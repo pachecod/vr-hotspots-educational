@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Admin - Common Assets</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        color: #333;
+      }
+      .admin-nav {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .admin-nav a,
+      .admin-nav button {
+        padding: 8px 14px;
+        border-radius: 4px;
+        text-decoration: none;
+        border: 1px solid #dee2e6;
+        background: #f8f9fa;
+        color: #333;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .admin-nav a.active {
+        background: #007bff;
+        color: #fff;
+        border-color: #007bff;
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .tab {
+        padding: 10px 16px;
+        border: 1px solid #ccc;
+        background: #fff;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .tab.active {
+        background: #28a745;
+        color: #fff;
+        border-color: #28a745;
+      }
+      .upload-zone {
+        border: 2px dashed #adb5bd;
+        border-radius: 8px;
+        padding: 24px;
+        text-align: center;
+        background: #f8f9fa;
+        margin-bottom: 20px;
+      }
+      .upload-zone.dragover {
+        border-color: #007bff;
+        background: #e7f1ff;
+      }
+      .asset-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .asset-card {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 12px;
+        background: #fff;
+      }
+      .asset-thumb {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 4px;
+        background: #eee;
+        margin-bottom: 8px;
+      }
+      .asset-thumb-audio {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px;
+        box-sizing: border-box;
+      }
+      .asset-thumb-audio audio {
+        width: 100%;
+        height: 32px;
+      }
+      .asset-thumb-icon {
+        font-size: 28px;
+        line-height: 1;
+      }
+      .asset-thumb-3d {
+        padding: 0;
+        overflow: hidden;
+      }
+      .asset-thumb-3d iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+        display: block;
+        background: #ececec;
+      }
+      .asset-thumb-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 36px;
+      }
+      .preview-image {
+        max-width: 100%;
+        border-radius: 4px;
+        display: block;
+      }
+      .preview-audio audio,
+      .preview-audio {
+        width: 100%;
+      }
+      .preview-audio audio {
+        margin-bottom: 8px;
+      }
+      .preview-3d-frame {
+        width: 100%;
+        height: 420px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #ececec;
+      }
+      .preview-hint {
+        font-size: 12px;
+        color: #666;
+        margin: 8px 0 4px;
+      }
+      .preview-filename {
+        font-size: 13px;
+        color: #444;
+        margin: 0;
+        word-break: break-all;
+      }
+      .preview-unavailable {
+        color: #666;
+        margin: 0;
+      }
+      .asset-name {
+        font-weight: bold;
+        font-size: 13px;
+        word-break: break-all;
+        margin-bottom: 4px;
+      }
+      .asset-meta {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 10px;
+      }
+      .asset-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .asset-actions button {
+        padding: 6px 10px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .btn-preview {
+        background: #17a2b8;
+        color: #fff;
+      }
+      .btn-copy {
+        background: #6f42c1;
+        color: #fff;
+      }
+      .btn-delete {
+        background: #dc3545;
+        color: #fff;
+      }
+      #preview-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      #preview-modal .panel {
+        background: #fff;
+        border-radius: 8px;
+        max-width: 900px;
+        width: 100%;
+        max-height: 90vh;
+        overflow: auto;
+        padding: 20px;
+        position: relative;
+      }
+      #preview-modal .close {
+        position: absolute;
+        top: 10px;
+        right: 14px;
+        font-size: 24px;
+        border: none;
+        background: none;
+        cursor: pointer;
+      }
+      #toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #28a745;
+        color: #fff;
+        padding: 12px 18px;
+        border-radius: 6px;
+        display: none;
+        z-index: 10001;
+      }
+      .empty {
+        color: #666;
+        padding: 20px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app-root">
+      <div id="login-root"></div>
+      <div id="main-content" style="display: none">
+        <div class="admin-nav">
+          <a href="admin-dashboard.html">Submissions</a>
+          <a href="admin-common-assets.html" class="active">Common Assets</a>
+          <button type="button" id="logout-btn">Logout</button>
+        </div>
+
+        <h1>Common Assets</h1>
+        <p style="color: #666">
+          Upload shared images, audio, and 3D models. Students can copy stable URLs into hotspot
+          fields.
+        </p>
+
+        <div class="upload-zone" id="upload-zone">
+          <p><strong>Drag & drop files here</strong> or click to browse</p>
+          <p style="font-size: 12px; color: #666">
+            Images (10MB), Audio (50MB), 3D (100MB), Other (25MB)
+          </p>
+          <input type="file" id="file-input" multiple style="display: none" />
+          <button type="button" id="browse-btn" style="margin-top: 8px; padding: 8px 16px">
+            Browse Files
+          </button>
+          <div id="upload-status" style="margin-top: 10px; font-size: 13px"></div>
+        </div>
+
+        <div class="tabs" id="category-tabs">
+          <button class="tab active" data-category="images">Images</button>
+          <button class="tab" data-category="audio">Audio</button>
+          <button class="tab" data-category="3d">3D</button>
+          <button class="tab" data-category="other">Other</button>
+        </div>
+
+        <div id="asset-list" class="asset-grid"></div>
+      </div>
+    </div>
+
+    <div id="preview-modal">
+      <div class="panel">
+        <button class="close" id="preview-close" aria-label="Close">&times;</button>
+        <h3 id="preview-title"></h3>
+        <div id="preview-body"></div>
+        <p style="margin-top: 12px; font-size: 12px; word-break: break-all" id="preview-url"></p>
+        <button type="button" id="preview-copy-btn" class="btn-copy" style="margin-top: 8px">
+          Copy URL
+        </button>
+      </div>
+    </div>
+
+    <div id="toast">Copied!</div>
+
+    <script src="admin-auth-ui.js"></script>
+    <script src="common-assets-preview.js"></script>
+    <script src="admin-common-assets.js"></script>
+  </body>
+</html>

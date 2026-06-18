@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Admin Dashboard - Student Submissions</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+
+      /* Hosting overlay */
+      #hosting-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+      #hosting-overlay .panel {
+        width: min(520px, calc(100vw - 40px));
+        background: #fff;
+        border-radius: 10px;
+        padding: 18px 18px 16px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+      }
+      #hosting-overlay .title {
+        font-size: 16px;
+        font-weight: bold;
+        color: #212529;
+        margin: 0 0 8px;
+      }
+      #hosting-overlay .subtitle {
+        font-size: 13px;
+        color: #6c757d;
+        margin: 0 0 14px;
+      }
+      #hosting-overlay .bar {
+        width: 100%;
+        height: 12px;
+        background: #e9ecef;
+        border-radius: 999px;
+        overflow: hidden;
+        border: 1px solid #dee2e6;
+      }
+      #hosting-overlay .bar > div {
+        height: 100%;
+        width: 0%;
+        background: #28a745;
+        transition: width 180ms ease;
+      }
+      #hosting-overlay .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 10px;
+        font-size: 12px;
+        color: #495057;
+      }
+      #hosting-overlay .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+          'Courier New', monospace;
+      }
+      .submission {
+        border: 1px solid #ddd;
+        margin: 10px 0;
+        padding: 15px;
+        border-radius: 5px;
+      }
+      .download-btn {
+        background: #007bff;
+        color: white;
+        padding: 8px 15px;
+        border: none;
+        border-radius: 3px;
+        margin-right: 10px;
+        cursor: pointer;
+      }
+      .download-btn:hover {
+        background: #0056b3;
+      }
+      .delete-btn {
+        background: #dc3545;
+        color: white;
+        padding: 8px 15px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        margin-right: 5px;
+      }
+      .delete-btn:hover {
+        background: #c82333;
+      }
+      .host-btn {
+        background: #28a745;
+        color: white;
+        padding: 8px 15px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        margin-right: 5px;
+      }
+      .host-btn:hover {
+        background: #218838;
+      }
+      .unhost-btn {
+        background: #ffc107;
+        color: #212529;
+        padding: 8px 15px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        margin-right: 5px;
+      }
+      .unhost-btn:hover {
+        background: #e0a800;
+      }
+      .host-btn:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+      .hosted-link {
+        color: #28a745;
+        text-decoration: none;
+        font-weight: bold;
+        margin-left: 10px;
+      }
+      .hosted-link:hover {
+        text-decoration: underline;
+      }
+      h1 {
+        color: #333;
+      }
+      .meta {
+        color: #666;
+        font-size: 0.9em;
+      }
+      .admin-nav {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .admin-nav a,
+      .admin-nav button {
+        padding: 8px 14px;
+        border-radius: 4px;
+        text-decoration: none;
+        border: 1px solid #dee2e6;
+        background: #f8f9fa;
+        color: #333;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .admin-nav a.active {
+        background: #007bff;
+        color: #fff;
+        border-color: #007bff;
+      }
+    </style>
+    <script src="admin-auth-ui.js"></script>
+  </head>
+  <body>
+    <div id="login-root"></div>
+    <div id="main-content" style="display: none">
+    <div class="admin-nav">
+      <a href="admin-dashboard.html" class="active">Submissions</a>
+      <a href="admin-common-assets.html">Common Assets</a>
+      <button type="button" id="logout-btn">Logout</button>
+    </div>
+    <h1>Admin Dashboard - Student VR Project Submissions</h1>
+    <div
+      style="
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 30px;
+        border: 2px solid #dee2e6;
+      "
+    >
+      <h2 style="margin-top: 0; color: #495057">📦 Import Project</h2>
+      <p style="color: #6c757d; margin-bottom: 15px">
+        <strong>Import a project ZIP:</strong> Upload a previously exported VR project ZIP file.
+      </p>
+
+      <div style="display: flex; gap: 15px; flex-wrap: wrap">
+        <button
+          onclick="document.getElementById('import-project-zip-input').click()"
+          style="
+            background: #6f42c1;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          "
+          onmouseover="this.style.background='#5e37a3'"
+          onmouseout="this.style.background='#6f42c1'"
+        >
+          <span style="font-size: 20px">➕</span>
+          Import Project ZIP
+        </button>
+
+        <input
+          type="file"
+          id="import-project-zip-input"
+          accept=".zip"
+          style="display: none"
+          onchange="importProjectZip(this.files[0])"
+        />
+      </div>
+
+      <div
+        id="backup-status"
+        style="margin-top: 15px; padding: 10px; border-radius: 5px; display: none"
+      ></div>
+    </div>
+
+    <h2 style="border-bottom: 2px solid #dee2e6; padding-bottom: 10px">📚 Student Submissions</h2>
+    <div id="submissions">Loading submissions...</div>
+    </div>
+
+    <div id="hosting-overlay" aria-hidden="true">
+      <div class="panel" role="status" aria-live="polite">
+        <div class="title" id="hosting-title">Hosting project…</div>
+        <div class="subtitle" id="hosting-subtitle">
+          Please keep this tab open until hosting finishes.
+        </div>
+        <div class="bar"><div id="hosting-bar-fill"></div></div>
+        <div class="row">
+          <div id="hosting-step">Preparing…</div>
+          <div class="mono"><span id="hosting-percent">0</span>%</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ===== Hosting progress overlay (simulated percent) =====
+      let __hostingTimer = null;
+      let __hostingPct = 0;
+
+      function setHostingOverlayVisible(visible) {
+        const overlay = document.getElementById('hosting-overlay');
+        if (!overlay) return;
+        overlay.style.display = visible ? 'flex' : 'none';
+        overlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      }
+
+      function setHostingProgress(pct, stepText) {
+        const p = Math.max(0, Math.min(100, Math.round(pct)));
+        __hostingPct = p;
+        const fill = document.getElementById('hosting-bar-fill');
+        const pctEl = document.getElementById('hosting-percent');
+        const stepEl = document.getElementById('hosting-step');
+        if (fill) fill.style.width = p + '%';
+        if (pctEl) pctEl.textContent = String(p);
+        if (stepEl && stepText) stepEl.textContent = stepText;
+      }
+
+      function startHostingOverlay({ title, subtitle } = {}) {
+        // Reset
+        if (__hostingTimer) {
+          clearInterval(__hostingTimer);
+          __hostingTimer = null;
+        }
+        __hostingPct = 0;
+        const t = document.getElementById('hosting-title');
+        const st = document.getElementById('hosting-subtitle');
+        if (t) t.textContent = title || 'Hosting project…';
+        if (st)
+          st.textContent = subtitle || 'Please keep this tab open until hosting finishes.';
+        setHostingProgress(0, 'Starting…');
+        setHostingOverlayVisible(true);
+
+        // Simulated progress: rise quickly early, then slow near 90% until we finish.
+        __hostingTimer = setInterval(() => {
+          const cap = 90;
+          if (__hostingPct >= cap) return;
+          const remaining = cap - __hostingPct;
+          const step = remaining > 30 ? 6 : remaining > 15 ? 3 : 1;
+          const jitter = Math.random() < 0.3 ? 1 : 0;
+          setHostingProgress(__hostingPct + step + jitter, 'Hosting…');
+        }, 220);
+      }
+
+      async function finishHostingOverlay(ok) {
+        if (__hostingTimer) {
+          clearInterval(__hostingTimer);
+          __hostingTimer = null;
+        }
+        setHostingProgress(100, ok ? 'Done' : 'Failed');
+        await new Promise((r) => setTimeout(r, 350));
+        setHostingOverlayVisible(false);
+      }
+
+      async function loadSubmissions() {
+        try {
+          const response = await adminFetch('/admin/submissions');
+          const submissions = await response.json();
+
+          const container = document.getElementById('submissions');
+
+          if (submissions.length === 0) {
+            container.innerHTML = '<p>No submissions yet.</p>';
+            return;
+          }
+
+          container.innerHTML = submissions
+            .map((submission) => {
+              const isHosted = submission.isHosted || submission.hostedUrl;
+              const hostButton = isHosted
+                ? `<button class="unhost-btn" onclick="unhostProject('${submission.fileName}')">🔗 Unhost</button>`
+                : `<button class="host-btn" onclick="hostProject('${submission.fileName}', '${submission.studentName}')">🌐 Host</button>`;
+
+              return `
+                    <div class="submission" data-filename="${submission.fileName}">
+                        <h3>${submission.projectName}</h3>
+                        <div class="meta">
+                            <strong>Student:</strong> ${submission.studentName}<br>
+                            <strong>Submitted:</strong> ${new Date(
+                              submission.submittedAt
+                            ).toLocaleString()}<br>
+                            <strong>File:</strong> ${submission.fileName}
+                            ${
+                              submission.hostedUrl
+                                ? `<br><strong>🌐 Hosted at:</strong> <a href="${
+                                    submission.hostedUrl
+                                  }" class="hosted-link" target="_blank">${
+                                    submission.hostedPath || 'View Live'
+                                  }</a>`
+                                : ''
+                            }
+                            ${
+                              submission.hostedAt
+                                ? `<br><strong>Hosted on:</strong> ${new Date(
+                                    submission.hostedAt
+                                  ).toLocaleString()}`
+                                : ''
+                            }
+                            ${
+                              submission.updatedAt
+                                ? `<br><strong>Updated at:</strong> ${new Date(
+                                    submission.updatedAt
+                                  ).toLocaleString()}`
+                                : ''
+                            }
+                        </div>
+                        <br>
+                        <button class="download-btn" onclick="downloadProject('${
+                          submission.fileName
+                        }')">📥 Download</button>
+                        ${hostButton}
+                        <button class="delete-btn" onclick="deleteProject('${
+                          submission.fileName
+                        }')">🗑️ Delete</button>
+                    </div>
+                `;
+            })
+            .join('');
+    } catch (error) {
+      if (error.code === 'AUTH_REQUIRED') {
+        location.reload();
+        return;
+      }
+      if (error.code === 'BACKEND_UNAVAILABLE') {
+        document.getElementById('submissions').innerHTML =
+          '<p style="color:#dc3545;">API server not running. Run <code>npm run dev</code> and reload.</p>';
+        return;
+      }
+      document.getElementById('submissions').innerHTML = '<p>Error loading submissions.</p>';
+    }
+      }
+
+      async function downloadProject(filename) {
+        try {
+          // Create a temporary link element for download
+          const link = document.createElement('a');
+          link.href = `/admin/download/${filename}`;
+          link.download = filename;
+          link.style.display = 'none';
+
+          // Add to document, click, and remove
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } catch (error) {
+          alert('Error downloading project: ' + error.message);
+        }
+      }
+
+      async function hostProject(filename, studentName) {
+        // Suggest a URL path based on student name
+        const suggestedPath = studentName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const urlPath = prompt(
+          `Host this project at what URL path?\n\nExample: If you enter "john_doe", the project will be available at:\n${window.location.origin}/hosted/john_doe/index.html`,
+          suggestedPath
+        );
+
+        if (!urlPath) return;
+
+        // Validate URL path
+        if (!/^[a-zA-Z0-9_-]+$/.test(urlPath)) {
+          alert('Invalid URL path. Please use only letters, numbers, underscores, and hyphens.');
+          return;
+        }
+
+        try {
+          startHostingOverlay({
+            title: 'Hosting project…',
+            subtitle: `Creating /hosted/${urlPath}/ from ${filename}`,
+          });
+
+          const response = await adminFetch(`/admin/host/${filename}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ urlPath }),
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            await finishHostingOverlay(true);
+            alert(
+              `Project hosted successfully!\n\nLive URL: ${result.hostedUrl}\n\nThe project is now accessible to anyone with this link.`
+            );
+
+            // Reload submissions to show the hosted link
+            loadSubmissions();
+          } else {
+            await finishHostingOverlay(false);
+            alert('Error hosting project: ' + result.message);
+          }
+        } catch (error) {
+          await finishHostingOverlay(false);
+          alert('Error hosting project: ' + error.message);
+        }
+      }
+
+      async function unhostProject(filename) {
+        if (
+          !confirm(
+            'Are you sure you want to remove this project from hosting? The live URL will no longer work.'
+          )
+        ) {
+          return;
+        }
+
+        try {
+          const response = await adminFetch(`/admin/unhost/${filename}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            alert('Project unhosted successfully! The live URL is no longer accessible.');
+
+            // Reload submissions to update the display
+            loadSubmissions();
+          } else {
+            alert('Error unhosting project: ' + result.message);
+          }
+        } catch (error) {
+          alert('Error unhosting project: ' + error.message);
+        }
+      }
+
+      async function deleteProject(filename) {
+        if (!confirm(`Are you sure you want to delete ${filename}?`)) {
+          return;
+        }
+
+        try {
+          const response = await adminFetch(`/admin/delete/${filename}`, {
+            method: 'DELETE',
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            // Remove the submission from the display
+            const submissionElement = document.querySelector(`[data-filename="${filename}"]`);
+            if (submissionElement) {
+              submissionElement.remove();
+            }
+
+            // Reload submissions to ensure consistency
+            setTimeout(loadSubmissions, 500);
+          } else {
+            alert('Error deleting project: ' + result.message);
+          }
+        } catch (error) {
+          alert('Error deleting project: ' + error.message);
+        }
+      }
+
+      function initDashboard() {
+        document.getElementById('login-root').innerHTML = '';
+        document.getElementById('main-content').style.display = 'block';
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+          await adminLogout();
+          location.reload();
+        });
+        loadSubmissions();
+        startAutoRefresh();
+      }
+
+      requireAdminSession('login-root', initDashboard);
+
+      // Refresh every 30 seconds, but pause if user is interacting
+      let refreshInterval;
+      let lastActivity = Date.now();
+
+      function startAutoRefresh() {
+        refreshInterval = setInterval(() => {
+          // Only refresh if user hasn't been active for at least 10 seconds
+          if (Date.now() - lastActivity > 10000) {
+            loadSubmissions();
+          }
+        }, 30000);
+      }
+
+      // Track user activity
+      document.addEventListener('click', () => {
+        lastActivity = Date.now();
+      });
+
+      document.addEventListener('mousemove', () => {
+        lastActivity = Date.now();
+      });
+
+      startAutoRefresh();
+
+      // Backup & Restore Functions - Remove downloadBackup() and restoreBackup()
+
+      async function importProjectZip(file) {
+        if (!file) return;
+        const statusDiv = document.getElementById('backup-status');
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#d1ecf1';
+        statusDiv.style.color = '#0c5460';
+        statusDiv.style.border = '1px solid #bee5eb';
+        statusDiv.innerHTML = '📦 Importing project ZIP...';
+        try {
+          const fd = new FormData();
+          fd.append('project', file);
+          const res = await fetch('/submit-project', { method: 'POST', body: fd });
+          const ct = (res.headers.get('content-type') || '').toLowerCase();
+          const data = ct.includes('application/json')
+            ? await res.json()
+            : { success: false, message: await res.text() };
+          if (!data.success) throw new Error(data.message || 'Import failed');
+          statusDiv.style.background = '#d4edda';
+          statusDiv.style.color = '#155724';
+          statusDiv.style.border = '1px solid #c3e6cb';
+          statusDiv.innerHTML =
+            '✅ Imported: ' +
+            (data.projectName || 'Project') +
+            ' by ' +
+            (data.studentName || 'Unknown') +
+            ' (File: ' +
+            data.fileName +
+            ') Reloading...';
+          setTimeout(() => {
+            loadSubmissions();
+            statusDiv.style.display = 'none';
+          }, 1500);
+        } catch (e) {
+          statusDiv.style.background = '#f8d7da';
+          statusDiv.style.color = '#721c24';
+          statusDiv.style.border = '1px solid #f5c6cb';
+          statusDiv.innerHTML = '❌ Import failed: ' + e.message;
+        }
+        document.getElementById('import-project-zip-input').value = '';
+      }
+    </script>
+  </body>
+</html>

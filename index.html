@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>VR Hotspot Editor</title>
+    <meta name="description" content="VR Hotspot Editor - Create interactive hotspots" />
+    <script src="./node_modules/aframe/dist/aframe-v1.7.1.min.js"></script>
+    <script src="./node_modules/aframe-extras/dist/aframe-extras.min.js"></script>
+    <script src="common-assets-preview.js"></script>
+    <script src="script.js"></script>
+    <style>
+      a-text {
+        font-family: Arial;
+        font-weight: bold;
+      }
+
+      @keyframes fadeInOut {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(0.8);
+        }
+
+        20% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1);
+        }
+
+        80% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1);
+        }
+
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(0.8);
+        }
+      }
+
+      /* Animation for gaze feedback */
+      @keyframes hotspotPulse {
+        0% {
+          opacity: 0.8;
+        }
+
+        50% {
+          opacity: 1;
+        }
+
+        100% {
+          opacity: 0.8;
+        }
+      }
+
+      .hotspot-animation {
+        animation: hotspotPulse 2s infinite;
+      }
+
+      /* Side Panel Styles */
+      #hotspot-editor {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 350px;
+        height: 100vh;
+        background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+        border-left: 2px solid #444;
+        color: white;
+        font-family: Arial, sans-serif;
+        z-index: 1000;
+        overflow-y: auto;
+        box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3);
+      }
+
+      .panel-header {
+        background: #333;
+        padding: 20px;
+        border-bottom: 1px solid #555;
+        text-align: center;
+      }
+
+      .panel-section {
+        padding: 20px;
+        border-bottom: 1px solid #444;
+      }
+
+      .section-title {
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #4caf50;
+      }
+
+      .hotspot-type {
+        display: flex;
+        align-items: center;
+        margin: 10px 0;
+        padding: 10px;
+        border: 2px solid #555;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .hotspot-type:hover {
+        border-color: #4caf50;
+        background: rgba(76, 175, 80, 0.1);
+      }
+
+      .hotspot-type.selected {
+        border-color: #4caf50;
+        background: rgba(76, 175, 80, 0.2);
+      }
+
+      .hotspot-type input[type='radio'] {
+        margin-right: 10px;
+      }
+
+      .form-group {
+        margin: 15px 0;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+
+      .form-group input,
+      .form-group textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background: #333;
+        color: white;
+        box-sizing: border-box;
+      }
+
+      .form-group textarea {
+        height: 80px;
+        resize: vertical;
+      }
+
+      .btn {
+        padding: 12px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        width: 100%;
+        margin: 5px 0;
+      }
+
+      .btn-with-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .btn-icon-img {
+        width: 18px;
+        height: 18px;
+        display: inline-block;
+        object-fit: contain;
+      }
+
+      .btn-primary {
+        background: #4caf50;
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: #45a049;
+        transform: translateY(-2px);
+      }
+
+      .btn-secondary {
+        background: #666;
+        color: white;
+      }
+
+      .btn-secondary:hover {
+        background: #555;
+      }
+
+      .btn-ca-browse {
+        width: 100%;
+        margin-top: 8px;
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+
+      .btn-danger {
+        background: #f44336;
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: #da190b;
+      }
+
+      .hotspot-list {
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .hotspot-item {
+        padding: 10px;
+        margin: 5px 0;
+        background: #333;
+        border-radius: 4px;
+        border-left: 4px solid #4caf50;
+        cursor: pointer;
+      }
+
+      .hotspot-item:hover {
+        background: #444;
+      }
+
+      .hotspot-item.selected {
+        background: #444;
+        border-left-color: #ffc107;
+      }
+
+      .edit-mode-indicator {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        background: rgba(76, 175, 80, 0.9);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-weight: bold;
+        z-index: 999;
+      }
+
+      .instructions {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.85);
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        max-width: 320px;
+        z-index: 999;
+        border: 2px solid #4caf50;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+      }
+
+      .instructions-header {
+        display: flex !important;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+        margin-bottom: 0;
+        transition: margin-bottom 0.3s ease;
+        visibility: visible !important;
+      }
+
+      .instructions-header:not(.collapsed) {
+        margin-bottom: 10px;
+      }
+
+      .instructions-title {
+        font-weight: bold;
+        font-size: 15px;
+        color: #4caf50;
+      }
+
+      .instructions-toggle {
+        background: none;
+        border: none;
+        color: #4caf50;
+        font-size: 16px;
+        cursor: pointer;
+        padding: 0;
+        transition: transform 0.3s ease;
+        display: inline-block !important;
+        visibility: visible !important;
+      }
+
+      .instructions-toggle.collapsed {
+        transform: rotate(-90deg);
+      }
+
+      .instructions-content {
+        max-height: 500px;
+        overflow: hidden;
+        transition: max-height 0.3s ease, opacity 0.3s ease;
+      }
+
+      .instructions-content.collapsed {
+        max-height: 0 !important;
+        opacity: 0 !important;
+        margin-top: 0 !important;
+      }
+
+      /* Editor Global Sound Control */
+      .editor-sound-control {
+        position: fixed;
+        top: 20px;
+        right: 370px;
+        z-index: 1001;
+        background: rgba(0, 0, 0, 0.8);
+        border: 2px solid #ff9800;
+        border-radius: 8px;
+        padding: 10px 15px;
+        color: white;
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        user-select: none;
+      }
+
+      .editor-sound-control:hover {
+        background: rgba(255, 152, 0, 0.2);
+        border-color: #ffb74d;
+        transform: translateY(-2px);
+      }
+
+      .editor-sound-control.muted {
+        border-color: #f44336;
+        color: #f44336;
+      }
+
+      .editor-sound-control.muted:hover {
+        background: rgba(244, 67, 54, 0.2);
+        border-color: #ef5350;
+      }
+
+      /* Editor Audio Progress */
+      .editor-progress-container {
+        position: fixed;
+        top: 65px;
+        right: 370px;
+        z-index: 1001;
+        background: rgba(0, 0, 0, 0.8);
+        border: 2px solid #ff9800;
+        border-radius: 8px;
+        padding: 8px 12px;
+        min-width: 200px;
+        font-family: Arial, sans-serif;
+        color: white;
+        font-size: 11px;
+        display: none;
+      }
+
+      .editor-progress-container .audio-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .editor-progress-container .progress-bar {
+        width: 100%;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+        position: relative;
+        cursor: pointer;
+      }
+
+      .editor-progress-container .progress-fill {
+        height: 100%;
+        background: #ff9800;
+        border-radius: 2px;
+        width: 0%;
+        transition: width 0.1s ease;
+      }
+
+      .editor-progress-container .progress-handle {
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 12px;
+        height: 12px;
+        background: #ff9800;
+        border: 2px solid white;
+        border-radius: 50%;
+        cursor: pointer;
+        left: 0%;
+        transition: left 0.1s ease;
+        opacity: 0;
+      }
+
+      .editor-progress-container .progress-bar:hover .progress-handle {
+        opacity: 1;
+      }
+
+      /* Common Assets modal */
+      #common-assets-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 10002;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+      }
+      #common-assets-modal .modal-panel {
+        width: min(720px, 100%);
+        max-height: 85vh;
+        background: #2a2a2a;
+        border: 2px solid #444;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #common-assets-modal .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        border-bottom: 1px solid #444;
+      }
+      #common-assets-modal .modal-body {
+        padding: 16px 20px;
+        overflow-y: auto;
+      }
+      #common-assets-modal .ca-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      #common-assets-modal .ca-tab {
+        padding: 8px 12px;
+        border: 1px solid #555;
+        background: #333;
+        color: #fff;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      #common-assets-modal .ca-tab.active {
+        background: #4caf50;
+        border-color: #4caf50;
+      }
+      #common-assets-modal .ca-search {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 12px;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background: #333;
+        color: #fff;
+        box-sizing: border-box;
+      }
+      #common-assets-modal .ca-item {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid #444;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        background: #333;
+      }
+      #common-assets-modal .ca-item-thumb {
+        width: 56px;
+        height: 56px;
+        object-fit: cover;
+        border-radius: 4px;
+        background: #222;
+        flex-shrink: 0;
+      }
+      #common-assets-modal .ca-item-thumb-audio {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px;
+        overflow: hidden;
+      }
+      #common-assets-modal .ca-item-thumb-audio audio {
+        width: 100%;
+        height: 28px;
+      }
+      #common-assets-modal .ca-item-thumb-3d {
+        padding: 0;
+        overflow: hidden;
+      }
+      #common-assets-modal .ca-item-thumb-3d iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+        background: #ececec;
+      }
+      #common-assets-modal .ca-item-thumb-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+      }
+      #common-assets-modal .ca-item-info {
+        flex: 1;
+        min-width: 0;
+      }
+      #common-assets-modal .ca-item-name {
+        font-size: 13px;
+        font-weight: bold;
+        word-break: break-all;
+      }
+      #common-assets-modal .ca-item-actions {
+        display: flex;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+      #common-assets-modal .ca-item-actions button {
+        padding: 6px 10px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Scene Loading Overlay -->
+    <div
+      id="scene-loading-overlay"
+      style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: Arial, sans-serif;
+        color: white;
+        transition: opacity 0.5s ease-out;
+      "
+    >
+      <div style="text-align: center">
+        <div
+          style="
+            width: 80px;
+            height: 80px;
+            border: 6px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 30px;
+          "
+        ></div>
+        <h2 style="margin: 0 0 10px 0; font-size: 28px; font-weight: bold">Loading VR Scene...</h2>
+        <p style="margin: 0; font-size: 16px; opacity: 0.9">
+          Please wait while we prepare your experience
+        </p>
+      </div>
+    </div>
+
+    <style>
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+
+    <!-- Edit Mode Indicator -->
+    <div id="edit-indicator" class="edit-mode-indicator" style="display: none">
+      EDIT MODE: Click on the 360° image to place hotspot
+    </div>
+
+    <!-- Editor Global Sound Control -->
+    <div id="editor-sound-control" class="editor-sound-control">🎵 Scene Audio: ON</div>
+
+    <!-- Editor Audio Progress -->
+    <div id="editor-progress-container" class="editor-progress-container">
+      <div class="audio-info">
+        <span id="editor-current-time">0:00</span>
+        <div class="progress-bar-container" style="flex: 1">
+          <div class="progress-bar" id="editor-progress-bar">
+            <div class="progress-fill" id="editor-progress-fill"></div>
+            <div class="progress-handle" id="editor-progress-handle"></div>
+          </div>
+        </div>
+        <span id="editor-total-time">0:00</span>
+      </div>
+    </div>
+
+    <!-- Instructions -->
+    <div id="instructions" class="instructions">
+      <div class="instructions-header collapsed" onclick="toggleInstructions()">
+        <div class="instructions-title">Instructions</div>
+        <button class="instructions-toggle collapsed" id="instructions-toggle">▼</button>
+      </div>
+      <div class="instructions-content collapsed" id="instructions-content">
+        <strong>🛠️ Edit Mode:</strong><br />1. 📝 Select hotspot type (Text/Audio/Portal)<br />2. 🎯
+        Click "Add Hotspot" to start placing<br />3. 📍 Click on 360° image to position<br />4. ✏️
+        Use Edit (✏️) to modify content<br />5. ✎ Use Move (✎) to reposition<br />6. 🧭 Uncheck
+        "Edit Mode" to navigate<br /><br /><strong style="color: #4caf50">💡 Pro Tip:</strong
+        ><br /><span style="font-size: 12px"
+          >First scene will be the starting point on export!</span
+        >
+      </div>
+    </div>
+
+    <!-- Side Panel -->
+    <div id="hotspot-editor">
+      <div class="panel-header">
+        <h2>Hotspot Editor</h2>
+      </div>
+      <!-- CSS Customization -->
+      <div class="panel-section">
+        <div class="section-title">Visual Customization</div>
+        <button class="btn btn-secondary" id="css-settings">🎨 Customize Styles</button>
+        <div style="font-size: 12px; color: #999; margin-top: 8px">
+          Opens style editor with live preview
+        </div>
+      </div>
+      <!-- Mode -->
+      <div class="panel-section">
+        <div class="section-title">Mode</div>
+        <div class="form-group">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <div
+              id="edit-mode-switch"
+              role="switch"
+              aria-checked="true"
+              tabindex="0"
+              style="
+                width: 52px;
+                height: 28px;
+                background: #4caf50;
+                border-radius: 14px;
+                position: relative;
+                cursor: pointer;
+                transition: background 160ms ease;
+                outline: none;
+              "
+            >
+              <div
+                class="thumb"
+                style="
+                  position: absolute;
+                  top: 2px;
+                  left: 26px;
+                  width: 24px;
+                  height: 24px;
+                  background: #fff;
+                  border-radius: 50%;
+                  transition: left 160ms ease;
+                "
+              ></div>
+            </div>
+            <div style="flex: 1; min-width: 0">
+              <div id="edit-mode-label" style="font-weight: 700; color: #e0e0e0">
+                🛠️ Edit Mode: ON
+              </div>
+              <small id="edit-mode-help" style="color: #888; font-size: 11px"
+                >Click to switch to Navigation Mode</small
+              >
+            </div>
+          </div>
+          <!-- Hidden native toggle retained for logic bindings -->
+          <input type="checkbox" id="edit-mode-toggle" checked style="display: none" />
+        </div>
+      </div>
+
+      <!-- Global Scene Sound -->
+      <div class="panel-section">
+        <div class="section-title">Global Scene Sound</div>
+        <div class="form-group">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <div
+              id="global-sound-switch"
+              role="switch"
+              aria-checked="false"
+              tabindex="0"
+              style="
+                width: 52px;
+                height: 28px;
+                background: #777;
+                border-radius: 14px;
+                position: relative;
+                cursor: pointer;
+                transition: background 160ms ease;
+                outline: none;
+              "
+            >
+              <div
+                class="thumb"
+                style="
+                  position: absolute;
+                  top: 2px;
+                  left: 2px;
+                  width: 24px;
+                  height: 24px;
+                  background: #fff;
+                  border-radius: 50%;
+                  transition: left 160ms ease;
+                "
+              ></div>
+            </div>
+            <div style="flex: 1; min-width: 0">
+              <div id="global-sound-label" style="font-weight: 700; color: #e0e0e0">
+                🔇 Scene Audio: OFF
+              </div>
+              <small id="global-sound-help" style="color: #888; font-size: 11px"
+                >Click to enable ambient sound for this scene</small
+              >
+            </div>
+          </div>
+          <!-- Hidden native toggle retained for logic bindings -->
+          <input type="checkbox" id="global-sound-enabled" style="display: none" />
+        </div>
+        <div id="global-sound-controls" style="display: none">
+          <div class="form-group">
+            <label for="global-sound-file">Audio File:</label>
+            <input type="file" id="global-sound-file" accept="audio/*" />
+          </div>
+          <div class="form-group">
+            <label for="global-sound-url">Or Audio URL:</label>
+            <input
+              type="url"
+              id="global-sound-url"
+              placeholder="https://example.com/ambient.mp3"
+              style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #555;
+                border-radius: 4px;
+                background: #333;
+                color: white;
+                box-sizing: border-box;
+              "
+            />
+            <small style="color: #888; font-size: 11px">
+              Enter a direct URL to an audio file for ambient Scene sound
+            </small>
+          </div>
+          <div class="form-group">
+            <label for="global-sound-volume">Volume:</label>
+            <input
+              type="range"
+              id="global-sound-volume"
+              min="0"
+              max="1"
+              step="0.1"
+              value="0.5"
+              style="width: 100%"
+            />
+            <small style="color: #888; font-size: 11px"> Volume level (0.0 - 1.0) </small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ground/Texture Settings -->
+      <div class="panel-section">
+        <div
+          class="section-title"
+          id="ground-section-header"
+          style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px"
+          onclick="
+          const content = document.getElementById('ground-section-content');
+          const caret = document.getElementById('ground-section-caret');
+          const isHidden = content.style.display === 'none';
+          content.style.display = isHidden ? 'block' : 'none';
+          caret.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+        "
+        >
+          <span
+            id="ground-section-caret"
+            style="transition: transform 0.2s; transform: rotate(90deg); font-size: 12px"
+            >▶</span
+          >
+          <span>Ground/Texture</span>
+        </div>
+        <div id="ground-section-content">
+          <div class="form-group">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <div
+                id="ground-enabled-switch"
+                role="switch"
+                aria-checked="false"
+                tabindex="0"
+                style="
+                  width: 52px;
+                  height: 28px;
+                  background: #777;
+                  border-radius: 14px;
+                  position: relative;
+                  cursor: pointer;
+                  transition: background 160ms ease;
+                  outline: none;
+                "
+              >
+                <div
+                  class="thumb"
+                  style="
+                    position: absolute;
+                    top: 2px;
+                    left: 2px;
+                    width: 24px;
+                    height: 24px;
+                    background: #fff;
+                    border-radius: 50%;
+                    transition: left 160ms ease;
+                  "
+                ></div>
+              </div>
+              <div style="flex: 1; min-width: 0">
+                <div id="ground-enabled-label" style="font-weight: 700; color: #e0e0e0">
+                  🌍 Ground: OFF
+                </div>
+                <small id="ground-enabled-help" style="color: #888; font-size: 11px"
+                  >Click to add ground plane with textures</small
+                >
+              </div>
+            </div>
+            <!-- Hidden native toggle retained for logic bindings -->
+            <input type="checkbox" id="ground-enabled-toggle" style="display: none" />
+          </div>
+          <div id="ground-controls" style="display: none">
+            <!-- Essential Textures -->
+            <div
+              style="
+                background: rgba(76, 175, 80, 0.1);
+                padding: 12px;
+                border-radius: 6px;
+                margin-bottom: 15px;
+                border: 1px solid rgba(76, 175, 80, 0.3);
+              "
+            >
+              <div
+                id="essential-textures-header"
+                style="
+                  font-weight: bold;
+                  color: #4caf50;
+                  margin-bottom: 8px;
+                  cursor: pointer;
+                  user-select: none;
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                "
+                onclick="document.getElementById('essential-textures-content').style.display = document.getElementById('essential-textures-content').style.display === 'none' ? 'block' : 'none'; document.getElementById('essential-caret').style.transform = document.getElementById('essential-textures-content').style.display === 'none' ? 'rotate(0deg)' : 'rotate(90deg)';"
+              >
+                <span
+                  id="essential-caret"
+                  style="transition: transform 0.2s; transform: rotate(90deg)"
+                  >▶</span
+                >
+                <span>✅ Essential Textures</span>
+              </div>
+
+              <div id="essential-textures-content">
+                <div class="form-group">
+                  <label for="ground-diffuse"> 🎨 Diffuse/Color Map (Required) </label>
+                  <div style="display: flex; gap: 5px; align-items: center">
+                    <input
+                      type="file"
+                      id="ground-diffuse"
+                      accept="image/jpeg,image/png,image/jpg"
+                      required
+                      style="flex: 1"
+                    />
+                    <button
+                      type="button"
+                      id="clear-ground-diffuse"
+                      style="
+                        padding: 5px 10px;
+                        background: #f44336;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 12px;
+                      "
+                      title="Clear file"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="ground-normal"> 🗺️ Normal Map (Required) </label>
+                  <div style="display: flex; gap: 5px; align-items: center">
+                    <input
+                      type="file"
+                      id="ground-normal"
+                      accept="image/jpeg,image/png,image/jpg"
+                      required
+                      style="flex: 1"
+                    />
+                    <button
+                      type="button"
+                      id="clear-ground-normal"
+                      style="
+                        padding: 5px 10px;
+                        background: #f44336;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 12px;
+                      "
+                      title="Clear file"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Optional Textures -->
+            <div
+              id="optional-textures-section"
+              style="
+                background: rgba(33, 150, 243, 0.1);
+                padding: 12px;
+                border-radius: 6px;
+                margin-bottom: 15px;
+                border: 1px solid rgba(33, 150, 243, 0.3);
+              "
+            >
+              <div
+                id="optional-textures-header"
+                style="
+                  font-weight: bold;
+                  color: #2196f3;
+                  margin-bottom: 8px;
+                  cursor: pointer;
+                  user-select: none;
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                "
+                onclick="document.getElementById('optional-textures-content').style.display = document.getElementById('optional-textures-content').style.display === 'none' ? 'block' : 'none'; document.getElementById('optional-caret').style.transform = document.getElementById('optional-textures-content').style.display === 'none' ? 'rotate(0deg)' : 'rotate(90deg)';"
+              >
+                <span
+                  id="optional-caret"
+                  style="transition: transform 0.2s; transform: rotate(0deg)"
+                  >▶</span
+                >
+                <span>🎯 Optional Textures (Enhance Realism)</span>
+              </div>
+
+              <div id="optional-textures-content" style="display: none">
+                <div class="form-group">
+                  <label for="ground-roughness"> ✨ Roughness Map (Optional) </label>
+                  <div style="display: flex; gap: 5px; align-items: center">
+                    <input
+                      type="file"
+                      id="ground-roughness"
+                      accept="image/jpeg,image/png,image/jpg"
+                      style="flex: 1"
+                    />
+                    <button
+                      type="button"
+                      id="clear-ground-roughness"
+                      style="
+                        padding: 5px 10px;
+                        background: #f44336;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 12px;
+                      "
+                      title="Clear file"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="ground-ao"> 🌑 Ambient Occlusion (Optional) </label>
+                  <div style="display: flex; gap: 5px; align-items: center">
+                    <input
+                      type="file"
+                      id="ground-ao"
+                      accept="image/jpeg,image/png,image/jpg"
+                      style="flex: 1"
+                    />
+                    <button
+                      type="button"
+                      id="clear-ground-ao"
+                      style="
+                        padding: 5px 10px;
+                        background: #f44336;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 12px;
+                      "
+                      title="Clear file"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="ground-displacement"> ⛰️ Displacement Map (Optional) </label>
+                  <div style="display: flex; gap: 5px; align-items: center">
+                    <input
+                      type="file"
+                      id="ground-displacement"
+                      accept="image/jpeg,image/png,image/jpg"
+                      style="flex: 1"
+                    />
+                    <button
+                      type="button"
+                      id="clear-ground-displacement"
+                      style="
+                        padding: 5px 10px;
+                        background: #f44336;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 12px;
+                      "
+                      title="Clear file"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Ground Properties -->
+            <div
+              style="
+                background: rgba(255, 152, 0, 0.1);
+                padding: 12px;
+                border-radius: 6px;
+                margin-bottom: 15px;
+                border: 1px solid rgba(255, 152, 0, 0.3);
+              "
+            >
+              <div
+                id="ground-properties-header"
+                style="
+                  font-weight: bold;
+                  color: #ff9800;
+                  margin-bottom: 8px;
+                  cursor: pointer;
+                  user-select: none;
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                "
+                onclick="document.getElementById('ground-properties-content').style.display = document.getElementById('ground-properties-content').style.display === 'none' ? 'block' : 'none'; document.getElementById('properties-caret').style.transform = document.getElementById('ground-properties-content').style.display === 'none' ? 'rotate(0deg)' : 'rotate(90deg)';"
+              >
+                <span
+                  id="properties-caret"
+                  style="transition: transform 0.2s; transform: rotate(0deg)"
+                  >▶</span
+                >
+                <span>📐 Size & Texture Repeat</span>
+              </div>
+
+              <div id="ground-properties-content" style="display: none">
+                <div class="form-group">
+                  <label for="ground-width">Width (meters):</label>
+                  <input
+                    type="number"
+                    id="ground-width"
+                    value="50"
+                    min="1"
+                    max="200"
+                    step="1"
+                    style="
+                      width: 100%;
+                      padding: 10px;
+                      border: 1px solid #555;
+                      border-radius: 4px;
+                      background: #333;
+                      color: white;
+                      box-sizing: border-box;
+                    "
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="ground-depth">Depth (meters):</label>
+                  <input
+                    type="number"
+                    id="ground-depth"
+                    value="50"
+                    min="1"
+                    max="200"
+                    step="1"
+                    style="
+                      width: 100%;
+                      padding: 10px;
+                      border: 1px solid #555;
+                      border-radius: 4px;
+                      background: #333;
+                      color: white;
+                      box-sizing: border-box;
+                    "
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="ground-repeat">Texture Repeat:</label>
+                  <input
+                    type="number"
+                    id="ground-repeat"
+                    value="20"
+                    min="1"
+                    max="100"
+                    step="1"
+                    style="
+                      width: 100%;
+                      padding: 10px;
+                      border: 1px solid #555;
+                      border-radius: 4px;
+                      background: #333;
+                      color: white;
+                      box-sizing: border-box;
+                    "
+                  />
+                  <small style="color: #888; font-size: 11px">
+                    How many times the texture repeats across the ground
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene Management -->
+      <div class="panel-section">
+        <div class="section-title">Scene Management</div>
+        <!-- Starting Point Controls -->
+        <div class="form-group" style="margin-top: 0; padding-top: 0; border-top: none">
+          <label style="margin-bottom: 10px; color: #4caf50; font-weight: bold">
+            📍 Starting Point Controls
+          </label>
+          <div style="display: flex; gap: 5px; margin-bottom: 10px">
+            <button
+              class="btn btn-secondary"
+              id="set-starting-point"
+              style="flex: 1; font-size: 12px"
+            >
+              Set Current View
+            </button>
+            <button
+              class="btn btn-secondary"
+              id="clear-starting-point"
+              style="flex: 1; font-size: 12px"
+            >
+              Clear
+            </button>
+          </div>
+          <div
+            id="starting-point-info"
+            style="
+              font-size: 11px;
+              color: #ccc;
+              text-align: center;
+              padding: 8px;
+              background: #333;
+              border-radius: 4px;
+            "
+          >
+            No starting point set
+          </div>
+        </div>
+        <div class="form-group" style="margin-top: 15px">
+          <label for="current-scene">Current Scene:</label>
+          <select
+            id="current-scene"
+            style="
+              width: 100%;
+              padding: 8px;
+              background: #333;
+              color: white;
+              border: 1px solid #555;
+              border-radius: 4px;
+            "
+          >
+            <option value="scene1">Scene 1</option>
+          </select>
+        </div>
+        <div style="display: flex; gap: 5px">
+          <button class="btn btn-secondary" id="add-scene" style="flex: 1">Add Scene</button>
+          <button class="btn btn-secondary" id="manage-scenes" style="flex: 1">Manage</button>
+        </div>
+      </div>
+
+      <!-- Hotspot Type Selection -->
+      <div class="panel-section" id="hotspot-type-section">
+        <div
+          class="section-title"
+          id="hotspot-type-title"
+          style="cursor: pointer; user-select: none"
+        >
+          Hotspot Type
+          <span id="hotspot-type-caret" style="opacity: 0.8; font-size: 12px; margin-left: 6px"
+            >▼</span
+          >
+        </div>
+        <div class="hotspot-type selected" data-type="text">
+          <input type="radio" name="hotspot-type" value="text" checked />
+          <span>📝 Text Popup Only</span>
+        </div>
+        <div class="hotspot-type" data-type="audio">
+          <input type="radio" name="hotspot-type" value="audio" />
+          <span>🔊 Audio Only</span>
+        </div>
+        <div class="hotspot-type" data-type="text-audio">
+          <input type="radio" name="hotspot-type" value="text-audio" />
+          <span>🎵📝 Text + Audio</span>
+        </div>
+        <div class="hotspot-type" data-type="navigation">
+          <input type="radio" name="hotspot-type" value="navigation" />
+          <span>🚪 Navigation Portal</span>
+        </div>
+        <div class="hotspot-type" data-type="weblink">
+          <input type="radio" name="hotspot-type" value="weblink" />
+          <span>🔗 Weblink Portal</span>
+        </div>
+        <div class="hotspot-type" data-type="image">
+          <input type="radio" name="hotspot-type" value="image" />
+          <span>🖼️ Image</span>
+        </div>
+        <div class="hotspot-type" data-type="model">
+          <input type="radio" name="hotspot-type" value="model" />
+          <span>🎨 3D Model</span>
+        </div>
+
+        <!-- Hotspot Properties merged into this section -->
+        <div id="hotspot-properties-group" style="margin-top: 10px">
+          <div class="section-title" style="margin-top: 10px">Hotspot Properties</div>
+          <div class="form-group">
+            <label for="hotspot-text">Text Content:</label>
+            <textarea id="hotspot-text" placeholder="Enter popup text content"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="hotspot-audio">Audio File:</label>
+            <input type="file" id="hotspot-audio" accept="audio/*" />
+          </div>
+          <div class="form-group">
+            <label for="hotspot-audio-url">Or Audio URL:</label>
+            <input
+              type="url"
+              id="hotspot-audio-url"
+              placeholder="https://example.com/audio.mp3"
+              style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #555;
+                border-radius: 4px;
+                background: #333;
+                color: white;
+                box-sizing: border-box;
+              "
+            />
+            <small style="color: #888; font-size: 11px">
+              Enter a direct URL to an audio file (mp3, wav, ogg)
+            </small>
+            <button
+              type="button"
+              class="btn btn-secondary btn-ca-browse"
+              data-ca-target="hotspot-audio-url"
+              data-ca-category="audio"
+            >
+              Browse Shared Assets
+            </button>
+          </div>
+          <div class="form-group" id="audio-loop-group" style="display: none">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+              <input
+                type="checkbox"
+                id="hotspot-audio-loop"
+                checked
+                style="width: 16px; height: 16px; cursor: pointer"
+              />
+              <span>Loop audio continuously</span>
+            </label>
+          </div>
+          <div class="form-group" id="navigation-target-group" style="display: none">
+            <label for="navigation-target">Target Scene:</label>
+            <select
+              id="navigation-target"
+              style="
+                width: 100%;
+                padding: 8px;
+                background: #333;
+                color: white;
+                border: 1px solid #555;
+                border-radius: 4px;
+              "
+            >
+              <option value="">Select target scene...</option>
+            </select>
+          </div>
+          <!-- Image hotspot specific fields -->
+          <div class="form-group" id="image-file-group" style="display: none">
+            <label for="hotspot-image-file">Image File:</label>
+            <input type="file" id="hotspot-image-file" accept="image/*" />
+          </div>
+          <div class="form-group" id="image-url-group" style="display: none">
+            <label for="hotspot-image-url">Or Image URL:</label>
+            <input
+              type="url"
+              id="hotspot-image-url"
+              placeholder="https://example.com/image.png"
+              style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #555;
+                border-radius: 4px;
+                background: #333;
+                color: white;
+                box-sizing: border-box;
+              "
+            />
+            <small style="color: #888; font-size: 11px"
+              >Provide an image file or URL (png, jpg, gif). One is required.</small
+            >
+            <button
+              type="button"
+              class="btn btn-secondary btn-ca-browse"
+              data-ca-target="hotspot-image-url"
+              data-ca-category="images"
+            >
+              Browse Shared Assets
+            </button>
+          </div>
+
+          <!-- Model hotspot specific fields -->
+          <div class="form-group" id="model-file-group" style="display: none">
+            <label for="hotspot-model-file">3D Model File (GLB):</label>
+            <input type="file" id="hotspot-model-file" accept=".glb,.gltf" />
+            <small style="color: #888; font-size: 11px">Upload a GLB/GLTF 3D model file</small>
+          </div>
+          <div class="form-group" id="model-url-group" style="display: none">
+            <label for="hotspot-model-url">Or Model URL:</label>
+            <input
+              type="url"
+              id="hotspot-model-url"
+              placeholder="https://example.com/model.glb"
+              style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #555;
+                border-radius: 4px;
+                background: #333;
+                color: white;
+                box-sizing: border-box;
+              "
+            />
+            <small style="color: #888; font-size: 11px">Provide a GLB/GLTF file or URL. One is required.</small>
+            <button
+              type="button"
+              class="btn btn-secondary btn-ca-browse"
+              data-ca-target="hotspot-model-url"
+              data-ca-category="3d"
+            >
+              Browse Shared Assets
+            </button>
+          </div>
+          <div class="form-group" id="model-size-group" style="display: none">
+            <label style="font-size: 12px; color: #ccc"
+              >Scale
+              <input
+                type="number"
+                id="hotspot-model-scale"
+                min="0.1"
+                max="200"
+                step="0.5"
+                value="1"
+                style="
+                  width: 100%;
+                  padding: 8px;
+                  border-radius: 4px;
+                  border: 1px solid #555;
+                  background: #333;
+                  color: #fff;
+                "
+              />
+            </label>
+            <small style="color: #888; font-size: 11px">Adjust the size of the 3D model</small>
+          </div>
+
+          <div class="form-group" id="model-rotation-group" style="display: none">
+            <label style="font-size: 12px; color: #ccc"
+              >Rotation (Y-axis)
+              <input
+                type="number"
+                id="hotspot-model-rotation"
+                min="0"
+                max="360"
+                step="15"
+                value="0"
+                style="
+                  width: 100%;
+                  padding: 8px;
+                  border-radius: 4px;
+                  border: 1px solid #555;
+                  background: #333;
+                  color: #fff;
+                "
+              />
+            </label>
+            <small style="color: #888; font-size: 11px">Rotate the model (0-360 degrees)</small>
+          </div>
+
+          <div class="form-group" id="model-position-group" style="display: none">
+            <label style="font-size: 12px; color: #ccc"
+              >Vertical Position (Y)
+              <input
+                type="number"
+                id="hotspot-model-position-y"
+                min="-5"
+                max="5"
+                step="0.1"
+                value="0"
+                style="
+                  width: 100%;
+                  padding: 8px;
+                  border-radius: 4px;
+                  border: 1px solid #555;
+                  background: #333;
+                  color: #fff;
+                "
+              />
+            </label>
+            <small style="color: #888; font-size: 11px"
+              >Adjust vertical position (negative = lower, positive = higher)</small
+            >
+          </div>
+
+          <div class="form-group" id="image-size-group" style="display: none">
+            <label style="font-size: 12px; color: #ccc"
+              >Scale
+              <input
+                type="number"
+                id="hotspot-image-scale"
+                min="0.1"
+                max="10"
+                step="0.1"
+                value="1"
+                style="
+                  width: 100%;
+                  padding: 8px;
+                  border-radius: 4px;
+                  border: 1px solid #555;
+                  background: #333;
+                  color: #fff;
+                "
+              />
+            </label>
+            <small style="color: #888; font-size: 11px"
+              >Scales the image uniformly. Aspect ratio preserved from original image.</small
+            >
+          </div>
+
+          <!-- Weblink portal specific fields -->
+          <div class="form-group" id="weblink-url-group" style="display: none">
+            <label for="weblink-url">Link URL:</label>
+            <input
+              type="url"
+              id="weblink-url"
+              placeholder="https://example.com"
+              style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #555;
+                border-radius: 4px;
+                background: #333;
+                color: white;
+                box-sizing: border-box;
+              "
+            />
+            <small style="color: #888; font-size: 11px"
+              >Provide a full URL starting with http:// or https://</small
+            >
+          </div>
+          <div class="form-group" id="weblink-title-group" style="display: none">
+            <label for="weblink-title">Link Title (optional):</label>
+            <input
+              type="text"
+              id="weblink-title"
+              placeholder="e.g., GitHub"
+              style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #555;
+                border-radius: 4px;
+                background: #333;
+                color: white;
+                box-sizing: border-box;
+              "
+            />
+          </div>
+          <div class="form-group" id="weblink-image-file-group" style="display: none">
+            <label for="weblink-image-file">Portal Preview Image (optional):</label>
+            <input type="file" id="weblink-image-file" accept="image/*" />
+          </div>
+          <div class="form-group" id="weblink-image-url-group" style="display: none">
+            <label for="weblink-image-url">Or Preview Image URL:</label>
+            <input
+              type="url"
+              id="weblink-image-url"
+              placeholder="https://example.com/preview.jpg"
+              style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #555;
+                border-radius: 4px;
+                background: #333;
+                color: white;
+                box-sizing: border-box;
+              "
+            />
+            <small style="color: #888; font-size: 11px"
+              >Optional image shown inside the ring on hover.</small
+            >
+          </div>
+          <button class="btn btn-primary" id="add-hotspot">Add Hotspot</button>
+        </div>
+      </div>
+
+      <!-- Existing Hotspots -->
+      <div class="panel-section">
+        <div class="section-title">Existing Hotspots</div>
+        <div class="hotspot-list" id="hotspot-list">
+          <div style="color: #888; text-align: center; padding: 20px">No hotspots created yet</div>
+        </div>
+        <button class="btn btn-danger" id="clear-hotspots">Clear All</button>
+        <button class="btn btn-warning" id="clear-data" style="margin-top: 5px">Clear Data</button>
+      </div>
+
+      <!-- Common Assets -->
+      <div class="panel-section">
+        <div class="section-title">Common Assets</div>
+        <button class="btn btn-secondary" id="open-common-assets">Browse Shared Assets</button>
+        <div style="font-size: 12px; color: #999; margin-top: 8px">
+          Pick shared images, audio, or 3D models while editing hotspots
+        </div>
+      </div>
+
+      <!-- Save Template -->
+      <div class="panel-section">
+        <div class="section-title">Template</div>
+        <div class="form-group">
+          <label for="template-name">Template Name:</label>
+          <input type="text" id="template-name" placeholder="Enter template name" />
+        </div>
+        <button class="btn btn-primary" id="save-template">Save Template</button>
+        <button class="btn btn-secondary" id="load-template">Load Template</button>
+        <button class="btn btn-secondary btn-with-icon" id="upload-github">
+          <img class="btn-icon-img" src="images/github-mark-white.png" alt="" aria-hidden="true" />
+          Upload to GitHub
+        </button>
+      </div>
+
+      <!-- Student Submission -->
+      <div class="panel-section">
+        <div class="section-title">Student Submission</div>
+        <button
+          class="btn btn-success"
+          id="submit-to-professor"
+          style="
+            background: #28a745;
+            border-color: #28a745;
+            width: 100%;
+            font-weight: bold;
+            padding: 12px;
+          "
+        >
+          📤 Submit to Admin
+        </button>
+        <div style="font-size: 0.8em; color: #ccc; margin-top: 8px; text-align: center">
+          Submit your completed VR project
+        </div>
+      </div>
+    </div>
+
+    <!-- Common Assets Modal -->
+    <div id="common-assets-modal">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <h3 style="margin: 0; color: #4caf50">Common Assets</h3>
+          <button id="close-common-assets" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="search" id="common-assets-search" class="ca-search" placeholder="Search by filename..." />
+          <div class="ca-tabs" id="common-assets-tabs">
+            <button class="ca-tab active" data-category="images">Images</button>
+            <button class="ca-tab" data-category="audio">Audio</button>
+            <button class="ca-tab" data-category="3d">3D</button>
+            <button class="ca-tab" data-category="other">Other</button>
+          </div>
+          <div id="common-assets-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <a-scene background="color: #ECECEC" id="main-scene">
+      <!-- VR Controllers -->
+      <a-entity
+        laser-controls="hand: right"
+        raycaster="objects: .clickable, .audio-control"
+      ></a-entity>
+      <a-entity
+        laser-controls="hand: left"
+        raycaster="objects: .clickable, .audio-control"
+      ></a-entity>
+
+      <a-assets>
+        <!-- Default panorama image -->
+        <img id="main-panorama" src="./images/scene1.jpg" />
+        <!-- Default audio file -->
+        <audio id="default-audio" src="./audio/music.mp3"></audio>
+        <!-- Close icon -->
+        <img id="close" src="./images/close.png" />
+        <!-- Audio controls -->
+        <img id="play" src="./images/play.png" />
+        <img id="pause" src="./images/pause.png" />
+        <!-- Video assets for 360° video scenes -->
+        <video
+          id="scene-video-dynamic"
+          crossorigin="anonymous"
+          loop
+          muted
+          playsinline
+          webkit-playsinline
+          style="display: none"
+        ></video>
+      </a-assets>
+
+      <!-- Container for hotspots -->
+      <a-entity id="hotspot-container"></a-entity>
+
+      <!-- 360 Sky -->
+      <a-sky id="skybox" src="#main-panorama"></a-sky>
+
+      <!-- Camera with cursor for interaction -->
+      <a-entity
+        id="cam"
+        camera
+        position="0 1.6 0"
+        look-controls="magicWindowTrackingEnabled: false; touchEnabled: true"
+      >
+        <!-- Mouse-based cursor for non-VR mode -->
+        <a-entity
+          cursor="rayOrigin: mouse; fuse: false"
+          raycaster="objects: .clickable, .audio-control, #skybox"
+          id="mouse-cursor"
+          visible="true"
+        >
+        </a-entity>
+
+        <!-- Gaze-based cursor for VR mode -->
+        <a-entity
+          cursor="fuse: true; fuseTimeout: 2000"
+          raycaster="objects: .clickable, .audio-control, #skybox"
+          position="0 0 -1"
+          geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
+          material="color: white; shader: flat; opacity: 0.8"
+          id="gaze-cursor"
+          visible="true"
+          animation__mouseenter="property: geometry.radiusOuter; to: 0.02; startEvents: mouseenter; dur: 2000; easing: easeInQuad"
+          animation__mouseleave="property: geometry.radiusOuter; to: 0.01; startEvents: mouseleave; dur: 300; easing: easeOutQuad"
+          animation__click="property: scale; to: 1.5 1.5 1.5; startEvents: click; dur: 150; easing: easeInOutQuad"
+          animation__fusing="property: scale; to: 2 2 2; startEvents: fusing; dur: 2000; easing: easeInQuad"
+          animation__fusecomplete="property: scale; to: 1 1 1; startEvents: click; dur: 150; easing: easeOutQuad"
+        >
+        </a-entity>
+      </a-entity>
+    </a-scene>
+
+    <!-- Toggle instructions panel script -->
+    <script>
+      // Toggle instructions panel
+      function toggleInstructions() {
+        const content = document.getElementById('instructions-content');
+        const toggle = document.getElementById('instructions-toggle');
+        const header = document.querySelector('.instructions-header');
+
+        console.log('Toggle clicked', { content, toggle, header });
+
+        if (content && toggle) {
+          content.classList.toggle('collapsed');
+          toggle.classList.toggle('collapsed');
+          if (header) {
+            header.classList.toggle('collapsed');
+          }
+          console.log('After toggle:', {
+            contentCollapsed: content.classList.contains('collapsed'),
+            toggleCollapsed: toggle.classList.contains('collapsed'),
+            headerCollapsed: header?.classList.contains('collapsed'),
+          });
+        }
+      }
+    </script>
+
+    <!-- Video Controls (appears only for video scenes) -->
+    <div
+      id="video-controls"
+      style="
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        padding: 15px 25px;
+        border-radius: 30px;
+        display: none;
+        gap: 15px;
+        align-items: center;
+        z-index: 1001;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      "
+    >
+      <button
+        id="video-play-pause"
+        style="
+          background: #007bff;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 20px;
+          cursor: pointer;
+          font-size: 16px;
+          font-weight: bold;
+        "
+      >
+        ⏸ Pause
+      </button>
+
+      <button
+        id="video-mute"
+        style="
+          background: #28a745;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 20px;
+          cursor: pointer;
+          font-size: 16px;
+        "
+      >
+        🔇 Muted
+      </button>
+
+      <div style="color: white; font-size: 14px">
+        <span id="video-time-current">0:00</span> / <span id="video-time-total">0:00</span>
+      </div>
+
+      <input
+        type="range"
+        id="video-progress"
+        min="0"
+        max="100"
+        value="0"
+        style="width: 200px; height: 6px; cursor: pointer"
+      />
+
+      <input
+        type="range"
+        id="video-volume"
+        min="0"
+        max="100"
+        value="50"
+        style="width: 100px; height: 6px; cursor: pointer"
+        title="Volume"
+      />
+    </div>
+  </body>
+</html>

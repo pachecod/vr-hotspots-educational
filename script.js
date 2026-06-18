@@ -12424,6 +12424,11 @@ document.addEventListener('DOMContentLoaded', () => {
           <p style="color: rgba(255,255,255,0.7); margin-top: 20px; font-size: 13px;">
             💡 You can always change it later from the Scene Manager
           </p>
+
+          <p style="color: rgba(255,255,255,0.75); margin-top: 18px; margin-bottom: 0; font-size: 12px; line-height: 1.5;">
+            Available for free for education use under the MIT License.
+            <a href="https://github.com/pachecod/vr-hotspots-educational" target="_blank" rel="noopener noreferrer" style="color: #fff; text-decoration: underline;">See our Github</a>.
+          </p>
         </div>
       `;
 

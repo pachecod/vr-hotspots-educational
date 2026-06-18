@@ -16,6 +16,14 @@ const {
   handleAdminSessionStatus,
 } = require('../admin-auth');
 
+const COMMON_ASSETS_LIST_CACHE_MS = 2 * 60 * 1000;
+let commonAssetsListCache = { data: null, expiresAt: 0 };
+
+function invalidateCommonAssetsListCache() {
+  commonAssetsListCache = { data: null, expiresAt: 0 };
+  b2Service.invalidateCommonAssetsCaches();
+}
+
 function getServerBaseUrl(req) {
   if (process.env.SERVER_BASE_URL && typeof process.env.SERVER_BASE_URL === 'string') {
     return process.env.SERVER_BASE_URL.replace(/\/$/, '');
@@ -36,31 +44,61 @@ async function buildPublicAssetUrl(category, filename) {
 }
 
 async function listCommonAssets() {
-  await b2Service.syncLegacyCommonAssetsToPublicBucket();
   const grouped = {};
   for (const category of COMMON_ASSET_CATEGORIES) {
     grouped[category] = [];
   }
 
+  await b2Service.ensureCommonAssetsBucket();
+  const prefix = 'common-assets/';
+  const allFiles = await b2Service.listCommonAssetFiles(prefix);
+
+  let sharedToken = null;
+  if (!b2Service.commonAssetsPublicAccess) {
+    sharedToken = await b2Service.getCommonAssetsPrefixAuthorization();
+  }
+
+  for (const file of allFiles) {
+    const remotePath = file.fileName || '';
+    if (!remotePath.startsWith(prefix)) continue;
+    const rest = remotePath.slice(prefix.length);
+    const parts = rest.split('/');
+    if (parts.length !== 2) continue;
+    const [category, filename] = parts;
+    if (!isValidCategory(category) || !filename) continue;
+
+    const url = b2Service.commonAssetsPublicAccess
+      ? b2Service.getCommonAssetPublicUrl(remotePath)
+      : b2Service.buildCommonAssetAccessUrl(remotePath, sharedToken);
+
+    grouped[category].push({
+      name: filename,
+      category,
+      size: file.contentLength,
+      uploadedAt: new Date(file.uploadTimestamp).toISOString(),
+      url,
+      contentType: getContentType(filename),
+    });
+  }
+
   for (const category of COMMON_ASSET_CATEGORIES) {
-    const prefix = `common-assets/${category}/`;
-    const files = await b2Service.listCommonAssetFiles(prefix);
-    for (const file of files) {
-      const filename = file.fileName.replace(prefix, '');
-      if (!filename || filename.includes('/')) continue;
-      grouped[category].push({
-        name: filename,
-        category,
-        size: file.contentLength,
-        uploadedAt: new Date(file.uploadTimestamp).toISOString(),
-        url: await b2Service.getCommonAssetAccessUrl(file.fileName),
-        contentType: getContentType(filename),
-      });
-    }
     grouped[category].sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
   }
 
   return grouped;
+}
+
+async function getCachedCommonAssets() {
+  const now = Date.now();
+  if (commonAssetsListCache.data && now < commonAssetsListCache.expiresAt) {
+    return commonAssetsListCache.data;
+  }
+  const data = await listCommonAssets();
+  commonAssetsListCache = {
+    data,
+    expiresAt: now + COMMON_ASSETS_LIST_CACHE_MS,
+  };
+  return data;
 }
 
 function registerCommonAssetRoutes(app, upload) {
@@ -70,7 +108,7 @@ function registerCommonAssetRoutes(app, upload) {
 
   app.get('/api/common-assets', async (req, res) => {
     try {
-      const assets = await listCommonAssets();
+      const assets = await getCachedCommonAssets();
       for (const category of Object.keys(assets)) {
         for (const asset of assets[category]) {
           asset.proxyUrl = buildProxyAssetUrl(req, asset.category, asset.name);
@@ -93,7 +131,7 @@ function registerCommonAssetRoutes(app, upload) {
 
   app.get('/admin/common-assets', requireAdmin, async (req, res) => {
     try {
-      const assets = await listCommonAssets();
+      const assets = await getCachedCommonAssets();
       for (const category of Object.keys(assets)) {
         for (const asset of assets[category]) {
           asset.proxyUrl = buildProxyAssetUrl(req, asset.category, asset.name);
@@ -133,6 +171,7 @@ function registerCommonAssetRoutes(app, upload) {
 
       const remotePath = buildRemotePath(validation.category, storedFilename);
       await b2Service.uploadCommonAsset(tempPath, remotePath, validation.contentType);
+      invalidateCommonAssetsListCache();
 
       res.json({
         success: true,
@@ -167,6 +206,7 @@ function registerCommonAssetRoutes(app, upload) {
 
       const remotePath = buildRemotePath(category, filename);
       await b2Service.deleteCommonAsset(remotePath);
+      invalidateCommonAssetsListCache();
       res.json({ success: true, message: 'Asset deleted' });
     } catch (err) {
       console.error('Common asset delete error:', err);
@@ -183,12 +223,6 @@ function registerCommonAssetRoutes(app, upload) {
       }
 
       const remotePath = buildRemotePath(category, filename);
-      const fileInfo = await b2Service.getCommonAssetFileInfo(remotePath);
-      if (!fileInfo) {
-        return res.status(404).send('Asset not found');
-      }
-
-      const totalSize = fileInfo.contentLength;
       const contentType = getContentType(filename);
       const rangeHeader = req.headers.range;
 
@@ -197,31 +231,47 @@ function registerCommonAssetRoutes(app, upload) {
         const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
         if (match) {
           const start = match[1] ? parseInt(match[1], 10) : 0;
-          const end = match[2] ? parseInt(match[2], 10) : totalSize - 1;
-          if (start <= end && end < totalSize) {
-            rangeOption = `bytes=${start}-${end}`;
+          const end = match[2] ? parseInt(match[2], 10) : null;
+          if (end === null || start <= end) {
+            rangeOption = end === null ? `bytes=${start}-` : `bytes=${start}-${end}`;
           }
         }
       }
 
-      const { stream, statusCode, headers } = await b2Service.downloadCommonAssetStream(remotePath, {
-        range: rangeOption,
-      });
+      let stream;
+      let statusCode;
+      let headers;
+      try {
+        ({ stream, statusCode, headers } = await b2Service.downloadCommonAssetStream(remotePath, {
+          range: rangeOption,
+        }));
+      } catch (err) {
+        const status = err && err.response && err.response.status;
+        if (status === 404) {
+          return res.status(404).send('Asset not found');
+        }
+        throw err;
+      }
+
+      if (statusCode === 404) {
+        return res.status(404).send('Asset not found');
+      }
 
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=86400');
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Access-Control-Allow-Origin', '*');
 
-      if (rangeOption && (statusCode === 206 || headers['content-range'])) {
-        const start = parseInt(rangeOption.split('=')[1].split('-')[0], 10);
-        const end = parseInt(rangeOption.split('-')[1], 10);
+      const contentLength = headers['content-length'];
+      const contentRange = headers['content-range'];
+
+      if (statusCode === 206 || contentRange) {
         res.status(206);
-        res.setHeader('Content-Range', `bytes ${start}-${end}/${totalSize}`);
-        res.setHeader('Content-Length', end - start + 1);
+        if (contentRange) res.setHeader('Content-Range', contentRange);
+        if (contentLength) res.setHeader('Content-Length', contentLength);
       } else {
         res.status(200);
-        res.setHeader('Content-Length', totalSize);
+        if (contentLength) res.setHeader('Content-Length', contentLength);
       }
 
       stream.on('error', (err) => {
@@ -238,4 +288,10 @@ function registerCommonAssetRoutes(app, upload) {
   });
 }
 
-module.exports = { registerCommonAssetRoutes, buildPublicAssetUrl, buildProxyAssetUrl, listCommonAssets };
+module.exports = {
+  registerCommonAssetRoutes,
+  buildPublicAssetUrl,
+  buildProxyAssetUrl,
+  listCommonAssets,
+  invalidateCommonAssetsListCache,
+};

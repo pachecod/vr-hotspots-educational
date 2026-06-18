@@ -37,6 +37,13 @@ class B2Service {
     this.commonAssetsBucketReady = false;
     this.commonAssetsPublicAccess = false;
     this._commonAssetsMigrationDone = false;
+    this._commonAssetsPrefixAuth = null;
+    this._commonAssetsPrefixAuthExpiresAt = 0;
+  }
+
+  invalidateCommonAssetsCaches() {
+    this._commonAssetsPrefixAuth = null;
+    this._commonAssetsPrefixAuthExpiresAt = 0;
   }
 
   _isExpiredAuthTokenError(err) {
@@ -474,23 +481,44 @@ class B2Service {
     return `${base}/file/${this.commonAssetsBucketName}/${this._encodeB2FilePath(remotePath)}`;
   }
 
+  buildCommonAssetAccessUrl(remotePath, authorizationToken) {
+    if (this.commonAssetsPublicAccess) {
+      return this.getCommonAssetPublicUrl(remotePath);
+    }
+    const base = (this.commonAssetsDownloadUrl || this.downloadUrl || this.b2.downloadUrl).replace(/\/$/, '');
+    return `${base}/file/${this.commonAssetsBucketName}/${this._encodeB2FilePath(remotePath)}?Authorization=${encodeURIComponent(authorizationToken)}`;
+  }
+
+  async getCommonAssetsPrefixAuthorization() {
+    await this.ensureCommonAssetsBucket();
+    if (this.commonAssetsPublicAccess) return null;
+
+    const now = Date.now();
+    if (this._commonAssetsPrefixAuth && now < this._commonAssetsPrefixAuthExpiresAt) {
+      return this._commonAssetsPrefixAuth;
+    }
+
+    const authResponse = await this._withReauthRetry('getDownloadAuthorization(common assets prefix)', async () =>
+      this.b2.getDownloadAuthorization({
+        bucketId: this.commonAssetsBucketId,
+        fileNamePrefix: 'common-assets/',
+        validDurationInSeconds: 604800,
+      })
+    );
+
+    this._commonAssetsPrefixAuth = authResponse.data.authorizationToken;
+    this._commonAssetsPrefixAuthExpiresAt = now + 23 * 60 * 60 * 1000;
+    return this._commonAssetsPrefixAuth;
+  }
+
   async getCommonAssetAccessUrl(remotePath) {
     await this.ensureCommonAssetsBucket();
     if (this.commonAssetsPublicAccess) {
       return this.getCommonAssetPublicUrl(remotePath);
     }
 
-    const authResponse = await this._withReauthRetry('getDownloadAuthorization(common asset)', async () =>
-      this.b2.getDownloadAuthorization({
-        bucketId: this.commonAssetsBucketId,
-        fileNamePrefix: remotePath,
-        validDurationInSeconds: 604800,
-      })
-    );
-
-    const base = (this.commonAssetsDownloadUrl || this.downloadUrl || this.b2.downloadUrl).replace(/\/$/, '');
-    const token = authResponse.data.authorizationToken;
-    return `${base}/file/${this.commonAssetsBucketName}/${this._encodeB2FilePath(remotePath)}?Authorization=${encodeURIComponent(token)}`;
+    const token = await this.getCommonAssetsPrefixAuthorization();
+    return this.buildCommonAssetAccessUrl(remotePath, token);
   }
 
   _usePrivateBucketForCommonAssets() {
@@ -571,6 +599,9 @@ class B2Service {
 
   async applyCommonAssetsCorsRules() {
     if (!this.commonAssetsBucketId) return;
+    if (trimEnv(process.env.B2_SKIP_CORS_UPDATE) === 'true') {
+      return;
+    }
 
     const axios = require('axios');
     const corsRules = [
@@ -609,6 +640,11 @@ class B2Service {
     ];
 
     try {
+      if (await this._bucketCorsIsConfigured(this.commonAssetsBucketId, corsRules)) {
+        console.log(`ℹ️  CORS already configured on ${this.commonAssetsBucketName}; skipping update`);
+        return;
+      }
+
       await axios.post(
         `${this.b2.apiUrl}/b2api/v2/b2_update_bucket`,
         {
@@ -627,6 +663,43 @@ class B2Service {
     } catch (err) {
       const details = err.response && err.response.data ? JSON.stringify(err.response.data) : err.message;
       console.warn(`⚠️ Could not update CORS on common-assets bucket: ${details}`);
+    }
+  }
+
+  async _bucketCorsIsConfigured(bucketId, expectedRules) {
+    const axios = require('axios');
+    try {
+      const response = await axios.post(
+        `${this.b2.apiUrl}/b2api/v2/b2_get_bucket`,
+        {
+          accountId: this.b2.accountId,
+          bucketId,
+        },
+        {
+          headers: {
+            Authorization: this.b2.authorizationToken,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const existing = response.data && response.data.corsRules;
+      if (!Array.isArray(existing) || existing.length === 0) return false;
+
+      const rule = existing.find((entry) => entry.corsRuleName === 'allowBrowserAccess') || existing[0];
+      const expected = expectedRules[0];
+      if (!rule || !expected) return false;
+
+      const originsOk =
+        Array.isArray(rule.allowedOrigins) &&
+        rule.allowedOrigins.includes('*');
+      const operationsOk =
+        Array.isArray(rule.allowedOperations) &&
+        expected.allowedOperations.every((op) => rule.allowedOperations.includes(op));
+
+      return originsOk && operationsOk;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -756,6 +829,7 @@ class B2Service {
 
   async uploadCommonAsset(localPath, remotePath, contentType = 'application/octet-stream') {
     await this.ensureCommonAssetsBucket();
+    this.invalidateCommonAssetsCaches();
     if (!this.commonAssetsPublicAccess) {
       return this.uploadFile(localPath, remotePath, contentType);
     }
@@ -780,6 +854,7 @@ class B2Service {
 
   async deleteCommonAsset(remotePath) {
     await this.ensureCommonAssetsBucket();
+    this.invalidateCommonAssetsCaches();
     if (!this.commonAssetsPublicAccess) {
       return this.deleteFile(remotePath);
     }

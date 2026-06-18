@@ -205,9 +205,12 @@ app.use(protectAdminRoutes);
 registerCommonAssetRoutes(app, upload);
 
 if (process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_BUCKET_NAME) {
-  b2Service.ensureCommonAssetsBucket().catch((err) => {
-    console.warn('⚠️ Common assets bucket setup skipped:', err.message);
-  });
+  b2Service
+    .ensureCommonAssetsBucket()
+    .then(() => b2Service.syncLegacyCommonAssetsToPublicBucket())
+    .catch((err) => {
+      console.warn('⚠️ Common assets bucket setup skipped:', err.message);
+    });
 }
 
 // Debug endpoint: view server memory usage (useful on localhost / Render)

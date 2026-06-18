@@ -3,11 +3,15 @@ const B2 = require('backblaze-b2');
 const fs = require('fs');
 const path = require('path');
 
-// Backblaze credentials from environment variables
-const B2_KEY_ID = process.env.B2_KEY_ID;
-const B2_APP_KEY = process.env.B2_APP_KEY;
-const B2_BUCKET_NAME = process.env.B2_BUCKET_NAME;
-const B2_BUCKET_ID = process.env.B2_BUCKET_ID;
+function trimEnv(value) {
+  return typeof value === 'string' ? value.trim() : value;
+}
+
+// Backblaze credentials from environment variables (trim — Render paste often adds whitespace)
+const B2_KEY_ID = trimEnv(process.env.B2_KEY_ID);
+const B2_APP_KEY = trimEnv(process.env.B2_APP_KEY);
+const B2_BUCKET_NAME = trimEnv(process.env.B2_BUCKET_NAME);
+const B2_BUCKET_ID = trimEnv(process.env.B2_BUCKET_ID);
 
 // Validate required environment variables (defer hard failure until first B2 use)
 const B2_CONFIGURED = !!(B2_KEY_ID && B2_APP_KEY && B2_BUCKET_NAME);
@@ -39,6 +43,68 @@ class B2Service {
     const code = err && err.response && err.response.data && err.response.data.code;
     const status = err && err.response && err.response.status;
     return status === 401 && (code === 'expired_auth_token' || code === 'bad_auth_token');
+  }
+
+  _isBadBucketIdError(err) {
+    const status = err && err.response && err.response.status;
+    const message = (err && err.response && err.response.data && err.response.data.message) || '';
+    return status === 400 && /bucket/i.test(String(message));
+  }
+
+  formatError(err) {
+    const data = err && err.response && err.response.data;
+    if (data && data.message) {
+      return data.message;
+    }
+    return err && err.message ? err.message : 'Unknown B2 error';
+  }
+
+  async _resolveBucketByName(bucketName) {
+    const bucketResponse = await this.b2.getBucket({ bucketName });
+    const bucket = bucketResponse.data.buckets && bucketResponse.data.buckets[0];
+    if (bucket) {
+      this.bucketId = bucket.bucketId;
+      this.downloadUrl = bucket.downloadUrl || this.b2.downloadUrl;
+      console.log(`✅ Using existing bucket: ${bucketName}`);
+      console.log(`   Bucket ID: ${this.bucketId}`);
+      return true;
+    }
+
+    console.log(`   Bucket "${bucketName}" not found via API, creating...`);
+    try {
+      const createResponse = await this.b2.createBucket({
+        bucketName,
+        bucketType: 'allPrivate',
+      });
+      this.bucketId = createResponse.data.bucketId;
+      this.downloadUrl = createResponse.data.downloadUrl || this.b2.downloadUrl;
+      console.log(`✅ Created new bucket: ${bucketName}`);
+      console.log(`   Bucket ID: ${this.bucketId}`);
+      return true;
+    } catch (createErr) {
+      if (createErr.response && createErr.response.data && createErr.response.data.code === 'duplicate_bucket_name') {
+        throw new Error(
+          `Bucket "${bucketName}" exists but could not be resolved. ` +
+            'Open Backblaze B2 → Buckets → your bucket → Bucket Settings, copy the Bucket ID, ' +
+            'and add B2_BUCKET_ID=... to .env. Or use a new bucket name in B2_BUCKET_NAME (e.g. hotspot-vr).'
+        );
+      }
+      throw createErr;
+    }
+  }
+
+  async _validateBucketId(bucketId) {
+    try {
+      await this.b2.listFileNames({
+        bucketId,
+        maxFileCount: 1,
+        startFileName: '',
+      });
+      return true;
+    } catch (err) {
+      if (this._isBadBucketIdError(err)) return false;
+      throw err;
+    }
   }
 
   async _withReauthRetry(actionName, fn) {
@@ -76,42 +142,19 @@ class B2Service {
       console.log('✅ Backblaze B2 authorized');
 
       if (bucketIdFromEnv) {
-        this.bucketId = bucketIdFromEnv;
-        this.downloadUrl = this.b2.downloadUrl;
-        console.log(`✅ Using bucket ID from env: ${this.bucketId} (${bucketName})`);
-        return;
-      }
-
-      const bucketResponse = await this.b2.getBucket({ bucketName });
-      const bucket = bucketResponse.data.buckets && bucketResponse.data.buckets[0];
-      if (bucket) {
-        this.bucketId = bucket.bucketId;
-        this.downloadUrl = bucket.downloadUrl || this.b2.downloadUrl;
-        console.log(`✅ Using existing bucket: ${bucketName}`);
-        console.log(`   Bucket ID: ${this.bucketId}`);
-        return;
-      }
-
-      console.log(`   Bucket "${bucketName}" not found via API, creating...`);
-      try {
-        const createResponse = await this.b2.createBucket({
-          bucketName,
-          bucketType: 'allPrivate',
-        });
-        this.bucketId = createResponse.data.bucketId;
-        this.downloadUrl = createResponse.data.downloadUrl || this.b2.downloadUrl;
-        console.log(`✅ Created new bucket: ${bucketName}`);
-        console.log(`   Bucket ID: ${this.bucketId}`);
-      } catch (createErr) {
-        if (createErr.response && createErr.response.data && createErr.response.data.code === 'duplicate_bucket_name') {
-          throw new Error(
-            `Bucket "${bucketName}" exists but could not be resolved. ` +
-              'Open Backblaze B2 → Buckets → your bucket → Bucket Settings, copy the Bucket ID, ' +
-              'and add B2_BUCKET_ID=... to .env. Or use a new bucket name in B2_BUCKET_NAME (e.g. hotspot-vr).'
-          );
+        const bucketIdValid = await this._validateBucketId(bucketIdFromEnv);
+        if (bucketIdValid) {
+          this.bucketId = bucketIdFromEnv;
+          this.downloadUrl = this.b2.downloadUrl;
+          console.log(`✅ Using bucket ID from env: ${this.bucketId} (${bucketName})`);
+          return;
         }
-        throw createErr;
+        console.warn(
+          `⚠️ B2_BUCKET_ID "${bucketIdFromEnv}" is invalid for this account; resolving bucket by name "${bucketName}" instead.`
+        );
       }
+
+      await this._resolveBucketByName(bucketName);
 
       // Guard: if bucketId is still null after resolution, fail fast
       if (!this.bucketId) {

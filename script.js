@@ -2591,7 +2591,7 @@ class HotspotEditor {
       scene: this.currentScene,
       navigationTarget: document.getElementById('navigation-target').value || null,
       image: null,
-      imageScale: 1,
+      imageScale: 5,
       weblinkUrl: null,
       weblinkTitle: null,
       weblinkPreview: null,
@@ -2609,7 +2609,7 @@ class HotspotEditor {
       const imgFileEl = document.getElementById('hotspot-image-file');
       const imgUrlEl = document.getElementById('hotspot-image-url');
       const scaleEl = document.getElementById('hotspot-image-scale');
-      const s = parseFloat(scaleEl?.value || '1') || 1;
+      const s = parseFloat(scaleEl?.value || '5') || 5;
       hotspotData.imageScale = Math.max(0.1, Math.min(10, s));
       if (imgUrlEl?.value.trim()) hotspotData.image = imgUrlEl.value.trim();
       else if (imgFileEl?.files?.[0]) hotspotData.image = imgFileEl.files[0];
@@ -2769,7 +2769,7 @@ class HotspotEditor {
     const imageUrlEl = document.getElementById('hotspot-image-url');
     if (imageUrlEl) imageUrlEl.value = '';
     const imageScaleEl = document.getElementById('hotspot-image-scale');
-    if (imageScaleEl) imageScaleEl.value = '1';
+    if (imageScaleEl) imageScaleEl.value = '5';
     const modelFileEl = document.getElementById('hotspot-model-file');
     if (modelFileEl) modelFileEl.value = '';
     const modelUrlEl = document.getElementById('hotspot-model-url');
@@ -8439,7 +8439,7 @@ AFRAME.registerComponent("hotspot", {
     popupHeight: { type: "number", default: 2 },
     popupColor: { type: "color", default: "#333333" },
     imageSrc: { type: "string", default: "" },
-    imageScale: { type: "number", default: 1 },
+    imageScale: { type: "number", default: 5 },
     imageAspectRatio: { type: "number", default: 0 },
     modelSrc: { type: "string", default: "" },
     modelScale: { type: "number", default: 1 },
@@ -13563,7 +13563,7 @@ AFRAME.registerComponent('editor-spot', {
     popupColor: { type: 'color', default: '#333333' },
     navigation: { type: 'string', default: '' },
     imageSrc: { type: 'string', default: '' },
-    imageScale: { type: 'number', default: 1 },
+    imageScale: { type: 'number', default: 5 },
     imageAspectRatio: { type: 'number', default: 0 },
     modelSrc: { type: 'string', default: '' },
     modelScale: { type: 'number', default: 1 },
@@ -13683,7 +13683,6 @@ AFRAME.registerComponent('editor-spot', {
       const editor = window.hotspotEditor;
       if (editor && editor.customStyles && editor.customStyles.image) {
         const istyle = editor.customStyles.image;
-        x;
         const opacity = typeof istyle.opacity === 'number' ? istyle.opacity : 1.0;
         img.setAttribute(
           'material',
@@ -14637,7 +14636,7 @@ const CommonAssetsPicker = {
     const el = document.getElementById(targetId);
     if (!el) return false;
 
-    el.value = asset.url;
+    el.value = asset.proxyUrl || asset.url;
     el.dispatchEvent(new Event('input', { bubbles: true }));
 
     const fileInputId = this.FIELD_FILE_MAP[targetId];

@@ -71,20 +71,46 @@ function registerCommonAssetRoutes(app, upload) {
   app.get('/api/common-assets', async (req, res) => {
     try {
       const assets = await listCommonAssets();
+      for (const category of Object.keys(assets)) {
+        for (const asset of assets[category]) {
+          asset.proxyUrl = buildProxyAssetUrl(req, asset.category, asset.name);
+        }
+      }
       res.json({ success: true, assets });
     } catch (err) {
       console.error('List common assets error:', err);
-      res.status(500).json({ success: false, message: err.message || 'Failed to list assets' });
+      const b2Message = b2Service.formatError(err);
+      const hint =
+        /bucket/i.test(b2Message) ?
+          ' Check B2_BUCKET_ID and B2_BUCKET_NAME in Render Environment (or remove B2_BUCKET_ID to auto-resolve by name).'
+        : '';
+      res.status(500).json({
+        success: false,
+        message: (b2Message || err.message || 'Failed to list assets') + hint,
+      });
     }
   });
 
   app.get('/admin/common-assets', requireAdmin, async (req, res) => {
     try {
       const assets = await listCommonAssets();
+      for (const category of Object.keys(assets)) {
+        for (const asset of assets[category]) {
+          asset.proxyUrl = buildProxyAssetUrl(req, asset.category, asset.name);
+        }
+      }
       res.json({ success: true, assets });
     } catch (err) {
       console.error('Admin list common assets error:', err);
-      res.status(500).json({ success: false, message: err.message || 'Failed to list assets' });
+      const b2Message = b2Service.formatError(err);
+      const hint =
+        /bucket/i.test(b2Message) ?
+          ' Check B2_BUCKET_ID and B2_BUCKET_NAME in Render Environment (or remove B2_BUCKET_ID to auto-resolve by name).'
+        : '';
+      res.status(500).json({
+        success: false,
+        message: (b2Message || err.message || 'Failed to list assets') + hint,
+      });
     }
   });
 

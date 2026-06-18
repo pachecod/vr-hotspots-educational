@@ -280,6 +280,7 @@ class HotspotEditor {
 
   init() {
     this.bindEvents();
+    this.setupEditorPanelToggle();
     this.setupHotspotTypeSelection();
     this.setupSceneManagement();
 
@@ -1227,6 +1228,31 @@ class HotspotEditor {
       window.removeEventListener('mousemove', this._navPreviewMove);
     }
   }
+  setupEditorPanelToggle() {
+    const panel = document.getElementById('hotspot-editor');
+    const toggle = document.getElementById('hotspot-editor-toggle');
+    const icon = document.getElementById('hotspot-editor-toggle-icon');
+    if (!panel || !toggle || !icon) return;
+
+    const storageKey = 'hotspot-editor-expanded';
+    const saved = localStorage.getItem(storageKey);
+    const startExpanded = saved === null ? true : saved === 'true';
+
+    const setExpanded = (expanded) => {
+      panel.classList.toggle('collapsed', !expanded);
+      icon.textContent = expanded ? '›' : '‹';
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      toggle.title = expanded ? 'Hide editor tools' : 'Show editor tools';
+      localStorage.setItem(storageKey, expanded ? 'true' : 'false');
+    };
+
+    setExpanded(startExpanded);
+
+    toggle.addEventListener('click', () => {
+      setExpanded(panel.classList.contains('collapsed'));
+    });
+  }
+
   bindEvents() {
     // Add hotspot button
     document.getElementById('add-hotspot').addEventListener('click', () => {
@@ -12382,7 +12408,12 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
 
       dialog.innerHTML = `
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; border-radius: 16px; color: white; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; border-radius: 16px; color: white; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center; position: relative;">
+          <button id="welcome-close-btn" type="button" aria-label="Close" title="Keep default scene" style="
+            position: absolute; top: 12px; left: 12px;
+            background: none; border: none; color: rgba(255,255,255,0.85);
+            font-size: 28px; line-height: 1; cursor: pointer; padding: 4px 8px;
+          ">&times;</button>
           <div style="font-size: 48px; margin-bottom: 20px;">🎬</div>
           <h2 style="margin: 0 0 15px 0; font-size: 28px; font-weight: bold;">Welcome to VR Hotspot Editor!</h2>
           <p style="color: #f0f0f0; margin-bottom: 25px; font-size: 16px; line-height: 1.6;">
@@ -12521,10 +12552,13 @@ document.addEventListener('DOMContentLoaded', () => {
         };
       }
 
-      // Keep Default button
-      document.getElementById('keep-default-btn').onclick = () => {
-        document.body.removeChild(dialog);
+      // Keep Default button (same as close X)
+      const closeWelcomeDialog = () => {
+        if (dialog.parentNode) document.body.removeChild(dialog);
       };
+
+      document.getElementById('welcome-close-btn').onclick = closeWelcomeDialog;
+      document.getElementById('keep-default-btn').onclick = closeWelcomeDialog;
     }, 1000); // Delay by 1 second to let the scene load first
   }
 
@@ -14184,11 +14218,11 @@ class StudentSubmission {
         <p style="color: #ccc;">Submit your VR hotspot project to the admin:</p>
         
         <div style="margin: 20px 0;">
-          <label style="display: block; margin-bottom: 5px; color: #ccc;">Student Name:</label>
-          <input type="text" id="student-name" style="
+          <label style="display: block; margin-bottom: 5px; color: #ccc;">Project Name:</label>
+          <input type="text" id="project-name" style="
             width: 100%; padding: 10px; border: 1px solid #555; 
             background: #333; color: white; border-radius: 4px;
-          " placeholder="Enter your full name">
+          " placeholder="My project name">
         </div>
         
         <div style="margin: 25px 0; text-align: center;">
@@ -14210,7 +14244,7 @@ class StudentSubmission {
 
     // Add event listeners
     document.getElementById('submit-project-btn').addEventListener('click', () => {
-      StudentSubmission.submitProject(document.getElementById('student-name').value);
+      StudentSubmission.submitProject(document.getElementById('project-name').value);
     });
 
     document.getElementById('cancel-submission-btn').addEventListener('click', () => {
@@ -14218,11 +14252,14 @@ class StudentSubmission {
     });
   }
 
-  static async submitProject(studentName) {
-    if (!studentName || !studentName.trim()) {
-      alert('Please enter your name!');
+  static async submitProject(projectDisplayName) {
+    if (!projectDisplayName || !projectDisplayName.trim()) {
+      alert('Please enter a project name!');
       return;
     }
+
+    const projectName = projectDisplayName.trim();
+    const studentName = projectName;
 
     const statusDiv = document.getElementById('submission-status');
     const submitBtn = document.getElementById('submit-project-btn');
@@ -14237,8 +14274,8 @@ class StudentSubmission {
         throw new Error('Editor not initialized');
       }
 
-      // Create a simple project name from student name and timestamp
-      const projectName = `${studentName.replace(/[^a-zA-Z0-9]/g, '_')}_VR_Project`;
+      // Sanitize for zip/filename paths
+      const safeProjectName = projectName.replace(/[^a-zA-Z0-9]/g, '_') || 'My_Project';
 
       // Create the project zip using the existing method
       const JSZip = window.JSZip || (await window.hotspotEditor.loadJSZip());
@@ -14249,14 +14286,14 @@ class StudentSubmission {
       const skyboxSrc = skyboxImg ? skyboxImg.src : '';
 
       // Add files to zip using existing method
-      await window.hotspotEditor.addFilesToZip(zip, projectName, skyboxSrc);
+      await window.hotspotEditor.addFilesToZip(zip, safeProjectName, skyboxSrc);
 
       // Generate blob
       const content = await zip.generateAsync({ type: 'blob' });
 
       // Create form data
       const formData = new FormData();
-      formData.append('project', content, `${projectName}.zip`);
+      formData.append('project', content, `${safeProjectName}.zip`);
       formData.append('studentName', studentName);
       formData.append('projectName', projectName);
 
@@ -14302,7 +14339,7 @@ class StudentSubmission {
               return handleRetry(err);
             }
 
-            const safeStudent = studentName.replace(/[^a-zA-Z0-9]/g, '_') || 'student';
+            const safeStudent = safeProjectName.replace(/[^a-zA-Z0-9]/g, '_') || 'project';
             const fileName = `${safeStudent}_${Date.now()}.zip`;
             const remotePath = `student-projects/${fileName}`;
 

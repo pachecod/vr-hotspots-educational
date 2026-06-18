@@ -553,6 +553,16 @@
         border: none;
         background: #ececec;
       }
+      #common-assets-modal .ca-item-thumb-video {
+        overflow: hidden;
+        background: #111;
+      }
+      #common-assets-modal .ca-item-thumb-video video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
       #common-assets-modal .ca-item-thumb-fallback {
         display: flex;
         align-items: center;
@@ -1680,7 +1690,9 @@
         <div class="modal-body">
           <input type="search" id="common-assets-search" class="ca-search" placeholder="Search by filename..." />
           <div class="ca-tabs" id="common-assets-tabs">
-            <button class="ca-tab active" data-category="images">Images</button>
+            <button class="ca-tab active" data-category="images">Flat Images</button>
+            <button class="ca-tab" data-category="360-images">360 Photos</button>
+            <button class="ca-tab" data-category="360-videos">360 Videos</button>
             <button class="ca-tab" data-category="audio">Audio</button>
             <button class="ca-tab" data-category="3d">3D</button>
             <button class="ca-tab" data-category="other">Other</button>

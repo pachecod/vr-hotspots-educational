@@ -12481,38 +12481,14 @@ document.addEventListener('DOMContentLoaded', () => {
       // Change Image button
       document.getElementById('change-scene-image-btn').onclick = () => {
         document.body.removeChild(dialog);
-        this.editSceneImage('scene1');
+        this.editSceneImage('scene1', { reopenSceneManager: false });
       };
 
       const videoBtn = document.getElementById('change-scene-video-btn');
       if (videoBtn) {
         videoBtn.onclick = () => {
           document.body.removeChild(dialog);
-          // Reuse the addSceneVideoFromFile flow but apply to scene1
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = 'video/mp4,video/webm';
-          input.onchange = async (e) => {
-            const file = e.target.files && e.target.files[0];
-            if (!file) return;
-            if (!file.type.startsWith('video/')) {
-              alert('Please select a valid MP4/WebM video.');
-              return;
-            }
-            const storageKey = 'video_scene1';
-            await this.saveVideoToIDB(storageKey, file);
-            const url = URL.createObjectURL(file);
-            const sc = this.scenes.scene1 || {};
-            sc.type = 'video';
-            sc.videoSrc = url;
-            sc.videoStorageKey = storageKey;
-            sc.videoFileName = file.name;
-            sc.videoVolume = 0.5;
-            this.scenes.scene1 = sc;
-            this.saveScenesData();
-            this.switchToScene('scene1');
-          };
-          input.click();
+          this.showSceneVideoSourcePicker('scene1');
         };
       }
 
@@ -12605,6 +12581,15 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div style="margin: 15px 0;">
+            <button id="browse-image-common-new" style="
+              background: #6f42c1; color: white; border: none; padding: 12px 20px;
+              border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
+            ">📚 Browse Shared Assets</button>
+            <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
+              Choose a 360° image from the shared library
+            </div>
+          </div>
+          <div style="margin: 15px 0;">
             <button id="use-image-url-new" style="
               background: #2196F3; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
@@ -12621,9 +12606,18 @@ document.addEventListener('DOMContentLoaded', () => {
             <button id="upload-video-file-new" style="
               background: #9C27B0; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
-            ">� Upload Video File</button>
+            ">🎥 Upload Video File</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
               MP4/WebM • 360° equirectangular format
+            </div>
+          </div>
+          <div style="margin: 15px 0;">
+            <button id="browse-video-common-new" style="
+              background: #6f42c1; color: white; border: none; padding: 12px 20px;
+              border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
+            ">📚 Browse Shared Assets</button>
+            <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
+              Choose a 360° video from the shared library
             </div>
           </div>
           <div style="margin: 15px 0;">
@@ -12665,6 +12659,22 @@ document.addEventListener('DOMContentLoaded', () => {
       this.addSceneFromURL(name);
     };
 
+    document.getElementById('browse-image-common-new').onclick = () => {
+      document.body.removeChild(dialog);
+      if (!window.CommonAssetsPicker) {
+        alert('Shared assets picker is not available.');
+        return;
+      }
+      window.CommonAssetsPicker.openFor({
+        category: '360-images',
+        onSelect: (asset) => {
+          if (!asset || asset.category !== '360-images') return;
+          const url = asset.proxyUrl || asset.url;
+          this.addSceneFromURL(name, url);
+        },
+      });
+    };
+
     // Video upload from file
     document.getElementById('upload-video-file-new').onclick = () => {
       document.body.removeChild(dialog);
@@ -12675,6 +12685,22 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('use-video-url-new').onclick = () => {
       document.body.removeChild(dialog);
       this.addSceneVideoFromURL(name);
+    };
+
+    document.getElementById('browse-video-common-new').onclick = () => {
+      document.body.removeChild(dialog);
+      if (!window.CommonAssetsPicker) {
+        alert('Shared assets picker is not available.');
+        return;
+      }
+      window.CommonAssetsPicker.openFor({
+        category: '360-videos',
+        onSelect: (asset) => {
+          if (!asset || asset.category !== '360-videos') return;
+          const url = asset.proxyUrl || asset.url;
+          this.addSceneVideoFromURL(name, url);
+        },
+      });
     };
 
     document.getElementById('cancel-scene').onclick = () => {
@@ -12736,11 +12762,14 @@ document.addEventListener('DOMContentLoaded', () => {
     input.click();
   }
 
-  addSceneFromURL(name) {
-    const url = prompt(
-      "Enter the URL of the 360° image:\n(Make sure it's a direct link to an image file)",
-      'https://'
-    );
+  addSceneFromURL(name, presetUrl) {
+    const url =
+      typeof presetUrl === 'string' && presetUrl.trim()
+        ? presetUrl.trim()
+        : prompt(
+            "Enter the URL of the 360° image:\n(Make sure it's a direct link to an image file)",
+            'https://'
+          );
     if (!url || url === 'https://') return;
 
     // Validate URL format
@@ -12756,7 +12785,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Test if the image loads
     const testImg = new Image();
-    testImg.crossOrigin = 'anonymous';
+    const isSameOrigin =
+      url.startsWith('/') ||
+      url.startsWith(window.location.origin + '/') ||
+      url.startsWith(window.location.origin);
+    if (!isSameOrigin) {
+      testImg.crossOrigin = 'anonymous';
+    }
 
     testImg.onload = () => {
       const sceneId = `scene_${Date.now()}`;
@@ -12863,11 +12898,14 @@ document.addEventListener('DOMContentLoaded', () => {
     input.click();
   }
 
-  async addSceneVideoFromURL(name) {
-    const url = prompt(
-      'Enter the URL of the 360° video:\n(Direct link to MP4/WebM file)',
-      'https://'
-    );
+  async addSceneVideoFromURL(name, presetUrl) {
+    const url =
+      typeof presetUrl === 'string' && presetUrl.trim()
+        ? presetUrl.trim()
+        : prompt(
+            'Enter the URL of the 360° video:\n(Direct link to MP4/WebM file)',
+            'https://'
+          );
     if (!url || url === 'https://') return;
 
     // Validate URL format
@@ -13008,7 +13046,169 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(dialog);
   }
 
-  editSceneImage(sceneId) {
+  applySceneImageFromUrl(sceneId, url, { onDone } = {}) {
+    const scene = this.scenes[sceneId];
+    if (!scene || !url) return;
+
+    this.showLoadingIndicator('Loading image...');
+
+    const testImg = new Image();
+    const isSameOrigin =
+      url.startsWith('/') ||
+      url.startsWith(window.location.origin + '/') ||
+      url.startsWith(window.location.origin);
+    if (!isSameOrigin) {
+      testImg.crossOrigin = 'anonymous';
+    }
+
+    testImg.onload = () => {
+      scene.type = 'image';
+      scene.image = url;
+      scene.videoSrc = null;
+      delete scene.imageStorageKey;
+      delete scene.imageFileName;
+      this.saveScenesData();
+      if (sceneId === this.currentScene) {
+        this.loadCurrentScene();
+      }
+      this.hideLoadingIndicator();
+      if (typeof onDone === 'function') {
+        onDone();
+      } else {
+        this.showStartingPointFeedback(`Updated image for "${scene.name}"`);
+      }
+    };
+
+    testImg.onerror = () => {
+      this.hideLoadingIndicator();
+      alert(
+        'Failed to load image. Please check the URL is correct and accessible.'
+      );
+    };
+
+    testImg.src = url;
+  }
+
+  async applySceneVideoFromUrl(sceneId, url, { onDone } = {}) {
+    const scene = this.scenes[sceneId];
+    if (!scene || !url) return;
+
+    scene.type = 'video';
+    scene.videoSrc = url;
+    scene.videoFileName = url.split('/').pop();
+    scene.videoVolume = scene.videoVolume || 0.5;
+    this.scenes[sceneId] = scene;
+    this.saveScenesData();
+
+    await this.autoDownloadRemoteVideo(sceneId, url);
+    this.switchToScene(sceneId);
+
+    if (typeof onDone === 'function') {
+      onDone();
+    }
+  }
+
+  pickSceneVideoFromFile(sceneId) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/mp4,video/webm';
+    input.onchange = async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('video/')) {
+        alert('Please select a valid MP4/WebM video.');
+        return;
+      }
+      const storageKey = sceneId === 'scene1' ? 'video_scene1' : `video_${sceneId}`;
+      await this.saveVideoToIDB(storageKey, file);
+      const url = URL.createObjectURL(file);
+      const sc = this.scenes[sceneId] || {};
+      sc.type = 'video';
+      sc.videoSrc = url;
+      sc.videoStorageKey = storageKey;
+      sc.videoFileName = file.name;
+      sc.videoVolume = sc.videoVolume || 0.5;
+      this.scenes[sceneId] = sc;
+      this.saveScenesData();
+      this.switchToScene(sceneId);
+    };
+    input.click();
+  }
+
+  showSceneVideoSourcePicker(sceneId) {
+    const scene = this.scenes[sceneId];
+    if (!scene) return;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8); z-index: 10000; display: flex;
+      align-items: center; justify-content: center; font-family: Arial;
+    `;
+
+    dialog.innerHTML = `
+      <div style="background: #2a2a2a; padding: 30px; border-radius: 10px; color: white; max-width: 500px;">
+        <h3 style="margin-top: 0; color: #9C27B0;">🎥 Choose 360° Video</h3>
+        <p style="color: #ccc;">Select a video for "${scene.name}":</p>
+
+        <div style="margin: 15px 0;">
+          <button id="scene-video-upload-file" style="
+            background: #9C27B0; color: white; border: none; padding: 12px 20px;
+            border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
+          ">📁 Upload Video File</button>
+          <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
+            MP4/WebM from your computer
+          </div>
+        </div>
+
+        <div style="margin: 15px 0;">
+          <button id="scene-video-browse-common" style="
+            background: #6f42c1; color: white; border: none; padding: 12px 20px;
+            border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
+          ">📚 Browse Shared Assets</button>
+          <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
+            Choose a 360° video from the shared library
+          </div>
+        </div>
+
+        <button id="scene-video-source-cancel" style="
+          background: #666; color: white; border: none; padding: 10px 20px;
+          border-radius: 4px; cursor: pointer; margin-top: 10px; width: 100%; font-weight: bold;
+        ">Cancel</button>
+      </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    const close = () => {
+      if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
+    };
+
+    dialog.querySelector('#scene-video-source-cancel').onclick = close;
+
+    dialog.querySelector('#scene-video-upload-file').onclick = () => {
+      close();
+      this.pickSceneVideoFromFile(sceneId);
+    };
+
+    dialog.querySelector('#scene-video-browse-common').onclick = () => {
+      close();
+      if (!window.CommonAssetsPicker) {
+        alert('Shared assets picker is not available.');
+        return;
+      }
+      window.CommonAssetsPicker.openFor({
+        category: '360-videos',
+        onSelect: (asset) => {
+          if (!asset || asset.category !== '360-videos') return;
+          const url = asset.proxyUrl || asset.url;
+          this.applySceneVideoFromUrl(sceneId, url);
+        },
+      });
+    };
+  }
+
+  editSceneImage(sceneId, { reopenSceneManager = true } = {}) {
     const scene = this.scenes[sceneId];
     if (!scene) return;
 
@@ -13041,6 +13241,17 @@ document.addEventListener('DOMContentLoaded', () => {
             Upload a new image from your computer
           </div>
         </div>
+
+        <div style="margin: 20px 0;">
+          <button id="browse-common-image" style="
+            background: #6f42c1; color: white; border: none; padding: 15px 25px;
+            border-radius: 6px; cursor: pointer; margin: 5px; width: 200px;
+            font-size: 14px; font-weight: bold;
+          ">📚 Browse Shared Assets</button>
+          <div style="font-size: 12px; color: #ccc; margin-left: 5px;">
+            Choose a 360° photo from the shared library
+          </div>
+        </div>
         
         <div style="margin: 20px 0;">
           <button id="use-new-url" style="
@@ -13066,11 +13277,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const close = () => {
       if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
-      // Reopen scene manager
-      setTimeout(() => this.showSceneManager(), 100);
+      if (reopenSceneManager) {
+        setTimeout(() => this.showSceneManager(), 100);
+      }
     };
 
     dialog.querySelector('#cancel-edit').onclick = close;
+
+    dialog.querySelector('#browse-common-image').onclick = () => {
+      close();
+      if (!window.CommonAssetsPicker) {
+        alert('Shared assets picker is not available.');
+        return;
+      }
+      window.CommonAssetsPicker.openFor({
+        category: '360-images',
+        onSelect: (asset) => {
+          if (!asset || asset.category !== '360-images') return;
+          const url = asset.proxyUrl || asset.url;
+          this.applySceneImageFromUrl(sceneId, url);
+        },
+      });
+    };
 
     dialog.querySelector('#upload-new-file').onclick = () => {
       const input = document.createElement('input');
@@ -13123,33 +13351,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Show loading indicator
-      this.showLoadingIndicator('Loading new image...');
-
-      const testImg = new Image();
-      testImg.crossOrigin = 'anonymous';
-      testImg.onload = () => {
-        scene.image = url;
-        delete scene.imageStorageKey;
-        delete scene.imageFileName;
-        this.saveScenesData(); // Save to localStorage
-        if (sceneId === this.currentScene) {
-          this.loadCurrentScene();
-        }
-
-        // Hide loading indicator
-        this.hideLoadingIndicator();
-
-        close();
-        this.showStartingPointFeedback(`Updated image for "${scene.name}"`);
-      };
-      testImg.onerror = () => {
-        // Hide loading indicator
-        this.hideLoadingIndicator();
-
-        alert('Failed to load image from URL. Please check the URL is correct and accessible.');
-      };
-      testImg.src = url;
+      close();
+      this.applySceneImageFromUrl(sceneId, url);
     };
   }
 
@@ -14517,6 +14720,8 @@ const CommonAssetsPicker = {
   searchQuery: '',
   targetFieldId: null,
   filterCategory: null,
+  filterCategories: null,
+  onSelect: null,
 
   FIELD_FILE_MAP: {
     'hotspot-audio-url': 'hotspot-audio',
@@ -14549,8 +14754,10 @@ const CommonAssetsPicker = {
     document.getElementById('common-assets-tabs').addEventListener('click', (e) => {
       const tab = e.target.closest('.ca-tab');
       if (!tab) return;
-      if (this.filterCategory && tab.dataset.category !== this.filterCategory) return;
-      this.activeCategory = tab.dataset.category;
+      const cat = tab.dataset.category;
+      const visible = this.getVisibleCategories();
+      if (!visible.includes(cat)) return;
+      this.activeCategory = cat;
       this.renderTabs();
       this.render();
     });
@@ -14580,23 +14787,30 @@ const CommonAssetsPicker = {
     });
   },
 
+  getVisibleCategories() {
+    if (this.filterCategories && this.filterCategories.length) return this.filterCategories;
+    if (this.filterCategory) return [this.filterCategory];
+    return ['images', '360-images', '360-videos', 'audio', '3d', 'other'];
+  },
+
   renderTabs() {
+    const visible = new Set(this.getVisibleCategories());
     document.querySelectorAll('#common-assets-tabs .ca-tab').forEach((tab) => {
       const cat = tab.dataset.category;
-      if (this.filterCategory) {
-        tab.style.display = cat === this.filterCategory ? '' : 'none';
-        tab.classList.toggle('active', cat === this.filterCategory);
-      } else {
-        tab.style.display = '';
-        tab.classList.toggle('active', cat === this.activeCategory);
-      }
+      const show = visible.has(cat);
+      tab.style.display = show ? '' : 'none';
+      tab.classList.toggle('active', show && cat === this.activeCategory);
     });
   },
 
-  async openFor({ targetFieldId = null, category = null } = {}) {
+  async openFor({ targetFieldId = null, category = null, categories = null, onSelect = null } = {}) {
     this.targetFieldId = targetFieldId;
-    this.filterCategory = category;
-    if (category) {
+    this.filterCategories = Array.isArray(categories) && categories.length ? categories : null;
+    this.filterCategory = this.filterCategories ? null : category;
+    this.onSelect = typeof onSelect === 'function' ? onSelect : null;
+    if (this.filterCategories) {
+      this.activeCategory = this.filterCategories[0];
+    } else if (category) {
       this.activeCategory = category;
     } else {
       const editor = window.hotspotEditor;
@@ -14614,6 +14828,8 @@ const CommonAssetsPicker = {
     document.getElementById('common-assets-modal').style.display = 'none';
     this.targetFieldId = null;
     this.filterCategory = null;
+    this.filterCategories = null;
+    this.onSelect = null;
     this.renderTabs();
   },
 
@@ -14648,8 +14864,9 @@ const CommonAssetsPicker = {
     }
     list.innerHTML = items
       .map((asset) => {
+        const cat = asset.category || this.activeCategory;
         const icon = window.CommonAssetsPreview
-          ? CommonAssetsPreview.renderPickerThumb(this.activeCategory, asset)
+          ? CommonAssetsPreview.renderPickerThumb(cat, asset)
           : `<div class="ca-item-thumb ca-item-thumb-fallback">📄</div>`;
         return `<div class="ca-item">
           ${icon}
@@ -14711,6 +14928,13 @@ const CommonAssetsPicker = {
   },
 
   useUrl(asset) {
+    if (this.onSelect) {
+      const handler = this.onSelect;
+      this.close();
+      handler(asset);
+      return;
+    }
+
     const targetId = this.resolveTargetFieldId(asset);
     if (!targetId) {
       this.copyUrl(asset.url);

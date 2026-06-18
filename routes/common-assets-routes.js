@@ -159,7 +159,11 @@ function registerCommonAssetRoutes(app, upload) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
       }
 
-      const validation = validateCommonAssetFile(req.file.originalname, req.file.size);
+      const validation = validateCommonAssetFile(
+        req.file.originalname,
+        req.file.size,
+        (req.body && req.body.category) || null
+      );
       if (!validation.ok) {
         return res.status(400).json({ success: false, message: validation.message });
       }

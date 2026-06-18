@@ -32,8 +32,15 @@ const CommonAssetsPreview = {
     const url = asset.url;
     const name = asset.name || '';
 
-    if (category === 'images') {
+    if (category === 'images' || category === '360-images') {
       return `<img class="asset-thumb" src="${this.escapeAttr(url)}" alt="" loading="lazy" crossorigin="anonymous" />`;
+    }
+
+    if (category === '360-videos') {
+      return `<div class="asset-thumb asset-thumb-video">
+        <video muted playsinline preload="metadata" crossorigin="anonymous" src="${this.escapeAttr(url)}"></video>
+        <span class="asset-thumb-label">360°</span>
+      </div>`;
     }
 
     if (category === 'audio') {
@@ -59,10 +66,17 @@ const CommonAssetsPreview = {
     const url = asset.url;
     const name = asset.name || '';
 
-    if (category === 'images') {
+    if (category === 'images' || category === '360-images') {
       return `<img class="preview-image" src="${this.escapeAttr(url)}" alt="${this.escapeAttr(
         name
       )}" crossorigin="anonymous" />`;
+    }
+
+    if (category === '360-videos') {
+      return `<div class="preview-video">
+        <video controls autoplay muted playsinline preload="auto" crossorigin="anonymous" src="${this.escapeAttr(url)}"></video>
+        <p class="preview-filename">${this.escapeAttr(name)}</p>
+      </div>`;
     }
 
     if (category === 'audio') {
@@ -93,8 +107,14 @@ const CommonAssetsPreview = {
     const url = asset.url;
     const name = asset.name || '';
 
-    if (category === 'images') {
+    if (category === 'images' || category === '360-images') {
       return `<img class="ca-item-thumb" src="${this.escapeAttr(url)}" alt="" loading="lazy" crossorigin="anonymous" />`;
+    }
+
+    if (category === '360-videos') {
+      return `<div class="ca-item-thumb ca-item-thumb-video">
+        <video muted playsinline preload="metadata" crossorigin="anonymous" src="${this.escapeAttr(url)}"></video>
+      </div>`;
     }
 
     if (category === 'audio') {
@@ -111,7 +131,14 @@ const CommonAssetsPreview = {
       </div>`;
     }
 
-    const icon = category === 'audio' ? '🔊' : category === '3d' ? '🎨' : '📄';
+    const icon =
+      category === '360-videos'
+        ? '🎥'
+        : category === 'audio'
+          ? '🔊'
+          : category === '3d'
+            ? '🎨'
+            : '📄';
     return `<div class="ca-item-thumb ca-item-thumb-fallback">${icon}</div>`;
   },
 

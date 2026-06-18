@@ -41,7 +41,7 @@ function renderAssets() {
     .map(
       (asset) => `
     <div class="asset-card" data-name="${asset.name}">
-      ${CommonAssetsPreview.renderGridThumb(activeCategory, asset)}
+      ${CommonAssetsPreview.renderGridThumb(asset.category, asset)}
       <div class="asset-name">${asset.name}</div>
       <div class="asset-meta">${formatBytes(asset.size)} · ${new Date(asset.uploadedAt).toLocaleString()}</div>
       <div class="asset-actions">
@@ -71,7 +71,7 @@ function openPreview(asset) {
   document.getElementById('preview-title').textContent = asset.name;
   document.getElementById('preview-url').textContent = asset.url;
 
-  body.innerHTML = CommonAssetsPreview.renderModalBody(activeCategory, asset);
+  body.innerHTML = CommonAssetsPreview.renderModalBody(asset.category, asset);
   modal.style.display = 'flex';
 }
 
@@ -104,6 +104,7 @@ async function uploadFiles(fileList) {
     status.textContent = `Uploading ${i + 1}/${files.length}: ${file.name}...`;
     const fd = new FormData();
     fd.append('file', file);
+    fd.append('category', activeCategory);
     const res = await adminFetch('/admin/common-assets/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (!data.success) {

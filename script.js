@@ -294,6 +294,7 @@ class HotspotEditor {
   init() {
     this.bindEvents();
     this.setupEditorPanelToggle();
+    this.setupEditModeBarToggle();
     this.setupHotspotTypeSelection();
     this.setupSceneManagement();
 
@@ -1714,6 +1715,31 @@ class HotspotEditor {
 
     toggle.addEventListener('click', () => {
       setExpanded(panel.classList.contains('collapsed'));
+    });
+  }
+
+  setupEditModeBarToggle() {
+    const bar = document.getElementById('edit-mode-bar');
+    const toggle = document.getElementById('edit-mode-bar-toggle');
+    const icon = document.getElementById('edit-mode-bar-toggle-icon');
+    if (!bar || !toggle || !icon) return;
+
+    const storageKey = 'edit-mode-bar-expanded';
+    const saved = localStorage.getItem(storageKey);
+    const startExpanded = saved === null ? true : saved === 'true';
+
+    const setExpanded = (expanded) => {
+      bar.classList.toggle('collapsed', !expanded);
+      icon.textContent = expanded ? '›' : '‹';
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      toggle.title = expanded ? 'Hide edit mode panel' : 'Show edit mode panel';
+      localStorage.setItem(storageKey, expanded ? 'true' : 'false');
+    };
+
+    setExpanded(startExpanded);
+
+    toggle.addEventListener('click', () => {
+      setExpanded(bar.classList.contains('collapsed'));
     });
   }
 

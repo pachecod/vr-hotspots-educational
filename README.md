@@ -219,6 +219,12 @@ vr_hotspots/
 - Enable collaboration and sharing features
 - Store detailed submission analytics
 
+## 🙏 Acknowledgements
+
+Special thanks to Syracuse University graduate [Sagar Gada](https://github.com/sagargada73), who created the first version of this application as a graduate student assistant for Professor Dan Pacheco, and later as a part-time employee under the National Science Foundation grant for the Innovative Technology Experiences for Students and Teachers (ITEST) project ([Professor Silvie Huang's NSF Grant](https://soe.syr.edu/professor-huangs-nsf-grant/)).
+
+Thanks also to all participants in that project, especially other faculty, students, community volunteers, and especially the youth who used the early tools and provided feedback.
+
 ## 📜 License
 
 MIT License

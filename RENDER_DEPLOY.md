@@ -45,8 +45,6 @@ Optional:
 |----------|---------|
 | `B2_PUBLIC_BUCKET_NAME` | Public common-assets bucket (auto-created if omitted) |
 | `B2_PUBLIC_BUCKET_ID` | Public bucket ID after first deploy |
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth in editor |
-| `GITHUB_OAUTH_CALLBACK_BASE` | `https://YOUR-SERVICE.onrender.com` |
 
 ## 4. After deploy
 
@@ -63,4 +61,3 @@ On first deploy, check **Logs** for B2 authorization and CORS messages.
 - **Free tier** services spin down after inactivity; the first request may take ~30s.
 - **Ephemeral disk:** Local `submissions.json` and temp uploads reset on redeploy; student project ZIPs in B2 persist.
 - **HTTPS:** Render provides TLS automatically — use `https://` URLs when sharing links.
-- Update GitHub OAuth callback URL to your Render URL if you use GitHub upload.

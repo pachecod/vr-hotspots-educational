@@ -29,34 +29,6 @@ npm install
 npm start
 ```
 
-## ⬆️ Upload to GitHub (New)
-
-The editor now includes an **“Upload to GitHub”** button. It will:
-
-- Ask you to sign in via **GitHub OAuth**
-- Let you **create a new repo** or **commit updates to an existing repo**
-- Upload the same full exported project (the same files/folders as “Save Template” produces)
-
-Optional:
-- When creating a **public** repo, you can enable **GitHub Pages** so the exported site is hosted automatically.
-
-### GitHub OAuth Setup
-
-1. Create a GitHub OAuth App:
-	- Callback URL: `http://localhost:3000/github/oauth/callback` (or your deployed URL)
-2. Add these to your `.env`:
-
-```bash
-GITHUB_CLIENT_ID=your_client_id
-GITHUB_CLIENT_SECRET=your_client_secret
-
-# Optional (recommended if behind a proxy or using a non-standard URL)
-GITHUB_OAUTH_CALLBACK_BASE=http://localhost:3000
-```
-
-Notes:
-- The OAuth scope used is `repo` so the server can create repos and push commits.
-
 ### 2. Offline Support ✨
 
 - **Complete Offline Operation**: Works without internet connection
@@ -213,7 +185,6 @@ vr_hotspots/
 ### For Production:
 
 - Deploy with [Deploy to Render](RENDER_DEPLOY.md) (recommended)
-- Configure GitHub OAuth callback URLs for your production domain
 - Set B2 and admin secrets in the host environment (never commit `.env`)
 
 ## 🆘 Troubleshooting

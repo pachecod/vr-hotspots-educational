@@ -118,6 +118,15 @@ function applyRoundedMaskToAImage(aImgEl, styleCfg, force = false) {
   }
 }
 
+// Z-index layers: editor panel < scene overlays < dialogs/progress/toasts
+const EDITOR_LAYER = Object.freeze({
+  panel: 1000,
+  sceneOverlay: 100000,
+  dialog: 100050,
+  progress: 100055,
+  toast: 100060,
+});
+
 // Hotspot Editor Manager
 class HotspotEditor {
   constructor() {
@@ -1413,7 +1422,7 @@ class HotspotEditor {
         position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
         background: rgba(0, 0, 0, 0.8); color: white; padding: 20px 30px;
         border-radius: 8px; font-family: Arial, sans-serif; font-size: 16px;
-        z-index: 100001; opacity: 0; pointer-events: none;
+        z-index: ${EDITOR_LAYER.progress}; opacity: 0; pointer-events: none;
         transition: opacity 300ms ease; display: flex; align-items: center; gap: 15px;
       `;
 
@@ -2141,7 +2150,8 @@ class HotspotEditor {
     overlay.style.right = '0';
     overlay.style.bottom = '0';
     overlay.style.background = 'rgba(0,0,0,0.75)';
-    overlay.style.zIndex = '2000';
+    overlay.style.zIndex = String(EDITOR_LAYER.dialog);
+    overlay.classList.add('editor-modal-overlay');
     overlay.style.display = 'flex';
     overlay.style.alignItems = 'center';
     overlay.style.justifyContent = 'center';
@@ -4473,7 +4483,9 @@ class HotspotEditor {
     overlay.id = 'model-hotspot-action-overlay';
     // Lightweight modal overlay; keeps styling local to avoid CSS conflicts
     overlay.style.cssText =
-      'position:fixed; inset:0; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index:10004; font-family:Arial;';
+      'position:fixed; inset:0; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index:' +
+      EDITOR_LAYER.dialog +
+      '; font-family:Arial;';
 
     const dialog = document.createElement('div');
     dialog.style.cssText =
@@ -4562,7 +4574,7 @@ class HotspotEditor {
       border-radius: 10px;
       font-size: 18px;
       font-family: Arial, sans-serif;
-      z-index: 10000;
+      z-index: ${EDITOR_LAYER.toast};
       pointer-events: none;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
       animation: fadeInOut ${duration}ms ease-in-out;
@@ -4754,7 +4766,7 @@ class HotspotEditor {
 
     const overlay = document.createElement('div');
     overlay.style.cssText = `
-      position: fixed; inset: 0; z-index: 10002; pointer-events: none;
+      position: fixed; inset: 0; z-index: ${EDITOR_LAYER.dialog}; pointer-events: none;
       display: flex; align-items: flex-start; justify-content: center; font-family: Arial; padding-top: 20px;
     `;
 
@@ -5879,7 +5891,9 @@ class HotspotEditor {
     const n = document.createElement('div');
     n.id = 'reposition-notice';
     n.style.cssText =
-      'position:fixed; top:20px; right:380px; background: rgba(33,150,243,0.95); color:white; padding:8px 12px; border-radius:6px; z-index:10001; font-family:Arial; font-size:12px;';
+      'position:fixed; top:20px; right:380px; background: rgba(33,150,243,0.95); color:white; padding:8px 12px; border-radius:6px; z-index:' +
+      EDITOR_LAYER.toast +
+      '; font-family:Arial; font-size:12px;';
     n.textContent =
       'Reposition mode: click on the 360° image to set new position • Press ESC to cancel';
     document.body.appendChild(n);
@@ -6077,11 +6091,109 @@ class HotspotEditor {
     const templateName =
       document.getElementById('template-name').value || `hotspot-project-${Date.now()}`;
 
-    // Save directly as ZIP (no dialog needed)
-    this.saveAsCompleteProject(templateName);
+    const exportMode = await this.showExportModeDialog({
+      title: 'Save Template',
+      description: 'Choose how media should be included in your exported ZIP.',
+    });
+    if (!exportMode) return;
+
+    this.saveAsCompleteProject(templateName, exportMode);
   }
 
-  async saveAsCompleteProject(templateName) {
+  showExportModeDialog(options = {}) {
+    const { title = 'Export Project', description = 'Choose how media should be included.' } =
+      options;
+
+    return new Promise((resolve) => {
+      const dialog = document.createElement('div');
+      dialog.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85); z-index: ${EDITOR_LAYER.dialog}; display: flex;
+        align-items: center; justify-content: center; font-family: Arial;
+      `;
+
+      dialog.innerHTML = `
+        <div style="background: #2a2a2a; padding: 28px; border-radius: 12px; color: white; max-width: 520px; width: calc(100% - 40px); box-shadow: 0 12px 40px rgba(0,0,0,0.45);">
+          <h3 style="margin: 0 0 8px 0; color: #4CAF50;">${title}</h3>
+          <p style="color: #ccc; margin: 0 0 20px 0; line-height: 1.5; font-size: 14px;">${description}</p>
+
+          <label style="display: block; margin-bottom: 12px; padding: 14px; border: 2px solid #4CAF50; border-radius: 8px; cursor: pointer; background: rgba(76,175,80,0.08);">
+            <input type="radio" name="export-mode" value="bundle" checked style="margin-right: 10px;" />
+            <strong>Include media in the package</strong>
+            <div style="color: #aaa; font-size: 12px; margin: 6px 0 0 24px; line-height: 1.45;">
+              Downloads videos, images, and audio into the ZIP. Best for offline use or sharing a self-contained project. Larger file size.
+            </div>
+          </label>
+
+          <label style="display: block; margin-bottom: 22px; padding: 14px; border: 2px solid #555; border-radius: 8px; cursor: pointer;">
+            <input type="radio" name="export-mode" value="urls" style="margin-right: 10px;" />
+            <strong>Keep online URLs</strong>
+            <div style="color: #aaa; font-size: 12px; margin: 6px 0 0 24px; line-height: 1.45;">
+              Leaves hosted media (Backblaze, common assets, remote links) as URLs in config.json. Smaller ZIP — requires internet when viewing.
+            </div>
+          </label>
+
+          <p style="color: #888; font-size: 12px; margin: 0 0 18px 0; line-height: 1.4;">
+            Files uploaded only to this browser are always included so the export does not break.
+          </p>
+
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button type="button" id="export-mode-cancel" style="
+              background: #666; color: white; border: none; padding: 12px 18px;
+              border-radius: 6px; cursor: pointer;
+            ">Cancel</button>
+            <button type="button" id="export-mode-continue" style="
+              background: #4CAF50; color: white; border: none; padding: 12px 18px;
+              border-radius: 6px; cursor: pointer; font-weight: bold;
+            ">Continue</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(dialog);
+
+      const radios = dialog.querySelectorAll('input[name="export-mode"]');
+      const labels = dialog.querySelectorAll('label');
+      const syncBorder = () => {
+        labels.forEach((label) => {
+          const input = label.querySelector('input[name="export-mode"]');
+          label.style.borderColor = input?.checked ? '#4CAF50' : '#555';
+          label.style.background = input?.checked ? 'rgba(76,175,80,0.08)' : 'transparent';
+        });
+      };
+      radios.forEach((radio) => radio.addEventListener('change', syncBorder));
+
+      const close = (value) => {
+        if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
+        resolve(value);
+      };
+
+      dialog.querySelector('#export-mode-cancel').onclick = () => close(null);
+      dialog.querySelector('#export-mode-continue').onclick = () => {
+        const selected = dialog.querySelector('input[name="export-mode"]:checked');
+        close(selected ? selected.value : 'bundle');
+      };
+    });
+  }
+
+  _isRemoteMediaUrl(url) {
+    return typeof url === 'string' && /^https?:\/\//i.test(url);
+  }
+
+  async _bundleRemoteAssetToFolder(url, folder, filename, folderName) {
+    if (!folder || !this._isRemoteMediaUrl(url)) return null;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) return null;
+      const blob = await resp.blob();
+      folder.file(filename, blob);
+      return `./${folderName}/${filename}`;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async saveAsCompleteProject(templateName, exportMode = 'bundle') {
     try {
       // Show progress
       const progressDiv = this.showProgress('Creating complete project...');
@@ -6095,7 +6207,7 @@ class HotspotEditor {
       const skyboxSrc = skyboxImg ? skyboxImg.src : '';
 
       // Create project structure with all scenes
-      await this.addFilesToZip(zip, templateName, skyboxSrc);
+      await this.addFilesToZip(zip, templateName, skyboxSrc, exportMode);
 
       // Generate and download ZIP
       const content = await zip.generateAsync({ type: 'blob' });
@@ -6118,7 +6230,7 @@ class HotspotEditor {
     });
   }
 
-  async addFilesToZip(zip, templateName, skyboxSrc) {
+  async addFilesToZip(zip, templateName, skyboxSrc, exportMode = 'bundle') {
     // Add main HTML file
     const htmlContent = this.generateCompleteHTML(templateName);
     zip.file('index.html', htmlContent);
@@ -6151,7 +6263,8 @@ class HotspotEditor {
       audioFolder,
       imagesFolder,
       videosFolder,
-      modelsFolder
+      modelsFolder,
+      exportMode
     );
     const config = {
       name: templateName,
@@ -6261,8 +6374,15 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
     }
   }
 
-  async normalizeScenePathsForExport(audioFolder, imagesFolder, videosFolder, modelsFolder) {
+  async normalizeScenePathsForExport(
+    audioFolder,
+    imagesFolder,
+    videosFolder,
+    modelsFolder,
+    exportMode = 'bundle'
+  ) {
     const normalizedScenes = {};
+    const preserveUrls = exportMode === 'urls';
 
     const extFromMime = (mime, fallback = '.mp4') => {
       if (!mime || typeof mime !== 'string') return fallback;
@@ -6320,6 +6440,41 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
 
       const sceneUsesCommonAsset = this.isCommonAssetObject(scene);
 
+      if (sceneUsesCommonAsset) {
+        if (newScene.type === 'video' && scene.commonAssetUrl) {
+          newScene.videoSrc = scene.commonAssetUrl;
+        }
+        if (newScene.type === 'image' && scene.commonAssetUrl) {
+          newScene.image = scene.commonAssetUrl;
+        }
+        if (!preserveUrls) {
+          if (newScene.type === 'video' && scene.commonAssetUrl && videosFolder) {
+            const ext = /\.webm(\?|$)/i.test(scene.commonAssetUrl) ? '.webm' : '.mp4';
+            const bundled = await this._bundleRemoteAssetToFolder(
+              scene.commonAssetUrl,
+              videosFolder,
+              `${sceneId}${ext}`,
+              'videos'
+            );
+            if (bundled) newScene.videoSrc = bundled;
+          }
+          if (newScene.type === 'image' && scene.commonAssetUrl && imagesFolder) {
+            const ext = /\.png(\?|$)/i.test(scene.commonAssetUrl)
+              ? '.png'
+              : /\.webp(\?|$)/i.test(scene.commonAssetUrl)
+              ? '.webp'
+              : '.jpg';
+            const bundled = await this._bundleRemoteAssetToFolder(
+              scene.commonAssetUrl,
+              imagesFolder,
+              `${sceneId}${ext}`,
+              'images'
+            );
+            if (bundled) newScene.image = bundled;
+          }
+        }
+      }
+
       // Process ground textures for export
       if (scene.ground && scene.ground.enabled) {
         newScene.ground = {
@@ -6346,7 +6501,9 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
 
       // If this is an image scene and the source is local/IDB, export the blob
       if (newScene.type === 'image' && !sceneUsesCommonAsset) {
-        try {
+        if (preserveUrls && this._isRemoteMediaUrl(scene.image)) {
+          newScene.image = scene.image;
+        } else try {
           const isRemote =
             typeof scene.image === 'string' &&
             (scene.image.startsWith('http://') || scene.image.startsWith('https://'));
@@ -6367,11 +6524,33 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
         } catch (_) {
           /* ignore */
         }
+
+        if (
+          !preserveUrls &&
+          this._isRemoteMediaUrl(newScene.image) &&
+          imagesFolder &&
+          !newScene.image.startsWith('./images/')
+        ) {
+          const ext = /\.png(\?|$)/i.test(newScene.image)
+            ? '.png'
+            : /\.webp(\?|$)/i.test(newScene.image)
+            ? '.webp'
+            : '.jpg';
+          const bundled = await this._bundleRemoteAssetToFolder(
+            newScene.image,
+            imagesFolder,
+            `${sceneId}${ext}`,
+            'images'
+          );
+          if (bundled) newScene.image = bundled;
+        }
       }
 
       // If this is a video scene and the source is a blob URL or local, try to export the actual file from IDB
       if (newScene.type === 'video' && !sceneUsesCommonAsset) {
-        try {
+        if (preserveUrls && this._isRemoteMediaUrl(scene.videoSrc)) {
+          newScene.videoSrc = scene.videoSrc;
+        } else try {
           const isBlobUrl =
             typeof scene.videoSrc === 'string' && scene.videoSrc.startsWith('blob:');
           const isDataUrl =
@@ -6421,6 +6600,22 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
           }
         } catch (_) {
           /* ignore; keep original src */
+        }
+
+        if (
+          !preserveUrls &&
+          this._isRemoteMediaUrl(newScene.videoSrc) &&
+          videosFolder &&
+          !String(newScene.videoSrc).startsWith('./videos/')
+        ) {
+          const ext = /\.webm(\?|$)/i.test(newScene.videoSrc) ? '.webm' : '.mp4';
+          const bundled = await this._bundleRemoteAssetToFolder(
+            newScene.videoSrc,
+            videosFolder,
+            `${sceneId}${ext}`,
+            'videos'
+          );
+          if (bundled) newScene.videoSrc = bundled;
         }
       }
 
@@ -8419,7 +8614,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
     progressDiv.style.cssText = `
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       background: rgba(0,0,0,0.9); color: white; padding: 20px;
-      border-radius: 8px; z-index: 10001; font-family: Arial;
+      border-radius: 8px; z-index: ${EDITOR_LAYER.progress}; font-family: Arial;
     `;
     progressDiv.innerHTML = `<div style="text-align: center;">${message}<br><div style="margin-top: 10px;">⏳ Please wait...</div></div>`;
     document.body.appendChild(progressDiv);
@@ -11716,7 +11911,7 @@ document.addEventListener('DOMContentLoaded', () => {
     feedback.style.cssText = `
       position: fixed; top: 20px; right: 380px; 
       background: rgba(76, 175, 80, 0.9); color: white; padding: 10px 15px;
-      border-radius: 6px; font-weight: bold; z-index: 10001;
+      border-radius: 6px; font-weight: bold; z-index: ${EDITOR_LAYER.toast};
       font-family: Arial; font-size: 12px;
     `;
     feedback.innerHTML = `📍 ${message}`;
@@ -13071,7 +13266,7 @@ document.addEventListener('DOMContentLoaded', () => {
     feedback.style.cssText = `
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       background: rgba(76, 175, 80, 0.9); color: white; padding: 15px 25px;
-      border-radius: 8px; font-weight: bold; z-index: 10001;
+      border-radius: 8px; font-weight: bold; z-index: ${EDITOR_LAYER.toast};
       font-family: Arial; animation: fadeInOut 2s ease-in-out;
     `;
     feedback.innerHTML = `Navigated to: ${sceneName}`;
@@ -13135,7 +13330,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const dialog = document.createElement('div');
       dialog.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85); z-index: 100000; display: flex;
+        background: rgba(0,0,0,0.85); z-index: ${EDITOR_LAYER.dialog}; display: flex;
         align-items: center; justify-content: center; font-family: Arial;
         animation: fadeIn 0.3s ease-in;
       `;
@@ -13279,7 +13474,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dialog = document.createElement('div');
     dialog.style.cssText = `
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-      background: rgba(0,0,0,0.8); z-index: 10000; display: flex; 
+      background: rgba(0,0,0,0.8); z-index: ${EDITOR_LAYER.dialog}; display: flex; 
       align-items: center; justify-content: center; font-family: Arial;
     `;
 
@@ -13714,7 +13909,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dialog = document.createElement('div');
     dialog.style.cssText = `
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-      background: rgba(0,0,0,0.8); z-index: 10000; display: flex; 
+      background: rgba(0,0,0,0.8); z-index: ${EDITOR_LAYER.dialog}; display: flex; 
       align-items: center; justify-content: center; font-family: Arial;
     `;
 
@@ -13934,7 +14129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dialog = document.createElement('div');
     dialog.style.cssText = `
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.8); z-index: 10000; display: flex;
+      background: rgba(0,0,0,0.8); z-index: ${EDITOR_LAYER.dialog}; display: flex;
       align-items: center; justify-content: center; font-family: Arial;
     `;
 
@@ -14024,7 +14219,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dialog = document.createElement('div');
     dialog.style.cssText = `
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-      background: rgba(0,0,0,0.8); z-index: 10000; display: flex; 
+      background: rgba(0,0,0,0.8); z-index: ${EDITOR_LAYER.dialog}; display: flex; 
       align-items: center; justify-content: center; font-family: Arial;
     `;
 
@@ -14385,7 +14580,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const dialog = document.createElement('div');
       dialog.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85); z-index: 100000; display: flex;
+        background: rgba(0,0,0,0.85); z-index: ${EDITOR_LAYER.dialog}; display: flex;
         align-items: center; justify-content: center; font-family: Arial;
         animation: fadeIn 0.3s ease-in;
       `;
@@ -15105,7 +15300,7 @@ class StudentSubmission {
     const dialog = document.createElement('div');
     dialog.style.cssText = `
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-      background: rgba(0,0,0,0.8); z-index: 10000; display: flex; 
+      background: rgba(0,0,0,0.8); z-index: ${EDITOR_LAYER.dialog}; display: flex; 
       align-items: center; justify-content: center; font-family: Arial;
     `;
 
@@ -15158,6 +15353,12 @@ class StudentSubmission {
     const projectName = projectDisplayName.trim();
     const studentName = projectName;
 
+    const exportMode = await window.hotspotEditor.showExportModeDialog({
+      title: 'Submit to Admin',
+      description: 'Choose how media should be included in the package uploaded to admin.',
+    });
+    if (!exportMode) return;
+
     const statusDiv = document.getElementById('submission-status');
     const submitBtn = document.getElementById('submit-project-btn');
     const cancelBtn = document.getElementById('cancel-submission-btn');
@@ -15183,7 +15384,7 @@ class StudentSubmission {
       const skyboxSrc = skyboxImg ? skyboxImg.src : '';
 
       // Add files to zip using existing method
-      await window.hotspotEditor.addFilesToZip(zip, safeProjectName, skyboxSrc);
+      await window.hotspotEditor.addFilesToZip(zip, safeProjectName, skyboxSrc, exportMode);
 
       // Generate blob
       const content = await zip.generateAsync({ type: 'blob' });

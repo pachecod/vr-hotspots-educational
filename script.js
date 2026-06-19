@@ -485,26 +485,41 @@ class HotspotEditor {
 
       const absoluteSrc = this.toAbsoluteMediaUrl(videoSrc);
       let settled = false;
+      let timeoutId = null;
       const finish = (fn) => {
         if (settled || loadToken !== this._sceneLoadToken) return;
         settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
         fn();
       };
 
       const onReady = () => finish(() => resolve());
       const onError = () => finish(() => reject(new Error('Video failed to load')));
 
+      videoEl.addEventListener('loadedmetadata', onReady, { once: true });
       videoEl.addEventListener('loadeddata', onReady, { once: true });
+      videoEl.addEventListener('canplay', onReady, { once: true });
       videoEl.addEventListener('error', onError, { once: true });
 
+      timeoutId = setTimeout(() => {
+        console.warn('Editor video load timed out, proceeding anyway');
+        finish(() => resolve());
+      }, 12000);
+
+      videoEl.playsInline = true;
+      videoEl.muted = true;
       this.configureSceneVideoCrossOrigin(videoEl);
       try {
         videoEl.pause();
-        videoEl.removeAttribute('src');
-        videoEl.load();
       } catch (_) {}
-      videoEl.src = absoluteSrc;
-      videoEl.load();
+      if (videoEl.src !== absoluteSrc) {
+        videoEl.src = absoluteSrc;
+      }
+      try {
+        videoEl.load();
+      } catch (_) {
+        finish(() => resolve());
+      }
     });
   }
 
@@ -534,6 +549,7 @@ class HotspotEditor {
     const el = document.createElement('a-entity');
     el.id = 'videosphere';
     el.classList.add('scene-media-surface');
+    el.setAttribute('class', 'scene-media-surface');
     el.setAttribute('geometry', {
       primitive: 'sphere',
       radius: 5000,
@@ -542,6 +558,148 @@ class HotspotEditor {
     });
     el.setAttribute('rotation', '0 -90 0');
     return el;
+  }
+
+  ensureVideoHotspotRaycastSurface(sceneEl) {
+    if (!sceneEl) return null;
+    let surface = document.getElementById('hotspot-raycast-surface');
+    if (!surface) {
+      surface = document.createElement('a-entity');
+      surface.id = 'hotspot-raycast-surface';
+      surface.classList.add('scene-media-surface');
+      surface.setAttribute('class', 'scene-media-surface');
+      surface.setAttribute('geometry', {
+        primitive: 'sphere',
+        radius: 5000,
+        segmentsWidth: 64,
+        segmentsHeight: 32,
+      });
+      surface.setAttribute('material', {
+        shader: 'flat',
+        color: '#000',
+        opacity: 0,
+        transparent: true,
+        side: 'back',
+      });
+      surface.setAttribute('rotation', '0 -90 0');
+      sceneEl.appendChild(surface);
+    }
+    surface.setAttribute('visible', 'true');
+    return surface;
+  }
+
+  hideVideoHotspotRaycastSurface() {
+    const surface = document.getElementById('hotspot-raycast-surface');
+    if (surface) surface.setAttribute('visible', 'false');
+  }
+
+  refreshSceneMediaRaycasters() {
+    ['mouse-cursor', 'gaze-cursor'].forEach((id) => {
+      const cursor = document.getElementById(id);
+      const raycaster = cursor?.components?.raycaster;
+      if (raycaster?.refreshObjects) raycaster.refreshObjects();
+    });
+    this._bindSceneMediaClickHandlers();
+  }
+
+  _bindSceneMediaClickHandlers() {
+    ['skybox', 'videosphere', 'hotspot-raycast-surface'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el || el.dataset.placementBound === 'true') return;
+      el.dataset.placementBound = 'true';
+      el.addEventListener('click', (evt) => this._handleScenePlacementClick(evt));
+    });
+  }
+
+  _trackScenePointer() {
+    const sceneEl = document.querySelector('a-scene');
+    const track = (evt) => {
+      this._lastScenePointer = {
+        clientX: evt.clientX,
+        clientY: evt.clientY,
+      };
+    };
+    sceneEl?.canvas?.addEventListener('pointerdown', track, { passive: true });
+    ['mouse-cursor', 'gaze-cursor'].forEach((id) => {
+      document.getElementById(id)?.addEventListener('click', (evt) => {
+        this._handleScenePlacementClick(evt);
+      });
+    });
+  }
+
+  _getSceneMediaMeshes() {
+    const meshes = [];
+    ['hotspot-raycast-surface', 'videosphere', 'skybox'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el || el.getAttribute('visible') === 'false') return;
+      const mesh = el.getObject3D?.('mesh');
+      if (mesh) meshes.push(mesh);
+    });
+    return meshes;
+  }
+
+  _raycastSceneMediaFromPointer(sourceEvent) {
+    const sceneEl = document.querySelector('a-scene');
+    const camera = sceneEl?.camera || document.getElementById('cam')?.getObject3D?.('camera');
+    const canvas = sceneEl?.canvas;
+    if (!camera || !canvas || typeof THREE === 'undefined') return null;
+
+    const pointer = sourceEvent?.clientX != null
+      ? sourceEvent
+      : this._lastScenePointer;
+    if (!pointer) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((pointer.clientX - rect.left) / rect.width) * 2 - 1,
+      -((pointer.clientY - rect.top) / rect.height) * 2 + 1
+    );
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(this._getSceneMediaMeshes(), false);
+    return hits[0] || null;
+  }
+
+  _buildViewCenterIntersection() {
+    const camera = document.getElementById('cam');
+    if (!camera || typeof THREE === 'undefined') return null;
+
+    const worldPos = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    camera.object3D.getWorldPosition(worldPos);
+    camera.object3D.getWorldDirection(direction);
+
+    return {
+      point: worldPos.clone().add(direction.multiplyScalar(100)),
+    };
+  }
+
+  _handleScenePlacementClick(evt) {
+    if (this.repositioningHotspotId) {
+      this.applyReposition(evt);
+      return;
+    }
+    if (!this.editMode) return;
+    this.placeHotspot(evt);
+  }
+
+  armHotspotPlacement() {
+    const validationResult = this.validateHotspotData();
+    if (!validationResult.valid) {
+      alert(validationResult.message);
+      return false;
+    }
+
+    this.enterEditMode();
+    return true;
+  }
+
+  isSceneMediaSurface(el) {
+    if (!el) return false;
+    if (el.classList?.contains('scene-media-surface')) return true;
+    const id = el.id || el.getAttribute?.('id');
+    return id === 'skybox' || id === 'videosphere' || id === 'hotspot-raycast-surface';
   }
 
   detachVideoTextureRenderer() {
@@ -608,10 +766,23 @@ class HotspotEditor {
       sceneEl?.addEventListener('render', this._videoTextureRenderHandler);
     };
 
-    return videoEl.play().then(startRenderer).catch(() => {
-      // Autoplay blocked — still bind texture; playback resumes on user gesture
-      startRenderer();
-    });
+    return Promise.race([
+      videoEl
+        .play()
+        .then(startRenderer)
+        .catch(() => {
+          // Autoplay blocked — still bind texture; playback resumes on user gesture
+          startRenderer();
+        }),
+      new Promise((resolve) => {
+        setTimeout(() => {
+          try {
+            startRenderer();
+          } catch (_) {}
+          resolve();
+        }, 3000);
+      }),
+    ]);
   }
 
 
@@ -1217,9 +1388,9 @@ class HotspotEditor {
   _startCrossfadeOverlay() {
     return new Promise((resolve) => {
       const overlay = this._ensureCrossfadeOverlay();
-      // allow layout flush
+      // Visual-only crossfade — never block sidebar / editor clicks
+      overlay.style.pointerEvents = 'none';
       requestAnimationFrame(() => {
-        overlay.style.pointerEvents = 'auto';
         overlay.style.opacity = '1';
         setTimeout(resolve, 320);
       });
@@ -1228,10 +1399,8 @@ class HotspotEditor {
 
   _endCrossfadeOverlay() {
     const overlay = this._ensureCrossfadeOverlay();
+    overlay.style.pointerEvents = 'none';
     overlay.style.opacity = '0';
-    setTimeout(() => {
-      overlay.style.pointerEvents = 'none';
-    }, 320);
   }
 
   // ===== Loading Indicator =====
@@ -1301,10 +1470,9 @@ class HotspotEditor {
   hideSceneLoadingOverlay() {
     const overlay = document.getElementById('scene-loading-overlay');
     if (overlay) {
+      overlay.style.pointerEvents = 'none';
       overlay.style.opacity = '0';
-      setTimeout(() => {
-        overlay.style.display = 'none';
-      }, 500);
+      overlay.style.display = 'none';
     }
   }
 
@@ -1541,9 +1709,9 @@ class HotspotEditor {
   }
 
   bindEvents() {
-    // Add hotspot button
+    // Add hotspot — arms placement; next click on the scene places it
     document.getElementById('add-hotspot').addEventListener('click', () => {
-      this.enterEditMode();
+      this.armHotspotPlacement();
     });
 
     // Clear hotspots button
@@ -1595,15 +1763,13 @@ class HotspotEditor {
 
     // Scene media click for placing or repositioning hotspots (skybox or video sphere)
     document.querySelector('a-scene').addEventListener('click', (evt) => {
-      const hitEl = evt.detail?.intersection?.el;
-      if (!hitEl?.classList?.contains('scene-media-surface')) return;
+      this._handleScenePlacementClick(evt);
+    });
+    this._trackScenePointer();
 
-      if (this.repositioningHotspotId) {
-        this.applyReposition(evt);
-        return;
-      }
-      if (this.editMode) {
-        this.placeHotspot(evt);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.editMode) {
+        this.exitEditMode();
       }
     });
 
@@ -2586,15 +2752,14 @@ class HotspotEditor {
       const btn = document.getElementById('add-hotspot');
       const toggle = document.getElementById('edit-mode-toggle');
       if (!btn || !toggle) return;
-      const enabled = !!toggle.checked;
-      btn.disabled = !enabled;
-      btn.setAttribute('aria-disabled', String(!enabled));
-      // Visual affordances for disabled state
-      btn.style.opacity = enabled ? '' : '0.5';
-      // Show a cross/forbidden cursor on hover when disabled
-      btn.style.cursor = enabled ? '' : 'not-allowed';
-      if (!enabled) {
-        btn.title = 'Enable Edit Mode to add hotspots.';
+      const inEditMode = !!toggle.checked;
+      // Always clickable — enterEditMode turns on Edit Mode when needed
+      btn.disabled = false;
+      btn.removeAttribute('aria-disabled');
+      btn.style.opacity = inEditMode ? '' : '0.9';
+      btn.style.cursor = inEditMode ? '' : 'pointer';
+      if (!inEditMode) {
+        btn.title = 'Click to enable Edit Mode and start placing a hotspot.';
       } else {
         btn.removeAttribute('title');
       }
@@ -2875,16 +3040,28 @@ class HotspotEditor {
   }
 
   enterEditMode() {
-    // Gate entering edit mode by the UI toggle to prevent accidental placement
     const toggle = document.getElementById('edit-mode-toggle');
-    // If the toggle exists and is unchecked, do not allow entering edit mode (button appears disabled)
     if (toggle && !toggle.checked) {
-      return;
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      this._syncEditModeToggleUI();
     }
 
     this.editMode = true;
-    document.getElementById('edit-indicator').style.display = 'block';
-    this.updateModeIndicator(); // Keep instructions consistent
+    this.navigationMode = false;
+    const indicator = document.getElementById('edit-indicator');
+    if (indicator) {
+      indicator.style.display = 'block';
+      indicator.textContent = 'Click on the 360° scene to place hotspot';
+    }
+    this.updateModeIndicator();
+    this._updateAddHotspotButtonState();
+    this._setHotspotTypeCollapsed(false);
+    this._setHotspotPropertiesVisible(true);
+
+    try {
+      document.getElementById('hotspot-type-section')?.scrollIntoView({ block: 'nearest' });
+    } catch (_) {}
   }
 
   exitEditMode() {
@@ -2896,21 +3073,26 @@ class HotspotEditor {
   placeHotspot(evt) {
     if (!this.editMode) return;
 
-    // Validate required fields based on hotspot type
     const validationResult = this.validateHotspotData();
     if (!validationResult.valid) {
       alert(validationResult.message);
       return;
     }
 
-    // Get intersection point from the click event
-    const intersection = evt.detail.intersection;
+    let intersection = evt?.detail?.intersection;
+    const hitEl = intersection?.el || evt?.target;
+    if (!intersection || !this.isSceneMediaSurface(hitEl)) {
+      intersection = this._raycastSceneMediaFromPointer(
+        evt?.detail?.mouseEvent || evt?.detail?.sourceEvent || evt
+      );
+    }
     if (!intersection) return;
 
-    // Get camera for position calculation
-    const camera = document.querySelector('#cam');
+    this._finalizeHotspotPlacement(intersection);
+  }
 
-    // Use the optimal coordinate calculation method
+  _finalizeHotspotPlacement(intersection) {
+    const camera = document.querySelector('#cam');
     const optimizedPosition = this.calculateOptimalPosition(intersection, camera);
 
     // Create hotspot data with optimized positioning
@@ -3109,13 +3291,12 @@ class HotspotEditor {
         }
       })();
     }
-    this.exitEditMode();
+    this.showHotspotPlacementFeedback(hotspotData);
 
-    // Clear form fields
+    // Clear text/audio fields but keep hotspot type + navigation target for rapid placement
     document.getElementById('hotspot-text').value = '';
     document.getElementById('hotspot-audio').value = '';
     document.getElementById('hotspot-audio-url').value = '';
-    document.getElementById('navigation-target').value = '';
     const imageFileEl = document.getElementById('hotspot-image-file');
     if (imageFileEl) imageFileEl.value = '';
     const imageUrlEl = document.getElementById('hotspot-image-url');
@@ -3179,9 +3360,13 @@ class HotspotEditor {
 
       case 'navigation':
         if (!navigationTarget) {
+          const sceneCount = Object.keys(this.scenes || {}).length;
           return {
             valid: false,
-            message: 'Navigation hotspots require a target scene.',
+            message:
+              sceneCount <= 1
+                ? 'Navigation portals need at least two scenes. Use "Add Scene" to create another scene first, then pick it as the target.'
+                : 'Navigation hotspots require a target scene.',
           };
         }
         break;
@@ -4401,6 +4586,23 @@ class HotspotEditor {
     }
 
     setTimeout(() => overlay.remove(), duration);
+  }
+
+  showHotspotPlacementFeedback(hotspotData) {
+    const typeLabel =
+      hotspotData.type === 'navigation'
+        ? '🚪 Navigation portal'
+        : hotspotData.type === 'weblink'
+        ? '🔗 Weblink portal'
+        : hotspotData.type === 'audio'
+        ? '🔊 Audio hotspot'
+        : hotspotData.type === 'image'
+        ? '🖼️ Image hotspot'
+        : hotspotData.type === 'model'
+        ? '📦 3D model hotspot'
+        : '📝 Hotspot';
+    this.showTemporaryMessage(`${typeLabel} placed! Click Add Hotspot to place another.`, 2500);
+    this.exitEditMode();
   }
 
   updateHotspotList() {
@@ -9314,10 +9516,19 @@ class HotspotProject {
 
     // Show loading UI and preload all scene images so nav previews/skyboxes are instant
     this.showLoadingIndicator();
+    const loaderSafetyMs = 25000;
+    const loaderSafetyTimer = setTimeout(() => {
+      if (document.getElementById('scene-loading-indicator')) {
+        console.warn('Loader safety timeout — dismissing overlay');
+        this.hideLoadingIndicator();
+        this.showTapToPlayBanner('Tap anywhere to start the experience');
+      }
+    }, loaderSafetyMs);
     this.preloadAllSceneImages({ updateUI: true, timeoutMs: 20000 })
       .catch(() => {})
       .finally(() => {
         this.loadScene(this.currentScene);
+        setTimeout(() => clearTimeout(loaderSafetyTimer), loaderSafetyMs + 1000);
       });
   }
 
@@ -9576,36 +9787,83 @@ class HotspotProject {
     return true;
   }
 
-  loadExportVideoSource(videoEl, videoSrc) {
+  waitForExportSceneReady(timeoutMs = 8000) {
+    return new Promise((resolve) => {
+      const sceneEl = document.querySelector('a-scene');
+      if (!sceneEl) {
+        resolve();
+        return;
+      }
+      if (sceneEl.hasLoaded) {
+        resolve();
+        return;
+      }
+      const timer = setTimeout(resolve, timeoutMs);
+      sceneEl.addEventListener(
+        'loaded',
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true }
+      );
+    });
+  }
+
+  loadExportVideoSource(videoEl, videoSrc, options = {}) {
+    const timeoutMs = options.timeoutMs ?? 10000;
     return new Promise((resolve, reject) => {
       if (!videoEl) {
         reject(new Error('Missing video element'));
         return;
       }
       let settled = false;
+      let timeoutId = null;
       const finish = (fn) => {
         if (settled) return;
         settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
         fn();
       };
-      videoEl.addEventListener('loadeddata', () => finish(resolve), { once: true });
-      videoEl.addEventListener('error', () => finish(() => reject(new Error('Video failed to load'))), {
-        once: true,
-      });
+      const onReady = () => finish(resolve);
+      const onError = () => finish(() => reject(new Error('Video failed to load')));
+
+      videoEl.addEventListener('loadedmetadata', onReady, { once: true });
+      videoEl.addEventListener('loadeddata', onReady, { once: true });
+      videoEl.addEventListener('canplay', onReady, { once: true });
+      videoEl.addEventListener('error', onError, { once: true });
+
+      timeoutId = setTimeout(() => {
+        console.warn('Video source load timed out, proceeding anyway');
+        finish(resolve);
+      }, timeoutMs);
+
+      videoEl.playsInline = true;
+      videoEl.muted = true;
+      videoEl.setAttribute('playsinline', '');
+      videoEl.setAttribute('webkit-playsinline', '');
+      videoEl.preload = 'auto';
       this.configureSceneVideoCrossOrigin(videoEl);
+
       try {
         videoEl.pause();
-        videoEl.removeAttribute('src');
-        videoEl.load();
       } catch (_) {}
-      videoEl.src = videoSrc;
-      videoEl.load();
+
+      if (videoEl.src !== videoSrc) {
+        videoEl.src = videoSrc;
+      }
+      try {
+        videoEl.load();
+      } catch (_) {
+        finish(resolve);
+      }
     });
   }
 
   async loadVideoScene(sceneId, scene, skybox) {
     console.log('Loading video scene:', sceneId, scene.videoSrc);
 
+    this.hideTapToPlayBanner();
     skybox.setAttribute('visible', 'false');
 
     const existingVideosphere = document.getElementById('current-videosphere');
@@ -9656,18 +9914,22 @@ class HotspotProject {
       this.currentScene = sceneId;
     };
 
+    let sceneFinished = false;
+    const finishOnce = () => {
+      if (sceneFinished) return;
+      sceneFinished = true;
+      finishVideoSceneLoaded();
+    };
+
     const armTapToPlay = () => {
-      const subEl = document.getElementById('scene-loading-subtitle');
-      if (subEl) subEl.textContent = 'Tap anywhere to start the video';
+      this.showTapToPlayBanner('Tap anywhere to start the video');
       const resume = (e) => {
         try {
           e && e.stopPropagation && e.stopPropagation();
         } catch (_) {}
         cleanup();
-        videoEl
-          .play()
-          .catch(() => {})
-          .finally(() => finishVideoSceneLoaded());
+        this.hideTapToPlayBanner();
+        videoEl.play().catch(() => {});
       };
       const cleanup = () => {
         document.removeEventListener('pointerdown', resume, true);
@@ -9679,31 +9941,46 @@ class HotspotProject {
       document.addEventListener('click', resume, { once: true, capture: true });
     };
 
+    const sceneReadyTimeout = setTimeout(() => {
+      console.warn('Video scene setup timed out, showing tour anyway');
+      finishOnce();
+      if (videoEl.paused) armTapToPlay();
+    }, 15000);
+
     try {
+      await this.waitForExportSceneReady();
       await this.loadExportVideoSource(videoEl, scene.videoSrc);
 
-      const videosphere = this.createExportVideoSphereElement();
-      aScene.appendChild(videosphere);
+      if (!document.getElementById('current-videosphere')) {
+        const videosphere = this.createExportVideoSphereElement();
+        aScene.appendChild(videosphere);
 
-      await new Promise((resolve) => {
-        if (videosphere.hasLoaded) resolve();
-        else videosphere.addEventListener('loaded', () => resolve(), { once: true });
-        setTimeout(resolve, 500);
-      });
+        await new Promise((resolve) => {
+          if (videosphere.hasLoaded) resolve();
+          else videosphere.addEventListener('loaded', () => resolve(), { once: true });
+          setTimeout(resolve, 500);
+        });
 
-      if (!this.attachExportVideoTexture(videosphere, videoEl)) {
-        throw new Error('Failed to bind video texture');
+        this.attachExportVideoTexture(videosphere, videoEl);
+      }
+
+      if (sceneFinished) {
+        clearTimeout(sceneReadyTimeout);
+        return;
       }
 
       try {
         await videoEl.play();
-        finishVideoSceneLoaded();
+        clearTimeout(sceneReadyTimeout);
+        finishOnce();
       } catch (playErr) {
         console.log('Autoplay blocked, waiting for user gesture:', playErr);
-        finishVideoSceneLoaded();
+        clearTimeout(sceneReadyTimeout);
+        finishOnce();
         armTapToPlay();
       }
     } catch (err) {
+      clearTimeout(sceneReadyTimeout);
       console.error('Video scene failed to load:', err);
       this.hideLoadingIndicator();
       const loadingEnvironment = document.getElementById('loading-environment');
@@ -10408,6 +10685,37 @@ class HotspotProject {
     const loadingEl = document.getElementById('scene-loading-indicator');
     if (loadingEl && loadingEl.parentNode) {
       loadingEl.parentNode.removeChild(loadingEl);
+    }
+  }
+
+  showTapToPlayBanner(message = 'Tap anywhere to start the video') {
+    this.hideTapToPlayBanner();
+    const banner = document.createElement('div');
+    banner.id = 'tap-to-play-banner';
+    banner.textContent = message;
+    banner.style.cssText = \`
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(26, 26, 46, 0.92);
+      color: #fff;
+      padding: 14px 22px;
+      border-radius: 999px;
+      font-family: Arial, sans-serif;
+      font-size: 15px;
+      z-index: 10001;
+      border: 1px solid rgba(76, 175, 80, 0.45);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      pointer-events: none;
+    \`;
+    document.body.appendChild(banner);
+  }
+
+  hideTapToPlayBanner() {
+    const banner = document.getElementById('tap-to-play-banner');
+    if (banner && banner.parentNode) {
+      banner.parentNode.removeChild(banner);
     }
   }
 
@@ -11496,17 +11804,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
   updateNavigationTargets() {
     const dropdown = document.getElementById('navigation-target');
+    if (!dropdown) return;
+
+    const previous = dropdown.value;
     dropdown.innerHTML = '<option value="">Select target scene...</option>';
 
-    Object.keys(this.scenes).forEach((sceneId) => {
+    const sceneIds = Object.keys(this.scenes || {});
+    sceneIds.forEach((sceneId) => {
       if (sceneId !== this.currentScene) {
-        // Don't allow navigation to current scene
         const option = document.createElement('option');
         option.value = sceneId;
         option.textContent = this.scenes[sceneId].name;
         dropdown.appendChild(option);
       }
     });
+
+    if (sceneIds.length <= 1) {
+      const hint = document.createElement('option');
+      hint.value = '';
+      hint.textContent = 'Add another scene first (Add Scene button)';
+      hint.disabled = true;
+      dropdown.appendChild(hint);
+    }
+
+    if (previous && previous !== this.currentScene && this.scenes[previous]) {
+      dropdown.value = previous;
+    }
   }
 
   // Helper function to get the first scene ID for consistent starting point
@@ -12389,15 +12712,16 @@ document.addEventListener('DOMContentLoaded', () => {
       // Edit mode (whether actively placing or not)
       if (this.editMode) {
         editModeIndicator.style.display = 'block';
+        editModeIndicator.textContent = 'Click on the 360° scene to place hotspot';
         if (instructionsContent) {
           instructionsContent.innerHTML =
-            '<strong>🎯 PLACING HOTSPOT:</strong><br>• Click anywhere on the 360° image to place<br>• Use mouse to rotate view first if needed<br>• Hotspot will appear with selected type<br><br><strong style="color: #2196F3;">ℹ️ Tip:</strong><br><span style="font-size: 12px;">Position carefully - you can move it later with 📍</span>';
+            '<strong>🎯 PLACING HOTSPOT:</strong><br>• Click anywhere on the 360° scene to place<br>• Use mouse/touch to look around first if needed<br>• Press Esc or click Add Hotspot again to cancel<br><br><strong style="color: #2196F3;">ℹ️ Tip:</strong><br><span style="font-size: 12px;">Use Move (📍) later to reposition</span>';
         }
       } else {
         editModeIndicator.style.display = 'none';
         if (instructionsContent) {
           instructionsContent.innerHTML =
-            '<strong>🛠️ Edit Mode:</strong><br>1. 📝 Select hotspot type (Text/Audio/Portal)<br>2. 🎯 Click "Add Hotspot" to start placing<br>3. 📍 Click on 360° image to position<br>4. Use Edit (📝) to modify content<br>5. Use Move (📍) to reposition<br>6. 🧭 Uncheck "Edit Mode" to navigate<br><br><strong style="color: #4caf50;">💡 Pro Tip:</strong><br><span style="font-size: 12px;">First scene will be the starting point on export!</span>';
+            '<strong>🛠️ Edit Mode:</strong><br>1. 📝 Select hotspot type (Text/Audio/Portal)<br>2. 🎯 Click <strong>Add Hotspot</strong><br>3. 📍 Click on the 360° scene to position<br>4. Use Edit (📝) to modify content<br>5. Use Move (📍) to reposition<br>6. 🧭 Switch to Navigation Mode to preview<br><br><strong style="color: #4caf50;">💡 Pro Tip:</strong><br><span style="font-size: 12px;">First scene will be the starting point on export!</span>';
         }
       }
     }
@@ -12420,9 +12744,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const skybox = document.getElementById('skybox');
     const sceneEl = document.querySelector('a-scene');
     const loadToken = ++this._sceneLoadToken;
+    const overlaySafety = setTimeout(() => this.hideSceneLoadingOverlay(), 12000);
 
     console.log(`Loading scene: ${this.currentScene}`, scene); // Debug log
 
+    try {
     // Clear any existing videosphere and stop any playing scene video
     const existingVideosphere = document.getElementById('videosphere');
     if (existingVideosphere) {
@@ -12450,16 +12776,31 @@ document.addEventListener('DOMContentLoaded', () => {
         await this.waitForAFrameEntity(videosphere);
         if (loadToken !== this._sceneLoadToken) return;
 
-        await this.attachVideoTextureToSphere(videosphere, videoEl, loadToken);
+        try {
+          await this.attachVideoTextureToSphere(videosphere, videoEl, loadToken);
+        } catch (texErr) {
+          console.warn('Video texture bind failed, continuing with placement surface:', texErr);
+        }
         if (loadToken !== this._sceneLoadToken) return;
+
+        const raycastSurface = this.ensureVideoHotspotRaycastSurface(sceneEl);
+        await this.waitForAFrameEntity(raycastSurface);
+        this.refreshSceneMediaRaycasters();
+
         this.updateVideoControls(videoEl, scene);
-        this.hideSceneLoadingOverlay();
+        try {
+          await videoEl.play();
+        } catch (_) {
+          /* autoplay blocked — editor controls still work */
+        }
       } catch (err) {
         if (loadToken !== this._sceneLoadToken) return;
         console.warn('Video failed to load:', resolvedVideoSrc, err);
         alert(
           'Failed to load the video for this scene. If it was added from a local file, try re-selecting the file or ensure browser storage permissions allow keeping large files.'
         );
+        this.hideVideoHotspotRaycastSurface();
+        skybox.classList.add('scene-media-surface');
         skybox.setAttribute('visible', 'true');
         this.hideVideoControls();
       }
@@ -12503,9 +12844,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     } else {
       // Handle image scenes (existing logic)
+      this.hideVideoHotspotRaycastSurface();
       this.hideVideoControls();
       skybox.classList.add('scene-media-surface');
       skybox.setAttribute('visible', 'true');
+      this.refreshSceneMediaRaycasters();
 
       const uniqueId = `panorama-${this.currentScene}-${Date.now()}`;
       const newPanorama = document.createElement('img');
@@ -12644,12 +12987,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     await this.applyStartingPointAfterSceneLoad(loadToken);
     if (loadToken !== this._sceneLoadToken) return;
-
-    // Notify listeners that the scene finished loading (for transitions)
-    try {
-      this._dispatchSceneLoaded && this._dispatchSceneLoaded();
-    } catch (e) {
-      // no-op
+    } finally {
+      clearTimeout(overlaySafety);
+      if (loadToken === this._sceneLoadToken) {
+        this.hideSceneLoadingOverlay();
+        this.hideLoadingIndicator();
+        this._endCrossfadeOverlay();
+        this._dispatchSceneLoaded();
+      }
     }
   }
 

@@ -110,6 +110,7 @@ vr_hotspots/
 ├── student-projects/            # Submitted projects folder (auto-created)
 ├── hosted-projects/             # Hosted projects folder (auto-created)
 ├── RENDER_DEPLOY.md             # Production setup and deployment guide
+├── USER_GUIDE.md                # End-user guide (students & admins)
 ├── render.yaml                  # Render blueprint configuration
 └── audio/, images/              # Asset folders
 ```
@@ -150,6 +151,7 @@ vr_hotspots/
 
 ## 📖 Documentation
 
+- **[User Guide](USER_GUIDE.md)**: How to use the editor, export, and submit projects
 - **[Quick Start](#-quick-start)**: Local installation and usage
 - **[Deploy to Render](RENDER_DEPLOY.md)**: Production hosting, B2 configuration, and admin URLs
 - **[License](LICENSE.md)**: MIT license text

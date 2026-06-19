@@ -533,6 +533,7 @@ class HotspotEditor {
   createVideoSphereElement() {
     const el = document.createElement('a-entity');
     el.id = 'videosphere';
+    el.classList.add('scene-media-surface');
     el.setAttribute('geometry', {
       primitive: 'sphere',
       radius: 5000,
@@ -1592,9 +1593,11 @@ class HotspotEditor {
     // Check if returning from style editor
     this.checkForStyleUpdates();
 
-    // Sky click event for placing or repositioning hotspots
-    document.getElementById('skybox').addEventListener('click', (evt) => {
-      // Reposition has highest precedence
+    // Scene media click for placing or repositioning hotspots (skybox or video sphere)
+    document.querySelector('a-scene').addEventListener('click', (evt) => {
+      const hitEl = evt.detail?.intersection?.el;
+      if (!hitEl?.classList?.contains('scene-media-surface')) return;
+
       if (this.repositioningHotspotId) {
         this.applyReposition(evt);
         return;
@@ -9218,6 +9221,8 @@ class HotspotProject {
   this.weblinkOverlay = null;
   this.weblinkFrame = null;
   this.wasInVRBeforeWeblink = false;
+    this._activeVideoTexture = null;
+    this._videoTextureRenderHandler = null;
     this.loadProject();
   }
 
@@ -9337,6 +9342,7 @@ class HotspotProject {
     }
 
     // Ensure any existing videosphere is removed when switching to an image scene
+    this.detachVideoTextureRenderer();
     const existingVideosphere = document.getElementById('current-videosphere');
     if (existingVideosphere && existingVideosphere.parentNode) {
       existingVideosphere.parentNode.removeChild(existingVideosphere);
@@ -9503,146 +9509,213 @@ class HotspotProject {
     this.currentScene = sceneId;
   }
 
-  loadVideoScene(sceneId, scene, skybox) {
+  configureSceneVideoCrossOrigin(videoEl) {
+    if (!videoEl) return;
+    videoEl.crossOrigin = 'anonymous';
+    videoEl.setAttribute('crossorigin', 'anonymous');
+  }
+
+  createExportVideoSphereElement() {
+    const el = document.createElement('a-entity');
+    el.id = 'current-videosphere';
+    el.setAttribute('geometry', {
+      primitive: 'sphere',
+      radius: 5000,
+      segmentsWidth: 64,
+      segmentsHeight: 32,
+    });
+    el.setAttribute('rotation', '0 -90 0');
+    return el;
+  }
+
+  detachVideoTextureRenderer() {
+    const sceneEl = document.querySelector('a-scene');
+    if (this._videoTextureRenderHandler && sceneEl) {
+      sceneEl.removeEventListener('render', this._videoTextureRenderHandler);
+    }
+    this._videoTextureRenderHandler = null;
+    if (this._activeVideoTexture?.dispose) {
+      try {
+        this._activeVideoTexture.dispose();
+      } catch (_) {}
+    }
+    this._activeVideoTexture = null;
+  }
+
+  attachExportVideoTexture(sphereEl, videoEl) {
+    this.detachVideoTextureRenderer();
+    const mesh = (sphereEl.getObject3D && sphereEl.getObject3D('mesh')) || sphereEl.object3D;
+    if (!mesh || typeof THREE === 'undefined') return false;
+
+    this.configureSceneVideoCrossOrigin(videoEl);
+    const texture = new THREE.VideoTexture(videoEl);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      side: THREE.BackSide,
+    });
+    if (mesh.material?.dispose) {
+      try {
+        mesh.material.dispose();
+      } catch (_) {}
+    }
+    mesh.material = material;
+    this._activeVideoTexture = texture;
+
+    const sceneEl = document.querySelector('a-scene');
+    this._videoTextureRenderHandler = () => {
+      if (this._activeVideoTexture && videoEl.readyState >= 2) {
+        this._activeVideoTexture.needsUpdate = true;
+      }
+    };
+    sceneEl?.addEventListener('render', this._videoTextureRenderHandler);
+    return true;
+  }
+
+  loadExportVideoSource(videoEl, videoSrc) {
+    return new Promise((resolve, reject) => {
+      if (!videoEl) {
+        reject(new Error('Missing video element'));
+        return;
+      }
+      let settled = false;
+      const finish = (fn) => {
+        if (settled) return;
+        settled = true;
+        fn();
+      };
+      videoEl.addEventListener('loadeddata', () => finish(resolve), { once: true });
+      videoEl.addEventListener('error', () => finish(() => reject(new Error('Video failed to load'))), {
+        once: true,
+      });
+      this.configureSceneVideoCrossOrigin(videoEl);
+      try {
+        videoEl.pause();
+        videoEl.removeAttribute('src');
+        videoEl.load();
+      } catch (_) {}
+      videoEl.src = videoSrc;
+      videoEl.load();
+    });
+  }
+
+  async loadVideoScene(sceneId, scene, skybox) {
     console.log('Loading video scene:', sceneId, scene.videoSrc);
-    
-    // Hide skybox, we'll use videosphere instead
+
     skybox.setAttribute('visible', 'false');
-    
-    // Remove any existing videosphere
+
     const existingVideosphere = document.getElementById('current-videosphere');
     if (existingVideosphere) {
-      existingVideosphere.parentNode.removeChild(existingVideosphere);
+      existingVideosphere.remove();
     }
-    
-    // Get or create video element
-    let videoEl = document.getElementById('scene-video-dynamic');
+    this.detachVideoTextureRenderer();
+
+    const videoEl = document.getElementById('scene-video-dynamic');
     if (!videoEl) {
       console.warn('Video element not found in assets');
       this.hideLoadingIndicator();
       return;
     }
-    
-    // Set video source
-    videoEl.src = scene.videoSrc;
+
     videoEl.volume = scene.videoVolume !== undefined ? scene.videoVolume : 0.5;
     videoEl.loop = true;
-    videoEl.muted = true; // Start muted for autoplay
-    
-    // Create videosphere element
-  const videosphere = document.createElement('a-videosphere');
-    videosphere.id = 'current-videosphere';
-    videosphere.setAttribute('src', '#scene-video-dynamic');
-  // Align videosphere yaw with expected orientation (match editor behavior)
-  videosphere.setAttribute('rotation', '0 -90 0');
-    
-    // Add to scene
-    const aScene = document.querySelector('a-scene');
-    aScene.appendChild(videosphere);
-    
-    const finishVideoSceneLoaded = () => {
-      console.log('Video playing');
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.setAttribute('webkit-playsinline', '');
 
-      // Hide loading environment
+    const aScene = document.querySelector('a-scene');
+
+    const finishVideoSceneLoaded = () => {
       const loadingEnvironment = document.getElementById('loading-environment');
       if (loadingEnvironment) {
         loadingEnvironment.setAttribute('visible', 'false');
       }
 
-      // Create hotspots
       const container = document.getElementById('hotspot-container');
       container.innerHTML = '';
       this.createHotspots(scene.hotspots);
-
-      // Load ground for this scene
       this.loadGround(sceneId);
 
-      // Apply starting point, then notify scene loaded
       setTimeout(() => {
         this.applyStartingPoint(scene);
-
         setTimeout(() => {
           this.playCurrentGlobalSound();
         }, 500);
-
         try {
           const ev = new CustomEvent('vrhotspots:scene-loaded');
           window.dispatchEvent(ev);
         } catch (e) {}
       }, 100);
 
-      // Setup video controls
       this.updateVideoControls();
-
-      // Hide loading indicator
       this.hideLoadingIndicator();
+      this.currentScene = sceneId;
     };
 
-    const tryStartVideo = async () => {
-      try {
-        // Ensure muted for autoplay policies; user can unmute via controls.
-        videoEl.muted = true;
-        const p = videoEl.play();
-        if (p && typeof p.then === 'function') {
-          await p;
-        }
-        finishVideoSceneLoaded();
-        return true;
-      } catch (err) {
-        console.error('Error playing video:', err);
-        return false;
-      }
-    };
-
-    // Wait for video to be ready
-    const onVideoReady = async () => {
-      console.log('Video ready to play');
-
-      // Try to autoplay. If blocked, keep loader up and retry on first user interaction.
-      const ok = await tryStartVideo();
-      if (ok) return;
-
-      // Autoplay blocked (common on iOS/Safari unless initiated by a gesture)
+    const armTapToPlay = () => {
       const subEl = document.getElementById('scene-loading-subtitle');
-      if (subEl) subEl.textContent = 'Tap/click to start video';
-
-      const resume = async (e) => {
+      if (subEl) subEl.textContent = 'Tap anywhere to start the video';
+      const resume = (e) => {
         try {
           e && e.stopPropagation && e.stopPropagation();
         } catch (_) {}
         cleanup();
-        const ok2 = await tryStartVideo();
-        if (!ok2) {
-          // If still blocked, keep the hint visible.
-          if (subEl) subEl.textContent = 'Tap/click to start video';
-          arm();
-        }
+        videoEl
+          .play()
+          .catch(() => {})
+          .finally(() => finishVideoSceneLoaded());
       };
-
-      const arm = () => {
-        document.addEventListener('pointerdown', resume, { once: true, capture: true });
-        document.addEventListener('touchstart', resume, { once: true, capture: true });
-        document.addEventListener('click', resume, { once: true, capture: true });
-        document.addEventListener('keydown', resume, { once: true, capture: true });
-      };
-
       const cleanup = () => {
         document.removeEventListener('pointerdown', resume, true);
         document.removeEventListener('touchstart', resume, true);
         document.removeEventListener('click', resume, true);
-        document.removeEventListener('keydown', resume, true);
       };
-
-      arm();
+      document.addEventListener('pointerdown', resume, { once: true, capture: true });
+      document.addEventListener('touchstart', resume, { once: true, capture: true });
+      document.addEventListener('click', resume, { once: true, capture: true });
     };
-    
-    if (videoEl.readyState >= 2) {
-      onVideoReady();
-    } else {
-      videoEl.addEventListener('loadeddata', onVideoReady, { once: true });
+
+    try {
+      await this.loadExportVideoSource(videoEl, scene.videoSrc);
+
+      const videosphere = this.createExportVideoSphereElement();
+      aScene.appendChild(videosphere);
+
+      await new Promise((resolve) => {
+        if (videosphere.hasLoaded) resolve();
+        else videosphere.addEventListener('loaded', () => resolve(), { once: true });
+        setTimeout(resolve, 500);
+      });
+
+      if (!this.attachExportVideoTexture(videosphere, videoEl)) {
+        throw new Error('Failed to bind video texture');
+      }
+
+      try {
+        await videoEl.play();
+        finishVideoSceneLoaded();
+      } catch (playErr) {
+        console.log('Autoplay blocked, waiting for user gesture:', playErr);
+        finishVideoSceneLoaded();
+        armTapToPlay();
+      }
+    } catch (err) {
+      console.error('Video scene failed to load:', err);
+      this.hideLoadingIndicator();
+      const loadingEnvironment = document.getElementById('loading-environment');
+      if (loadingEnvironment) {
+        loadingEnvironment.setAttribute('visible', 'false');
+      }
+      skybox.setAttribute('visible', 'true');
+      this.hideVideoControls();
+      alert(
+        'Failed to load the 360° video for this scene. If you are on iPhone, try tapping the page after it loads, or check your network connection.'
+      );
     }
-    
-    this.currentScene = sceneId;
   }
 
   updateVideoControls() {
@@ -12363,6 +12436,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (scene.type === 'video' && resolvedVideoSrc) {
       console.log('Loading video scene:', resolvedVideoSrc);
       skybox.setAttribute('visible', 'false');
+      skybox.classList.remove('scene-media-surface');
 
       const videoEl = this.getSceneVideoElement();
 
@@ -12430,6 +12504,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       // Handle image scenes (existing logic)
       this.hideVideoControls();
+      skybox.classList.add('scene-media-surface');
       skybox.setAttribute('visible', 'true');
 
       const uniqueId = `panorama-${this.currentScene}-${Date.now()}`;

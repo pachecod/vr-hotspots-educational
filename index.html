@@ -1739,7 +1739,7 @@
       <a-entity id="hotspot-container"></a-entity>
 
       <!-- 360 Sky -->
-      <a-sky id="skybox" src="#main-panorama"></a-sky>
+      <a-sky id="skybox" class="scene-media-surface" src="#main-panorama"></a-sky>
 
       <!-- Camera with cursor for interaction -->
       <a-entity
@@ -1751,7 +1751,7 @@
         <!-- Mouse-based cursor for non-VR mode -->
         <a-entity
           cursor="rayOrigin: mouse; fuse: false"
-          raycaster="objects: .clickable, .audio-control, #skybox"
+          raycaster="objects: .clickable, .audio-control, .scene-media-surface"
           id="mouse-cursor"
           visible="true"
         >
@@ -1760,7 +1760,7 @@
         <!-- Gaze-based cursor for VR mode -->
         <a-entity
           cursor="fuse: true; fuseTimeout: 2000"
-          raycaster="objects: .clickable, .audio-control, #skybox"
+          raycaster="objects: .clickable, .audio-control, .scene-media-surface"
           position="0 0 -1"
           geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
           material="color: white; shader: flat; opacity: 0.8"

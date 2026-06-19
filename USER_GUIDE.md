@@ -15,18 +15,13 @@ The editor lets you create **interactive 360° VR stories** — like a virtual t
 
 ### Live examples
 
-Browse these finished tours for inspiration (replace the placeholders below with your hosted project links):
+Browse these finished tours for inspiration:
 
 | Tour | Description |
 |------|-------------|
-| *[Agriquest Seeds of Story Tour #1](https://agriquest.org/tours/student5/)* | *One-line description of the project* |
-| *[Tour name](https://example.com/your-tour)* | *This tour of the Salt City Harvest Farm was created by a youth participant of the NSF project this tool was initially created to support.* |
-
-| *[Agriquest Seeds of Story Tour #2](https://agriquest.org/tours/student5/)* | *One-line description of the project* |
-| *[Tour name](https://example.com/your-tour)* | *Another student's tour explaining what they did during their summer planting project.* |
-
-https://agriquest.org/tours/student7/
-
+| [Agriquest Seeds of Story Tour #1](https://agriquest.org/tours/student5/) | Sample tour from the Agriquest Seeds of Story program. |
+| [Salt City Harvest Farm](https://agriquest.org/tours/student7/) | This tour of the Salt City Harvest Farm was created by a youth participant of the NSF project this tool was initially created to support. |
+| [Agriquest Seeds of Story Tour #2](https://agriquest.org/tours/student7/) | Another student's tour explaining what they did during their summer planting project. |
 
 Works in a desktop browser, on phones and tablets, and in VR headsets that support WebXR.
 

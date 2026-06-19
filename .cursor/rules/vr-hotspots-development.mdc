@@ -1,0 +1,51 @@
+---
+description: VR Hotspots editor architecture — where to change editor UI vs exported runtime
+globs: script.js,index.html,simple-server.js,admin-*.html,admin-*.js,routes/**/*.js,lib/**/*.js,services/**/*.js
+alwaysApply: false
+---
+
+# VR Hotspots — development map
+
+## Run locally
+
+```bash
+npm install
+npm run dev:feature   # API :3001, Vite editor :5174
+npm start             # production-style single server (:3000)
+```
+
+Copy `.env.example` → `.env`. Never commit `.env`. Deploy docs: `RENDER_DEPLOY.md`.
+
+## Architecture (critical)
+
+Most logic lives in **`script.js`** (~15k lines). There are **two runtimes**:
+
+| Change affects… | Edit here |
+|-----------------|-----------|
+| Editor sidebar, dialogs, placement | `HotspotEditor` class (~line 131) |
+| Exported / standalone projects | `generateCompleteJS()` (~line 9284) |
+| Exported styling | `generateCSS()` (~line 9039) |
+| Editor hotspot behavior | `editor-spot` component (~line 14820) |
+| Exported hotspot behavior | `hotspot` inside `generateCompleteJS` (~line 9356) |
+
+**Rule:** UI-only changes stay in `HotspotEditor` / `index.html`. Anything students see in exported ZIPs must also be updated inside `generateCompleteJS()` (code inside its template literal is what gets shipped).
+
+## Other key files
+
+- **`index.html`** — editor layout, panel order, CSS for admin UI
+- **`simple-server.js`** — Express app, static files, submission upload
+- **`routes/common-assets-routes.js`** + **`lib/common-assets.js`** — shared B2 asset library
+- **`services/b2-service.js`** — Backblaze upload/download
+- **`admin-dashboard.html`**, **`admin-common-assets.html`** — admin UIs
+
+## Persistence & export
+
+- Scene/hotspot data: `saveScenesData()`, localStorage, IndexedDB (search `.saveToIDB`, `rehydrate`)
+- Student ZIP export: `saveAsCompleteProject()` / `normalizeScenePathsForExport()` — supports bundle vs URL modes
+- Common asset URLs must work in exported projects (direct B2 URLs or bundled relative paths)
+
+## Conventions
+
+- Match existing patterns; avoid large refactors of `script.js` unless requested
+- Test both **editor** and **re-exported project** after hotspot or A-Frame behavior changes
+- A-Frame is vendored locally (`node_modules/aframe`) — no CDN in exports

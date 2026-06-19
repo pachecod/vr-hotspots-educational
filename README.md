@@ -137,8 +137,8 @@ vr_hotspots/
 ├── package.json                 # Node.js dependencies
 ├── student-projects/            # Submitted projects folder (auto-created)
 ├── hosted-projects/             # Hosted projects folder (auto-created)
-├── EDUCATIONAL_SETUP.md         # Detailed setup guide
-├── HOSTING_GUIDE.md             # Project hosting documentation
+├── RENDER_DEPLOY.md             # Production setup and deployment guide
+├── render.yaml                  # Render blueprint configuration
 └── audio/, images/              # Asset folders
 ```
 
@@ -178,9 +178,9 @@ vr_hotspots/
 
 ## 📖 Documentation
 
-- **[Educational Setup Guide](EDUCATIONAL_SETUP.md)**: Step-by-step installation and usage
-- **[Hosting Guide](HOSTING_GUIDE.md)**: Student project hosting and deployment
-- **[Copilot Instructions](.github/copilot-instructions.md)**: Complete project documentation
+- **[Quick Start](#-quick-start)**: Local installation and usage
+- **[Deploy to Render](RENDER_DEPLOY.md)**: Production hosting, B2 configuration, and admin URLs
+- **[License](LICENSE.md)**: MIT license text
 
 ## 🎮 Usage Examples
 
@@ -212,10 +212,9 @@ vr_hotspots/
 
 ### For Production:
 
-- Deploy to cloud hosting (Heroku, AWS, DigitalOcean)
-- Add SSL certificates
-- Configure domain names
-- Scale server resources
+- Deploy with [Deploy to Render](RENDER_DEPLOY.md) (recommended)
+- Configure GitHub OAuth callback URLs for your production domain
+- Set B2 and admin secrets in the host environment (never commit `.env`)
 
 ## 🆘 Troubleshooting
 
@@ -228,7 +227,7 @@ vr_hotspots/
 
 ### Support:
 
-1. Check `EDUCATIONAL_SETUP.md` for detailed troubleshooting
+1. Check [Quick Start](#-quick-start) and [Deploy to Render](RENDER_DEPLOY.md) for setup and troubleshooting
 2. Monitor server console output for error messages
 3. Verify all files are present and Node.js is installed
 4. Test with small projects first before full deployment
@@ -265,4 +264,4 @@ See [LICENSE.md](LICENSE.md) for the canonical license file.
 
 ---
 
-**Ready to start?** Follow the [Educational Setup Guide](EDUCATIONAL_SETUP.md) for detailed instructions!
+**Ready to start?** Use [Quick Start](#-quick-start) for local setup, or follow the [Render Deploy Guide](RENDER_DEPLOY.md) for production deployment.

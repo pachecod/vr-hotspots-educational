@@ -19,9 +19,8 @@ Browse these finished tours for inspiration:
 
 | Tour | Description |
 |------|-------------|
-| [Agriquest Seeds of Story Tour #1](https://agriquest.org/tours/student5/) | Sample tour from the Agriquest Seeds of Story program. |
-| [Salt City Harvest Farm](https://agriquest.org/tours/student7/) | This tour of the Salt City Harvest Farm was created by a youth participant of the NSF project this tool was initially created to support. |
-| [Agriquest Seeds of Story Tour #2](https://agriquest.org/tours/student7/) | Another student's tour explaining what they did during their summer planting project. |
+| [Agriquest Seeds of Story Tour #1](https://agriquest.org/tours/student5/) | Sample tour from the Agriquest Seeds of Story program that this tool was originally created to support. The tour was built by a youth participant of project. |
+| [Agriquest Seeds of Story Tour #2](https://agriquest.org/tours/student7/) | Another student tour of the Salt City Harvest Farm project. |
 
 Works in a desktop browser, on phones and tablets, and in VR headsets that support WebXR.
 

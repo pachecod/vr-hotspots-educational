@@ -1730,7 +1730,7 @@ class HotspotEditor {
 
     const setExpanded = (expanded) => {
       bar.classList.toggle('collapsed', !expanded);
-      icon.textContent = expanded ? '›' : '‹';
+      icon.textContent = expanded ? '‹' : '›';
       toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
       toggle.title = expanded ? 'Hide edit mode panel' : 'Show edit mode panel';
       localStorage.setItem(storageKey, expanded ? 'true' : 'false');

@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node simple-server.js",
     "dev": "concurrently -n api,vite -c blue,green \"nodemon simple-server.js\" \"vite\"",
+    "dev:feature": "concurrently -n api,vite -c blue,magenta \"PORT=3001 nodemon simple-server.js\" \"API_TARGET=http://localhost:3001 VITE_PORT=5174 vite\"",
     "dev:api": "nodemon simple-server.js",
     "vite": "vite",
     "dev:vite": "concurrently -n api,vite -c blue,green \"node simple-server.js\" \"vite\"",

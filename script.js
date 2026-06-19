@@ -219,6 +219,10 @@ class HotspotEditor {
     // Cache for data URLs of image Files to avoid re-encoding identical uploads
     this._imageDataURLCache = new Map();
     this._videoPreviewCache = new Map();
+    this._sceneLoadToken = 0;
+    this._activeVideoTexture = null;
+    this._activeVideoSphere = null;
+    this._videoTextureRenderHandler = null;
 
     this.init();
   }
@@ -328,6 +332,288 @@ class HotspotEditor {
   }
 
   // ===== IndexedDB asset storage helpers (videos + images) =====
+  isCommonAssetObject(obj) {
+    return !!(obj && typeof obj.commonAssetUrl === 'string' && /^https?:\/\//i.test(obj.commonAssetUrl));
+  }
+
+  getCommonAssetProvenance(asset) {
+    if (!asset || !asset.category || !asset.name) return null;
+    const commonAssetUrl = asset.url;
+    if (!commonAssetUrl || typeof commonAssetUrl !== 'string' || !/^https?:\/\//i.test(commonAssetUrl)) {
+      return null;
+    }
+    return {
+      commonAssetUrl,
+      commonAssetCategory: asset.category,
+      commonAssetName: asset.name,
+    };
+  }
+
+  applyCommonAssetProvenance(target, asset) {
+    if (!target) return false;
+    const prov = this.getCommonAssetProvenance(asset);
+    if (!prov) return false;
+    target.commonAssetUrl = prov.commonAssetUrl;
+    target.commonAssetCategory = prov.commonAssetCategory;
+    target.commonAssetName = prov.commonAssetName;
+    return true;
+  }
+
+  clearCommonAssetProvenance(target) {
+    if (!target) return;
+    delete target.commonAssetUrl;
+    delete target.commonAssetCategory;
+    delete target.commonAssetName;
+    delete target.previewCommonAssetUrl;
+    delete target.previewCommonAssetCategory;
+    delete target.previewCommonAssetName;
+  }
+
+  clearCommonAssetDataset(el) {
+    if (!el || !el.dataset) return;
+    delete el.dataset.commonAssetUrl;
+    delete el.dataset.commonAssetCategory;
+    delete el.dataset.commonAssetName;
+  }
+
+  setCommonAssetDataset(el, asset) {
+    if (!el) return;
+    const prov = this.getCommonAssetProvenance(asset);
+    if (!prov) {
+      this.clearCommonAssetDataset(el);
+      return;
+    }
+    el.dataset.commonAssetUrl = prov.commonAssetUrl;
+    el.dataset.commonAssetCategory = prov.commonAssetCategory;
+    el.dataset.commonAssetName = prov.commonAssetName;
+  }
+
+  readCommonAssetFromDataset(el) {
+    if (!el?.dataset?.commonAssetUrl) return null;
+    return {
+      commonAssetUrl: el.dataset.commonAssetUrl,
+      commonAssetCategory: el.dataset.commonAssetCategory || '',
+      commonAssetName: el.dataset.commonAssetName || '',
+    };
+  }
+
+  applyCommonAssetFromDataset(target, el, { preview = false } = {}) {
+    const prov = this.readCommonAssetFromDataset(el);
+    if (!prov || !target) return false;
+    if (preview) {
+      target.previewCommonAssetUrl = prov.commonAssetUrl;
+      target.previewCommonAssetCategory = prov.commonAssetCategory;
+      target.previewCommonAssetName = prov.commonAssetName;
+    } else {
+      target.commonAssetUrl = prov.commonAssetUrl;
+      target.commonAssetCategory = prov.commonAssetCategory;
+      target.commonAssetName = prov.commonAssetName;
+    }
+    return true;
+  }
+
+  getRuntimeCommonAssetUrl(asset) {
+    return (asset && (asset.proxyUrl || asset.url)) || '';
+  }
+
+  buildCommonAssetProxyPath(obj) {
+    const category = obj?.commonAssetCategory || obj?.category;
+    const name = obj?.commonAssetName || obj?.name;
+    if (!category || !name) return '';
+    return `/common-assets/${category}/${encodeURIComponent(name)}`;
+  }
+
+  resolveSceneVideoSrc(scene) {
+    if (!scene || scene.type !== 'video') return '';
+    let src = '';
+    if (typeof scene.videoSrc === 'string' && scene.videoSrc.trim()) {
+      src = scene.videoSrc.trim();
+    } else if (this.isCommonAssetObject(scene)) {
+      const proxy = this.buildCommonAssetProxyPath(scene);
+      if (proxy) {
+        scene.videoSrc = proxy;
+        src = proxy;
+      } else {
+        src = scene.commonAssetUrl || '';
+      }
+    }
+    return src ? this.toAbsoluteMediaUrl(src) : '';
+  }
+
+  pauseSceneVideo() {
+    const videoEl = document.getElementById('scene-video-dynamic');
+    if (!videoEl) return;
+    try {
+      videoEl.pause();
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  getSceneVideoElement() {
+    let videoEl = document.getElementById('scene-video-dynamic');
+    if (videoEl) return videoEl;
+
+    videoEl = document.createElement('video');
+    videoEl.id = 'scene-video-dynamic';
+    videoEl.loop = true;
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.setAttribute('webkit-playsinline', '');
+    videoEl.preload = 'auto';
+    videoEl.style.display = 'none';
+    this.configureSceneVideoCrossOrigin(videoEl);
+    const assets = document.querySelector('a-assets');
+    (assets || document.body).appendChild(videoEl);
+    return videoEl;
+  }
+
+  toAbsoluteMediaUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.startsWith('/') && !url.startsWith('//')) {
+      return `${window.location.origin}${url}`;
+    }
+    return url;
+  }
+
+  loadSceneVideoSource(videoEl, videoSrc, loadToken) {
+    return new Promise((resolve, reject) => {
+      if (!videoEl) {
+        reject(new Error('Missing video element'));
+        return;
+      }
+
+      const absoluteSrc = this.toAbsoluteMediaUrl(videoSrc);
+      let settled = false;
+      const finish = (fn) => {
+        if (settled || loadToken !== this._sceneLoadToken) return;
+        settled = true;
+        fn();
+      };
+
+      const onReady = () => finish(() => resolve());
+      const onError = () => finish(() => reject(new Error('Video failed to load')));
+
+      videoEl.addEventListener('loadeddata', onReady, { once: true });
+      videoEl.addEventListener('error', onError, { once: true });
+
+      this.configureSceneVideoCrossOrigin(videoEl);
+      try {
+        videoEl.pause();
+        videoEl.removeAttribute('src');
+        videoEl.load();
+      } catch (_) {}
+      videoEl.src = absoluteSrc;
+      videoEl.load();
+    });
+  }
+
+  waitForAFrameEntity(entity) {
+    return new Promise((resolve) => {
+      if (!entity) {
+        resolve();
+        return;
+      }
+      if (entity.hasLoaded) {
+        resolve();
+        return;
+      }
+      entity.addEventListener('loaded', () => resolve(), { once: true });
+      setTimeout(resolve, 500);
+    });
+  }
+
+  configureSceneVideoCrossOrigin(videoEl) {
+    if (!videoEl) return;
+    // Required for WebGL video textures — without this, audio plays but the sphere stays black
+    videoEl.crossOrigin = 'anonymous';
+    videoEl.setAttribute('crossorigin', 'anonymous');
+  }
+
+  createVideoSphereElement() {
+    const el = document.createElement('a-entity');
+    el.id = 'videosphere';
+    el.setAttribute('geometry', {
+      primitive: 'sphere',
+      radius: 5000,
+      segmentsWidth: 64,
+      segmentsHeight: 32,
+    });
+    el.setAttribute('rotation', '0 -90 0');
+    return el;
+  }
+
+  detachVideoTextureRenderer() {
+    const sceneEl = document.querySelector('a-scene');
+    if (this._videoTextureRenderHandler && sceneEl) {
+      sceneEl.removeEventListener('render', this._videoTextureRenderHandler);
+    }
+    this._videoTextureRenderHandler = null;
+    if (this._activeVideoTexture?.dispose) {
+      try {
+        this._activeVideoTexture.dispose();
+      } catch (_) {}
+    }
+    this._activeVideoTexture = null;
+    this._activeVideoSphere = null;
+  }
+
+  attachVideoTextureToSphere(sphereEl, videoEl, loadToken) {
+    this.detachVideoTextureRenderer();
+
+    const applyTexture = () => {
+      if (loadToken !== this._sceneLoadToken) return false;
+      const mesh = (sphereEl.getObject3D && sphereEl.getObject3D('mesh')) || sphereEl.object3D;
+      if (!mesh || typeof THREE === 'undefined') return false;
+
+      const texture = new THREE.VideoTexture(videoEl);
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        side: THREE.BackSide,
+      });
+
+      if (mesh.material?.dispose) {
+        try {
+          mesh.material.dispose();
+        } catch (_) {}
+      }
+
+      mesh.material = material;
+      this._activeVideoTexture = texture;
+      this._activeVideoSphere = sphereEl;
+      return true;
+    };
+
+    const sceneEl = document.querySelector('a-scene');
+    this._videoTextureRenderHandler = () => {
+      if (loadToken !== this._sceneLoadToken) {
+        this.detachVideoTextureRenderer();
+        return;
+      }
+      if (this._activeVideoTexture && videoEl.readyState >= 2) {
+        this._activeVideoTexture.needsUpdate = true;
+      }
+    };
+
+    const startRenderer = () => {
+      if (!applyTexture()) {
+        throw new Error('Failed to bind video texture to sphere');
+      }
+      sceneEl?.addEventListener('render', this._videoTextureRenderHandler);
+    };
+
+    return videoEl.play().then(startRenderer).catch(() => {
+      // Autoplay blocked — still bind texture; playback resumes on user gesture
+      startRenderer();
+    });
+  }
+
+
   openVideoDB() {
     if (this._videoDBPromise) return this._videoDBPromise;
     this._videoDBPromise = new Promise((resolve, reject) => {
@@ -1395,13 +1681,16 @@ class HotspotEditor {
     document.getElementById('hotspot-audio').addEventListener('change', () => {
       if (document.getElementById('hotspot-audio').files.length > 0) {
         document.getElementById('hotspot-audio-url').value = '';
+        this.clearCommonAssetDataset(document.getElementById('hotspot-audio-url'));
       }
     });
 
     // Audio URL coordination - clear file when URL is entered
     document.getElementById('hotspot-audio-url').addEventListener('input', () => {
+      if (this._skipClearCommonAssetDataset) return;
       if (document.getElementById('hotspot-audio-url').value.trim()) {
         document.getElementById('hotspot-audio').value = '';
+        this.clearCommonAssetDataset(document.getElementById('hotspot-audio-url'));
       }
     });
 
@@ -1409,10 +1698,17 @@ class HotspotEditor {
     const imageUrlInput = document.getElementById('hotspot-image-url');
     if (imageFileInput && imageUrlInput) {
       imageFileInput.addEventListener('change', () => {
-        if (imageFileInput.files.length > 0) imageUrlInput.value = '';
+        if (imageFileInput.files.length > 0) {
+          imageUrlInput.value = '';
+          this.clearCommonAssetDataset(imageUrlInput);
+        }
       });
       imageUrlInput.addEventListener('input', () => {
-        if (imageUrlInput.value.trim()) imageFileInput.value = '';
+        if (this._skipClearCommonAssetDataset) return;
+        if (imageUrlInput.value.trim()) {
+          imageFileInput.value = '';
+          this.clearCommonAssetDataset(imageUrlInput);
+        }
       });
     }
 
@@ -1420,10 +1716,17 @@ class HotspotEditor {
     const modelUrlInput = document.getElementById('hotspot-model-url');
     if (modelFileInput && modelUrlInput) {
       modelFileInput.addEventListener('change', () => {
-        if (modelFileInput.files.length > 0) modelUrlInput.value = '';
+        if (modelFileInput.files.length > 0) {
+          modelUrlInput.value = '';
+          this.clearCommonAssetDataset(modelUrlInput);
+        }
       });
       modelUrlInput.addEventListener('input', () => {
-        if (modelUrlInput.value.trim()) modelFileInput.value = '';
+        if (this._skipClearCommonAssetDataset) return;
+        if (modelUrlInput.value.trim()) {
+          modelFileInput.value = '';
+          this.clearCommonAssetDataset(modelUrlInput);
+        }
       });
     }
 
@@ -1437,13 +1740,16 @@ class HotspotEditor {
     document.getElementById('global-sound-file').addEventListener('change', () => {
       if (document.getElementById('global-sound-file').files.length > 0) {
         document.getElementById('global-sound-url').value = '';
+        this.clearCommonAssetDataset(document.getElementById('global-sound-url'));
       }
       this.updateGlobalSound();
     });
 
     document.getElementById('global-sound-url').addEventListener('input', () => {
+      if (this._skipClearCommonAssetDataset) return;
       if (document.getElementById('global-sound-url').value.trim()) {
         document.getElementById('global-sound-file').value = '';
+        this.clearCommonAssetDataset(document.getElementById('global-sound-url'));
       }
       this.updateGlobalSound();
     });
@@ -2639,6 +2945,9 @@ class HotspotEditor {
       hotspotData.imageScale = Math.max(0.1, Math.min(10, s));
       if (imgUrlEl?.value.trim()) hotspotData.image = imgUrlEl.value.trim();
       else if (imgFileEl?.files?.[0]) hotspotData.image = imgFileEl.files[0];
+      if (typeof hotspotData.image === 'string') {
+        this.applyCommonAssetFromDataset(hotspotData, imgUrlEl);
+      }
     }
     if (this.selectedHotspotType === 'model') {
       const modelFileEl = document.getElementById('hotspot-model-file');
@@ -2655,6 +2964,9 @@ class HotspotEditor {
       const modelUrl = modelUrlEl?.value.trim();
       if (modelUrl) hotspotData.model = modelUrl;
       else if (modelFileEl?.files?.[0]) hotspotData.model = modelFileEl.files[0];
+      if (typeof hotspotData.model === 'string') {
+        this.applyCommonAssetFromDataset(hotspotData, modelUrlEl);
+      }
     }
     if (this.selectedHotspotType === 'weblink') {
       const url = (document.getElementById('weblink-url')?.value || '').trim();
@@ -2664,6 +2976,17 @@ class HotspotEditor {
       hotspotData.weblinkUrl = url || null;
       hotspotData.weblinkTitle = title || null;
       hotspotData.weblinkPreview = wImgFile ? wImgFile : wImgUrl || null;
+      if (typeof hotspotData.weblinkPreview === 'string') {
+        this.applyCommonAssetFromDataset(
+          hotspotData,
+          document.getElementById('weblink-image-url'),
+          { preview: true }
+        );
+      }
+    }
+
+    if (typeof hotspotData.audio === 'string') {
+      this.applyCommonAssetFromDataset(hotspotData, document.getElementById('hotspot-audio-url'));
     }
 
     this.createHotspotElement(hotspotData);
@@ -5775,14 +6098,22 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
       const newScene = {
         name: scene.name,
         type: scene.type || 'image', // Include scene type
-        image: this.getExportImagePath(scene.image, sceneId),
-        videoSrc: scene.videoSrc || null, // Include video source (may be replaced by exported path)
+        image:
+          this.isCommonAssetObject(scene) && scene.type === 'image'
+            ? scene.commonAssetUrl
+            : this.getExportImagePath(scene.image, sceneId, scene),
+        videoSrc:
+          this.isCommonAssetObject(scene) && scene.type === 'video'
+            ? scene.commonAssetUrl
+            : scene.videoSrc || null,
         videoVolume: scene.videoVolume || 0.5, // Include video volume
         hotspots: [],
         startingPoint: scene.startingPoint,
         globalSound: null,
         ground: null, // Will be populated below with proper paths
       };
+
+      const sceneUsesCommonAsset = this.isCommonAssetObject(scene);
 
       // Process ground textures for export
       if (scene.ground && scene.ground.enabled) {
@@ -5809,7 +6140,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
       }
 
       // If this is an image scene and the source is local/IDB, export the blob
-      if (newScene.type === 'image') {
+      if (newScene.type === 'image' && !sceneUsesCommonAsset) {
         try {
           const isRemote =
             typeof scene.image === 'string' &&
@@ -5834,7 +6165,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
       }
 
       // If this is a video scene and the source is a blob URL or local, try to export the actual file from IDB
-      if (newScene.type === 'video') {
+      if (newScene.type === 'video' && !sceneUsesCommonAsset) {
         try {
           const isBlobUrl =
             typeof scene.videoSrc === 'string' && scene.videoSrc.startsWith('blob:');
@@ -5892,7 +6223,9 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
       if (scene.globalSound && scene.globalSound.enabled) {
         const gs = scene.globalSound;
         let outPath = null;
-        try {
+        if (this.isCommonAssetObject(gs)) {
+          outPath = gs.commonAssetUrl;
+        } else try {
           if (gs.audio instanceof File) {
             const baseName = sanitizeExportFileName(
               `global_${sceneId}_` + (gs.audio.name || 'audio.mp3'),
@@ -5968,7 +6301,9 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
           };
 
           // Handle audio properly (export blobs/IDB to files)
-          if (origHotspot.audio) {
+          if (origHotspot.commonAssetUrl && (origHotspot.type === 'audio' || origHotspot.type === 'text-audio')) {
+            newHotspot.audio = origHotspot.commonAssetUrl;
+          } else if (origHotspot.audio) {
             try {
               if (origHotspot.audio instanceof File) {
                 const baseName = sanitizeExportFileName(
@@ -6055,13 +6390,17 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
               origHotspot.imageAspectRatio > 0
             ) {
               newHotspot.imageAspectRatio = origHotspot.imageAspectRatio;
-            } else if (
+            } 
+            else if (
               typeof origHotspot._aspectRatio === 'number' &&
               isFinite(origHotspot._aspectRatio) &&
               origHotspot._aspectRatio > 0
             ) {
               newHotspot.imageAspectRatio = origHotspot._aspectRatio;
             }
+            if (origHotspot.commonAssetUrl) {
+              newHotspot.image = origHotspot.commonAssetUrl;
+            } else {
             // Prefer IndexedDB record when available (supports legacy fallback key)
             const effImageKey =
               origHotspot.imageStorageKey ||
@@ -6124,6 +6463,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
             } else {
               newHotspot.image = null;
             }
+            }
           }
 
           // Weblink portal export: include URL, title, and preview (string only)
@@ -6132,7 +6472,9 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
               newHotspot.weblinkUrl = origHotspot.weblinkUrl;
             if (typeof origHotspot.weblinkTitle === 'string')
               newHotspot.weblinkTitle = origHotspot.weblinkTitle;
-            if (typeof origHotspot.weblinkPreview === 'string')
+            if (origHotspot.previewCommonAssetUrl) {
+              newHotspot.weblinkPreview = origHotspot.previewCommonAssetUrl;
+            } else if (typeof origHotspot.weblinkPreview === 'string')
               newHotspot.weblinkPreview = origHotspot.weblinkPreview;
             else if (origHotspot.weblinkPreview instanceof File) {
               // For now, we keep preview inline only if it's already a data URL; copying file would require a name/path decision.
@@ -6157,6 +6499,9 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
             if (typeof origHotspot.modelPositionY === 'number') {
               newHotspot.modelPositionY = Math.min(5, Math.max(-5, origHotspot.modelPositionY));
             }
+            if (origHotspot.commonAssetUrl) {
+              newHotspot.model = origHotspot.commonAssetUrl;
+            } else {
             // Prefer IndexedDB record when available
             const effModelKey =
               origHotspot.modelStorageKey ||
@@ -6214,6 +6559,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
             } else {
               newHotspot.model = null;
             }
+            }
           }
 
           // Harden export: skip invalid image hotspots lacking an image reference
@@ -6236,10 +6582,19 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
     return normalizedScenes;
   }
 
-  getExportImagePath(imagePath, sceneId) {
+  getExportImagePath(imagePath, sceneId, scene) {
+    if (scene && this.isCommonAssetObject(scene) && scene.type === 'image') {
+      return scene.commonAssetUrl;
+    }
+    if (!imagePath || typeof imagePath !== 'string') {
+      return `./images/${sceneId}.jpg`;
+    }
     // If it's a URL (http:// or https://), use it directly
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
       return imagePath;
+    }
+    if (imagePath.startsWith('/common-assets/')) {
+      return scene?.commonAssetUrl || imagePath;
     }
     // For uploaded scenes (data URLs), save as sceneId.jpg
     else if (imagePath.startsWith('data:')) {
@@ -7625,6 +7980,13 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
             scene.videoSrc.startsWith('blob:')
           ) {
             scene.videoSrc = null;
+          }
+          if (
+            scene.type === 'video' &&
+            !scene.videoSrc &&
+            this.isCommonAssetObject(scene)
+          ) {
+            scene.videoSrc = this.buildCommonAssetProxyPath(scene);
           }
         });
 
@@ -9016,18 +9378,19 @@ class HotspotProject {
         // Load ground for this scene
         this.loadGround(sceneId);
         
-        // Apply starting point if available
+        // Apply starting point if available, then signal scene loaded
         setTimeout(() => {
           this.applyStartingPoint(scene);
-          
-          // Play global sound for this scene
+
           setTimeout(() => {
             this.playCurrentGlobalSound();
           }, 500);
+
+          try {
+            const ev = new CustomEvent('vrhotspots:scene-loaded');
+            window.dispatchEvent(ev);
+          } catch (e) {}
         }, 100);
-        
-        // Notify listeners that the scene finished loading (for transitions)
-        try { const ev = new CustomEvent('vrhotspots:scene-loaded'); window.dispatchEvent(ev); } catch(e) {}
 
         // Hide the loading indicator
         this.hideLoadingIndicator();
@@ -9093,18 +9456,19 @@ class HotspotProject {
         // Load ground for this scene
         this.loadGround(sceneId);
         
-        // Apply starting point if available
+        // Apply starting point if available, then signal scene loaded
         setTimeout(() => {
           this.applyStartingPoint(scene);
-          
-          // Play global sound for this scene
+
           setTimeout(() => {
             this.playCurrentGlobalSound();
           }, 500);
+
+          try {
+            const ev = new CustomEvent('vrhotspots:scene-loaded');
+            window.dispatchEvent(ev);
+          } catch (e) {}
         }, 100);
-        
-        // Notify listeners that the scene finished loading (for transitions)
-        try { const ev = new CustomEvent('vrhotspots:scene-loaded'); window.dispatchEvent(ev); } catch(e) {}
 
         // Hide the loading indicator
         this.hideLoadingIndicator();
@@ -9193,21 +9557,19 @@ class HotspotProject {
       // Load ground for this scene
       this.loadGround(sceneId);
 
-      // Apply starting point
+      // Apply starting point, then notify scene loaded
       setTimeout(() => {
         this.applyStartingPoint(scene);
 
-        // Play global sound for this scene
         setTimeout(() => {
           this.playCurrentGlobalSound();
         }, 500);
-      }, 100);
 
-      // Notify scene loaded
-      try {
-        const ev = new CustomEvent('vrhotspots:scene-loaded');
-        window.dispatchEvent(ev);
-      } catch (e) {}
+        try {
+          const ev = new CustomEvent('vrhotspots:scene-loaded');
+          window.dispatchEvent(ev);
+        } catch (e) {}
+      }, 100);
 
       // Setup video controls
       this.updateVideoControls();
@@ -10248,47 +10610,49 @@ class HotspotProject {
   }
   
   applyStartingPoint(scene) {
-    if (!scene.startingPoint || !scene.startingPoint.rotation) return;
-    
-    const camera = document.getElementById('cam');
-    const rotation = scene.startingPoint.rotation;
-    // Clamp pitch (X) to avoid exact -90/90 which often locks device-orientation
-    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-    // allow a safety margin from full vertical
-    const safeX = clamp(Number(rotation.x) || 0, -85, 85);
-    const safeY = Number(rotation.y) || 0;
-    const safeZ = Number(rotation.z) || 0;
+    if (!scene) scene = this.scenes[this.currentScene];
+    if (!scene) return;
 
-    // Temporarily disable look-controls to allow rotation setting
-    const lookControls = camera && camera.components ? camera.components['look-controls'] : null;
+    const camera = document.getElementById('cam');
+    if (!camera) return;
+
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const rotation = scene.startingPoint?.rotation;
+    const safeX = rotation ? clamp(Number(rotation.x) || 0, -85, 85) : 0;
+    const safeY = rotation ? Number(rotation.y) || 0 : 0;
+    const safeZ = rotation ? Number(rotation.z) || 0 : 0;
+
+    const lookControls = camera.components ? camera.components['look-controls'] : null;
     try {
       if (lookControls && typeof lookControls.pause === 'function') lookControls.pause();
 
-      // Apply the stored (clamped) rotation to the camera entity
-  camera.setAttribute('rotation', String(safeX) + ' ' + String(safeY) + ' ' + String(safeZ));
+      if (lookControls?.pitchObject?.rotation) {
+        lookControls.pitchObject.rotation.x = THREE.MathUtils.degToRad(safeX);
+      }
+      if (lookControls?.yawObject?.rotation) {
+        lookControls.yawObject.rotation.y = THREE.MathUtils.degToRad(safeY);
+      }
 
-      // Try to sync internal look-controls state where possible (robust to missing internals)
-      if (lookControls) {
-        try {
-          if (lookControls.pitchObject && lookControls.pitchObject.rotation)
-            lookControls.pitchObject.rotation.x = THREE.MathUtils.degToRad(safeX);
-          if (lookControls.yawObject && lookControls.yawObject.rotation)
-            lookControls.yawObject.rotation.y = THREE.MathUtils.degToRad(safeY);
-        } catch (innerErr) {
-          // Non-fatal: some look-controls implementations on certain devices may not expose these
-          console.warn('[applyStartingPoint] could not set look-controls internal rotation', innerErr);
-        }
+      camera.setAttribute('rotation', '0 0 0');
+
+      if (lookControls && typeof lookControls.updateOrientation === 'function') {
+        lookControls.updateOrientation();
       }
     } finally {
-      // Ensure look-controls is re-enabled even if something above failed
       if (lookControls && typeof lookControls.play === 'function') {
-        setTimeout(() => {
-          try { lookControls.play(); } catch (_) {}
-        }, 100);
+        requestAnimationFrame(() => {
+          try {
+            lookControls.play();
+          } catch (_) {}
+        });
       }
     }
 
-  console.log('Applied starting point rotation: X:' + safeX + '° Y:' + safeY + '° Z:' + safeZ + '°');
+    if (rotation) {
+      console.log('Applied starting point rotation: X:' + safeX + '° Y:' + safeY + '° Z:' + safeZ + '°');
+    } else {
+      console.log('Reset camera to default view (no starting point set for this scene)');
+    }
   }
   
   setupGlobalSoundControl() {
@@ -10986,51 +11350,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
   applyStartingPoint() {
     const currentScene = this.scenes[this.currentScene];
-    if (!currentScene.startingPoint) return;
-
     const camera = document.getElementById('cam');
-    const rotation = currentScene.startingPoint.rotation;
-    // Clamp pitch (X) to avoid exact -90/90 which often locks device-orientation
-    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-    const safeX = clamp(Number(rotation.x) || 0, -85, 85);
-    const safeY = Number(rotation.y) || 0;
-    const safeZ = Number(rotation.z) || 0;
+    if (!camera) return;
 
-    // Temporarily disable look-controls to allow rotation setting
-    const lookControls = camera && camera.components ? camera.components['look-controls'] : null;
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const rotation = currentScene?.startingPoint?.rotation;
+    const safeX = rotation ? clamp(Number(rotation.x) || 0, -85, 85) : 0;
+    const safeY = rotation ? Number(rotation.y) || 0 : 0;
+    const safeZ = rotation ? Number(rotation.z) || 0 : 0;
+
+    const lookControls = camera.components ? camera.components['look-controls'] : null;
     try {
       if (lookControls && typeof lookControls.pause === 'function') lookControls.pause();
 
-      // Apply the stored (clamped) rotation to the camera entity
-      camera.setAttribute('rotation', String(safeX) + ' ' + String(safeY) + ' ' + String(safeZ));
+      if (lookControls?.pitchObject?.rotation) {
+        lookControls.pitchObject.rotation.x = THREE.MathUtils.degToRad(safeX);
+      }
+      if (lookControls?.yawObject?.rotation) {
+        lookControls.yawObject.rotation.y = THREE.MathUtils.degToRad(safeY);
+      }
 
-      // Try to sync internal look-controls state where possible (robust to missing internals)
-      if (lookControls) {
-        try {
-          if (lookControls.pitchObject && lookControls.pitchObject.rotation)
-            lookControls.pitchObject.rotation.x = THREE.MathUtils.degToRad(safeX);
-          if (lookControls.yawObject && lookControls.yawObject.rotation)
-            lookControls.yawObject.rotation.y = THREE.MathUtils.degToRad(safeY);
-        } catch (innerErr) {
-          console.warn(
-            '[applyStartingPoint] could not set look-controls internal rotation',
-            innerErr
-          );
-        }
+      // look-controls drives the child yaw/pitch objects, not the entity rotation
+      camera.setAttribute('rotation', '0 0 0');
+
+      if (lookControls && typeof lookControls.updateOrientation === 'function') {
+        lookControls.updateOrientation();
       }
     } finally {
       if (lookControls && typeof lookControls.play === 'function') {
-        setTimeout(() => {
+        requestAnimationFrame(() => {
           try {
             lookControls.play();
           } catch (_) {}
-        }, 100);
+        });
       }
     }
 
-    console.log(
-      'Applied starting point rotation: X:' + safeX + '° Y:' + safeY + '° Z:' + safeZ + '°'
-    );
+    if (rotation) {
+      console.log(
+        'Applied starting point rotation: X:' + safeX + '° Y:' + safeY + '° Z:' + safeZ + '°'
+      );
+    } else {
+      console.log('Reset camera to default view (no starting point set for this scene)');
+    }
+  }
+
+  applyStartingPointAfterSceneLoad(loadToken) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        if (loadToken === this._sceneLoadToken) {
+          this.applyStartingPoint();
+        }
+        resolve();
+      }, 150);
+    });
   }
 
   updateSceneDropdown() {
@@ -11128,6 +11501,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (this.scenes[this.currentScene].globalSound) {
           delete this.scenes[this.currentScene].globalSound.audioStorageKey;
           delete this.scenes[this.currentScene].globalSound.audioFileName;
+        }
+        this.applyCommonAssetFromDataset(
+          this.scenes[this.currentScene].globalSound,
+          document.getElementById('global-sound-url')
+        );
+        if (!this.isCommonAssetObject(this.scenes[this.currentScene].globalSound)) {
+          this.clearCommonAssetProvenance(this.scenes[this.currentScene].globalSound);
         }
       }
     } else {
@@ -11966,111 +12346,50 @@ document.addEventListener('DOMContentLoaded', () => {
     const scene = this.scenes[this.currentScene];
     const skybox = document.getElementById('skybox');
     const sceneEl = document.querySelector('a-scene');
+    const loadToken = ++this._sceneLoadToken;
 
     console.log(`Loading scene: ${this.currentScene}`, scene); // Debug log
 
-    // Clear any existing videosphere
+    // Clear any existing videosphere and stop any playing scene video
     const existingVideosphere = document.getElementById('videosphere');
     if (existingVideosphere) {
       existingVideosphere.remove();
     }
+    this.detachVideoTextureRenderer();
+    this.pauseSceneVideo();
 
     // Handle video scenes
-    if (scene.type === 'video' && scene.videoSrc) {
-      console.log('Loading video scene:', scene.videoSrc);
-
-      // Hide regular skybox
+    const resolvedVideoSrc = this.resolveSceneVideoSrc(scene);
+    if (scene.type === 'video' && resolvedVideoSrc) {
+      console.log('Loading video scene:', resolvedVideoSrc);
       skybox.setAttribute('visible', 'false');
 
-      // Create videosphere
-      let videosphere = document.createElement('a-videosphere');
-      videosphere.id = 'videosphere';
-      videosphere.setAttribute('rotation', '0 -90 0'); // Adjust rotation if needed
-      sceneEl.appendChild(videosphere);
+      const videoEl = this.getSceneVideoElement();
 
-      // Get or create video element
-      let videoEl = document.getElementById('scene-video-dynamic');
-      if (!videoEl) {
-        videoEl = document.createElement('video');
-        videoEl.id = 'scene-video-dynamic';
-        videoEl.loop = true;
-        videoEl.muted = true; // Start muted for autoplay
-        videoEl.playsInline = true;
-        videoEl.setAttribute('webkit-playsinline', '');
-        videoEl.style.display = 'none';
-        document.querySelector('a-assets').appendChild(videoEl);
-      }
+      try {
+        await this.loadSceneVideoSource(videoEl, resolvedVideoSrc, loadToken);
+        if (loadToken !== this._sceneLoadToken) return;
 
-      // Decide crossorigin based on source to avoid remote CORS playback errors
-      const isRemoteVideoSrc =
-        typeof scene.videoSrc === 'string' &&
-        (scene.videoSrc.startsWith('http://') || scene.videoSrc.startsWith('https://'));
-      if (isRemoteVideoSrc) {
-        try {
-          videoEl.removeAttribute('crossorigin');
-        } catch (_) {}
-      } else {
-        try {
-          videoEl.setAttribute('crossorigin', 'anonymous');
-        } catch (_) {}
-      }
+        const videosphere = this.createVideoSphereElement();
+        sceneEl.appendChild(videosphere);
 
-      // Load video source
-      if (videoEl.src !== scene.videoSrc) {
-        videoEl.src = scene.videoSrc;
-        videoEl.load();
-      }
+        await this.waitForAFrameEntity(videosphere);
+        if (loadToken !== this._sceneLoadToken) return;
 
-      // Set videosphere to use this video
-      videosphere.setAttribute('src', '#scene-video-dynamic');
-
-      // Attempt autoplay (fallback to play on first user click)
-      const playVideo = () => {
-        videoEl.play().catch((err) => {
-          console.log('Autoplay blocked, waiting for user interaction:', err);
-          const playOnClick = () => {
-            videoEl.play();
-            document.removeEventListener('click', playOnClick);
-          };
-          document.addEventListener('click', playOnClick, { once: true });
-        });
-      };
-
-      // Video error handler (missing blob, etc.)
-      const onError = () => {
-        console.warn('Video failed to load:', scene.videoSrc);
+        await this.attachVideoTextureToSphere(videosphere, videoEl, loadToken);
+        if (loadToken !== this._sceneLoadToken) return;
+        this.updateVideoControls(videoEl, scene);
+        this.hideSceneLoadingOverlay();
+      } catch (err) {
+        if (loadToken !== this._sceneLoadToken) return;
+        console.warn('Video failed to load:', resolvedVideoSrc, err);
         alert(
           'Failed to load the video for this scene. If it was added from a local file, try re-selecting the file or ensure browser storage permissions allow keeping large files.'
         );
-        // Cleanup videosphere and show skybox fallback
-        try {
-          videosphere.remove();
-        } catch (_) {}
         skybox.setAttribute('visible', 'true');
         this.hideVideoControls();
-      };
-      videoEl.addEventListener('error', onError, { once: true });
-
-      // Wait for video metadata and then play
-      videoEl.addEventListener(
-        'loadedmetadata',
-        () => {
-          console.log('Video metadata loaded');
-          playVideo();
-          this.hideSceneLoadingOverlay();
-        },
-        { once: true }
-      );
-
-      // If already loaded, play immediately
-      if (videoEl.readyState >= 2) {
-        playVideo();
-        this.hideSceneLoadingOverlay();
       }
-
-      // Update video controls UI
-      this.updateVideoControls(videoEl, scene);
-    } else if (scene.type === 'video' && !scene.videoSrc) {
+    } else if (scene.type === 'video' && !resolvedVideoSrc) {
       // No valid src (likely after refresh without IDB record) – prompt user to reselect file
       const choose = confirm(
         'This video scene needs the original file again. Do you want to select the video file now?'
@@ -12110,18 +12429,21 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     } else {
       // Handle image scenes (existing logic)
-      // Hide video controls for image scenes
       this.hideVideoControls();
+      skybox.setAttribute('visible', 'true');
 
-      // Create a unique asset ID for this scene load
       const uniqueId = `panorama-${this.currentScene}-${Date.now()}`;
-
-      // Create a new panorama asset element
       const newPanorama = document.createElement('img');
       newPanorama.id = uniqueId;
-      newPanorama.crossOrigin = 'anonymous'; // Important for URL images
+      const isSameOriginImage =
+        typeof scene.image === 'string' &&
+        (scene.image.startsWith('/') ||
+          scene.image.startsWith('./') ||
+          scene.image.startsWith(window.location.origin));
+      if (!isSameOriginImage) {
+        newPanorama.crossOrigin = 'anonymous';
+      }
 
-      // Prefer IndexedDB image if available
       let chosenSrc = null;
       try {
         if (
@@ -12131,7 +12453,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const rec = await this.getImageFromIDB(scene.imageStorageKey);
           if (rec && rec.blob) {
             chosenSrc = URL.createObjectURL(rec.blob);
-            scene.image = chosenSrc; // cache blob URL
+            scene.image = chosenSrc;
           }
         }
       } catch (_) {
@@ -12139,81 +12461,67 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (!chosenSrc) {
-        // Handle both URL and data URL images
         if (
           typeof scene.image === 'string' &&
           (scene.image.startsWith('data:') ||
             scene.image.startsWith('http://') ||
-            scene.image.startsWith('https://'))
+            scene.image.startsWith('https://') ||
+            scene.image.startsWith('/'))
         ) {
           chosenSrc = scene.image;
         } else if (typeof scene.image === 'string' && scene.image.length > 0) {
-          // For relative paths, ensure proper formatting
-          chosenSrc = scene.image.startsWith('./') ? scene.image : `./${scene.image}`;
+          chosenSrc =
+            scene.image.startsWith('./') || scene.image.startsWith('/')
+              ? scene.image
+              : `./${scene.image}`;
         } else {
-          // fallback to default panorama
           chosenSrc = '#main-panorama';
         }
       }
+
+      if (this.isCommonAssetObject(scene) && scene.type === 'image') {
+        const proxy = this.buildCommonAssetProxyPath(scene);
+        if (proxy) chosenSrc = proxy;
+      }
+
       if (chosenSrc.startsWith && chosenSrc.startsWith('#')) {
-        // We'll let skybox use asset id later
         newPanorama.src = document.querySelector(chosenSrc)?.src || '';
       } else {
         newPanorama.src = chosenSrc;
       }
 
-      // Get the assets container and add the new panorama
       const assets = document.querySelector('a-assets');
-
-      // Remove any old panorama assets to prevent memory leaks
       const oldPanoramas = assets.querySelectorAll("img[id^='panorama-']");
       oldPanoramas.forEach((img) => {
-        if (img.id !== uniqueId) {
-          img.remove();
-        }
+        if (img.id !== uniqueId) img.remove();
       });
-
       assets.appendChild(newPanorama);
 
-      // Set up loading handlers
-      newPanorama.onload = () => {
-        console.log('New panorama loaded successfully:', scene.image);
-
-        // Temporarily hide skybox to avoid flicker
-        skybox.setAttribute('visible', 'false');
-
-        // Update skybox to use the new asset
-        setTimeout(() => {
+      await new Promise((resolve) => {
+        const finish = () => {
+          if (loadToken !== this._sceneLoadToken) return;
           skybox.setAttribute('src', `#${uniqueId}`);
           skybox.setAttribute('visible', 'true');
+          this.hideSceneLoadingOverlay();
+          resolve();
+        };
+        newPanorama.onload = () => {
+          console.log('New panorama loaded successfully:', chosenSrc);
+          finish();
+        };
+        newPanorama.onerror = () => {
+          console.error('Failed to load panorama:', chosenSrc);
+          alert(
+            `Failed to load scene image: ${chosenSrc}\nPlease check if the URL is accessible and is a valid image.`
+          );
+          skybox.setAttribute('src', '#main-panorama');
+          skybox.setAttribute('visible', 'true');
+          resolve();
+        };
+        if (newPanorama.complete) newPanorama.onload();
+      });
 
-          console.log('Skybox updated with new image');
-
-          // Apply starting point after scene loads
-          setTimeout(() => {
-            this.applyStartingPoint();
-
-            // Hide the loading overlay once scene is ready
-            this.hideSceneLoadingOverlay();
-          }, 200);
-        }, 100);
-      };
-
-      newPanorama.onerror = () => {
-        console.error('Failed to load panorama:', scene.image);
-        alert(
-          `Failed to load scene image: ${scene.image}\nPlease check if the URL is accessible and is a valid image.`
-        );
-
-        // Fallback to default image
-        skybox.setAttribute('src', '#main-panorama');
-        skybox.setAttribute('visible', 'true');
-      };
-
-      // If the image is already cached and complete, trigger onload immediately
-      if (newPanorama.complete) {
-        newPanorama.onload();
-      }
+      if (loadToken !== this._sceneLoadToken) return;
     }
 
     // Clear existing hotspots
@@ -12258,6 +12566,9 @@ document.addEventListener('DOMContentLoaded', () => {
         this.stopEditorGlobalSound();
       }
     }, 500);
+
+    await this.applyStartingPointAfterSceneLoad(loadToken);
+    if (loadToken !== this._sceneLoadToken) return;
 
     // Notify listeners that the scene finished loading (for transitions)
     try {
@@ -12306,8 +12617,9 @@ document.addEventListener('DOMContentLoaded', () => {
           this._endCrossfadeOverlay();
         }, 1500);
 
-        this.loadCurrentScene();
-        this.updateNavigationTargets();
+        this.loadCurrentScene().then(() => {
+          this.updateNavigationTargets();
+        });
       })
       .catch(() => {
         // Fallback to direct switch
@@ -12317,8 +12629,9 @@ document.addEventListener('DOMContentLoaded', () => {
         this.stopGlobalSound();
         this.stopEditorGlobalSound();
         this.currentScene = sceneId;
-        this.loadCurrentScene();
-        this.updateNavigationTargets();
+        this.loadCurrentScene().then(() => {
+          this.updateNavigationTargets();
+        });
       });
   }
 
@@ -12426,7 +12739,7 @@ document.addEventListener('DOMContentLoaded', () => {
               border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
               box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform 0.2s;
             " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-              📁 Change Image
+              📁 Change Media
             </button>
             <button id="change-scene-video-btn" style="
               background: #9C27B0; color: white; border: none; padding: 15px 30px;
@@ -12478,17 +12791,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       document.body.appendChild(dialog);
 
-      // Change Image button
+      // Change Image button — full media dialog (image or video)
       document.getElementById('change-scene-image-btn').onclick = () => {
         document.body.removeChild(dialog);
-        this.editSceneImage('scene1', { reopenSceneManager: false });
+        this.editSceneMedia('scene1', { reopenSceneManager: false, initialMediaType: 'image' });
       };
 
       const videoBtn = document.getElementById('change-scene-video-btn');
       if (videoBtn) {
         videoBtn.onclick = () => {
           document.body.removeChild(dialog);
-          this.showSceneVideoSourcePicker('scene1');
+          this.editSceneMedia('scene1', { reopenSceneManager: false, initialMediaType: 'video' });
         };
       }
 
@@ -12669,8 +12982,7 @@ document.addEventListener('DOMContentLoaded', () => {
         category: '360-images',
         onSelect: (asset) => {
           if (!asset || asset.category !== '360-images') return;
-          const url = asset.proxyUrl || asset.url;
-          this.addSceneFromURL(name, url);
+          this.addSceneFromURL(name, asset);
         },
       });
     };
@@ -12697,8 +13009,7 @@ document.addEventListener('DOMContentLoaded', () => {
         category: '360-videos',
         onSelect: (asset) => {
           if (!asset || asset.category !== '360-videos') return;
-          const url = asset.proxyUrl || asset.url;
-          this.addSceneVideoFromURL(name, url);
+          this.addSceneVideoFromURL(name, asset);
         },
       });
     };
@@ -12727,7 +13038,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
           }
           const blobURL = URL.createObjectURL(file);
-          this.scenes[sceneId] = {
+          const newScene = {
             name: name,
             type: 'image',
             image: blobURL, // runtime blob URL; not persisted in localStorage
@@ -12750,6 +13061,7 @@ document.addEventListener('DOMContentLoaded', () => {
               repeat: 20,
             },
           };
+          this.scenes[sceneId] = newScene;
 
           this.finalizeNewScene(sceneId, name);
         } catch (err) {
@@ -12762,19 +13074,23 @@ document.addEventListener('DOMContentLoaded', () => {
     input.click();
   }
 
-  addSceneFromURL(name, presetUrl) {
+  addSceneFromURL(name, presetUrlOrAsset) {
+    const asset =
+      presetUrlOrAsset && typeof presetUrlOrAsset === 'object' ? presetUrlOrAsset : null;
     const url =
-      typeof presetUrl === 'string' && presetUrl.trim()
-        ? presetUrl.trim()
-        : prompt(
-            "Enter the URL of the 360° image:\n(Make sure it's a direct link to an image file)",
-            'https://'
-          );
+      typeof presetUrlOrAsset === 'string' && presetUrlOrAsset.trim()
+        ? presetUrlOrAsset.trim()
+        : asset
+          ? this.getRuntimeCommonAssetUrl(asset)
+          : prompt(
+              "Enter the URL of the 360° image:\n(Make sure it's a direct link to an image file)",
+              'https://'
+            );
     if (!url || url === 'https://') return;
 
     // Validate URL format
     try {
-      new URL(url);
+      new URL(url, window.location.origin);
     } catch (e) {
       alert('Please enter a valid URL');
       return;
@@ -12795,10 +13111,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     testImg.onload = () => {
       const sceneId = `scene_${Date.now()}`;
-      this.scenes[sceneId] = {
+      const scene = {
         name: name,
         type: 'image',
-        image: url, // Use URL directly for online images
+        image: url,
         videoSrc: null,
         videoVolume: 0.5,
         hotspots: [],
@@ -12816,6 +13132,10 @@ document.addEventListener('DOMContentLoaded', () => {
           repeat: 20,
         },
       };
+      if (asset) {
+        this.applyCommonAssetProvenance(scene, asset);
+      }
+      this.scenes[sceneId] = scene;
 
       // Hide loading indicator
       this.hideLoadingIndicator();
@@ -12898,31 +13218,35 @@ document.addEventListener('DOMContentLoaded', () => {
     input.click();
   }
 
-  async addSceneVideoFromURL(name, presetUrl) {
+  async addSceneVideoFromURL(name, presetUrlOrAsset) {
+    const asset =
+      presetUrlOrAsset && typeof presetUrlOrAsset === 'object' ? presetUrlOrAsset : null;
     const url =
-      typeof presetUrl === 'string' && presetUrl.trim()
-        ? presetUrl.trim()
-        : prompt(
-            'Enter the URL of the 360° video:\n(Direct link to MP4/WebM file)',
-            'https://'
-          );
+      typeof presetUrlOrAsset === 'string' && presetUrlOrAsset.trim()
+        ? presetUrlOrAsset.trim()
+        : asset
+          ? this.getRuntimeCommonAssetUrl(asset)
+          : prompt(
+              'Enter the URL of the 360° video:\n(Direct link to MP4/WebM file)',
+              'https://'
+            );
     if (!url || url === 'https://') return;
 
     // Validate URL format
     try {
-      new URL(url);
+      new URL(url, window.location.origin);
     } catch (e) {
       alert('Please enter a valid URL');
       return;
     }
 
     const sceneId = `scene_${Date.now()}`;
-    this.scenes[sceneId] = {
+    const scene = {
       name: name,
       type: 'video',
-      image: './images/scene1.jpg', // Placeholder image
+      image: './images/scene1.jpg',
       videoSrc: url,
-      videoFileName: url.split('/').pop(),
+      videoFileName: (asset && asset.name) || url.split('/').pop(),
       videoVolume: 0.5,
       hotspots: [],
       startingPoint: null,
@@ -12939,9 +13263,14 @@ document.addEventListener('DOMContentLoaded', () => {
         repeat: 20,
       },
     };
+    if (asset) {
+      this.applyCommonAssetProvenance(scene, asset);
+    }
+    this.scenes[sceneId] = scene;
 
-    // Automatically download remote video to local storage
-    await this.autoDownloadRemoteVideo(sceneId, url);
+    if (!this.isCommonAssetObject(scene)) {
+      await this.autoDownloadRemoteVideo(sceneId, url);
+    }
 
     this.finalizeNewScene(sceneId, name);
   }
@@ -13032,7 +13361,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dialog.innerHTML = `
       <div style="background: #2a2a2a; padding: 30px; border-radius: 10px; color: white; max-width: 600px; max-height: 80vh; overflow-y: auto;">
         <h3 style="margin-top: 0; color: #4CAF50;">🎬 Scene Manager</h3>
-        <p style="margin: 0 0 20px; color: #ccc; font-size: 14px;">Manage your 360° scenes and images</p>
+        <p style="margin: 0 0 20px; color: #ccc; font-size: 14px;">Manage your 360° scenes (images and videos)</p>
         <div style="margin: 20px 0;">
           ${sceneListHTML}
         </div>
@@ -13046,9 +13375,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(dialog);
   }
 
-  applySceneImageFromUrl(sceneId, url, { onDone } = {}) {
+  applySceneImageFromUrl(sceneId, urlOrAsset, { onDone } = {}) {
     const scene = this.scenes[sceneId];
-    if (!scene || !url) return;
+    if (!scene) return;
+
+    const asset = urlOrAsset && typeof urlOrAsset === 'object' ? urlOrAsset : null;
+    const url =
+      typeof urlOrAsset === 'string'
+        ? urlOrAsset.trim()
+        : asset
+          ? this.getRuntimeCommonAssetUrl(asset)
+          : '';
+    if (!url) return;
 
     this.showLoadingIndicator('Loading image...');
 
@@ -13067,6 +13405,13 @@ document.addEventListener('DOMContentLoaded', () => {
       scene.videoSrc = null;
       delete scene.imageStorageKey;
       delete scene.imageFileName;
+      delete scene.videoStorageKey;
+      delete scene.videoFileName;
+      if (asset) {
+        this.applyCommonAssetProvenance(scene, asset);
+      } else {
+        this.clearCommonAssetProvenance(scene);
+      }
       this.saveScenesData();
       if (sceneId === this.currentScene) {
         this.loadCurrentScene();
@@ -13089,19 +13434,45 @@ document.addEventListener('DOMContentLoaded', () => {
     testImg.src = url;
   }
 
-  async applySceneVideoFromUrl(sceneId, url, { onDone } = {}) {
+  async applySceneVideoFromUrl(sceneId, urlOrAsset, { onDone } = {}) {
     const scene = this.scenes[sceneId];
-    if (!scene || !url) return;
+    if (!scene) return;
+
+    const asset = urlOrAsset && typeof urlOrAsset === 'object' ? urlOrAsset : null;
+    const url =
+      typeof urlOrAsset === 'string'
+        ? urlOrAsset.trim()
+        : asset
+          ? this.getRuntimeCommonAssetUrl(asset)
+          : '';
+    if (!url) return;
 
     scene.type = 'video';
     scene.videoSrc = url;
-    scene.videoFileName = url.split('/').pop();
+    scene.videoFileName = (asset && asset.name) || url.split('/').pop();
     scene.videoVolume = scene.videoVolume || 0.5;
+    delete scene.videoStorageKey;
+    delete scene.imageStorageKey;
+    delete scene.imageFileName;
+
+    if (asset) {
+      this.applyCommonAssetProvenance(scene, asset);
+    } else {
+      this.clearCommonAssetProvenance(scene);
+    }
+
     this.scenes[sceneId] = scene;
     this.saveScenesData();
 
-    await this.autoDownloadRemoteVideo(sceneId, url);
-    this.switchToScene(sceneId);
+    if (!this.isCommonAssetObject(scene)) {
+      await this.autoDownloadRemoteVideo(sceneId, url);
+    }
+
+    if (sceneId === this.currentScene) {
+      await this.loadCurrentScene();
+    } else {
+      this.switchToScene(sceneId);
+    }
 
     if (typeof onDone === 'function') {
       onDone();
@@ -13128,6 +13499,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sc.videoStorageKey = storageKey;
       sc.videoFileName = file.name;
       sc.videoVolume = sc.videoVolume || 0.5;
+      this.clearCommonAssetProvenance(sc);
       this.scenes[sceneId] = sc;
       this.saveScenesData();
       this.switchToScene(sceneId);
@@ -13201,164 +13573,26 @@ document.addEventListener('DOMContentLoaded', () => {
         category: '360-videos',
         onSelect: (asset) => {
           if (!asset || asset.category !== '360-videos') return;
-          const url = asset.proxyUrl || asset.url;
-          this.applySceneVideoFromUrl(sceneId, url);
+          this.applySceneVideoFromUrl(sceneId, asset);
         },
       });
     };
   }
 
-  editSceneImage(sceneId, { reopenSceneManager = true } = {}) {
-    const scene = this.scenes[sceneId];
-    if (!scene) return;
-
-    // Close current scene manager
-    document.querySelectorAll('div').forEach((div) => {
-      if (div.style.position === 'fixed' && div.style.zIndex === '10000') {
-        div.remove();
-      }
-    });
-
-    const dialog = document.createElement('div');
-    dialog.style.cssText = `
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-      background: rgba(0,0,0,0.8); z-index: 10000; display: flex; 
-      align-items: center; justify-content: center; font-family: Arial;
-    `;
-
-    dialog.innerHTML = `
-      <div style="background: #2a2a2a; padding: 30px; border-radius: 10px; color: white; max-width: 500px;">
-        <h3 style="margin-top: 0; color: #4CAF50;">🖼️ Change Scene Image</h3>
-        <p style="color: #ccc;">Update the 360° image for "${scene.name}":</p>
-        
-        <div style="margin: 20px 0;">
-          <button id="upload-new-file" style="
-            background: #4CAF50; color: white; border: none; padding: 15px 25px;
-            border-radius: 6px; cursor: pointer; margin: 5px; width: 200px;
-            font-size: 14px; font-weight: bold;
-          ">📁 Upload New Image</button>
-          <div style="font-size: 12px; color: #ccc; margin-left: 5px;">
-            Upload a new image from your computer
-          </div>
-        </div>
-
-        <div style="margin: 20px 0;">
-          <button id="browse-common-image" style="
-            background: #6f42c1; color: white; border: none; padding: 15px 25px;
-            border-radius: 6px; cursor: pointer; margin: 5px; width: 200px;
-            font-size: 14px; font-weight: bold;
-          ">📚 Browse Shared Assets</button>
-          <div style="font-size: 12px; color: #ccc; margin-left: 5px;">
-            Choose a 360° photo from the shared library
-          </div>
-        </div>
-        
-        <div style="margin: 20px 0;">
-          <button id="use-new-url" style="
-            background: #2196F3; color: white; border: none; padding: 15px 25px;
-            border-radius: 6px; cursor: pointer; margin: 5px; width: 200px;
-            font-size: 14px; font-weight: bold;
-          ">🌐 Use Image URL</button>
-          <div style="font-size: 12px; color: #ccc; margin-left: 5px;">
-            Use an image from the internet
-          </div>
-        </div>
-        
-        <div style="display: flex; gap: 8px; margin-top: 20px;">
-          <button id="cancel-edit" style="
-            background: #666; color: white; border: none; padding: 10px 20px;
-            border-radius: 4px; cursor: pointer; flex: 1;
-          ">Cancel</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(dialog);
-
-    const close = () => {
-      if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
-      if (reopenSceneManager) {
-        setTimeout(() => this.showSceneManager(), 100);
-      }
-    };
-
-    dialog.querySelector('#cancel-edit').onclick = close;
-
-    dialog.querySelector('#browse-common-image').onclick = () => {
-      close();
-      if (!window.CommonAssetsPicker) {
-        alert('Shared assets picker is not available.');
-        return;
-      }
-      window.CommonAssetsPicker.openFor({
-        category: '360-images',
-        onSelect: (asset) => {
-          if (!asset || asset.category !== '360-images') return;
-          const url = asset.proxyUrl || asset.url;
-          this.applySceneImageFromUrl(sceneId, url);
-        },
-      });
-    };
-
-    dialog.querySelector('#upload-new-file').onclick = () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        (async () => {
-          try {
-            // Persist image in IDB
-            const storageKey = scene.imageStorageKey || `image_scene_${sceneId}`;
-            const saved = await this.saveImageToIDB(storageKey, file);
-            if (saved) {
-              const blobURL = URL.createObjectURL(file);
-              scene.type = 'image';
-              scene.imageStorageKey = storageKey;
-              scene.imageFileName = file.name;
-              scene.image = blobURL; // immediate use
-              scene.videoSrc = null;
-              this.saveScenesData();
-              if (sceneId === this.currentScene) {
-                this.loadCurrentScene();
-              }
-              close();
-              this.showStartingPointFeedback(`Updated image for "${scene.name}"`);
-            } else {
-              alert('Failed to save image locally.');
-            }
-          } catch (err) {
-            console.error('Failed to store image', err);
-            alert('Failed to store image.');
-          }
-        })();
-      };
-      input.click();
-    };
-
-    dialog.querySelector('#use-new-url').onclick = () => {
-      const url = prompt(
-        `Enter the URL of the new 360° image for "${scene.name}":\n(Make sure it's a direct link to an image file)`,
-        scene.image.startsWith('http') ? scene.image : 'https://'
-      );
-      if (!url || url === 'https://') return;
-
-      try {
-        new URL(url);
-      } catch (e) {
-        alert('Please enter a valid URL');
-        return;
-      }
-
-      close();
-      this.applySceneImageFromUrl(sceneId, url);
-    };
+  editSceneImage(sceneId, options = {}) {
+    this.editSceneMedia(sceneId, { ...options, initialMediaType: 'image' });
   }
 
-  editSceneMedia(sceneId) {
+  editSceneMedia(sceneId, { reopenSceneManager = true, initialMediaType } = {}) {
     const scene = this.scenes[sceneId];
     if (!scene) return;
+
+    const selectedMediaType =
+      initialMediaType === 'video' || initialMediaType === 'image'
+        ? initialMediaType
+        : scene.type === 'video'
+          ? 'video'
+          : 'image';
 
     // Close current scene manager
     document.querySelectorAll('div').forEach((div) => {
@@ -13377,7 +13611,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dialog.innerHTML = `
       <div style="background: #2a2a2a; padding: 30px; border-radius: 10px; color: white; max-width: 550px;">
         <h3 style="margin-top: 0; color: #4CAF50;">🎬 Change Scene Media</h3>
-        <p style="color: #ccc;">Update "${scene.name}" with image or video:</p>
+        <p style="color: #ccc;">Update "${scene.name}" with a 360° image or 360° video:</p>
         
         <!-- Media Type Selection -->
         <div style="margin: 20px 0;">
@@ -13388,18 +13622,30 @@ document.addEventListener('DOMContentLoaded', () => {
             width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #555;
             background: #333; color: white; font-size: 14px; cursor: pointer;
           ">
-            <option value="image" ${scene.type !== 'video' ? 'selected' : ''}>🖼️ 360° Image</option>
-            <option value="video" ${scene.type === 'video' ? 'selected' : ''}>🎥 360° Video</option>
+            <option value="image" ${selectedMediaType !== 'video' ? 'selected' : ''}>🖼️ 360° Image</option>
+            <option value="video" ${selectedMediaType === 'video' ? 'selected' : ''}>🎥 360° Video</option>
           </select>
+          <p style="color: #999; font-size: 12px; margin: 8px 0 0;">
+            Choose <strong>360° Video</strong> first, then pick upload, shared assets, or URL below.
+          </p>
         </div>
 
         <!-- Image Upload Options -->
-        <div id="image-options" style="display: ${scene.type === 'video' ? 'none' : 'block'};">
+        <div id="image-options" style="display: ${selectedMediaType === 'video' ? 'none' : 'block'};">
           <div style="margin: 15px 0;">
             <button id="upload-image-file" style="
               background: #4CAF50; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
             ">📁 Upload Image File</button>
+          </div>
+          <div style="margin: 15px 0;">
+            <button id="browse-image-common" style="
+              background: #6f42c1; color: white; border: none; padding: 12px 20px;
+              border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
+            ">📚 Browse Shared Assets</button>
+            <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
+              Choose a 360° photo from the shared library
+            </div>
           </div>
           <div style="margin: 15px 0;">
             <button id="use-image-url" style="
@@ -13410,7 +13656,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
 
         <!-- Video Upload Options -->
-        <div id="video-options" style="display: ${scene.type === 'video' ? 'block' : 'none'};">
+        <div id="video-options" style="display: ${selectedMediaType === 'video' ? 'block' : 'none'};">
           <div style="margin: 15px 0;">
             <button id="upload-video-file" style="
               background: #9C27B0; color: white; border: none; padding: 12px 20px;
@@ -13418,6 +13664,15 @@ document.addEventListener('DOMContentLoaded', () => {
             ">🎥 Upload Video File</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
               MP4/WebM • 360° equirectangular format
+            </div>
+          </div>
+          <div style="margin: 15px 0;">
+            <button id="browse-video-common" style="
+              background: #6f42c1; color: white; border: none; padding: 12px 20px;
+              border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
+            ">📚 Browse Shared Assets</button>
+            <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
+              Choose a 360° video from the shared library
             </div>
           </div>
           <div style="margin: 15px 0;">
@@ -13439,9 +13694,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.body.appendChild(dialog);
 
-    const close = () => {
+    const close = (reopenSceneManager = true) => {
       if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
-      setTimeout(() => this.showSceneManager(), 100);
+      if (reopenSceneManager) {
+        setTimeout(() => this.showSceneManager(), 100);
+      }
     };
 
     // Media type toggle
@@ -13451,7 +13708,47 @@ document.addEventListener('DOMContentLoaded', () => {
       dialog.querySelector('#video-options').style.display = isVideo ? 'block' : 'none';
     });
 
-    dialog.querySelector('#cancel-edit-media').onclick = close;
+    dialog.querySelector('#cancel-edit-media').onclick = () => close(true);
+
+    dialog.querySelector('#browse-image-common').onclick = () => {
+      close(false);
+      if (!window.CommonAssetsPicker) {
+        alert('Shared assets picker is not available.');
+        return;
+      }
+      window.CommonAssetsPicker.openFor({
+        category: '360-images',
+        onSelect: (asset) => {
+          if (!asset || asset.category !== '360-images') return;
+          this.applySceneImageFromUrl(sceneId, asset, {
+            onDone: () => {
+              this.showStartingPointFeedback(`Updated image for "${scene.name}"`);
+              this.showSceneManager();
+            },
+          });
+        },
+      });
+    };
+
+    dialog.querySelector('#browse-video-common').onclick = () => {
+      close(false);
+      if (!window.CommonAssetsPicker) {
+        alert('Shared assets picker is not available.');
+        return;
+      }
+      window.CommonAssetsPicker.openFor({
+        category: '360-videos',
+        onSelect: (asset) => {
+          if (!asset || asset.category !== '360-videos') return;
+          this.applySceneVideoFromUrl(sceneId, asset, {
+            onDone: () => {
+              this.showStartingPointFeedback(`Updated video for "${scene.name}"`);
+              this.showSceneManager();
+            },
+          });
+        },
+      });
+    };
 
     // Image upload from file
     dialog.querySelector('#upload-image-file').onclick = () => {
@@ -13472,11 +13769,12 @@ document.addEventListener('DOMContentLoaded', () => {
               scene.imageFileName = file.name;
               scene.image = blobURL;
               scene.videoSrc = null;
+              this.clearCommonAssetProvenance(scene);
               this.saveScenesData();
               if (sceneId === this.currentScene) {
                 this.loadCurrentScene();
               }
-              close();
+              close(true);
               this.showStartingPointFeedback(`Updated to image for "${scene.name}"`);
             } else {
               alert('Failed to save image locally.');
@@ -13505,29 +13803,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      this.showLoadingIndicator('Loading image...');
-
-      const testImg = new Image();
-      testImg.crossOrigin = 'anonymous';
-      testImg.onload = () => {
-        scene.type = 'image';
-        scene.image = url;
-        scene.videoSrc = null;
-        delete scene.imageStorageKey;
-        delete scene.imageFileName;
-        this.saveScenesData();
-        if (sceneId === this.currentScene) {
-          this.loadCurrentScene();
-        }
-        this.hideLoadingIndicator();
-        close();
-        this.showStartingPointFeedback(`Updated to image for "${scene.name}"`);
-      };
-      testImg.onerror = () => {
-        this.hideLoadingIndicator();
-        alert('Failed to load image from URL. Please check the URL and try again.');
-      };
-      testImg.src = url;
+      close(false);
+      this.applySceneImageFromUrl(sceneId, url, {
+        onDone: () => {
+          this.showStartingPointFeedback(`Updated to image for "${scene.name}"`);
+          this.showSceneManager();
+        },
+      });
     };
 
     // Video upload from file
@@ -13587,6 +13869,7 @@ document.addEventListener('DOMContentLoaded', () => {
             scene.videoStorageKey = storageKey;
             scene.videoFileName = file.name;
             scene.videoVolume = scene.videoVolume || 0.5;
+            this.clearCommonAssetProvenance(scene);
 
             // If this scene previously had an image stored in IDB, keep it; it can still be used for previews.
             // Ensure we don't keep stale video download flags, etc.
@@ -13597,7 +13880,7 @@ document.addEventListener('DOMContentLoaded', () => {
               this.loadCurrentScene();
             }
 
-            close();
+            close(true);
             this.showStartingPointFeedback(`Video "${file.name}" saved locally and loaded!`);
           } catch (err) {
             console.error('Failed to store video', err);
@@ -13666,22 +13949,13 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('Could not verify content type (CORS?), proceeding anyway:', e);
       }
 
-      // Set to video with temporary remote URL, then auto-download to local
-      scene.type = 'video';
-      scene.videoSrc = url;
-      scene.videoFileName = url.split('/').pop();
-      scene.videoVolume = scene.videoVolume || 0.5;
-      this.saveScenesData();
-
-      // Begin auto-download with loader
-      await this.autoDownloadRemoteVideo(sceneId, url);
-
-      if (sceneId === this.currentScene) {
-        this.loadCurrentScene();
-      }
-
-      close();
-      this.showStartingPointFeedback(`Video URL set for "${scene.name}"`);
+      close(false);
+      await this.applySceneVideoFromUrl(sceneId, url, {
+        onDone: () => {
+          this.showStartingPointFeedback(`Video URL set for "${scene.name}"`);
+          this.showSceneManager();
+        },
+      });
     };
   }
 
@@ -13702,7 +13976,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <h2 style="margin: 0 0 15px 0; font-size: 28px; font-weight: bold;">Cannot Delete Scene 1</h2>
           <p style="color: #f0f0f0; margin-bottom: 25px; font-size: 16px; line-height: 1.6;">
             Scene 1 is the default scene and cannot be deleted.<br>
-            However, you can <strong>edit its image</strong> to customize it!
+            However, you can <strong>edit its media</strong> to customize it!
           </p>
           
           <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
@@ -13711,7 +13985,7 @@ document.addEventListener('DOMContentLoaded', () => {
               border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
               box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform 0.2s;
             " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-              🖼️ Edit Scene 1 Image
+              🎬 Edit Scene 1 Media
             </button>
             
             <button id="close-delete-warning-btn" style="
@@ -13743,7 +14017,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Edit Image button - close this dialog and open edit scene image
       document.getElementById('edit-scene1-image-btn').onclick = () => {
         document.body.removeChild(dialog);
-        this.editSceneImage('scene1');
+        this.editSceneMedia('scene1');
       };
 
       // Close button
@@ -14895,8 +15169,14 @@ const CommonAssetsPicker = {
     const el = document.getElementById(targetId);
     if (!el) return false;
 
+    const editor = window.hotspotEditor;
     el.value = asset.proxyUrl || asset.url;
+    if (editor) {
+      editor._skipClearCommonAssetDataset = true;
+      editor.setCommonAssetDataset(el, asset);
+    }
     el.dispatchEvent(new Event('input', { bubbles: true }));
+    if (editor) editor._skipClearCommonAssetDataset = false;
 
     const fileInputId = this.FIELD_FILE_MAP[targetId];
     if (fileInputId) {

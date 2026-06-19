@@ -2,12 +2,14 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 const API_TARGET = process.env.API_TARGET || 'http://localhost:3000';
+const VITE_PORT = Number(process.env.VITE_PORT) || 5173;
 
 export default defineConfig({
   root: '.',
   publicDir: false,
   server: {
-    port: 5173,
+    port: VITE_PORT,
+    strictPort: true,
     open: '/index.html',
     proxy: {
       '/admin': { target: API_TARGET, changeOrigin: true },

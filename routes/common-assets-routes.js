@@ -168,6 +168,14 @@ function registerCommonAssetRoutes(app, upload) {
         return res.status(400).json({ success: false, message: validation.message });
       }
 
+      const diskSize = fs.statSync(tempPath).size;
+      if (diskSize <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'File is empty (0 bytes). Choose a valid file and try again.',
+        });
+      }
+
       const storedFilename = sanitizeFilename(req.file.originalname);
       if (!storedFilename) {
         return res.status(400).json({ success: false, message: 'Invalid filename' });

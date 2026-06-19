@@ -4981,9 +4981,12 @@ class HotspotEditor {
           </div>
           <div style="font-size:10px; color:#777; margin-top:4px;">Adjust the position using coordinates</div>
         </div>
-        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top: 10px;">
-          <button id="edit-cancel" style="background:#666; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">Cancel</button>
-          <button id="edit-save" style="background:#4CAF50; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">Save</button>
+        <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; margin-top: 10px;">
+          <button id="edit-delete" style="background:#f44336; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">Delete Hotspot</button>
+          <div style="display:flex; gap:8px;">
+            <button id="edit-cancel" style="background:#666; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">Cancel</button>
+            <button id="edit-save" style="background:#4CAF50; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">Save</button>
+          </div>
         </div>
       </div>
     `;
@@ -5327,6 +5330,10 @@ class HotspotEditor {
       if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     };
     dialog.querySelector('#edit-cancel').onclick = close;
+
+    dialog.querySelector('#edit-delete').onclick = () => {
+      if (this.deleteHotspot(id)) close();
+    };
 
     dialog.querySelector('#edit-save').onclick = () => {
       const isImageEdit = hotspot.type === 'image';
@@ -6053,21 +6060,30 @@ class HotspotEditor {
 
   deleteHotspot(id) {
     const hotspot = this.hotspots.find((h) => h.id === id);
-    if (!hotspot) return;
+    if (!hotspot) return false;
 
-    if (confirm(`Delete this hotspot?`)) {
-      // Remove from array
-      this.hotspots = this.hotspots.filter((h) => h.id !== id);
+    if (!confirm('Delete this hotspot?')) return false;
 
-      // Remove from scene
-      const hotspotEl = document.getElementById(`hotspot-${id}`);
-      if (hotspotEl) {
-        hotspotEl.remove();
-      }
+    this.hotspots = this.hotspots.filter((h) => h.id !== id);
 
-      this.updateHotspotList();
-      this.saveScenesData(); // Save after deleting hotspot
+    if (this.scenes[this.currentScene]?.hotspots) {
+      this.scenes[this.currentScene].hotspots = this.scenes[this.currentScene].hotspots.filter(
+        (h) => h.id !== id
+      );
     }
+
+    const hotspotEl = document.getElementById(`hotspot-${id}`);
+    if (hotspotEl) {
+      hotspotEl.remove();
+    }
+
+    if (this.selectedHotspotId === id) {
+      this.selectedHotspotId = null;
+    }
+
+    this.updateHotspotList();
+    this.saveScenesData();
+    return true;
   }
 
   clearAllHotspots() {

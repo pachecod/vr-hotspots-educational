@@ -101,6 +101,10 @@ async function uploadFiles(fileList) {
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
+    if (!file.size) {
+      status.textContent = `Skipped ${file.name}: file is empty (0 bytes).`;
+      continue;
+    }
     status.textContent = `Uploading ${i + 1}/${files.length}: ${file.name}...`;
     const fd = new FormData();
     fd.append('file', file);

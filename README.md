@@ -1,6 +1,6 @@
 # VR Hotspots Educational Edition
 
-A comprehensive VR Hotspot Editor with built-in student submission system for educational environments.
+A comprehensive VR Hotspot Editor with built-in student submission system for educational environments. New to the tool? Start with the **[User Guide](USER_GUIDE.md)** for step-by-step instructions — and browse **[live examples of finished tours](USER_GUIDE.md#live-examples)** built by students (including Agriquest Seeds of Story VR stories you can open in your browser).
 
 ## 🎓 Educational Features
 

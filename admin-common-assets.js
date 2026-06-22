@@ -1,6 +1,5 @@
 let assetsByCategory = {};
 let activeCategory = 'images';
-let previewAsset = null;
 
 function formatBytes(bytes) {
   if (!bytes && bytes !== 0) return '';
@@ -65,22 +64,21 @@ async function copyAssetUrl(asset) {
 }
 
 function openPreview(asset) {
-  previewAsset = asset;
-  const modal = document.getElementById('preview-modal');
-  const body = document.getElementById('preview-body');
-  document.getElementById('preview-title').textContent = asset.name;
-  document.getElementById('preview-url').textContent = asset.url;
-
-  body.innerHTML = CommonAssetsPreview.renderModalBody(asset.category, asset);
-  modal.style.display = 'flex';
-}
-
-function closePreview() {
-  const body = document.getElementById('preview-body');
-  CommonAssetsPreview.stopMedia(body);
-  document.getElementById('preview-modal').style.display = 'none';
-  body.innerHTML = '';
-  previewAsset = null;
+  const cat = asset.category || activeCategory;
+  const items = (assetsByCategory[activeCategory] || []).map((a) => ({
+    ...a,
+    category: a.category || activeCategory,
+  }));
+  const index = items.findIndex((a) => a.name === asset.name);
+  if (!window.AssetPreview) return;
+  AssetPreview.open({
+    category: cat,
+    asset: { ...asset, category: cat },
+    items,
+    index: index >= 0 ? index : 0,
+    showCopyUrl: true,
+    onCopy: () => showToast('URL copied!'),
+  });
 }
 
 async function deleteAsset(name) {
@@ -155,6 +153,16 @@ function setupTabs() {
 
 function setupAssetList() {
   document.getElementById('asset-list').addEventListener('click', async (e) => {
+    if (e.target.closest('audio, video')) return;
+
+    const thumb = e.target.closest('[data-preview-thumb]');
+    if (thumb) {
+      const card = thumb.closest('.asset-card');
+      const asset = findAsset(card?.dataset.name);
+      if (asset) openPreview(asset);
+      return;
+    }
+
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
     const name = btn.dataset.name;
@@ -172,16 +180,6 @@ function setupAssetList() {
       }
       alert(err.message || 'Action failed');
     }
-  });
-}
-
-function setupPreviewModal() {
-  document.getElementById('preview-close').addEventListener('click', closePreview);
-  document.getElementById('preview-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'preview-modal') closePreview();
-  });
-  document.getElementById('preview-copy-btn').addEventListener('click', async () => {
-    if (previewAsset) await copyAssetUrl(previewAsset);
   });
 }
 
@@ -246,7 +244,6 @@ function initMainApp() {
   setupUploadZone();
   setupTabs();
   setupAssetList();
-  setupPreviewModal();
   loadStudentPeekDropdown();
   loadAssets().catch((err) => {
     if (err.code === 'AUTH_REQUIRED') location.reload();

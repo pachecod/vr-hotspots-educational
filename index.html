@@ -7,6 +7,7 @@
     <script src="./node_modules/aframe/dist/aframe-v1.7.1.min.js"></script>
     <script src="./node_modules/aframe-extras/dist/aframe-extras.min.js"></script>
     <script src="common-assets-preview.js"></script>
+    <script src="asset-preview-modal.js"></script>
     <script src="student-auth-ui.js"></script>
     <script src="script.js"></script>
     <style>
@@ -807,6 +808,7 @@
         font-weight: bold;
       }
     </style>
+    <link rel="stylesheet" href="asset-preview-modal.css" />
   </head>
 
   <body>
@@ -1977,6 +1979,22 @@
             <button class="ca-tab" data-category="other">Other</button>
           </div>
           <div id="common-assets-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="asset-preview-modal" role="dialog" aria-modal="true" aria-labelledby="asset-preview-title">
+      <div class="asset-preview-panel">
+        <button type="button" class="asset-preview-close" aria-label="Close">&times;</button>
+        <h3 id="asset-preview-title" class="asset-preview-title"></h3>
+        <div id="asset-preview-counter" class="asset-preview-counter"></div>
+        <div id="asset-preview-body" class="asset-preview-body"></div>
+        <p id="asset-preview-url" class="asset-preview-url"></p>
+        <div class="asset-preview-footer">
+          <button type="button" id="asset-preview-prev-btn" class="btn-preview-nav" style="display:none">← Prev</button>
+          <button type="button" id="asset-preview-next-btn" class="btn-preview-nav" style="display:none">Next →</button>
+          <button type="button" id="asset-preview-copy-btn" class="btn-preview-copy" style="display:none">Copy URL</button>
+          <button type="button" id="asset-preview-select-btn" class="btn-preview-select" style="display:none">Select</button>
         </div>
       </div>
     </div>

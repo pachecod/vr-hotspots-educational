@@ -3,7 +3,6 @@ const StudentPeek = {
   returnTo: 'users',
   assetsByCategory: {},
   activeCategory: 'images',
-  previewAsset: null,
 
   CATEGORIES: [
     { id: 'images', label: 'Flat Images' },
@@ -272,6 +271,18 @@ const StudentPeek = {
         else if (btn.dataset.action === 'delete') this.deleteAsset(asset.name);
       });
     });
+
+    if (!list.dataset.previewBound) {
+      list.dataset.previewBound = '1';
+      list.addEventListener('click', (e) => {
+        if (e.target.closest('audio, video, button')) return;
+        const thumb = e.target.closest('[data-preview-thumb]');
+        if (!thumb) return;
+        const card = thumb.closest('.asset-card');
+        const asset = this.findAsset(card?.dataset.name);
+        if (asset) this.openPreview(asset);
+      });
+    }
   },
 
   findAsset(name) {
@@ -285,23 +296,25 @@ const StudentPeek = {
   },
 
   openPreview(asset) {
-    this.previewAsset = asset;
-    const modal = document.getElementById('peek-preview-modal');
-    const body = document.getElementById('peek-preview-body');
-    document.getElementById('peek-preview-title').textContent = asset.name;
-    const fullUrl = window.location.origin + asset.url;
-    document.getElementById('peek-preview-url').textContent = fullUrl;
-    body.innerHTML = CommonAssetsPreview.renderModalBody(asset.category, asset);
-    modal.style.display = 'flex';
+    const cat = asset.category || this.activeCategory;
+    const items = (this.assetsByCategory[this.activeCategory] || []).map((a) => ({
+      ...a,
+      category: a.category || this.activeCategory,
+    }));
+    const index = items.findIndex((a) => a.name === asset.name);
+    if (!window.AssetPreview) return;
+    AssetPreview.open({
+      category: cat,
+      asset: { ...asset, category: cat },
+      items,
+      index: index >= 0 ? index : 0,
+      showCopyUrl: true,
+      onCopy: () => this.showToast('URL copied!'),
+    });
   },
 
   closePreview() {
-    const body = document.getElementById('peek-preview-body');
-    if (body) CommonAssetsPreview.stopMedia(body);
-    const modal = document.getElementById('peek-preview-modal');
-    if (modal) modal.style.display = 'none';
-    if (body) body.innerHTML = '';
-    this.previewAsset = null;
+    if (window.AssetPreview) AssetPreview.close();
   },
 
   async deleteAsset(name) {
@@ -324,13 +337,6 @@ const StudentPeek = {
 
   bindUi() {
     document.getElementById('peek-back-btn')?.addEventListener('click', () => this.close());
-    document.getElementById('peek-preview-close')?.addEventListener('click', () => this.closePreview());
-    document.getElementById('peek-preview-copy-btn')?.addEventListener('click', () => {
-      if (this.previewAsset) this.copyAssetUrl(this.previewAsset);
-    });
-    document.getElementById('peek-preview-modal')?.addEventListener('click', (e) => {
-      if (e.target.id === 'peek-preview-modal') this.closePreview();
-    });
   },
 };
 

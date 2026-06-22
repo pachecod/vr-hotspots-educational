@@ -1,0 +1,276 @@
+/* Shared asset preview modal (student picker + admin) */
+
+#asset-preview-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 10050;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+#asset-preview-modal.is-open {
+  display: flex;
+}
+
+#asset-preview-modal .asset-preview-panel {
+  background: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 8px;
+  width: min(900px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  padding: 20px;
+  position: relative;
+  color: #e0e0e0;
+}
+
+#asset-preview-modal .asset-preview-close {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-size: 28px;
+  border: none;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+  line-height: 1;
+  z-index: 2;
+}
+
+#asset-preview-modal .asset-preview-title {
+  margin: 0 40px 8px 0;
+  font-size: 1.1rem;
+  color: #4caf50;
+  word-break: break-all;
+}
+
+#asset-preview-modal .asset-preview-counter {
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 12px;
+}
+
+#asset-preview-modal .asset-preview-body {
+  min-height: 80px;
+}
+
+#asset-preview-modal .asset-preview-url {
+  margin-top: 12px;
+  font-size: 12px;
+  word-break: break-all;
+  color: #aaa;
+}
+
+#asset-preview-modal .asset-preview-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  align-items: center;
+}
+
+#asset-preview-modal .asset-preview-footer button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+#asset-preview-modal .btn-preview-copy {
+  background: #6f42c1;
+  color: #fff;
+}
+
+#asset-preview-modal .btn-preview-select {
+  background: #4caf50;
+  color: #fff;
+}
+
+#asset-preview-modal .btn-preview-nav {
+  background: #555;
+  color: #fff;
+}
+
+#asset-preview-modal .preview-image {
+  max-width: 100%;
+  max-height: 80vh;
+  border-radius: 6px;
+  display: block;
+  margin: 0 auto;
+  background: #111;
+}
+
+#asset-preview-modal .preview-video video {
+  width: 100%;
+  max-height: 70vh;
+  background: #111;
+  border-radius: 6px;
+}
+
+#asset-preview-modal .preview-audio audio {
+  width: 100%;
+  max-width: 480px;
+  display: block;
+  margin: 0 auto 8px;
+}
+
+#asset-preview-modal .preview-3d-wrap {
+  position: relative;
+}
+
+#asset-preview-modal .preview-3d-frame {
+  width: 100%;
+  min-height: 420px;
+  height: min(70vh, 560px);
+  border: 1px solid #555;
+  border-radius: 8px;
+  background: #ececec;
+  display: block;
+}
+
+#asset-preview-modal .preview-3d-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(20, 20, 20, 0.9);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 2;
+}
+
+#asset-preview-modal .preview-3d-controls label {
+  font-size: 10px;
+  color: #aaa;
+  text-align: center;
+}
+
+#asset-preview-modal .preview-3d-mode-row {
+  display: flex;
+  gap: 4px;
+}
+
+#asset-preview-modal .preview-3d-mode-row button {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 11px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #444;
+  color: #ccc;
+}
+
+#asset-preview-modal .preview-3d-mode-row button.active {
+  background: #2196f3;
+  color: #fff;
+}
+
+#asset-preview-modal .preview-3d-mode-row button[data-mode='look'].active {
+  background: #4caf50;
+}
+
+#asset-preview-modal .btn-preview-3d-reset {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #2196f3;
+  color: #fff;
+}
+
+#asset-preview-modal .preview-hint {
+  font-size: 12px;
+  color: #aaa;
+  margin: 8px 0 4px;
+  text-align: center;
+}
+
+#asset-preview-modal .preview-filename {
+  font-size: 13px;
+  color: #ccc;
+  margin: 0;
+  word-break: break-all;
+  text-align: center;
+}
+
+#asset-preview-modal .preview-unavailable {
+  color: #aaa;
+  margin: 0;
+  text-align: center;
+  padding: 20px;
+}
+
+/* Clickable list thumbs */
+.asset-thumb-clickable {
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.asset-thumb-clickable:hover {
+  outline: 2px solid #4caf50;
+  outline-offset: 1px;
+}
+
+.asset-thumb-magnify {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+/* Picker row thumb sizing */
+#common-assets-modal .ca-item-thumb-wrap.asset-thumb-clickable {
+  width: 72px;
+  height: 72px;
+}
+
+#common-assets-modal .ca-item-thumb-wrap .ca-item-thumb,
+#common-assets-modal .ca-item-thumb-wrap.ca-item-thumb {
+  width: 72px;
+  height: 72px;
+}
+
+#common-assets-modal .ca-item-thumb-wrap .ca-item-thumb-fallback {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  background: #222;
+  border-radius: 4px;
+}
+
+#common-assets-modal .btn-preview-ca {
+  background: #17a2b8;
+  color: #fff;
+}
+
+/* Admin grid thumbs */
+.asset-grid .asset-thumb-clickable .asset-thumb,
+.asset-grid .asset-thumb-clickable.asset-thumb {
+  margin-bottom: 0;
+}
+
+.asset-grid .asset-thumb-clickable {
+  margin-bottom: 8px;
+}

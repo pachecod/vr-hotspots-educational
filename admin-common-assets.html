@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <title>Assets — VR Hotspots Admin</title>
     <link rel="stylesheet" href="admin-nav.css" />
+    <link rel="stylesheet" href="asset-preview-modal.css" />
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -345,21 +346,26 @@
       </div>
     </div>
 
-    <div id="preview-modal">
-      <div class="panel">
-        <button class="close" id="preview-close" aria-label="Close">&times;</button>
-        <h3 id="preview-title"></h3>
-        <div id="preview-body"></div>
-        <p style="margin-top: 12px; font-size: 12px; word-break: break-all" id="preview-url"></p>
-        <button type="button" id="preview-copy-btn" class="btn-copy" style="margin-top: 8px">
-          Copy URL
-        </button>
+    <div id="asset-preview-modal" role="dialog" aria-modal="true" aria-labelledby="asset-preview-title">
+      <div class="asset-preview-panel">
+        <button type="button" class="asset-preview-close" aria-label="Close">&times;</button>
+        <h3 id="asset-preview-title" class="asset-preview-title"></h3>
+        <div id="asset-preview-counter" class="asset-preview-counter"></div>
+        <div id="asset-preview-body" class="asset-preview-body"></div>
+        <p id="asset-preview-url" class="asset-preview-url"></p>
+        <div class="asset-preview-footer">
+          <button type="button" id="asset-preview-prev-btn" class="btn-preview-nav" style="display:none">← Prev</button>
+          <button type="button" id="asset-preview-next-btn" class="btn-preview-nav" style="display:none">Next →</button>
+          <button type="button" id="asset-preview-copy-btn" class="btn-preview-copy" style="display:none">Copy URL</button>
+          <button type="button" id="asset-preview-select-btn" class="btn-preview-select" style="display:none">Select</button>
+        </div>
       </div>
     </div>
 
     <div id="toast">Copied!</div>
 
     <script src="common-assets-preview.js"></script>
+    <script src="asset-preview-modal.js"></script>
     <script src="admin-common-assets.js"></script>
   </body>
 </html>

@@ -16,6 +16,14 @@ const CommonAssetsPreview = {
     return /\.(glb|gltf)$/i.test(filename || '');
   },
 
+  isPreviewable(category, name) {
+    if (category === 'images' || category === '360-images' || category === '360-videos' || category === 'audio') {
+      return true;
+    }
+    if (category === '3d') return this.is3dModelPreviewable(name);
+    return false;
+  },
+
   get3dModelProxyUrl(asset) {
     if (asset && asset.url) {
       return asset.url;
@@ -31,41 +39,87 @@ const CommonAssetsPreview = {
     return `common-assets-3d-preview.html?url=${encodeURIComponent(modelUrl)}`;
   },
 
-  renderGridThumb(category, asset) {
-    const url = asset.url;
-    const name = asset.name || '';
-
-    if (category === 'images' || category === '360-images') {
-      return `<img class="asset-thumb" src="${this.escapeAttr(url)}" alt="" loading="lazy" crossorigin="anonymous" />`;
-    }
-
-    if (category === '360-videos') {
-      return `<div class="asset-thumb asset-thumb-video">
-        <video muted playsinline preload="metadata" crossorigin="anonymous" src="${this.escapeAttr(url)}"></video>
-        <span class="asset-thumb-label">360°</span>
-      </div>`;
-    }
-
-    if (category === 'audio') {
-      return `<div class="asset-thumb asset-thumb-audio">
-        <span class="asset-thumb-icon" aria-hidden="true">🔊</span>
-        <audio controls preload="metadata" crossorigin="anonymous" src="${this.escapeAttr(url)}"></audio>
-      </div>`;
-    }
-
-    if (category === '3d' && this.is3dModelPreviewable(name)) {
-      return `<div class="asset-thumb asset-thumb-3d">
-        <iframe title="3D preview: ${this.escapeAttr(name)}" loading="lazy" src="${this.escapeAttr(
-          this.get3dPreviewPageUrl({ category, name, url })
-        )}"></iframe>
-      </div>`;
-    }
-
-    const icon = category === '3d' ? '🎨' : category === 'other' ? '📄' : '📦';
-    return `<div class="asset-thumb asset-thumb-fallback"><span>${icon}</span></div>`;
+  getListThumbIcon(category, name) {
+    if (category === '360-videos') return '🎥';
+    if (category === 'audio') return '🔊';
+    if (category === '3d') return '🎨';
+    if (category === 'other') return '📄';
+    return '📦';
   },
 
-  renderModalBody(category, asset) {
+  getThumbClass(context) {
+    if (context === 'picker') return 'ca-item-thumb';
+    return 'asset-thumb';
+  },
+
+  wrapClickable(innerHtml, category, name, context) {
+    const previewable = this.isPreviewable(category, name);
+    if (!previewable) return innerHtml;
+    const wrapClass =
+      context === 'picker'
+        ? 'ca-item-thumb-wrap asset-thumb-clickable'
+        : 'asset-thumb-clickable';
+    return `<div class="${wrapClass}" data-preview-thumb="1" title="Click to preview">${innerHtml}<span class="asset-thumb-magnify" aria-hidden="true">🔍</span></div>`;
+  },
+
+  renderListThumb(category, asset, options = {}) {
+    const context = options.context || 'grid';
+    const url = asset.url;
+    const name = asset.name || '';
+    const thumbClass = this.getThumbClass(context);
+    const fallbackClass = context === 'picker' ? `${thumbClass} ${thumbClass}-fallback` : `${thumbClass} ${thumbClass}-fallback`;
+
+    let inner = '';
+
+    if (category === 'images' || category === '360-images') {
+      inner = `<img class="${thumbClass}" src="${this.escapeAttr(url)}" alt="" loading="lazy" crossorigin="anonymous" />`;
+    } else if (category === '360-videos') {
+      const label =
+        context === 'grid'
+          ? '<span class="asset-thumb-label">360°</span>'
+          : '';
+      inner = `<div class="${thumbClass} ${thumbClass}-video">
+        <video muted playsinline preload="metadata" crossorigin="anonymous" src="${this.escapeAttr(url)}"></video>
+        ${label}
+      </div>`;
+    } else if (category === 'audio') {
+      if (context === 'grid') {
+        inner = `<div class="${thumbClass} ${thumbClass}-audio">
+          <span class="asset-thumb-icon" aria-hidden="true">🔊</span>
+          <audio controls preload="metadata" crossorigin="anonymous" src="${this.escapeAttr(url)}"></audio>
+        </div>`;
+      } else {
+        inner = `<div class="${thumbClass} ${thumbClass}-audio">
+          <span class="asset-thumb-icon" aria-hidden="true">🔊</span>
+        </div>`;
+      }
+    } else {
+      inner = `<div class="${fallbackClass}"><span>${this.getListThumbIcon(category, name)}</span></div>`;
+    }
+
+    return this.wrapClickable(inner, category, name, context);
+  },
+
+  renderGridThumb(category, asset) {
+    return this.renderListThumb(category, asset, { context: 'grid' });
+  },
+
+  renderPickerThumb(category, asset) {
+    return this.renderListThumb(category, asset, { context: 'picker' });
+  },
+
+  render3dControlsOverlay() {
+    return `<div class="preview-3d-controls">
+      <label>Mode</label>
+      <div class="preview-3d-mode-row">
+        <button type="button" data-3d-mode="move" class="active" title="Move mode">Move</button>
+        <button type="button" data-3d-mode="look" title="Look mode">Look</button>
+      </div>
+      <button type="button" class="btn-preview-3d-reset" title="Reset view (R)">Reset</button>
+    </div>`;
+  },
+
+  renderModalBody(category, asset, options = {}) {
     const url = asset.url;
     const name = asset.name || '';
 
@@ -93,56 +147,17 @@ const CommonAssetsPreview = {
       if (!this.is3dModelPreviewable(name)) {
         return `<p class="preview-unavailable">Preview not available for this 3D format. Use .glb or .gltf files.</p>`;
       }
-      return `<div class="preview-3d">
+      return `<div class="preview-3d-wrap preview-3d">
         <iframe title="3D model preview" class="preview-3d-frame" src="${this.escapeAttr(
           this.get3dPreviewPageUrl({ category, name, url })
         )}"></iframe>
-        <p class="preview-hint">Drag to look around · Scroll to zoom</p>
+        ${this.render3dControlsOverlay()}
+        <p class="preview-hint">WASD move · drag look · pinch zoom · R reset</p>
         <p class="preview-filename">${this.escapeAttr(name)}</p>
       </div>`;
     }
 
     return `<p class="preview-unavailable">Preview not available for this file type.</p>`;
-  },
-
-  /** Compact row thumb for student picker modal */
-  renderPickerThumb(category, asset) {
-    const url = asset.url;
-    const name = asset.name || '';
-
-    if (category === 'images' || category === '360-images') {
-      return `<img class="ca-item-thumb" src="${this.escapeAttr(url)}" alt="" loading="lazy" crossorigin="anonymous" />`;
-    }
-
-    if (category === '360-videos') {
-      return `<div class="ca-item-thumb ca-item-thumb-video">
-        <video muted playsinline preload="metadata" crossorigin="anonymous" src="${this.escapeAttr(url)}"></video>
-      </div>`;
-    }
-
-    if (category === 'audio') {
-      return `<div class="ca-item-thumb ca-item-thumb-audio">
-        <audio controls preload="metadata" crossorigin="anonymous" src="${this.escapeAttr(url)}"></audio>
-      </div>`;
-    }
-
-    if (category === '3d' && this.is3dModelPreviewable(name)) {
-      return `<div class="ca-item-thumb ca-item-thumb-3d">
-        <iframe title="3D preview" loading="lazy" src="${this.escapeAttr(
-          this.get3dPreviewPageUrl({ category, name, url })
-        )}"></iframe>
-      </div>`;
-    }
-
-    const icon =
-      category === '360-videos'
-        ? '🎥'
-        : category === 'audio'
-          ? '🔊'
-          : category === '3d'
-            ? '🎨'
-            : '📄';
-    return `<div class="ca-item-thumb ca-item-thumb-fallback">${icon}</div>`;
   },
 
   stopMedia(container) {

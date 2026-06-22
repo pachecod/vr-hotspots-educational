@@ -16270,11 +16270,23 @@ const CommonAssetsPicker = {
     });
 
     document.getElementById('common-assets-list').addEventListener('click', (e) => {
+      if (e.target.closest('audio, video')) return;
+
+      const thumb = e.target.closest('[data-preview-thumb]');
+      if (thumb) {
+        const item = thumb.closest('.ca-item');
+        const name = item?.querySelector('.ca-item-name')?.textContent;
+        const asset = (this.assets[this.activeCategory] || []).find((a) => a.name === name);
+        if (asset) this.openPreview(asset);
+        return;
+      }
+
       const btn = e.target.closest('button[data-ca-action]');
       if (!btn) return;
       const name = btn.dataset.name;
       const asset = (this.assets[this.activeCategory] || []).find((a) => a.name === name);
       if (!asset) return;
+      if (btn.dataset.caAction === 'preview') this.openPreview(asset);
       if (btn.dataset.caAction === 'copy') this.copyUrl(asset.url);
       if (btn.dataset.caAction === 'use') this.useUrl(asset);
       if (btn.dataset.caAction === 'delete') this.deleteStudentAsset(asset);
@@ -16419,12 +16431,32 @@ const CommonAssetsPicker = {
     }
   },
 
-  render() {
-    const list = document.getElementById('common-assets-list');
+  getFilteredItems() {
     let items = this.assets[this.activeCategory] || [];
     if (this.searchQuery) {
       items = items.filter((a) => a.name.toLowerCase().includes(this.searchQuery));
     }
+    return items;
+  },
+
+  openPreview(asset) {
+    const items = this.getFilteredItems();
+    const index = items.findIndex((a) => a.name === asset.name);
+    const cat = asset.category || this.activeCategory;
+    if (!window.AssetPreview) return;
+    AssetPreview.open({
+      category: cat,
+      asset: { ...asset, category: cat },
+      items: items.map((a) => ({ ...a, category: a.category || this.activeCategory })),
+      index: index >= 0 ? index : 0,
+      showSelect: true,
+      onSelect: (selected) => this.useUrl(selected),
+    });
+  },
+
+  render() {
+    const list = document.getElementById('common-assets-list');
+    let items = this.getFilteredItems();
     if (!items.length) {
       list.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">No assets found.</p>';
       return;
@@ -16439,6 +16471,7 @@ const CommonAssetsPicker = {
           ${icon}
           <div class="ca-item-info"><div class="ca-item-name">${asset.name}</div></div>
           <div class="ca-item-actions">
+            <button data-ca-action="preview" data-name="${asset.name}" class="btn-preview-ca">Preview</button>
             <button data-ca-action="copy" data-name="${asset.name}" style="background:#6f42c1;color:#fff;">Copy</button>
             <button data-ca-action="use" data-name="${asset.name}" style="background:#4caf50;color:#fff;">Select</button>
             ${this.assetSource === 'my' ? `<button data-ca-action="delete" data-name="${asset.name}" style="background:#f44336;color:#fff;">Delete</button>` : ''}

@@ -16242,6 +16242,13 @@ const CommonAssetsPicker = {
     'weblink-image-url': 'images',
   },
 
+  updateSourceUi() {
+    const uploadEl = document.getElementById('my-assets-upload');
+    const introEl = document.getElementById('shared-assets-intro');
+    if (uploadEl) uploadEl.style.display = this.assetSource === 'my' ? 'block' : 'none';
+    if (introEl) introEl.style.display = this.assetSource === 'shared' ? 'block' : 'none';
+  },
+
   init() {
     const openBtn = document.getElementById('open-common-assets');
     const modal = document.getElementById('common-assets-modal');
@@ -16309,8 +16316,7 @@ const CommonAssetsPicker = {
           t.classList.toggle('active', t === tab);
           t.style.background = t === tab ? '#4caf50' : '#444';
         });
-        const uploadEl = document.getElementById('my-assets-upload');
-        if (uploadEl) uploadEl.style.display = this.assetSource === 'my' ? 'block' : 'none';
+        this.updateSourceUi();
         this.load();
       });
     });
@@ -16389,8 +16395,7 @@ const CommonAssetsPicker = {
       else if (type === 'model') this.activeCategory = '3d';
     }
     this.renderTabs();
-    const uploadEl = document.getElementById('my-assets-upload');
-    if (uploadEl) uploadEl.style.display = this.assetSource === 'my' ? 'block' : 'none';
+    this.updateSourceUi();
     document.getElementById('common-assets-modal').style.display = 'flex';
     await this.load();
   },
@@ -16419,6 +16424,7 @@ const CommonAssetsPicker = {
             t.classList.toggle('active', active);
             t.style.background = active ? '#4caf50' : '#444';
           });
+          this.updateSourceUi();
           return this.load();
         }
         const data = await res.json();

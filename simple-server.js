@@ -71,6 +71,17 @@ function writeSubmissionsLog(entries) {
   fs.writeFileSync(file, data, 'utf8');
 }
 
+async function resolveSubmissionRemotePath(filename) {
+  if (isDbEnabled()) {
+    const row = await submissionsDb.getSubmissionByFileName(filename);
+    if (row && row.remote_path) return row.remote_path;
+  }
+  const logs = loadSubmissionsLog();
+  const submission = logs.find((sub) => sub.fileName === filename);
+  if (submission && submission.remotePath) return submission.remotePath;
+  return `student-projects/${filename}`;
+}
+
 async function tryDeriveProjectMetaFromZip(zipPath) {
   return new Promise((resolve) => {
     let done = false;
@@ -1704,7 +1715,7 @@ app.post('/admin/sync-b2', async (req, res) => {
 app.get('/admin/download/:filename', async (req, res) => {
   try {
     const filename = req.params.filename;
-    const remotePath = `student-projects/${filename}`;
+    const remotePath = await resolveSubmissionRemotePath(filename);
     const tempPath = path.join('temp-uploads', `download_${Date.now()}_${filename}`);
 
     // Download from B2 to temp location
@@ -1742,7 +1753,7 @@ app.get('/admin/download/:filename', async (req, res) => {
 app.delete('/admin/delete/:filename', async (req, res) => {
   try {
     const filename = req.params.filename;
-    const remotePath = `student-projects/${filename}`;
+    const remotePath = await resolveSubmissionRemotePath(filename);
 
     console.log(`🗑️ Deleting ${remotePath} from B2...`);
 
@@ -1771,6 +1782,10 @@ app.delete('/admin/delete/:filename', async (req, res) => {
       // Remove from submissions log
       const updatedLogs = logs.filter((submission) => submission.fileName !== filename);
       writeSubmissionsLog(updatedLogs);
+    }
+
+    if (isDbEnabled()) {
+      await submissionsDb.deleteSubmission(filename);
     }
 
     console.log(`✅ Project deleted successfully`);
@@ -1802,7 +1817,7 @@ app.post('/admin/host/:filename', async (req, res) => {
   }
 
   try {
-    const remotePath = `student-projects/${filename}`;
+    const remotePath = await resolveSubmissionRemotePath(filename);
     const tempPath = path.join('temp-uploads', `host_${Date.now()}_${filename}`);
     const hostedDir = path.join('hosted-projects', urlPath);
 
@@ -1851,9 +1866,14 @@ app.post('/admin/host/:filename', async (req, res) => {
     });
   } catch (error) {
     console.error('Host error:', error);
-    res.status(500).json({
+    const notFound =
+      error.response?.status === 404 ||
+      /404|not found/i.test(String(error.message || ''));
+    res.status(notFound ? 404 : 500).json({
       success: false,
-      message: 'Error hosting project: ' + error.message,
+      message: notFound
+        ? `Project ZIP not found in cloud storage (${filename}). Try downloading first to verify the file exists.`
+        : error.message || 'Hosting failed',
     });
   }
 });

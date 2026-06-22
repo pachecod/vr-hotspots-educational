@@ -9,8 +9,10 @@ const {
 } = require('../lib/common-assets');
 const {
   buildStudentAssetKey,
+  buildStudentScopePrefix,
   attachTagsToStudentAssets,
   deleteTagsForKey,
+  listTagsForScope,
 } = require('../lib/asset-tags');
 
 async function getStudentPeekMeta(studentId) {
@@ -86,6 +88,21 @@ function registerAdminStudentPeekRoutes(app, { requireAdmin }) {
       return res.json({ success: true, assets: grouped, student: meta });
     } catch (err) {
       console.error('Admin list student assets error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/admin/students/:studentId/assets/tags', requireAdmin, requireDb, async (req, res) => {
+    try {
+      const studentId = req.params.studentId;
+      const meta = await getStudentPeekMeta(studentId);
+      if (!meta) {
+        return res.status(404).json({ success: false, message: 'Student not found' });
+      }
+      const tags = await listTagsForScope(buildStudentScopePrefix(studentId));
+      return res.json({ success: true, tags });
+    } catch (err) {
+      console.error('Admin list student asset tags error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   });

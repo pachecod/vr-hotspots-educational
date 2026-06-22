@@ -3,6 +3,7 @@ const StudentPeek = {
   returnTo: 'users',
   assetsByCategory: {},
   activeCategory: 'images',
+  searchQuery: '',
 
   CATEGORIES: [
     { id: 'images', label: 'Flat Images' },
@@ -61,6 +62,7 @@ const StudentPeek = {
 
   async open(studentId, options = {}) {
     this.studentId = studentId;
+    this.searchQuery = '';
     this.returnTo = options.returnTo || this.getReturnFromUrl();
     const listView = document.getElementById('users-list-view');
     const peekView = document.getElementById('student-peek-view');
@@ -126,6 +128,8 @@ const StudentPeek = {
       }
 
       this.assetsByCategory = assetsData.assets || {};
+      const searchInput = document.getElementById('peek-asset-search');
+      if (searchInput) searchInput.value = '';
       this.renderCategoryTabs();
       this.renderAssets();
       this.renderVersions(versionsData.versions || []);
@@ -234,13 +238,72 @@ const StudentPeek = {
     });
   },
 
+  getFilteredAssets() {
+    let items = this.assetsByCategory[this.activeCategory] || [];
+    if (this.searchQuery && this.searchQuery.trim()) {
+      items = items.filter((a) =>
+        window.AssetTagsUI
+          ? AssetTagsUI.assetMatchesSearch(a, this.searchQuery)
+          : a.name.toLowerCase().includes(this.searchQuery.toLowerCase())
+      );
+    }
+    return items;
+  },
+
+  collectAllTagsFromAssets() {
+    const tagCounts = {};
+    for (const cat of Object.keys(this.assetsByCategory)) {
+      for (const asset of this.assetsByCategory[cat] || []) {
+        for (const tag of asset.tags || []) {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        }
+      }
+    }
+    return Object.entries(tagCounts)
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  },
+
+  openTagBrowser() {
+    if (!window.AssetTagsUI || !this.studentId) return;
+    const openModal = (tags) => {
+      AssetTagsUI.openTagBrowserModal({
+        tags,
+        theme: 'light',
+        onSelectTag: (tag) => {
+          const input = document.getElementById('peek-asset-search');
+          if (!input) return;
+          const current = input.value.trim();
+          input.value = current ? `${current}, ${tag}` : tag;
+          this.searchQuery = input.value;
+          this.renderAssets();
+        },
+      });
+    };
+
+    adminFetch(`/admin/students/${this.studentId}/assets/tags`)
+      .then((res) => res.json())
+      .then((data) => {
+        openModal(
+          data.success && data.tags && data.tags.length
+            ? data.tags
+            : this.collectAllTagsFromAssets()
+        );
+      })
+      .catch(() => openModal(this.collectAllTagsFromAssets()));
+  },
+
   renderAssets() {
     const list = document.getElementById('peek-asset-list');
     if (!list) return;
-    const items = this.assetsByCategory[this.activeCategory] || [];
+    const items = this.getFilteredAssets();
+    const totalInCategory = (this.assetsByCategory[this.activeCategory] || []).length;
 
     if (!items.length) {
-      list.innerHTML = '<div class="empty">No assets in this category.</div>';
+      list.innerHTML =
+        totalInCategory > 0
+          ? '<div class="empty">No assets match your search.</div>'
+          : '<div class="empty">No assets in this category.</div>';
       list.className = '';
       return;
     }
@@ -287,7 +350,8 @@ const StudentPeek = {
   },
 
   findAsset(name) {
-    return (this.assetsByCategory[this.activeCategory] || []).find((a) => a.name === name);
+    return this.getFilteredAssets().find((a) => a.name === name) ||
+      (this.assetsByCategory[this.activeCategory] || []).find((a) => a.name === name);
   },
 
   async copyAssetUrl(asset) {
@@ -298,7 +362,7 @@ const StudentPeek = {
 
   openPreview(asset) {
     const cat = asset.category || this.activeCategory;
-    const items = (this.assetsByCategory[this.activeCategory] || []).map((a) => ({
+    const items = this.getFilteredAssets().map((a) => ({
       ...a,
       category: a.category || this.activeCategory,
     }));
@@ -338,6 +402,16 @@ const StudentPeek = {
 
   bindUi() {
     document.getElementById('peek-back-btn')?.addEventListener('click', () => this.close());
+
+    const searchInput = document.getElementById('peek-asset-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        this.searchQuery = e.target.value;
+        this.renderAssets();
+      });
+    }
+
+    document.getElementById('peek-show-tags-btn')?.addEventListener('click', () => this.openTagBrowser());
   },
 };
 

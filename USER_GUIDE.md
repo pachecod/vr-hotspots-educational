@@ -2,6 +2,8 @@
 
 This guide is for **students, teachers, and admins** using the VR Hotspot Editor. For installation and hosting, see the [README](README.md) and [Deploy to Render](RENDER_DEPLOY.md).
 
+Teachers looking for classroom setup, grading workflows, and admin how-tos should also see the **[Documentation Plan](DOCS_PLAN.md)** — dedicated teacher guides are listed there and will be added over time.
+
 ---
 
 ## What you can build
@@ -33,13 +35,16 @@ Your instructor or admin will give you a URL. Common examples:
 | Role | Page |
 |------|------|
 | **Student (editor)** | `/` or `/index.html` |
-| **Admin (submissions inbox)** | `/admin-submissions.html` |
-| **Admin (legacy dashboard)** | `/admin-dashboard.html` |
-| **Admin (shared assets)** | `/admin-common-assets.html` |
+| **Admin (submissions)** | `/admin-submissions.html` |
+| **Admin (online assets)** | `/admin-common-assets.html` |
 | **Admin (users & classes)** | `/admin-users.html` |
 | **Admin (billing)** | `/admin-billing.html` (when Stripe is enabled) |
 
-If you are running locally, that is usually `http://localhost:3000` (or `http://localhost:5174` when using the Vite dev server).
+All admin pages share a top nav: **Submissions · Assets · Users · Logout**.
+
+If you are running locally, that is usually `http://localhost:3000` (or `http://localhost:5174` when using the Vite dev server with `npm run dev`).
+
+> **Note:** `/admin-dashboard.html` redirects to the Submissions page.
 
 ---
 
@@ -52,11 +57,13 @@ When your instructor has enabled student accounts:
 3. **Choose your name** from that class
 4. Enter the **password** your teacher gave you
 
-After sign-in you can:
+After sign-in, a **session bar** at the top of the editor tools panel shows your name and class, with **Logout** and **My Submissions**.
 
-- Use **My Assets** in the asset browser to upload and reuse your own images, audio, and 3D files
+You can:
+
+- Use **My Assets** in the Asset Library to upload files, add tags, and reuse your own media
 - **Submit** projects tied to your account (not just a free-text project name)
-- Open **My Submissions** to see version history and teacher feedback
+- Open **My Submissions** to see version history, teacher feedback, and unread return badges
 - **Save to Cloud** drafts without notifying the teacher (submit when ready)
 
 Ask your teacher to reset your password from **Users & Classes** if you forget it.
@@ -81,7 +88,7 @@ Use the chevron tabs on the left and right panels to collapse them when you need
 Use this while **building** your project:
 
 1. Choose a **hotspot type**
-2. Fill in content (text, audio, link, etc.) Note: If the admin for your installation has uploaded common assets for you in the admin tools, you can simply select them rather than uploading yourself. Any asset you add yourself to your scene (versus what you choose from common assets) remains on your local computer or tablet unless you submit to admin.
+2. Fill in content (text, audio, link, etc.). If your teacher uploaded **Online Assets**, you can pick those instead of uploading yourself. Files you add only on your device stay local until you submit to admin.
 3. Click **Add Hotspot**, then **click on the scene** where it should appear
 4. Use **Edit** (📝) or **Move** (📍) on existing hotspots in the list
 
@@ -103,9 +110,9 @@ A **scene** is one 360° environment — either a **photo** or a **360° video**
 
 ### Add or change a scene
 
-1. Open **Scene Management** in the right panel.
-2. Click **Add Scene** and give it a name
-3. Choose a **360° image**, **360° video** (upload or URL), or pick from **Browse Shared Assets** if your class uses a shared library. Users are advised to not use very long videos, as that will greatly increase the download time and/or hosting costs for final tours created.
+1. Open **Scene Management** in the right panel and click **Manage** to open the **Scene Manager**.
+2. Click **Add Scene** and give it a name.
+3. Choose a **360° image**, **360° video** (upload or URL), or click **Edit Media** → **Browse Online Assets** to pick from your library. Avoid very long videos — they increase download time and hosting cost.
 4. Use the **Current Scene** dropdown to switch between scenes while editing.
 
 ### Starting view
@@ -136,7 +143,9 @@ Select a type under **Hotspot Type**, fill in the fields that appear, then **Add
 
 ### Tips for all hotspots
 
-- **Browse Shared Assets** (in Hotspot Properties or the Common Assets section) lets you pick files your instructor uploaded to a shared library
+- **Browse Online Assets** appears in Hotspot Properties, Global Scene Sound, the **Online Assets** section, and **Scene Manager → Edit Media**
+- When opened from a media field, the library auto-selects a sensible category (e.g. audio for Audio hotspots)
+- After choosing **Select**, the editor may prompt you to click the scene to place the hotspot
 - You can use **uploaded files** or **URLs** for media
 - After placing a hotspot, find it under **Existing Hotspots** — click to select, then **Edit** or **Delete**
 - **Clear All** removes every hotspot in the current scene; **Clear Data** resets broader saved data (use carefully)
@@ -149,23 +158,49 @@ Each scene can have **ambient background audio** (birds, music, room tone):
 
 1. Open **Global Scene Sound**
 2. Turn scene audio **ON**
-3. Upload a file or paste an audio URL
+3. Upload a file or paste an audio URL (or use **Browse Online Assets**)
 4. Adjust volume if needed
 
 This is separate from **Audio** hotspots, which play only when clicked.
 
 ---
 
-## Shared assets (Common Assets)
+## Online Assets (Asset Library)
 
-If your class uses the shared library:
+Open the library from **Browse Online Assets** in the editor sidebar, hotspot media fields, or **Scene Manager → Edit Media**.
 
-1. Click **Browse Shared Assets** in the editor sidebar
-2. Switch between **My Assets** (your uploads) and **Class Shared** (admin-provided library)
-2. Browse by category (images, audio, 360 videos, 3D, etc.)
-3. **Copy** a URL or click **Use URL** to drop it into the field you are editing
+### My Assets vs Shared Assets
 
-Your instructor manages uploads at `/admin-common-assets.html`.
+| Tab | Who uploads | Tags |
+|-----|-------------|------|
+| **My Assets** | You (when signed in) | Add on upload or via **Edit Tags** |
+| **Shared Assets** | Your teacher/admin | Managed on the admin Assets page |
+
+### Finding files
+
+1. Pick a **category tab** (Flat Images, 360 Photos, 360 Videos, Audio, 3D, Other).
+2. Use the **filter bar** at the top:
+   - Type a **filename** in the input to filter by name
+   - Press **Enter** or **comma** to add **tag chips** (tags filter assets — any matching tag counts)
+   - Click **Recent** tag pills or **Show All Tags** to add tags as chips
+   - Remove a chip with **×**; **Backspace** in an empty input removes the last chip
+3. Browse the grid below.
+
+### Actions on each asset
+
+| Button | What it does |
+|--------|----------------|
+| **Preview** | Full-size preview; prev/next through filtered list; 3D models support orbit/pan controls |
+| **Copy** | Copy the asset URL to the clipboard |
+| **Select** | Fill the field you opened the library from; you may be prompted to click the scene to place a hotspot |
+| **Edit Tags** | (My Assets only) Change tags on your file |
+| **Delete** | (My Assets only) Remove your upload |
+
+### Uploading to My Assets
+
+When signed in, the **Upload to My Assets** section lets you choose a file and optional **comma-separated tags**, then upload. Tags help you find files later with the filter bar.
+
+Your instructor manages **Shared Assets** at `/admin-common-assets.html`.
 
 ---
 
@@ -218,7 +253,14 @@ When your project is ready:
 
 Each submit creates a **new version**. You can keep editing and submit again; earlier versions stay on the server.
 
-**My Submissions** (in the signed-in bar at the top of the editor) shows your project history, downloads, and any **teacher feedback** returned from review.
+### My Submissions
+
+Open **My Submissions** from the session bar to:
+
+- See all projects and version history (Submitted, Draft, Teacher feedback)
+- Download any version
+- **Open in Editor** — including teacher-returned versions with feedback
+- Read teacher notes; an **unread badge** appears when new feedback arrives
 
 **Save to Cloud** (under Template) saves a draft to your account without appearing in the teacher inbox until you submit.
 
@@ -228,36 +270,81 @@ Each submit creates a **new version**. You can keep editing and submit again; ea
 
 ## Admin: review submissions
 
-### Submissions Inbox
+Sign in at `/admin-submissions.html` (or any admin page — same password).
 
-1. Open **Submissions Inbox** (`/admin-submissions.html`)
-2. Sign in if prompted
-3. Filter by class, student, or whether the student left a note
-4. Per submission: **Download**, **Host**, **Review in Editor**, or expand **Version history**
+### Submissions inbox
+
+1. Filter by **class**, **student**, or whether the student left a **note**
+2. For each submission:
+   - **Download** — get the ZIP
+   - **🌐 Host** — publish a live preview URL (re-host after server redeploy if using ephemeral disk — see [RENDER_DEPLOY.md](RENDER_DEPLOY.md))
+   - **✏️ Review in Editor** — load the project in the editor with an **Admin Review** bar
+   - **Version history** — expand to see all versions; download, review, or delete individual versions
+   - **🗑️ Delete** — remove a specific version
+
+### Import project ZIP
+
+Use **Import Project ZIP** at the top to upload a backup or locally exported project into the submissions system.
 
 ### Review in Editor and return feedback
 
-1. Click **Review in Editor** on a submission
-2. The student’s ZIP loads in the hotspot editor
+1. Click **Review in Editor** (from Submissions or from **Peek** — see below)
+2. The student’s project loads; an **Admin Review** bar shows student info and any student note
 3. Make edits as needed
 4. Click **Save and Send to Student**, add an optional feedback note, and confirm
 
 This creates a new **admin return** version. The student’s original ZIP is never overwritten. The student sees the feedback in **My Submissions** and can open your returned version in the editor.
 
-### Legacy dashboard
+---
 
-1. Open **Admin Dashboard** (`/admin-dashboard.html`) for the older flat list view
-2. **Download** a ZIP for any submission
-3. Unzip and open **`index.html`** in a browser to experience the student’s VR project offline
+## Admin: online assets
+
+Open **Assets** (`/admin-common-assets.html`).
+
+1. Sign in with the admin password
+2. Click **Upload Online Assets** to expand the upload zone (drag-and-drop or browse)
+3. Choose the active **category tab**, optionally add **comma-separated tags**, and upload
+
+Upload limits: Flat images 10MB, 360 photos 50MB, 360 videos 200MB, Audio 50MB, 3D 100MB, Other 25MB.
+
+### Managing assets
+
+- **Preview** — full-size preview with navigation between assets in the current filter
+- **Copy URL** — direct link for sharing or testing
+- **Edit Tags** — update tags on shared assets
+- **Delete** — remove the file
+
+### Finding assets
+
+Use the same **tag filter bar** as students: filename text, tag chips, **Recent** pills, and **Show All Tags**.
+
+### Peek into a student’s library
+
+Use the **Peek Into Student Assets and Submissions** dropdown to open a student’s assets, submissions, and version history without leaving the Assets page. **Back to Online Assets** returns you here; from **Users**, peek opens with **Back to Users**.
 
 ---
 
-## Admin: shared asset library
+## Admin: users & classes
 
-1. Open **Common Assets** (`/admin-common-assets.html`)
-2. Sign in with the admin password
-3. Upload files by category (images, audio, 360 videos, 3D models, etc.)
-4. **Copy URL** and share with students, or let them use **Browse Shared Assets** in the editor
+Open **Users** (`/admin-users.html`).
+
+1. Create **classes** and add **students** (username and password are generated)
+2. **Download All Passwords (CSV)** — passwords are stored on the server for later export
+3. **Reset Password** — for individual students
+4. **Peek** — view that student’s assets and submission history
+
+When Stripe billing is enabled, a link to **Class billing & usage** appears on this page.
+
+---
+
+## Admin: student Peek
+
+From **Users → Peek** or **Assets → student dropdown**, you can:
+
+- Browse the student’s uploaded assets by category (with tag/filename search)
+- **Preview**, **Copy URL**, or **Delete** student files
+- View **Projects & saves** — version table with Submitted / Draft / Teacher feedback badges
+- **Download** or **Review** any version in the editor
 
 ---
 
@@ -284,6 +371,8 @@ If media was exported as **online URLs**, stay connected to the internet. If med
 | **360° video won’t start (phone/tablet)** | Tap the page once after load; check Wi‑Fi if using a URL. |
 | **Submit failed** | Confirm you are on the instructor’s server URL, not a local file. Retry; ask admin to check the server. |
 | **Shared asset URL broken** | Ask admin to re-open the asset library (signed links may expire after several days). Re-export with **Include media in the package** for long-term archives. |
+| **Can’t find an asset** | Add tag chips or type part of the filename in the filter bar; try **Show All Tags**. |
+| **Hosted project link dead after redeploy** | Admin must **Host** again — hosted URLs on ephemeral disk do not survive redeploy. |
 | **Lost work** | Use **Save Template** often. Avoid **Clear Data** unless you mean to reset. |
 
 ---
@@ -293,3 +382,4 @@ If media was exported as **online URLs**, stay connected to the internet. If med
 - In-editor instructions: **ℹ️** next to “Hotspot Editor”
 - Setup and deployment: [README](README.md)
 - Hosting for your class: [RENDER_DEPLOY.md](RENDER_DEPLOY.md)
+- Planned teacher guides and help docs: [DOCS_PLAN.md](DOCS_PLAN.md)

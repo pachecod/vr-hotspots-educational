@@ -1,21 +1,26 @@
 # VR Hotspots Educational Edition
 
-A comprehensive VR Hotspot Editor with built-in student submission system for educational environments. New to the tool? Start with the **[User Guide](USER_GUIDE.md)** for step-by-step instructions — and browse **[live examples of finished tours](USER_GUIDE.md#live-examples)** built by students (including Agriquest Seeds of Story VR stories you can open in your browser).
+A comprehensive VR Hotspot Editor with built-in student submission system for educational environments. New to the tool? Start with the **[User Guide](USER_GUIDE.md)** for step-by-step instructions — and browse **[live examples of finished tours](USER_GUIDE.md#live-examples)** built by students. Teachers: see **[Documentation Plan](DOCS_PLAN.md)** for upcoming classroom guides.
 
 ## 🎓 Educational Features
 
 ### For Students:
 
 - **Full VR Editor**: Create immersive 360° experiences with hotspots
-- **Easy Submission**: One-click project submission to admin
+- **Student accounts**: Class-based sign-in with teacher-managed passwords
+- **Personal asset library**: Upload and tag files in **My Assets**; browse teacher **Shared Assets**
+- **Easy Submission**: One-click project submission with version history and teacher notes
 - **Professional Export**: Generate standalone VR experiences
 
-### For Admins:
+### For Admins / Teachers:
 
-- **Automatic Collection**: All student projects automatically organized
-- **Real-time Dashboard**: View submissions as they come in
-- **Easy Access**: Download and review projects instantly
-- **Common Assets Library**: Upload shared images, audio, and 3D files to Backblaze B2 with stable URLs for students
+- **Submissions inbox**: Filter by class, student, and notes; version history per project
+- **Review in Editor**: Load a student project, edit, and **Save and Send** feedback
+- **Host projects**: Publish live preview URLs for sharing
+- **Online Assets library**: Upload shared media to Backblaze B2 with tags and stable URLs
+- **Student Peek**: Browse a student’s uploads and submission history from Users or Assets
+- **Users & Classes**: Roster management, password CSV export, reset password
+- **Optional Stripe billing**: Class plan upgrades with usage quotas (when enabled)
 
 ## 🚀 Quick Start
 
@@ -25,8 +30,14 @@ A comprehensive VR Hotspot Editor with built-in student submission system for ed
 # Install dependencies (includes A-Frame for offline support)
 npm install
 
-# Start the server
+# Start the server (production-style)
 npm start
+
+# Local development with hot reload (Vite on :5174, API on :3000)
+npm run dev
+
+# Parallel feature branch dev (API :3001, Vite :5174)
+npm run dev:feature
 ```
 
 ### 2. Offline Support ✨
@@ -39,15 +50,19 @@ npm start
 ### 3. Access Points
 
 - **Students**: http://localhost:3000 or open `index.html` directly
-- **Admin Dashboard**: http://localhost:3000/admin-dashboard.html
-- **Common Assets (Admin)**: http://localhost:3000/admin-common-assets.html
+- **Admin Submissions**: http://localhost:3000/admin-submissions.html
+- **Admin Assets (Online Assets)**: http://localhost:3000/admin-common-assets.html
+- **Admin Users & Classes**: http://localhost:3000/admin-users.html
+- **Admin Billing** (optional): http://localhost:3000/admin-billing.html
+
+> `/admin-dashboard.html` redirects to Submissions.
 
 ### 4. Workflow
 
-1. Students create VR projects using the editor
-2. Students click "📤 Submit to Admin" when ready
-3. Admin reviews submissions on the dashboard
-4. Admin downloads projects for grading/hosting
+1. Admin creates classes and students in **Users & Classes**
+2. Students sign in and create VR projects in the editor
+3. Students click **📤 Submit to Admin** when ready (optional note for teacher)
+4. Admin reviews in **Submissions** — download, host, or **Review in Editor** → **Save and Send to Student**
 
 ## Common Assets (B2 + Render)
 
@@ -80,39 +95,45 @@ Run `npm run setup-b2-cors` manually if you need to refresh CORS rules.
 ### Admin workflow
 
 1. Open `/admin-common-assets.html` and sign in with `ADMIN_PASSWORD`
-2. Upload files by category (images, audio, 3D, other)
-3. Preview assets and click **Copy URL** to get a direct Backblaze link like:
-   `https://f005.backblazeb2.com/file/hotspot-vr/common-assets/images/photo_1234567890.jpg`
-
-These URLs work from exported VR projects, VR headsets, and local testing — not tied to localhost.
+2. Click **Upload Online Assets**, choose category, optionally add tags, and upload
+3. Use the tag filter bar to find assets; **Preview**, **Copy URL**, or **Edit Tags**
+4. Use **Peek Into Student Assets** to review individual student libraries
 
 ### Student workflow
 
-1. In the VR editor, click **Browse Shared Assets** in the sidebar
-2. Search/browse by category, then **Copy** or **Use URL** in hotspot fields
+1. In the VR editor, click **Browse Online Assets** (sidebar, hotspot fields, or Scene Manager → Edit Media)
+2. Switch **My Assets** / **Shared Assets**; filter by tag chips or filename
+3. **Preview**, **Copy**, or **Select** to use media in your project
 
 Assets live under `common-assets/{category}/` in the public B2 bucket. The `/common-assets/...` app route redirects to the direct B2 URL for backward compatibility.
+
+Direct B2 URLs look like:
+`https://f005.backblazeb2.com/file/hotspot-vr/common-assets/images/photo_1234567890.jpg`
+
+These URLs work from exported VR projects, VR headsets, and local testing — not tied to localhost.
 
 ## 📁 Project Structure
 
 ```
 vr_hotspots/
-├── index.html                    # Main VR editor interface
-├── script.js                     # Complete editor functionality
-├── style-editor.html            # Visual customization tool
-├── simple-server.js             # Educational backend server
-├── admin-dashboard.html         # Admin submission viewer
-├── admin-common-assets.html     # Admin common assets library
-├── admin-auth.js                # Admin session authentication
-├── lib/common-assets.js         # Asset category validation helpers
-├── routes/common-assets-routes.js # Common assets API + proxy
-├── package.json                 # Node.js dependencies
-├── student-projects/            # Submitted projects folder (auto-created)
-├── hosted-projects/             # Hosted projects folder (auto-created)
-├── RENDER_DEPLOY.md             # Production setup and deployment guide
-├── USER_GUIDE.md                # End-user guide (students & admins)
-├── render.yaml                  # Render blueprint configuration
-└── audio/, images/              # Asset folders
+├── index.html                      # Main VR editor
+├── script.js                       # Editor + CommonAssetsPicker + submissions UI
+├── asset-tags-ui.js / .css         # Tag chips, filter bar, Edit Tags modal
+├── asset-preview-modal.js / .css   # Shared asset preview modal
+├── simple-server.js                # Express backend
+├── admin-submissions.html/js       # Submissions inbox (primary admin)
+├── admin-common-assets.html/js     # Online Assets (admin upload + peek)
+├── admin-users.html/js             # Users & classes
+├── admin-user-peek.js              # Student peek (assets + versions)
+├── admin-billing.html/js           # Stripe billing (optional)
+├── admin-nav.js / .css             # Shared admin navigation
+├── lib/asset-tags.js               # Tag normalization + DB queries
+├── routes/                         # API route modules
+├── RENDER_DEPLOY.md                # Production deployment
+├── USER_GUIDE.md                   # End-user guide (students & admins)
+├── DOCS_PLAN.md                    # Plan for teacher guides & help docs
+├── render.yaml                     # Render blueprint
+└── student-projects/               # Local submission storage (dev)
 ```
 
 ## 🎯 Core Features
@@ -124,12 +145,14 @@ vr_hotspots/
 - **Style Customization**: Visual theme editor
 - **Export System**: Standalone project generation
 
-### Educational Backend:
+### Educational Backend (2.0):
 
-- **Project Collection**: Automatic ZIP file organization
-- **Submission Tracking**: Metadata logging with timestamps
-- **Admin Interface**: Clean dashboard for review
-- **File Management**: Organized storage with student info
+- **PostgreSQL**: Classes, students, submissions metadata, asset tags, billing
+- **Student auth**: Session-based sign-in with admin-managed rosters
+- **Submission versioning**: Student notes, admin returns, draft cloud saves
+- **B2 storage**: Student projects (private), common assets (public or signed URLs)
+- **Admin interface**: Submissions, Assets, Users, optional Billing
+- **Asset tagging**: Search/filter by tags across student, shared, and peek libraries
 
 ## 🛠 Technical Details
 
@@ -151,29 +174,27 @@ vr_hotspots/
 
 ## 📖 Documentation
 
-- **[User Guide](USER_GUIDE.md)**: How to use the editor, export, and submit projects
+- **[User Guide](USER_GUIDE.md)**: Editor, Online Assets, submit/review workflows
+- **[Documentation Plan](DOCS_PLAN.md)**: Teacher guides and help docs to write
 - **[Quick Start](#-quick-start)**: Local installation and usage
-- **[Deploy to Render](RENDER_DEPLOY.md)**: Production hosting, B2 configuration, and admin URLs
+- **[Deploy to Render](RENDER_DEPLOY.md)**: Production hosting, B2, PostgreSQL, Stripe
 - **[License](LICENSE.md)**: MIT license text
 
 ## 🎮 Usage Examples
 
 ### Student Workflow:
 
-1. Open http://localhost:3000
-2. Create hotspots by selecting type and clicking on 360° image
-3. Add scenes, audio, and customize styles
-4. Click "📤 Submit to Admin"
-5. Fill in name, student ID, and project name
-6. Submit automatically uploads complete project
+1. Open http://localhost:3000 and sign in (class → name → password)
+2. Create hotspots by selecting type and clicking on the 360° scene
+3. Add scenes, audio, and customize styles; use **Browse Online Assets** for shared media
+4. Click **📤 Submit to Admin** with project name and optional note for your teacher
 
 ### Admin Workflow:
 
-1. Open admin dashboard
-2. View real-time list of submissions
-3. Download individual projects as ZIP files
-4. Extract and open `index.html` to experience student work
-5. Grade or host projects as needed
+1. Open **Submissions** (`/admin-submissions.html`)
+2. Filter by class, student, or notes
+3. **Download**, **Host**, **Review in Editor**, or manage version history
+4. Upload shared media and manage rosters on **Assets** and **Users** pages
 
 ## 🔧 Customization
 
@@ -205,23 +226,24 @@ vr_hotspots/
 3. Verify all files are present and Node.js is installed
 4. Test with small projects first before full deployment
 
-## 🔮 Future Enhancements
+## 🔮 Roadmap
 
-### Phase 2 Features (2.0):
+### Shipped in 2.0
 
-- **Student accounts**: Class-based sign-in with admin-managed passwords
-- **Personal asset library**: Per-student uploads in B2 (`My Assets` tab)
-- **PostgreSQL on Render**: Durable roster, submissions metadata, and billing
-- **Optional Stripe billing**: Class plan upgrades with usage quotas
-- **Auto-hosting**: Deploy student projects to live URLs (in progress)
-- **Grading Interface**: Built-in rubrics and scoring (planned)
-- **Analytics**: Usage tracking and engagement metrics (planned)
+- Student accounts and personal **My Assets** library
+- PostgreSQL on Render (classes, submissions, tags, billing metadata)
+- Submission versioning with student notes and admin review returns
+- Online Assets library with tagging and chip-based filter search
+- Admin **Peek** (student assets + version history)
+- Optional Stripe class billing
+- Unified asset preview modal
 
-### Database Integration:
+### Planned
 
-- PostgreSQL on Render for users, classes, submissions, and billing
-- Per-student asset storage in B2
-- Optional Stripe subscriptions for class usage upgrades
+- **Auto-hosting**: Streamlined deploy of student projects to live URLs
+- **Grading interface**: Built-in rubrics and scoring
+- **Analytics**: Usage tracking and engagement metrics
+- **Teacher quick-start guide**: See [DOCS_PLAN.md](DOCS_PLAN.md)
 
 ## 🙏 Acknowledgements
 

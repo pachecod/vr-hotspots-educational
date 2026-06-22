@@ -61,18 +61,23 @@ Optional:
 Your app will be at `https://YOUR-SERVICE.onrender.com`:
 
 - **Editor:** `/index.html` or `/`
-- **Admin dashboard:** `/admin-dashboard.html`
-- **Common assets:** `/admin-common-assets.html`
+- **Admin submissions:** `/admin-submissions.html` (primary admin inbox)
+- **Admin assets (Online Assets):** `/admin-common-assets.html`
 - **Users & classes:** `/admin-users.html`
 - **Billing (if Stripe enabled):** `/admin-billing.html`
+
+> `/admin-dashboard.html` redirects to Submissions.
 
 On first deploy, check **Logs** for PostgreSQL migration, B2 authorization, and CORS messages.
 
 ### Student & class setup
 
-1. Sign in to **Users & Classes** as admin
-2. Create classes and add students (passwords are shown once — export the password report CSV)
+1. Sign in to **Users & Classes** (`/admin-users.html`) as admin
+2. Create classes and add students (passwords are shown once — use **Download All Passwords (CSV)**)
 3. Students sign in at the editor: choose class → name → password
+4. Upload shared media on **Assets** (`/admin-common-assets.html`); optional tags help students find files
+
+For classroom workflows (grading, peek, asset tagging), see [USER_GUIDE.md](USER_GUIDE.md). Planned teacher-specific guides are listed in [DOCS_PLAN.md](DOCS_PLAN.md).
 
 ### Stripe billing (optional)
 
@@ -85,5 +90,5 @@ On first deploy, check **Logs** for PostgreSQL migration, B2 authorization, and 
 
 - **Free tier** services spin down after inactivity; the first request may take ~30s.
 - **PostgreSQL** stores classes, students, submissions metadata, and billing — survives redeploys.
-- **Ephemeral disk:** Local `hosted-projects/` resets on redeploy; re-host projects after redeploy if needed. Student ZIPs in B2 persist.
+- **Ephemeral disk:** Local `hosted-projects/` resets on redeploy; **re-host** student projects from Submissions after redeploy if you use **Host**. Student ZIPs in B2 and PostgreSQL data persist.
 - **HTTPS:** Render provides TLS automatically — use `https://` URLs when sharing links.

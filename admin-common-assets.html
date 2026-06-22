@@ -36,6 +36,57 @@
         text-align: center;
         background: #f8f9fa;
         margin-bottom: 20px;
+        display: none;
+      }
+      .upload-zone.is-open {
+        display: block;
+      }
+      .assets-action-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      @media (max-width: 700px) {
+        .assets-action-row {
+          grid-template-columns: 1fr;
+        }
+      }
+      .assets-action-col {
+        padding: 16px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: center;
+        gap: 10px;
+      }
+      .assets-action-col h2 {
+        font-size: 1rem;
+        margin: 0;
+        font-weight: 600;
+      }
+      .assets-action-btn {
+        padding: 10px 18px;
+        border: none;
+        border-radius: 4px;
+        background: #007bff;
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .assets-action-btn:hover {
+        background: #0069d9;
+      }
+      #student-peek-select {
+        width: 100%;
+        max-width: 100%;
+        padding: 8px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        box-sizing: border-box;
       }
       .upload-zone.dragover {
         border-color: #007bff;
@@ -249,32 +300,25 @@
         <h1>Assets</h1>
         <p style="color: #666">
           Upload shared flat images, 360° photos/videos, audio, and 3D models. Students can copy
-          stable URLs into hotspot fields or use 360° assets for scenes.
+          stable URLs into hotspot fields or use 360° assets for scenes. The assets below are
+          available to all students. To see assets students have uploaded, select the student's user
+          name in the pulldown.
         </p>
 
-        <div
-          id="student-peek-bar"
-          style="
-            margin: 0 0 20px;
-            padding: 14px 16px;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 10px;
-          "
-        >
-          <label for="student-peek-select" style="font-weight: 600; margin: 0">
-            Peek into student assets:
-          </label>
-          <select id="student-peek-select" style="min-width: 260px; padding: 8px; border-radius: 4px; border: 1px solid #ccc">
-            <option value="">— Select a student —</option>
-          </select>
+        <div class="assets-action-row">
+          <div class="assets-action-col">
+            <button type="button" id="upload-common-toggle" class="assets-action-btn" aria-expanded="false">
+              Upload Common Assets
+            </button>
+          </div>
+          <div class="assets-action-col">
+            <h2>Peek into Student Assets</h2>
+            <select id="student-peek-select">
+              <option value="">— Select a student —</option>
+            </select>
+          </div>
         </div>
 
-        <h2 style="font-size: 1.1rem; margin: 0 0 8px">Common assets</h2>
         <div class="upload-zone" id="upload-zone">
           <p><strong>Drag & drop files here</strong> or click to browse</p>
           <p style="font-size: 12px; color: #666">

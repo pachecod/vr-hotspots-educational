@@ -185,6 +185,18 @@ function setupPreviewModal() {
   });
 }
 
+function setupUploadToggle() {
+  const btn = document.getElementById('upload-common-toggle');
+  const zone = document.getElementById('upload-zone');
+  if (!btn || !zone) return;
+
+  btn.addEventListener('click', () => {
+    const open = !zone.classList.contains('is-open');
+    zone.classList.toggle('is-open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+}
+
 function setupStudentPeekDropdown() {
   const select = document.getElementById('student-peek-select');
   if (!select) return;
@@ -229,6 +241,7 @@ function initMainApp() {
   document.getElementById('login-root').innerHTML = '';
   document.getElementById('main-content').style.display = 'block';
   renderAdminNav('assets');
+  setupUploadToggle();
   setupStudentPeekDropdown();
   setupUploadZone();
   setupTabs();

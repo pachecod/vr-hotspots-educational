@@ -1,7 +1,12 @@
-# Render Blueprint — https://render.com/docs/blueprint-spec
+# Render Blueprint for 2.0 — deploy as a separate stack from 1.0 production
+# https://render.com/docs/blueprint-spec
+databases:
+  - name: vr-hotspots-2-0-db
+    plan: free
+
 services:
   - type: web
-    name: vr-hotspots-educational
+    name: vr-hotspots-educational-2-0
     runtime: node
     plan: free
     region: oregon
@@ -11,16 +16,33 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vr-hotspots-2-0-db
+          property: connectionString
+      - key: STUDENT_AUTH_REQUIRED
+        value: "true"
       - key: B2_KEY_ID
         sync: false
       - key: B2_APP_KEY
         sync: false
       - key: B2_BUCKET_NAME
         sync: false
-      # Optional — app resolves bucket by name if omitted or invalid
-      # - key: B2_BUCKET_ID
-      #   sync: false
       - key: ADMIN_PASSWORD
         sync: false
       - key: ADMIN_SESSION_SECRET
+        sync: false
+      - key: STUDENT_SESSION_SECRET
+        sync: false
+      - key: STRIPE_ENABLED
+        value: "false"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_PRICE_CLASS
+        sync: false
+      - key: STRIPE_PRICE_PRO
         sync: false

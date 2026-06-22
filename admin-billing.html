@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Admin — Billing</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+      .nav { margin-bottom: 20px; }
+      .nav a { margin-right: 16px; color: #007bff; text-decoration: none; }
+      .nav a.active { font-weight: bold; text-decoration: underline; }
+      .panel { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+      .meter { background: #e9ecef; border-radius: 8px; height: 16px; overflow: hidden; margin: 8px 0 16px; }
+      .meter-fill { background: #28a745; height: 100%; transition: width 0.3s; }
+      button { padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; margin-right: 8px; }
+      .btn-primary { background: #007bff; color: #fff; }
+      .btn-success { background: #28a745; color: #fff; }
+      .btn-secondary { background: #6c757d; color: #fff; }
+      .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; background: #e9ecef; font-size: 13px; }
+      select { padding: 8px; margin-bottom: 16px; }
+    </style>
+    <script src="admin-auth-ui.js"></script>
+  </head>
+  <body>
+    <div class="nav">
+      <a href="admin-dashboard.html">Submissions</a>
+      <a href="admin-common-assets.html">Common Assets</a>
+      <a href="admin-users.html">Users & Classes</a>
+      <a href="admin-billing.html" class="active">Billing</a>
+      <button class="btn-secondary" onclick="adminLogout().then(() => location.reload())">Logout</button>
+    </div>
+
+    <div id="admin-gate"></div>
+    <div id="admin-content" style="display:none;">
+      <div class="panel">
+        <h2>Class Billing</h2>
+        <p id="stripe-off-msg" style="display:none;color:#666;">Stripe billing is not enabled. Set STRIPE_ENABLED=true and configure Stripe keys.</p>
+        <div id="billing-ui" style="display:none;">
+          <label>Select class:</label>
+          <select id="billing-class-select"></select>
+          <div id="billing-summary"></div>
+          <div style="margin-top:16px;">
+            <button class="btn-success" onclick="upgradeClass('class')">Upgrade to Class ($9/mo)</button>
+            <button class="btn-success" onclick="upgradeClass('pro')">Upgrade to Pro ($29/mo)</button>
+            <button class="btn-primary" onclick="openPortal()">Manage Billing</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="admin-billing.js"></script>
+  </body>
+</html>

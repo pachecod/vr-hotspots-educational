@@ -14,9 +14,26 @@ const b2Service = require('./services/b2-service');
 const os = require('os');
 const { requireAdmin } = require('./admin-auth');
 const { registerCommonAssetRoutes } = require('./routes/common-assets-routes');
+const { registerStripeWebhook } = require('./routes/stripe-webhook');
+const { registerStudentRoutes } = require('./routes/student-routes');
+const { registerRosterRoutes } = require('./routes/roster-routes');
+const { registerStudentAssetRoutes } = require('./routes/student-assets-routes');
+const { registerBillingRoutes } = require('./routes/billing-routes');
+const { runMigrations, importSubmissionsFromJson } = require('./db/migrate');
+const { isDbEnabled } = require('./services/db-service');
+const {
+  requireStudentStrict,
+  isStudentAuthRequired,
+  getStudentSession,
+} = require('./student-auth');
+const submissionsDb = require('./services/submissions-db');
+const { assertCanSubmit } = require('./services/usage-quota');
+const { parseCookies } = require('./lib/session');
 
 const app = express();
 const upload = multer({ dest: 'temp-uploads/' });
+
+registerStripeWebhook(app);
 
 const HOSTED_PROJECTS_FILE = path.join(__dirname, 'hosted-projects.json');
 
@@ -203,6 +220,10 @@ function protectAdminRoutes(req, res, next) {
 
 app.use(protectAdminRoutes);
 registerCommonAssetRoutes(app, upload);
+registerStudentRoutes(app);
+registerRosterRoutes(app, { requireAdmin });
+registerStudentAssetRoutes(app, upload);
+registerBillingRoutes(app);
 
 if (process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_BUCKET_NAME) {
   b2Service
@@ -1165,8 +1186,24 @@ app.post('/submit-project', upload.single('project'), async (req, res) => {
   }
 });
 
-// Endpoint to fetch B2 direct upload credentials
-app.get('/api/b2-upload-url', async (req, res) => {
+// Endpoint to fetch B2 direct upload credentials (student auth required when enabled)
+app.get('/api/b2-upload-url', async (req, res, next) => {
+  if (isStudentAuthRequired()) {
+    return requireStudentStrict(req, res, async () => {
+      try {
+        const data = await b2Service.getUploadUrl();
+        res.json({
+          success: true,
+          ...data,
+          studentId: req.studentSession.studentId,
+          classId: req.studentSession.classId,
+          classSlug: req.studentSession.classSlug,
+        });
+      } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to get secure upload URL' });
+      }
+    });
+  }
   try {
     const data = await b2Service.getUploadUrl();
     res.json({ success: true, ...data });
@@ -1181,33 +1218,85 @@ app.post('/api/submit-project-meta', express.json(), async (req, res) => {
     console.log('Project meta upload aborted');
   });
 
-  try {
-    const { studentName, projectName, fileName, remotePath } = req.body;
-    
-    // Log submission locally
-    const submission = {
-      studentName: studentName || 'student',
-      projectName: projectName || 'VR_Project',
-      fileName,
-      remotePath,
-      submittedAt: new Date().toISOString(),
-    };
+  const finish = async () => {
+    try {
+      let studentId = null;
+      let studentName = (req.body && req.body.studentName) || 'student';
+      let classId = null;
+      let classSlug = 'default';
 
-    const logs = loadSubmissionsLog();
-    logs.push(submission);
-    writeSubmissionsLog(logs);
+      if (isStudentAuthRequired()) {
+        const sess = getStudentSession(req);
+        if (!sess || !sess.studentId) {
+          return res.status(401).json({ success: false, message: 'Student authentication required' });
+        }
+        studentId = sess.studentId;
+        studentName = sess.displayName || studentName;
+        classId = sess.classId;
+        classSlug = sess.classSlug || 'default';
+        await assertCanSubmit({ classId });
+      } else if (isDbEnabled()) {
+        const sess = getStudentSession(req);
+        if (sess && sess.studentId) {
+          studentId = sess.studentId;
+          studentName = sess.displayName || studentName;
+          classId = sess.classId;
+          classSlug = sess.classSlug || 'default';
+        }
+      }
 
-    return res.json({
-      success: true,
-      message: 'Project submitted successfully to cloud storage!',
-      fileName,
-      studentName: submission.studentName,
-      projectName: submission.projectName,
-    });
-  } catch (err) {
-    console.error('Submit-project meta error:', err);
-    return res.status(500).json({ success: false, message: err.message || 'Server error' });
+      const { projectName, fileName, remotePath } = req.body || {};
+      const safeProject = projectName || 'VR_Project';
+
+      if (isDbEnabled()) {
+        await submissionsDb.createSubmission({
+          studentId,
+          studentName,
+          projectName: safeProject,
+          fileName,
+          remotePath,
+        });
+      }
+
+      const submission = {
+        studentId,
+        studentName,
+        projectName: safeProject,
+        fileName,
+        remotePath,
+        submittedAt: new Date().toISOString(),
+      };
+
+      const logs = loadSubmissionsLog();
+      logs.push({
+        studentName,
+        projectName: safeProject,
+        fileName,
+        remotePath,
+        submittedAt: submission.submittedAt,
+      });
+      writeSubmissionsLog(logs);
+
+      return res.json({
+        success: true,
+        message: 'Project submitted successfully to cloud storage!',
+        fileName,
+        studentName,
+        projectName: safeProject,
+      });
+    } catch (err) {
+      if (err.statusCode === 402) {
+        return res.status(402).json({ success: false, ...err.payload });
+      }
+      console.error('Submit-project meta error:', err);
+      return res.status(500).json({ success: false, message: err.message || 'Server error' });
+    }
+  };
+
+  if (isStudentAuthRequired()) {
+    return requireStudentStrict(req, res, finish);
   }
+  return finish();
 });
 
 // Server-side video fetch endpoint (bypasses CORS)
@@ -1398,9 +1487,52 @@ app.post('/admin/save-project-config', async (req, res) => {
   }
 });
 
-// Admin can view all submissions (API endpoint) - now synced with B2
+// Admin can view all submissions (API endpoint) - synced with B2 and PostgreSQL
 app.get('/admin/submissions', async (req, res) => {
   try {
+    const classId = req.query.classId || null;
+    const studentId = req.query.studentId || null;
+
+    if (isDbEnabled()) {
+      const dbSubs = await submissionsDb.listSubmissions({ classId, studentId });
+      if (dbSubs.length > 0) {
+        const enriched = dbSubs.map((submission) => {
+          try {
+            const hostedPath = submission.hostedPath;
+            if (hostedPath && typeof hostedPath === 'string') {
+              const hostedDir = path.join('hosted-projects', hostedPath);
+              let updatedISO = undefined;
+              const cfg = path.join(hostedDir, 'config.json');
+              if (fs.existsSync(cfg)) {
+                updatedISO = fs.statSync(cfg).mtime.toISOString();
+              } else {
+                const idx = path.join(hostedDir, 'index.html');
+                if (fs.existsSync(idx)) updatedISO = fs.statSync(idx).mtime.toISOString();
+              }
+              if (updatedISO) submission.updatedAt = updatedISO;
+            }
+          } catch (_) {}
+          return {
+            studentName: submission.studentDisplayName || submission.studentName,
+            studentId: submission.studentId,
+            className: submission.className,
+            classId: submission.classId,
+            projectName: submission.projectName,
+            fileName: submission.fileName,
+            remotePath: submission.remotePath,
+            hostedPath: submission.hostedPath,
+            hostedUrl: submission.hostedUrl,
+            hostedAt: submission.hostedAt,
+            isHosted: submission.isHosted,
+            submittedAt: submission.submittedAt,
+            updatedAt: submission.updatedAt,
+            syncedFromB2: submission.syncedFromB2,
+          };
+        });
+        return res.json(enriched);
+      }
+    }
+
     // Get files from B2
     const b2Files = await b2Service.listFiles('student-projects/');
 
@@ -1703,6 +1835,13 @@ app.post('/admin/host/:filename', async (req, res) => {
       submission.hostedAt = new Date().toISOString();
       submission.isHosted = true;
       writeSubmissionsLog(logs);
+      if (isDbEnabled()) {
+        await submissionsDb.updateSubmissionHosting(filename, {
+          hostedPath: urlPath,
+          hostedUrl: `/hosted/${urlPath}/index.html`,
+          isHosted: true,
+        });
+      }
     }
 
     res.json({
@@ -1749,6 +1888,13 @@ app.post('/admin/unhost/:filename', async (req, res) => {
     submission.isHosted = false;
 
     writeSubmissionsLog(logs);
+    if (isDbEnabled()) {
+      await submissionsDb.updateSubmissionHosting(filename, {
+        hostedPath: null,
+        hostedUrl: null,
+        isHosted: false,
+      });
+    }
 
     res.json({ success: true, message: 'Project unhosted successfully' });
   } catch (error) {
@@ -1944,7 +2090,17 @@ const useHTTPS = fs.existsSync('localhost+1-key.pem') && fs.existsSync('localhos
 // Use environment port or fallback to 3000
 const PORT = process.env.PORT || 3000;
 
-if (useHTTPS) {
+async function startServer() {
+  try {
+    await runMigrations();
+    if (isDbEnabled()) {
+      await importSubmissionsFromJson(loadSubmissionsLog, writeSubmissionsLog);
+    }
+  } catch (err) {
+    console.error('⚠️ Database startup error:', err.message);
+  }
+
+  if (useHTTPS) {
   // Local HTTPS setup with mkcert certificates
   const options = {
     key: fs.readFileSync('localhost+1-key.pem'),
@@ -1969,7 +2125,10 @@ if (useHTTPS) {
   server.timeout = 0; 
   server.requestTimeout = 0; 
   server.headersTimeout = 0; 
+  }
 }
+
+startServer();
 
 // Add cleanup function for orphaned temp files
 function cleanupTempFiles() {

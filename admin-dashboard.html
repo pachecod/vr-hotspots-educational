@@ -170,6 +170,8 @@
     <div class="admin-nav">
       <a href="admin-dashboard.html" class="active">Submissions</a>
       <a href="admin-common-assets.html">Common Assets</a>
+      <a href="admin-users.html">Users & Classes</a>
+      <a href="admin-billing.html" id="billing-nav" style="display:none;">Billing</a>
       <button type="button" id="logout-btn">Logout</button>
     </div>
     <h1>Admin Dashboard - Student VR Project Submissions</h1>
@@ -226,6 +228,11 @@
     </div>
 
     <h2 style="border-bottom: 2px solid #dee2e6; padding-bottom: 10px">📚 Student Submissions</h2>
+    <div style="margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+      <label>Class: <select id="filter-class"><option value="">All classes</option></select></label>
+      <label>Student: <select id="filter-student"><option value="">All students</option></select></label>
+      <button type="button" onclick="loadSubmissions()" style="padding:6px 12px;">Apply filters</button>
+    </div>
     <div id="submissions">Loading submissions...</div>
     </div>
 
@@ -304,7 +311,14 @@
 
       async function loadSubmissions() {
         try {
-          const response = await adminFetch('/admin/submissions');
+          const classId = document.getElementById('filter-class')?.value || '';
+          const studentId = document.getElementById('filter-student')?.value || '';
+          let url = '/admin/submissions';
+          const params = new URLSearchParams();
+          if (classId) params.set('classId', classId);
+          if (studentId) params.set('studentId', studentId);
+          if (params.toString()) url += '?' + params.toString();
+          const response = await adminFetch(url);
           const submissions = await response.json();
 
           const container = document.getElementById('submissions');
@@ -325,7 +339,7 @@
                     <div class="submission" data-filename="${submission.fileName}">
                         <h3>${submission.projectName}</h3>
                         <div class="meta">
-                            <strong>Student:</strong> ${submission.studentName}<br>
+                            <strong>Student:</strong> ${submission.studentName}${submission.className ? ` (${submission.className})` : ''}<br>
                             <strong>Submitted:</strong> ${new Date(
                               submission.submittedAt
                             ).toLocaleString()}<br>
@@ -508,6 +522,33 @@
         }
       }
 
+      async function loadFilterOptions() {
+        try {
+          const [classesRes, studentsRes, billingRes] = await Promise.all([
+            adminFetch('/admin/classes'),
+            adminFetch('/admin/students'),
+            fetch('/api/billing/enabled'),
+          ]);
+          const classes = await classesRes.json();
+          const students = await studentsRes.json();
+          const billing = await billingRes.json();
+          if (billing.enabled) {
+            const nav = document.getElementById('billing-nav');
+            if (nav) nav.style.display = '';
+          }
+          const classSel = document.getElementById('filter-class');
+          const studentSel = document.getElementById('filter-student');
+          if (classSel) {
+            classSel.innerHTML = '<option value="">All classes</option>' +
+              classes.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
+          }
+          if (studentSel) {
+            studentSel.innerHTML = '<option value="">All students</option>' +
+              students.map((s) => `<option value="${s.id}">${s.display_name} (${s.class_name || ''})</option>`).join('');
+          }
+        } catch (_) {}
+      }
+
       function initDashboard() {
         document.getElementById('login-root').innerHTML = '';
         document.getElementById('main-content').style.display = 'block';
@@ -515,6 +556,7 @@
           await adminLogout();
           location.reload();
         });
+        loadFilterOptions();
         loadSubmissions();
         startAutoRefresh();
       }

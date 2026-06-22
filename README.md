@@ -207,19 +207,21 @@ vr_hotspots/
 
 ## 🔮 Future Enhancements
 
-### Phase 2 Features:
+### Phase 2 Features (2.0):
 
-- **Auto-hosting**: Deploy student projects to live URLs
-- **Authentication**: Student accounts and login system
-- **Grading Interface**: Built-in rubrics and scoring
-- **Analytics**: Usage tracking and engagement metrics
+- **Student accounts**: Class-based sign-in with admin-managed passwords
+- **Personal asset library**: Per-student uploads in B2 (`My Assets` tab)
+- **PostgreSQL on Render**: Durable roster, submissions metadata, and billing
+- **Optional Stripe billing**: Class plan upgrades with usage quotas
+- **Auto-hosting**: Deploy student projects to live URLs (in progress)
+- **Grading Interface**: Built-in rubrics and scoring (planned)
+- **Analytics**: Usage tracking and engagement metrics (planned)
 
 ### Database Integration:
 
-- Replace JSON logging with PostgreSQL/MongoDB
-- Add user management and project versioning
-- Enable collaboration and sharing features
-- Store detailed submission analytics
+- PostgreSQL on Render for users, classes, submissions, and billing
+- Per-student asset storage in B2
+- Optional Stripe subscriptions for class usage upgrades
 
 ## 🙏 Acknowledgements
 

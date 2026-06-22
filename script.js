@@ -128,6 +128,8 @@ const EDITOR_LAYER = Object.freeze({
 });
 
 // Hotspot Editor Manager
+const APP_VERSION = '2.0.0';
+
 class HotspotEditor {
   constructor() {
     this.hotspots = [];
@@ -292,6 +294,7 @@ class HotspotEditor {
   }
 
   init() {
+    this.updateInstructionsVersion();
     this.bindEvents();
     this.setupEditorPanelToggle();
     this.setupEditModeBarToggle();
@@ -13022,6 +13025,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  updateInstructionsVersion() {
+    const versionEl = document.getElementById('instructions-version');
+    if (versionEl) {
+      versionEl.textContent = `Version ${APP_VERSION}`;
+    }
+  }
+
   updateModeIndicator() {
     const editModeIndicator = document.getElementById('edit-indicator');
     const instructionsContent = document.getElementById('instructions-content');
@@ -15487,7 +15497,22 @@ class StudentSubmission {
     }
 
     const projectName = projectDisplayName.trim();
-    const studentName = projectName;
+    let studentName = projectName;
+
+    try {
+      const sessRes = await fetch('/api/student/session', { credentials: 'include' });
+      const sess = await sessRes.json();
+      if (sess.authRequired && !sess.authenticated) {
+        alert('Please sign in before submitting your project.');
+        return;
+      }
+      if (sess.authenticated && sess.student) {
+        studentName = sess.student.displayName;
+        window.currentStudent = sess.student;
+      }
+    } catch (_) {
+      /* continue with project name */
+    }
 
     const exportMode = await window.hotspotEditor.showExportModeDialog({
       title: 'Submit to Admin',
@@ -15565,7 +15590,7 @@ class StudentSubmission {
             
             let authData;
             try {
-              const authRes = await fetch('/api/b2-upload-url');
+              const authRes = await fetch('/api/b2-upload-url', { credentials: 'include' });
               if (!authRes.ok) throw new Error('Could not get upload credentials');
               authData = await authRes.json();
               if (!authData.success) throw new Error(authData.message || 'B2 Auth failed');
@@ -15575,7 +15600,9 @@ class StudentSubmission {
 
             const safeStudent = safeProjectName.replace(/[^a-zA-Z0-9]/g, '_') || 'project';
             const fileName = `${safeStudent}_${Date.now()}.zip`;
-            const remotePath = `student-projects/${fileName}`;
+            const remotePath = authData.studentId && authData.classSlug
+              ? `student-projects/${authData.classSlug}/${authData.studentId}/${fileName}`
+              : `student-projects/${fileName}`;
 
             let xhr = new XMLHttpRequest();
             xhr.open('POST', authData.uploadUrl);
@@ -15634,6 +15661,7 @@ class StudentSubmission {
                 if (uploadLabel) uploadLabel.textContent = 'Logging submission...';
                 const metaRes = await fetch('/api/submit-project-meta', {
                   method: 'POST',
+                  credentials: 'include',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     studentName,
@@ -15642,6 +15670,11 @@ class StudentSubmission {
                     remotePath
                   })
                 });
+                
+                if (metaRes.status === 402) {
+                  const quota = await metaRes.json();
+                  throw new Error(quota.message || 'Usage limit reached. Ask your teacher about upgrading.');
+                }
                 
                 if (!metaRes.ok) throw new Error('Failed to log submission');
                 const metaData = await metaRes.json();
@@ -15748,6 +15781,7 @@ async function clearLocalStorage() {
 const CommonAssetsPicker = {
   assets: {},
   activeCategory: 'images',
+  assetSource: 'my',
   searchQuery: '',
   targetFieldId: null,
   filterCategory: null,
@@ -15806,6 +15840,7 @@ const CommonAssetsPicker = {
       if (!asset) return;
       if (btn.dataset.caAction === 'copy') this.copyUrl(asset.url);
       if (btn.dataset.caAction === 'use') this.useUrl(asset);
+      if (btn.dataset.caAction === 'delete') this.deleteStudentAsset(asset);
     });
 
     document.querySelectorAll('.btn-ca-browse').forEach((btn) => {
@@ -15816,6 +15851,52 @@ const CommonAssetsPicker = {
         });
       });
     });
+
+    document.querySelectorAll('.ca-source-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        this.assetSource = tab.dataset.source;
+        document.querySelectorAll('.ca-source-tab').forEach((t) => {
+          t.classList.toggle('active', t === tab);
+          t.style.background = t === tab ? '#4caf50' : '#444';
+        });
+        const uploadEl = document.getElementById('my-assets-upload');
+        if (uploadEl) uploadEl.style.display = this.assetSource === 'my' ? 'block' : 'none';
+        this.load();
+      });
+    });
+
+    const uploadBtn = document.getElementById('student-asset-upload-btn');
+    if (uploadBtn) {
+      uploadBtn.addEventListener('click', () => this.uploadStudentAsset());
+    }
+  },
+
+  async uploadStudentAsset() {
+    const fileInput = document.getElementById('student-asset-file');
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+      alert('Choose a file first');
+      return;
+    }
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    fd.append('category', this.activeCategory);
+    try {
+      const res = await fetch('/api/student-assets/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      });
+      const data = await res.json();
+      if (res.status === 402) {
+        alert('Storage limit reached. Ask your teacher about upgrading.');
+        return;
+      }
+      if (!data.success) throw new Error(data.message || 'Upload failed');
+      fileInput.value = '';
+      await this.load();
+    } catch (err) {
+      alert(err.message || 'Upload failed');
+    }
   },
 
   getVisibleCategories() {
@@ -15851,6 +15932,8 @@ const CommonAssetsPicker = {
       else if (type === 'model') this.activeCategory = '3d';
     }
     this.renderTabs();
+    const uploadEl = document.getElementById('my-assets-upload');
+    if (uploadEl) uploadEl.style.display = this.assetSource === 'my' ? 'block' : 'none';
     document.getElementById('common-assets-modal').style.display = 'flex';
     await this.load();
   },
@@ -15868,10 +15951,26 @@ const CommonAssetsPicker = {
     const list = document.getElementById('common-assets-list');
     list.innerHTML = '<p style="color:#ccc;text-align:center;">Loading...</p>';
     try {
-      const res = await fetch('/api/common-assets');
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message || 'Failed to load');
-      this.assets = data.assets || {};
+      if (this.assetSource === 'my') {
+        const res = await fetch('/api/student-assets', { credentials: 'include' });
+        if (res.status === 401) {
+          this.assetSource = 'shared';
+          document.querySelectorAll('.ca-source-tab').forEach((t) => {
+            const active = t.dataset.source === 'shared';
+            t.classList.toggle('active', active);
+            t.style.background = active ? '#4caf50' : '#444';
+          });
+          return this.load();
+        }
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'Failed to load');
+        this.assets = data.assets || {};
+      } else {
+        const res = await fetch('/api/common-assets');
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'Failed to load');
+        this.assets = data.assets || {};
+      }
       this.render();
     } catch (err) {
       list.innerHTML =
@@ -15905,10 +16004,26 @@ const CommonAssetsPicker = {
           <div class="ca-item-actions">
             <button data-ca-action="copy" data-name="${asset.name}" style="background:#6f42c1;color:#fff;">Copy</button>
             <button data-ca-action="use" data-name="${asset.name}" style="background:#4caf50;color:#fff;">Select</button>
+            ${this.assetSource === 'my' ? `<button data-ca-action="delete" data-name="${asset.name}" style="background:#f44336;color:#fff;">Delete</button>` : ''}
           </div>
         </div>`;
       })
       .join('');
+  },
+
+  async deleteStudentAsset(asset) {
+    if (!confirm(`Delete ${asset.name}?`)) return;
+    const cat = asset.category || this.activeCategory;
+    const res = await fetch(
+      `/api/student-assets/${encodeURIComponent(cat)}/${encodeURIComponent(asset.name)}`,
+      { method: 'DELETE', credentials: 'include' }
+    );
+    const data = await res.json();
+    if (!data.success) {
+      alert(data.message || 'Delete failed');
+      return;
+    }
+    await this.load();
   },
 
   async copyUrl(url) {
@@ -15990,8 +16105,17 @@ window.CommonAssetsPicker = CommonAssetsPicker;
 
 document.addEventListener('DOMContentLoaded', () => {
   CommonAssetsPicker.init();
-  // Wait for A-Frame to be ready
-  setTimeout(() => {
-    window.hotspotEditor = new HotspotEditor();
-  }, 1000);
+  const startEditor = () => {
+    setTimeout(() => {
+      window.hotspotEditor = new HotspotEditor();
+    }, 1000);
+  };
+  if (typeof requireStudentSession === 'function') {
+    requireStudentSession('student-login-gate', (student) => {
+      window.currentStudent = student;
+      startEditor();
+    });
+  } else {
+    startEditor();
+  }
 });

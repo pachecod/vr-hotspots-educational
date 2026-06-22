@@ -7,6 +7,7 @@
     <script src="./node_modules/aframe/dist/aframe-v1.7.1.min.js"></script>
     <script src="./node_modules/aframe-extras/dist/aframe-extras.min.js"></script>
     <script src="common-assets-preview.js"></script>
+    <script src="student-auth-ui.js"></script>
     <script src="script.js"></script>
     <style>
       a-text {
@@ -441,6 +442,14 @@
         color: #ddd;
       }
 
+      .instructions-version {
+        font-size: 11px;
+        color: #4caf50;
+        font-weight: bold;
+        margin-bottom: 10px;
+        letter-spacing: 0.03em;
+      }
+
       /* Editor Global Sound Control */
       .editor-sound-control {
         position: fixed;
@@ -676,6 +685,7 @@
   </head>
 
   <body>
+    <div id="student-login-gate"></div>
     <!-- Scene Loading Overlay -->
     <div
       id="scene-loading-overlay"
@@ -840,6 +850,7 @@
 
       <div class="panel-section collapsed" id="instructions-section">
         <div class="instructions-section-content">
+          <div id="instructions-version" class="instructions-version" aria-label="App version"></div>
           <div id="instructions-content">
             <strong>🛠️ Edit Mode:</strong><br />1. 📝 Select hotspot type (Text/Audio/Portal)<br />2. 🎯
             Click "Add Hotspot" to start placing<br />3. 📍 Click on 360° image to position<br />4. ✏️
@@ -1799,10 +1810,18 @@
     <div id="common-assets-modal">
       <div class="modal-panel">
         <div class="modal-header">
-          <h3 style="margin: 0; color: #4caf50">Common Assets</h3>
+          <h3 style="margin: 0; color: #4caf50">Asset Library</h3>
           <button id="close-common-assets" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer">&times;</button>
         </div>
         <div class="modal-body">
+          <div id="asset-source-tabs" style="display:flex;gap:8px;margin-bottom:12px;">
+            <button type="button" class="ca-source-tab active" data-source="my" style="flex:1;padding:8px;background:#4caf50;color:#fff;border:none;border-radius:4px;cursor:pointer;">My Assets</button>
+            <button type="button" class="ca-source-tab" data-source="shared" style="flex:1;padding:8px;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer;">Class Shared</button>
+          </div>
+          <div id="my-assets-upload" style="display:none;margin-bottom:12px;">
+            <input type="file" id="student-asset-file" style="margin-bottom:8px;color:#ccc;" />
+            <button type="button" id="student-asset-upload-btn" style="padding:8px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;">Upload to My Assets</button>
+          </div>
           <input type="search" id="common-assets-search" class="ca-search" placeholder="Search by filename..." />
           <div class="ca-tabs" id="common-assets-tabs">
             <button class="ca-tab active" data-category="images">Flat Images</button>

@@ -35,8 +35,28 @@ Your instructor or admin will give you a URL. Common examples:
 | **Student (editor)** | `/` or `/index.html` |
 | **Admin (submissions)** | `/admin-dashboard.html` |
 | **Admin (shared assets)** | `/admin-common-assets.html` |
+| **Admin (users & classes)** | `/admin-users.html` |
+| **Admin (billing)** | `/admin-billing.html` (when Stripe is enabled) |
 
-If you are running locally, that is usually `http://localhost:3000`.
+If you are running locally, that is usually `http://localhost:3000` (or `http://localhost:5174` when using the Vite dev server).
+
+---
+
+## Signing in as a student
+
+When your instructor has enabled student accounts:
+
+1. Open the editor — a sign-in screen appears
+2. **Choose your class** from the list
+3. **Choose your name** from that class
+4. Enter the **password** your teacher gave you
+
+After sign-in you can:
+
+- Use **My Assets** in the asset browser to upload and reuse your own images, audio, and 3D files
+- **Submit** projects tied to your account (not just a free-text project name)
+
+Ask your teacher to reset your password from **Users & Classes** if you forget it.
 
 ---
 
@@ -138,6 +158,7 @@ This is separate from **Audio** hotspots, which play only when clicked.
 If your class uses the shared library:
 
 1. Click **Browse Shared Assets** in the editor sidebar
+2. Switch between **My Assets** (your uploads) and **Class Shared** (admin-provided library)
 2. Browse by category (images, audio, 360 videos, 3D, etc.)
 3. **Copy** a URL or click **Use URL** to drop it into the field you are editing
 

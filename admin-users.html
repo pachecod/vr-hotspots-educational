@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Admin — Users & Classes</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+      .nav { margin-bottom: 20px; }
+      .nav a { margin-right: 16px; color: #007bff; text-decoration: none; }
+      .nav a.active { font-weight: bold; text-decoration: underline; }
+      .panel { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+      h2 { margin-top: 0; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+      button, .btn { padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; margin-right: 4px; }
+      .btn-primary { background: #007bff; color: #fff; }
+      .btn-danger { background: #dc3545; color: #fff; }
+      .btn-secondary { background: #6c757d; color: #fff; }
+      input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-right: 8px; }
+      .error { color: #dc3545; margin: 10px 0; }
+      .success { color: #28a745; margin: 10px 0; }
+      #admin-gate { min-height: 200px; }
+    </style>
+    <script src="admin-auth-ui.js"></script>
+  </head>
+  <body>
+    <div class="nav">
+      <a href="admin-dashboard.html">Submissions</a>
+      <a href="admin-common-assets.html">Common Assets</a>
+      <a href="admin-users.html" class="active">Users & Classes</a>
+      <a href="admin-billing.html" id="billing-nav" style="display:none;">Billing</a>
+      <button class="btn-secondary" onclick="adminLogout().then(() => location.reload())">Logout</button>
+    </div>
+
+    <div id="admin-gate"></div>
+    <div id="admin-content" style="display:none;">
+      <div class="panel">
+        <h2>Classes</h2>
+        <div style="margin-bottom:12px;">
+          <input type="text" id="new-class-name" placeholder="Class name" />
+          <input type="text" id="new-class-desc" placeholder="Description (optional)" />
+          <button class="btn-primary" id="add-class-btn">Add Class</button>
+        </div>
+        <div id="classes-list"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Students</h2>
+        <div style="margin-bottom:12px;">
+          <select id="filter-class"></select>
+          <input type="text" id="new-student-name" placeholder="Student display name" />
+          <button class="btn-primary" id="add-student-btn">Add Student</button>
+          <button class="btn-secondary" id="export-passwords-btn">Export Password Report (CSV)</button>
+        </div>
+        <div id="students-msg"></div>
+        <div id="students-list"></div>
+      </div>
+    </div>
+
+    <script src="admin-users.js"></script>
+  </body>
+</html>

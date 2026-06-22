@@ -16263,7 +16263,8 @@ const CommonAssetsPicker = {
   activeCategory: 'images',
   assetSource: 'my',
   canManageStudentAssets: false,
-  searchQuery: '',
+  searchFilter: { tags: [], text: '' },
+  tagFilterBar: null,
   targetFieldId: null,
   filterCategory: null,
   filterCategories: null,
@@ -16301,6 +16302,48 @@ const CommonAssetsPicker = {
     return this.assetSource === 'my' && this.canManageStudentAssets;
   },
 
+  initTagFilterBar() {
+    if (!window.AssetTagsUI?.AssetTagFilterBar) return;
+    const mount = document.getElementById('common-assets-tag-filter');
+    if (!mount) return;
+    if (this.tagFilterBar) {
+      this.tagFilterBar.destroy();
+      this.tagFilterBar = null;
+    }
+    const picker = this;
+    const storageKey =
+      this.assetSource === 'my' ? 'asset-tag-filter:student' : 'asset-tag-filter:shared';
+    this.tagFilterBar = AssetTagsUI.AssetTagFilterBar.create(mount, {
+      theme: 'dark',
+      placeholder: 'Filename...',
+      storageKey,
+      fetchRecentTags: async () => {
+        if (picker.assetSource === 'my' && picker.canManageStudentAssets) {
+          const res = await fetch('/api/student-assets/tags?sort=recent', {
+            credentials: 'include',
+          });
+          const data = await res.json();
+          if (data.success && data.tags?.length) return data.tags;
+        }
+        return picker.collectAllTagsFromAssets().slice(0, 8);
+      },
+      fetchAllTags: async () => {
+        if (picker.assetSource === 'my' && picker.canManageStudentAssets) {
+          const res = await fetch('/api/student-assets/tags?sort=alpha', {
+            credentials: 'include',
+          });
+          const data = await res.json();
+          if (data.success) return data.tags || [];
+        }
+        return picker.collectAllTagsFromAssets();
+      },
+      onChange: (state) => {
+        picker.searchFilter = state;
+        picker.render();
+      },
+    });
+  },
+
   init() {
     const openBtn = document.getElementById('open-common-assets');
     const modal = document.getElementById('common-assets-modal');
@@ -16323,16 +16366,6 @@ const CommonAssetsPicker = {
       this.renderTabs();
       this.render();
     });
-
-    document.getElementById('common-assets-search').addEventListener('input', (e) => {
-      this.searchQuery = e.target.value;
-      this.render();
-    });
-
-    const showTagsBtn = document.getElementById('ca-show-tags-btn');
-    if (showTagsBtn) {
-      showTagsBtn.addEventListener('click', () => this.openTagBrowser());
-    }
 
     document.getElementById('common-assets-list').addEventListener('click', (e) => {
       if (e.target.closest('audio, video')) return;
@@ -16375,6 +16408,7 @@ const CommonAssetsPicker = {
           t.style.background = t === tab ? '#4caf50' : '#444';
         });
         this.updateSourceUi();
+        this.initTagFilterBar();
         this.load();
       });
     });
@@ -16384,6 +16418,7 @@ const CommonAssetsPicker = {
       uploadBtn.addEventListener('click', () => this.uploadStudentAsset());
     }
 
+    this.initTagFilterBar();
     this.updateSourceUi();
   },
 
@@ -16461,6 +16496,8 @@ const CommonAssetsPicker = {
     }
     this.renderTabs();
     this.updateSourceUi();
+    this.initTagFilterBar();
+    if (this.tagFilterBar) this.tagFilterBar.clear();
     showAssetLibraryModal();
     await this.load();
   },
@@ -16506,6 +16543,8 @@ const CommonAssetsPicker = {
         this.assets = data.assets || {};
       }
       this.updateSourceUi();
+      this.initTagFilterBar();
+      if (this.tagFilterBar) this.tagFilterBar.refreshTagLists();
       this.render();
     } catch (err) {
       list.innerHTML =
@@ -16519,11 +16558,14 @@ const CommonAssetsPicker = {
 
   getFilteredItems() {
     let items = this.assets[this.activeCategory] || [];
-    if (this.searchQuery && this.searchQuery.trim()) {
+    const filter = this.searchFilter || { tags: [], text: '' };
+    const hasFilter =
+      (filter.tags && filter.tags.length) || (filter.text && filter.text.trim());
+    if (hasFilter) {
       items = items.filter((a) =>
         window.AssetTagsUI
-          ? AssetTagsUI.assetMatchesSearch(a, this.searchQuery)
-          : a.name.toLowerCase().includes(this.searchQuery.toLowerCase())
+          ? AssetTagsUI.assetMatchesSearch(a, filter)
+          : a.name.toLowerCase().includes((filter.text || '').toLowerCase())
       );
     }
     return items;
@@ -16541,35 +16583,6 @@ const CommonAssetsPicker = {
     return Object.entries(tagCounts)
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
-  },
-
-  openTagBrowser() {
-    if (!window.AssetTagsUI) return;
-    const openModal = (tags) => {
-      AssetTagsUI.openTagBrowserModal({
-        tags,
-        onSelectTag: (tag) => {
-          const input = document.getElementById('common-assets-search');
-          if (!input) return;
-          const current = input.value.trim();
-          input.value = current ? `${current}, ${tag}` : tag;
-          this.searchQuery = input.value;
-          this.render();
-        },
-      });
-    };
-
-    if (this.canEditTags()) {
-      fetch('/api/student-assets/tags', { credentials: 'include' })
-        .then((res) => res.json())
-        .then((data) => {
-          openModal(data.success && data.tags && data.tags.length ? data.tags : this.collectAllTagsFromAssets());
-        })
-        .catch(() => openModal(this.collectAllTagsFromAssets()));
-      return;
-    }
-
-    openModal(this.collectAllTagsFromAssets());
   },
 
   async editAssetTags(asset) {

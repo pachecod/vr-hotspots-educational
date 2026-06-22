@@ -13,6 +13,7 @@ const {
   attachTagsToStudentAssets,
   deleteTagsForKey,
   listTagsForScope,
+  parseTagSortParam,
 } = require('../lib/asset-tags');
 
 async function getStudentPeekMeta(studentId) {
@@ -99,7 +100,9 @@ function registerAdminStudentPeekRoutes(app, { requireAdmin }) {
       if (!meta) {
         return res.status(404).json({ success: false, message: 'Student not found' });
       }
-      const tags = await listTagsForScope(buildStudentScopePrefix(studentId));
+      const tags = await listTagsForScope(buildStudentScopePrefix(studentId), {
+        sort: parseTagSortParam(req.query.sort),
+      });
       return res.json({ success: true, tags });
     } catch (err) {
       console.error('Admin list student asset tags error:', err);

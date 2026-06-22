@@ -3,7 +3,8 @@ const StudentPeek = {
   returnTo: 'users',
   assetsByCategory: {},
   activeCategory: 'images',
-  searchQuery: '',
+  searchFilter: { tags: [], text: '' },
+  tagFilterBar: null,
 
   CATEGORIES: [
     { id: 'images', label: 'Flat Images' },
@@ -62,7 +63,7 @@ const StudentPeek = {
 
   async open(studentId, options = {}) {
     this.studentId = studentId;
-    this.searchQuery = '';
+    this.searchFilter = { tags: [], text: '' };
     this.returnTo = options.returnTo || this.getReturnFromUrl();
     const listView = document.getElementById('users-list-view');
     const peekView = document.getElementById('student-peek-view');
@@ -128,8 +129,8 @@ const StudentPeek = {
       }
 
       this.assetsByCategory = assetsData.assets || {};
-      const searchInput = document.getElementById('peek-asset-search');
-      if (searchInput) searchInput.value = '';
+      this.initTagFilterBar();
+      if (this.tagFilterBar) this.tagFilterBar.clear();
       this.renderCategoryTabs();
       this.renderAssets();
       this.renderVersions(versionsData.versions || []);
@@ -240,11 +241,14 @@ const StudentPeek = {
 
   getFilteredAssets() {
     let items = this.assetsByCategory[this.activeCategory] || [];
-    if (this.searchQuery && this.searchQuery.trim()) {
+    const filter = this.searchFilter || { tags: [], text: '' };
+    const hasFilter =
+      (filter.tags && filter.tags.length) || (filter.text && filter.text.trim());
+    if (hasFilter) {
       items = items.filter((a) =>
         window.AssetTagsUI
-          ? AssetTagsUI.assetMatchesSearch(a, this.searchQuery)
-          : a.name.toLowerCase().includes(this.searchQuery.toLowerCase())
+          ? AssetTagsUI.assetMatchesSearch(a, filter)
+          : a.name.toLowerCase().includes((filter.text || '').toLowerCase())
       );
     }
     return items;
@@ -264,33 +268,38 @@ const StudentPeek = {
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
   },
 
-  openTagBrowser() {
-    if (!window.AssetTagsUI || !this.studentId) return;
-    const openModal = (tags) => {
-      AssetTagsUI.openTagBrowserModal({
-        tags,
-        theme: 'light',
-        onSelectTag: (tag) => {
-          const input = document.getElementById('peek-asset-search');
-          if (!input) return;
-          const current = input.value.trim();
-          input.value = current ? `${current}, ${tag}` : tag;
-          this.searchQuery = input.value;
-          this.renderAssets();
-        },
-      });
-    };
-
-    adminFetch(`/admin/students/${this.studentId}/assets/tags`)
-      .then((res) => res.json())
-      .then((data) => {
-        openModal(
-          data.success && data.tags && data.tags.length
-            ? data.tags
-            : this.collectAllTagsFromAssets()
+  initTagFilterBar() {
+    if (!window.AssetTagsUI?.AssetTagFilterBar || !this.studentId) return;
+    const mount = document.getElementById('peek-asset-tag-filter');
+    if (!mount) return;
+    if (this.tagFilterBar) {
+      this.tagFilterBar.destroy();
+      this.tagFilterBar = null;
+    }
+    const studentId = this.studentId;
+    this.tagFilterBar = AssetTagsUI.AssetTagFilterBar.create(mount, {
+      theme: 'light',
+      placeholder: 'Filename...',
+      storageKey: `asset-tag-filter:peek:${studentId}`,
+      fetchRecentTags: async () => {
+        const res = await adminFetch(
+          `/admin/students/${studentId}/assets/tags?sort=recent`
         );
-      })
-      .catch(() => openModal(this.collectAllTagsFromAssets()));
+        const data = await res.json();
+        return data.success ? data.tags || [] : [];
+      },
+      fetchAllTags: async () => {
+        const res = await adminFetch(
+          `/admin/students/${studentId}/assets/tags?sort=alpha`
+        );
+        const data = await res.json();
+        return data.success ? data.tags || [] : [];
+      },
+      onChange: (state) => {
+        this.searchFilter = state;
+        this.renderAssets();
+      },
+    });
   },
 
   renderAssets() {
@@ -394,6 +403,7 @@ const StudentPeek = {
       const assetsRes = await adminFetch(`/admin/students/${this.studentId}/assets`);
       const assetsData = await assetsRes.json();
       this.assetsByCategory = assetsData.assets || {};
+      if (this.tagFilterBar) this.tagFilterBar.refreshTagLists();
       this.renderAssets();
     } catch (err) {
       alert('Delete failed: ' + err.message);
@@ -402,16 +412,6 @@ const StudentPeek = {
 
   bindUi() {
     document.getElementById('peek-back-btn')?.addEventListener('click', () => this.close());
-
-    const searchInput = document.getElementById('peek-asset-search');
-    if (searchInput) {
-      searchInput.addEventListener('input', (e) => {
-        this.searchQuery = e.target.value;
-        this.renderAssets();
-      });
-    }
-
-    document.getElementById('peek-show-tags-btn')?.addEventListener('click', () => this.openTagBrowser());
   },
 };
 

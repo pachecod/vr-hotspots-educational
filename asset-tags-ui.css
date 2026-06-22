@@ -183,19 +183,159 @@
   margin-left: 4px;
 }
 
-.asset-tags-search-row {
+.btn-tags-edit {
+  background: #9c27b0 !important;
+  color: #fff !important;
+}
+
+/* --- Tag filter bar (search surfaces) --- */
+
+.asset-tag-filter {
+  margin-bottom: 12px;
+}
+
+.asset-tag-filter-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  align-items: stretch;
-  margin-bottom: 8px;
+  align-items: center;
 }
 
-.asset-tags-search-row .ca-search,
-.asset-tags-search-row input[type='search'] {
-  flex: 1;
+.asset-tag-filter-combo {
+  flex: 0 0 25%;
+  min-width: 160px;
+  max-width: 280px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #333;
+  min-height: 36px;
+  box-sizing: border-box;
+  cursor: text;
 }
 
-.asset-tags-show-btn {
+.asset-tag-filter.light .asset-tag-filter-combo {
+  background: #fff;
+  border-color: #ccc;
+}
+
+.asset-tag-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.asset-tag-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  background: rgba(156, 39, 176, 0.25);
+  color: #ce93d8;
+  border: 1px solid rgba(156, 39, 176, 0.5);
+}
+
+.asset-tag-filter.light .asset-tag-filter-chip {
+  background: rgba(111, 66, 193, 0.15);
+  color: #5a32a3;
+  border-color: rgba(111, 66, 193, 0.4);
+}
+
+.asset-tag-filter-chip-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.asset-tag-filter-chip-remove:hover {
+  opacity: 1;
+}
+
+.asset-tag-filter-text {
+  flex: 1 1 60px;
+  min-width: 48px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  padding: 4px 0;
+  outline: none;
+}
+
+.asset-tag-filter.light .asset-tag-filter-text {
+  color: #333;
+}
+
+.asset-tag-filter-text::placeholder {
+  color: #888;
+}
+
+.asset-tag-filter-recent-wrap {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.asset-tag-filter-recent-label {
+  font-size: 12px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.asset-tag-filter.light .asset-tag-filter-recent-label {
+  color: #666;
+}
+
+.asset-tag-filter-recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.asset-tag-filter-suggest {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #555;
+  background: #3a3a3a;
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.asset-tag-filter-suggest:hover {
+  border-color: #9c27b0;
+  color: #fff;
+}
+
+.asset-tag-filter.light .asset-tag-filter-suggest {
+  background: #f0f0f0;
+  border-color: #ccc;
+  color: #444;
+}
+
+.asset-tag-filter.light .asset-tag-filter-suggest:hover {
+  border-color: #6f42c1;
+  color: #333;
+}
+
+.asset-tag-filter-show-all {
   padding: 8px 12px;
   background: #6f42c1;
   color: #fff;
@@ -204,13 +344,76 @@
   cursor: pointer;
   font-size: 13px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.asset-tags-show-btn:hover {
+.asset-tag-filter-show-all:hover,
+.asset-tag-filter-show-all.active {
   background: #5a32a3;
 }
 
-.btn-tags-edit {
-  background: #9c27b0 !important;
-  color: #fff !important;
+.asset-tag-filter-all-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+  margin-top: 0;
 }
+
+.asset-tag-filter-all-panel.is-open {
+  max-height: 240px;
+  margin-top: 8px;
+  overflow-y: auto;
+}
+
+.asset-tag-filter-all-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.asset-tag-filter.light .asset-tag-filter-all-list {
+  background: #f8f9fa;
+  border-color: #dee2e6;
+}
+
+.asset-tag-filter-all-item {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #555;
+  background: #333;
+  color: #ddd;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.asset-tag-filter-all-item:hover {
+  background: #444;
+  border-color: #9c27b0;
+}
+
+.asset-tag-filter.light .asset-tag-filter-all-item {
+  background: #fff;
+  border-color: #ccc;
+  color: #333;
+}
+
+.asset-tag-filter-count {
+  color: #888;
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.asset-tag-filter-empty {
+  margin: 0;
+  font-size: 13px;
+  color: #888;
+}
+
+.asset-tag-filter-mount {
+  margin-bottom: 8px;
+}
+

@@ -1,6 +1,7 @@
 let assetsByCategory = {};
 let activeCategory = 'images';
-let searchQuery = '';
+let searchFilter = { tags: [], text: '' };
+let tagFilterBar = null;
 
 function formatBytes(bytes) {
   if (!bytes && bytes !== 0) return '';
@@ -20,11 +21,14 @@ function showToast(message) {
 
 function getFilteredItems() {
   let items = assetsByCategory[activeCategory] || [];
-  if (searchQuery && searchQuery.trim()) {
+  const hasFilter =
+    (searchFilter.tags && searchFilter.tags.length) ||
+    (searchFilter.text && searchFilter.text.trim());
+  if (hasFilter) {
     items = items.filter((a) =>
       window.AssetTagsUI
-        ? AssetTagsUI.assetMatchesSearch(a, searchQuery)
-        : a.name.toLowerCase().includes(searchQuery.toLowerCase())
+        ? AssetTagsUI.assetMatchesSearch(a, searchFilter)
+        : a.name.toLowerCase().includes((searchFilter.text || '').toLowerCase())
     );
   }
   return items;
@@ -35,6 +39,7 @@ async function loadAssets() {
   const data = await res.json();
   if (!data.success) throw new Error(data.message || 'Failed to load assets');
   assetsByCategory = data.assets || {};
+  if (tagFilterBar) tagFilterBar.refreshTagLists();
   renderAssets();
 }
 
@@ -122,32 +127,10 @@ async function editAssetTags(asset) {
       const listAsset = (assetsByCategory[cat] || []).find((a) => a.name === asset.name);
       if (listAsset) listAsset.tags = asset.tags;
       renderAssets();
+      if (tagFilterBar) tagFilterBar.refreshTagLists();
       return true;
     },
   });
-}
-
-async function openTagBrowser() {
-  if (!window.AssetTagsUI) return;
-  try {
-    const res = await adminFetch('/admin/common-assets/tags');
-    const data = await res.json();
-    const tags = data.success ? data.tags || [] : [];
-    AssetTagsUI.openTagBrowserModal({
-      tags,
-      theme: 'light',
-      onSelectTag: (tag) => {
-        const input = document.getElementById('asset-search');
-        if (!input) return;
-        const current = input.value.trim();
-        input.value = current ? `${current}, ${tag}` : tag;
-        searchQuery = input.value;
-        renderAssets();
-      },
-    });
-  } catch (err) {
-    if (err.code !== 'AUTH_REQUIRED') alert(err.message || 'Failed to load tags');
-  }
 }
 
 async function deleteAsset(name) {
@@ -224,16 +207,33 @@ function setupTabs() {
   });
 }
 
-function setupSearch() {
-  const input = document.getElementById('asset-search');
-  if (input) {
-    input.addEventListener('input', (e) => {
-      searchQuery = e.target.value;
-      renderAssets();
-    });
+function initTagFilterBar() {
+  if (!window.AssetTagsUI?.AssetTagFilterBar) return;
+  const mount = document.getElementById('asset-tag-filter');
+  if (!mount) return;
+  if (tagFilterBar) {
+    tagFilterBar.destroy();
+    tagFilterBar = null;
   }
-  const showBtn = document.getElementById('show-tags-btn');
-  if (showBtn) showBtn.addEventListener('click', () => openTagBrowser());
+  tagFilterBar = AssetTagsUI.AssetTagFilterBar.create(mount, {
+    theme: 'light',
+    placeholder: 'Filename...',
+    storageKey: 'asset-tag-filter:common',
+    fetchRecentTags: async () => {
+      const res = await adminFetch('/admin/common-assets/tags?sort=recent');
+      const data = await res.json();
+      return data.success ? data.tags || [] : [];
+    },
+    fetchAllTags: async () => {
+      const res = await adminFetch('/admin/common-assets/tags?sort=alpha');
+      const data = await res.json();
+      return data.success ? data.tags || [] : [];
+    },
+    onChange: (state) => {
+      searchFilter = state;
+      renderAssets();
+    },
+  });
 }
 
 function setupAssetList() {
@@ -328,7 +328,7 @@ function initMainApp() {
   setupUploadToggle();
   setupStudentPeekDropdown();
   setupUploadZone();
-  setupSearch();
+  initTagFilterBar();
   setupTabs();
   setupAssetList();
   loadStudentPeekDropdown();

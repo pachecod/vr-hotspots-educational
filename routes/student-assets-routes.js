@@ -20,6 +20,7 @@ const {
   setTagsForKey,
   deleteTagsForKey,
   listTagsForScope,
+  parseTagSortParam,
 } = require('../lib/asset-tags');
 
 function buildStudentAssetPath(classSlug, studentId, category, filename) {
@@ -49,7 +50,8 @@ function registerStudentAssetRoutes(app, upload) {
         return res.json({ success: true, tags: [] });
       }
       const studentId = req.studentSession.studentId;
-      const tags = await listTagsForScope(buildStudentScopePrefix(studentId));
+      const sort = parseTagSortParam(req.query.sort);
+      const tags = await listTagsForScope(buildStudentScopePrefix(studentId), { sort });
       res.json({ success: true, tags });
     } catch (err) {
       console.error('List student asset tags error:', err);

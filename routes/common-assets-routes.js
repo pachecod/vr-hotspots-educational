@@ -23,6 +23,7 @@ const {
   setTagsForKey,
   deleteTagsForKey,
   listTagsForScope,
+  parseTagSortParam,
 } = require('../lib/asset-tags');
 
 const COMMON_ASSETS_LIST_CACHE_MS = 2 * 60 * 1000;
@@ -141,7 +142,8 @@ function registerCommonAssetRoutes(app, upload) {
 
   app.get('/admin/common-assets/tags', requireAdmin, async (req, res) => {
     try {
-      const tags = await listTagsForScope(COMMON_SCOPE_PREFIX);
+      const sort = parseTagSortParam(req.query.sort);
+      const tags = await listTagsForScope(COMMON_SCOPE_PREFIX, { sort });
       res.json({ success: true, tags });
     } catch (err) {
       console.error('List common asset tags error:', err);

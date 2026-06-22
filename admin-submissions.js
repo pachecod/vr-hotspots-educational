@@ -104,7 +104,9 @@ async function loadInbox() {
       .join('');
   } catch (error) {
     if (error.code === 'AUTH_REQUIRED') {
-      location.reload();
+      const main = document.getElementById('main-content');
+      if (main) main.style.display = 'none';
+      requireAdminSession('login-root', initInbox);
       return;
     }
     container.innerHTML = '<p style="color:#dc3545;">Error loading inbox.</p>';
@@ -200,7 +202,23 @@ async function toggleHistory(threadId, btn) {
 
 document.getElementById('apply-filters')?.addEventListener('click', loadInbox);
 
-requireAdminSession(async () => {
-  await loadClassesAndStudents();
-  await loadInbox();
-});
+function initInbox() {
+  const loginRoot = document.getElementById('login-root');
+  const main = document.getElementById('main-content');
+  if (loginRoot) loginRoot.innerHTML = '';
+  if (main) main.style.display = 'block';
+
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn && logoutBtn.dataset.bound !== '1') {
+    logoutBtn.dataset.bound = '1';
+    logoutBtn.addEventListener('click', async () => {
+      await adminLogout();
+      location.reload();
+    });
+  }
+
+  loadClassesAndStudents();
+  loadInbox();
+}
+
+requireAdminSession('login-root', initInbox);

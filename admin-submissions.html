@@ -136,8 +136,11 @@
         color: #383d41;
       }
     </style>
+    <script src="admin-auth-ui.js"></script>
   </head>
   <body>
+    <div id="login-root"></div>
+    <div id="main-content" style="display: none">
     <h1>📥 Submissions Inbox</h1>
     <div class="admin-nav">
       <a href="admin-dashboard.html">Legacy Dashboard</a>
@@ -145,6 +148,7 @@
       <a href="admin-common-assets.html">Common Assets</a>
       <a href="admin-users.html">Users & Classes</a>
       <a href="admin-billing.html" id="billing-nav" style="display: none">Billing</a>
+      <button type="button" id="logout-btn" style="padding: 8px 14px; cursor: pointer">Logout</button>
     </div>
 
     <div class="filters">
@@ -168,8 +172,8 @@
     </div>
 
     <div id="inbox-list">Loading submissions...</div>
+    </div>
 
-    <script src="admin-auth.js"></script>
     <script src="admin-submissions.js"></script>
   </body>
 </html>

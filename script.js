@@ -13668,9 +13668,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <button id="browse-image-common-new" style="
               background: #6f42c1; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
-            ">📚 Browse Shared Assets</button>
+            ">📚 Browse Online Assets</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-              Choose a 360° image from the shared library
+              Choose a 360° image from the online library
             </div>
           </div>
           <div style="margin: 15px 0;">
@@ -13699,9 +13699,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <button id="browse-video-common-new" style="
               background: #6f42c1; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
-            ">📚 Browse Shared Assets</button>
+            ">📚 Browse Online Assets</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-              Choose a 360° video from the shared library
+              Choose a 360° video from the online library
             </div>
           </div>
           <div style="margin: 15px 0;">
@@ -13746,7 +13746,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('browse-image-common-new').onclick = () => {
       document.body.removeChild(dialog);
       if (!window.CommonAssetsPicker) {
-        alert('Shared assets picker is not available.');
+        alert('Online assets picker is not available.');
         return;
       }
       window.CommonAssetsPicker.openFor({
@@ -13773,7 +13773,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('browse-video-common-new').onclick = () => {
       document.body.removeChild(dialog);
       if (!window.CommonAssetsPicker) {
-        alert('Shared assets picker is not available.');
+        alert('Online assets picker is not available.');
         return;
       }
       window.CommonAssetsPicker.openFor({
@@ -14308,9 +14308,9 @@ document.addEventListener('DOMContentLoaded', () => {
           <button id="scene-video-browse-common" style="
             background: #6f42c1; color: white; border: none; padding: 12px 20px;
             border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
-          ">📚 Browse Shared Assets</button>
+          ">📚 Browse Online Assets</button>
           <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-            Choose a 360° video from the shared library
+            Choose a 360° video from the online library
           </div>
         </div>
 
@@ -14337,7 +14337,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dialog.querySelector('#scene-video-browse-common').onclick = () => {
       close();
       if (!window.CommonAssetsPicker) {
-        alert('Shared assets picker is not available.');
+        alert('Online assets picker is not available.');
         return;
       }
       window.CommonAssetsPicker.openFor({
@@ -14397,7 +14397,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <option value="video" ${selectedMediaType === 'video' ? 'selected' : ''}>🎥 360° Video</option>
           </select>
           <p style="color: #999; font-size: 12px; margin: 8px 0 0;">
-            Choose <strong>360° Video</strong> first, then pick upload, shared assets, or URL below.
+            Choose <strong>360° Video</strong> first, then pick upload, online assets, or URL below.
           </p>
         </div>
 
@@ -14413,9 +14413,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <button id="browse-image-common" style="
               background: #6f42c1; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
-            ">📚 Browse Shared Assets</button>
+            ">📚 Browse Online Assets</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-              Choose a 360° photo from the shared library
+              Choose a 360° photo from the online library
             </div>
           </div>
           <div style="margin: 15px 0;">
@@ -14441,9 +14441,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <button id="browse-video-common" style="
               background: #6f42c1; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
-            ">📚 Browse Shared Assets</button>
+            ">📚 Browse Online Assets</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-              Choose a 360° video from the shared library
+              Choose a 360° video from the online library
             </div>
           </div>
           <div style="margin: 15px 0;">
@@ -14484,7 +14484,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dialog.querySelector('#browse-image-common').onclick = () => {
       close(false);
       if (!window.CommonAssetsPicker) {
-        alert('Shared assets picker is not available.');
+        alert('Online assets picker is not available.');
         return;
       }
       window.CommonAssetsPicker.openFor({
@@ -14504,7 +14504,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dialog.querySelector('#browse-video-common').onclick = () => {
       close(false);
       if (!window.CommonAssetsPicker) {
-        alert('Shared assets picker is not available.');
+        alert('Online assets picker is not available.');
         return;
       }
       window.CommonAssetsPicker.openFor({
@@ -16224,6 +16224,7 @@ const CommonAssetsPicker = {
   filterCategory: null,
   filterCategories: null,
   onSelect: null,
+  armPlacementAfterSelect: false,
 
   FIELD_FILE_MAP: {
     'hotspot-audio-url': 'hotspot-audio',
@@ -16364,8 +16365,15 @@ const CommonAssetsPicker = {
     });
   },
 
-  async openFor({ targetFieldId = null, category = null, categories = null, onSelect = null } = {}) {
+  async openFor({
+    targetFieldId = null,
+    category = null,
+    categories = null,
+    onSelect = null,
+    armPlacementAfterSelect = null,
+  } = {}) {
     this.targetFieldId = targetFieldId;
+    this.armPlacementAfterSelect = armPlacementAfterSelect ?? Boolean(targetFieldId);
     this.filterCategories = Array.isArray(categories) && categories.length ? categories : null;
     this.filterCategory = this.filterCategories ? null : category;
     this.onSelect = typeof onSelect === 'function' ? onSelect : null;
@@ -16390,6 +16398,8 @@ const CommonAssetsPicker = {
   close() {
     document.getElementById('common-assets-modal').style.display = 'none';
     this.targetFieldId = null;
+    this.onSelect = null;
+    this.armPlacementAfterSelect = false;
     this.filterCategory = null;
     this.filterCategories = null;
     this.onSelect = null;
@@ -16565,7 +16575,19 @@ const CommonAssetsPicker = {
     }
 
     if (this.applyToField(targetId, asset)) {
+      const placementFields = [
+        'hotspot-audio-url',
+        'hotspot-image-url',
+        'hotspot-model-url',
+        'global-sound-url',
+        'weblink-image-url',
+      ];
+      const shouldArm =
+        this.armPlacementAfterSelect || placementFields.includes(targetId);
       this.close();
+      if (shouldArm && window.hotspotEditor) {
+        window.hotspotEditor.armHotspotPlacement();
+      }
     } else {
       this.copyUrl(asset.url);
     }

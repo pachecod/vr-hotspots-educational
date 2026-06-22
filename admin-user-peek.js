@@ -56,7 +56,7 @@ const StudentPeek = {
     const btn = document.getElementById('peek-back-btn');
     if (!btn) return;
     btn.textContent =
-      this.returnTo === 'assets' ? '← Back to Common Assets' : '← Back to Users';
+      this.returnTo === 'assets' ? '← Back to Online Assets' : '← Back to Users';
   },
 
   async open(studentId, options = {}) {

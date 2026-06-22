@@ -5,6 +5,7 @@
     <title>Assets — VR Hotspots Admin</title>
     <link rel="stylesheet" href="admin-nav.css" />
     <link rel="stylesheet" href="asset-preview-modal.css" />
+    <link rel="stylesheet" href="asset-tags-ui.css" />
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -327,10 +328,16 @@
             (200MB), Audio (50MB), 3D (100MB), Other (25MB)
           </p>
           <input type="file" id="file-input" multiple style="display: none" />
+          <input type="text" id="upload-tags-input" placeholder="Tags (optional, comma-separated)" style="width:100%;max-width:400px;margin-top:8px;padding:8px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;" />
           <button type="button" id="browse-btn" style="margin-top: 8px; padding: 8px 16px">
             Browse Files
           </button>
           <div id="upload-status" style="margin-top: 10px; font-size: 13px"></div>
+        </div>
+
+        <div class="asset-tags-search-row" style="margin-bottom:16px;">
+          <input type="search" id="asset-search" placeholder="Search by tags or filename..." style="flex:1;padding:8px;border:1px solid #ccc;border-radius:4px;" />
+          <button type="button" id="show-tags-btn" class="asset-tags-show-btn">Show Tags</button>
         </div>
 
         <div class="tabs" id="category-tabs">
@@ -366,6 +373,7 @@
 
     <script src="common-assets-preview.js"></script>
     <script src="asset-preview-modal.js"></script>
+    <script src="asset-tags-ui.js"></script>
     <script src="admin-common-assets.js"></script>
   </body>
 </html>

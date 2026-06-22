@@ -8,6 +8,7 @@
     <script src="./node_modules/aframe-extras/dist/aframe-extras.min.js"></script>
     <script src="common-assets-preview.js"></script>
     <script src="asset-preview-modal.js"></script>
+    <script src="asset-tags-ui.js"></script>
     <script src="student-auth-ui.js"></script>
     <script src="script.js"></script>
     <style>
@@ -809,6 +810,7 @@
       }
     </style>
     <link rel="stylesheet" href="asset-preview-modal.css" />
+    <link rel="stylesheet" href="asset-tags-ui.css" />
   </head>
 
   <body>
@@ -1968,9 +1970,13 @@
           <p id="shared-assets-intro" style="display:none;margin:0 0 12px;color:#ccc;font-size:14px;">These are uploaded by your teacher(s).</p>
           <div id="my-assets-upload" style="display:none;margin-bottom:12px;">
             <input type="file" id="student-asset-file" style="margin-bottom:8px;color:#ccc;" />
+            <input type="text" id="student-asset-tags" class="ca-search" placeholder="Tags (optional, comma-separated)" style="margin-bottom:8px;" />
             <button type="button" id="student-asset-upload-btn" style="padding:8px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;">Upload to My Assets</button>
           </div>
-          <input type="search" id="common-assets-search" class="ca-search" placeholder="Search by filename..." />
+          <div class="asset-tags-search-row">
+            <input type="search" id="common-assets-search" class="ca-search" placeholder="Search by tags or filename..." />
+            <button type="button" id="ca-show-tags-btn" class="asset-tags-show-btn">Show Tags</button>
+          </div>
           <div class="ca-tabs" id="common-assets-tabs">
             <button class="ca-tab active" data-category="images">Flat Images</button>
             <button class="ca-tab" data-category="360-images">360 Photos</button>

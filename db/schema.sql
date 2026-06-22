@@ -95,6 +95,17 @@ CREATE TABLE IF NOT EXISTS student_assets (
 
 CREATE INDEX IF NOT EXISTS idx_student_assets_student_id ON student_assets(student_id);
 
+CREATE TABLE IF NOT EXISTS asset_tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  asset_key TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (asset_key, tag)
+);
+
+CREATE INDEX IF NOT EXISTS idx_asset_tags_asset_key ON asset_tags(asset_key);
+CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag);
+
 CREATE TABLE IF NOT EXISTS billing_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   scope_type TEXT NOT NULL CHECK (scope_type IN ('class', 'student', 'site')),

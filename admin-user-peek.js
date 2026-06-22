@@ -252,6 +252,7 @@ const StudentPeek = {
       <div class="asset-card" data-name="${this.escapeHtml(asset.name)}">
         ${CommonAssetsPreview.renderGridThumb(asset.category, asset)}
         <div class="asset-name">${this.escapeHtml(asset.name)}</div>
+        ${window.AssetTagsUI ? AssetTagsUI.renderTagChips(asset.tags) : ''}
         <div class="asset-meta">${this.formatBytes(asset.size)} · ${new Date(asset.uploadedAt).toLocaleString()}</div>
         <div class="asset-actions">
           <button type="button" class="btn-preview" data-action="preview" data-name="${this.escapeHtml(asset.name)}">Preview</button>

@@ -79,6 +79,20 @@ async function applyIncrementalMigrations(pool) {
         CREATE INDEX IF NOT EXISTS idx_project_versions_kind ON project_versions(kind, submitted_at DESC);
       `,
     },
+    {
+      name: 'asset_tags_v1',
+      sql: `
+        CREATE TABLE IF NOT EXISTS asset_tags (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          asset_key TEXT NOT NULL,
+          tag TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (asset_key, tag)
+        );
+        CREATE INDEX IF NOT EXISTS idx_asset_tags_asset_key ON asset_tags(asset_key);
+        CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag);
+      `,
+    },
   ];
 
   for (const migration of migrations) {

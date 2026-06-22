@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const b2Service = require('../services/b2-service');
-const { query } = require('../services/db-service');
+const { query, isDbEnabled } = require('../services/db-service');
 const { requireStudentStrict } = require('../student-auth');
 const {
   isValidCategory,
@@ -12,6 +12,15 @@ const {
   FILE_SIZE_LIMITS,
 } = require('../lib/common-assets');
 const { assertCanUploadAsset } = require('../services/usage-quota');
+const {
+  buildStudentAssetKey,
+  buildStudentScopePrefix,
+  parseTagsFromBody,
+  attachTagsToStudentAssets,
+  setTagsForKey,
+  deleteTagsForKey,
+  listTagsForScope,
+} = require('../lib/asset-tags');
 
 function buildStudentAssetPath(classSlug, studentId, category, filename) {
   return `student-assets/${classSlug}/${studentId}/${category}/${filename}`;
@@ -34,6 +43,20 @@ async function getStudentContext(studentId) {
 }
 
 function registerStudentAssetRoutes(app, upload) {
+  app.get('/api/student-assets/tags', requireStudentStrict, async (req, res) => {
+    try {
+      if (!isDbEnabled()) {
+        return res.json({ success: true, tags: [] });
+      }
+      const studentId = req.studentSession.studentId;
+      const tags = await listTagsForScope(buildStudentScopePrefix(studentId));
+      res.json({ success: true, tags });
+    } catch (err) {
+      console.error('List student asset tags error:', err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.get('/api/student-assets', requireStudentStrict, async (req, res) => {
     try {
       const studentId = req.studentSession.studentId;
@@ -53,6 +76,7 @@ function registerStudentAssetRoutes(app, upload) {
           url: `/student-assets/${studentId}/${row.category}/${encodeURIComponent(row.filename)}`,
         });
       }
+      await attachTagsToStudentAssets(grouped, studentId);
       res.json({ success: true, assets: grouped });
     } catch (err) {
       console.error('List student assets error:', err);
@@ -109,6 +133,15 @@ function registerStudentAssetRoutes(app, upload) {
           [studentId, category, storedFilename, b2Path, req.file.size]
         );
 
+        const tags = parseTagsFromBody(req.body);
+        let savedTags = [];
+        if (tags.length && isDbEnabled()) {
+          savedTags = await setTagsForKey(
+            buildStudentAssetKey(studentId, category, storedFilename),
+            tags
+          );
+        }
+
         res.json({
           success: true,
           asset: {
@@ -116,6 +149,7 @@ function registerStudentAssetRoutes(app, upload) {
             category,
             url: `/student-assets/${studentId}/${category}/${encodeURIComponent(storedFilename)}`,
             size: req.file.size,
+            tags: savedTags,
           },
         });
       } catch (err) {
@@ -130,6 +164,40 @@ function registerStudentAssetRoutes(app, upload) {
             fs.unlinkSync(tempPath);
           } catch (_) {}
         }
+      }
+    }
+  );
+
+  app.put(
+    '/api/student-assets/:category/:filename/tags',
+    requireStudentStrict,
+    async (req, res) => {
+      try {
+        const studentId = req.studentSession.studentId;
+        const category = req.params.category;
+        const filename = req.params.filename;
+        if (!isValidCategory(category)) {
+          return res.status(400).json({ success: false, message: 'Invalid category' });
+        }
+        const { rows } = await query(
+          `SELECT 1 FROM student_assets
+           WHERE student_id = $1 AND category = $2 AND filename = $3`,
+          [studentId, category, filename]
+        );
+        if (!rows.length) {
+          return res.status(404).json({ success: false, message: 'Asset not found' });
+        }
+        const tags = await setTagsForKey(
+          buildStudentAssetKey(studentId, category, filename),
+          req.body && req.body.tags
+        );
+        res.json({ success: true, tags });
+      } catch (err) {
+        if (err.statusCode === 503) {
+          return res.status(503).json({ success: false, message: err.message });
+        }
+        console.error('Update student asset tags error:', err);
+        res.status(500).json({ success: false, message: err.message });
       }
     }
   );
@@ -156,6 +224,7 @@ function registerStudentAssetRoutes(app, upload) {
           `DELETE FROM student_assets WHERE student_id = $1 AND category = $2 AND filename = $3`,
           [studentId, category, filename]
         );
+        await deleteTagsForKey(buildStudentAssetKey(studentId, category, filename));
         res.json({ success: true });
       } catch (err) {
         console.error('Delete student asset error:', err);

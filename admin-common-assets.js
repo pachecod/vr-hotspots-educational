@@ -1,5 +1,6 @@
 let assetsByCategory = {};
 let activeCategory = 'images';
+let searchQuery = '';
 
 function formatBytes(bytes) {
   if (!bytes && bytes !== 0) return '';
@@ -17,6 +18,18 @@ function showToast(message) {
   }, 1800);
 }
 
+function getFilteredItems() {
+  let items = assetsByCategory[activeCategory] || [];
+  if (searchQuery && searchQuery.trim()) {
+    items = items.filter((a) =>
+      window.AssetTagsUI
+        ? AssetTagsUI.assetMatchesSearch(a, searchQuery)
+        : a.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }
+  return items;
+}
+
 async function loadAssets() {
   const res = await adminFetch('/admin/common-assets');
   const data = await res.json();
@@ -27,30 +40,36 @@ async function loadAssets() {
 
 function renderAssets() {
   const list = document.getElementById('asset-list');
-  const items = assetsByCategory[activeCategory] || [];
+  const items = getFilteredItems();
 
   if (!items.length) {
-    list.innerHTML = '<div class="empty">No assets in this category yet.</div>';
+    const hasAny = (assetsByCategory[activeCategory] || []).length > 0;
+    list.innerHTML = hasAny
+      ? '<div class="empty">No assets match your search.</div>'
+      : '<div class="empty">No assets in this category yet.</div>';
     list.className = '';
     return;
   }
 
   list.className = 'asset-grid';
   list.innerHTML = items
-    .map(
-      (asset) => `
+    .map((asset) => {
+      const tagChips = window.AssetTagsUI ? AssetTagsUI.renderTagChips(asset.tags) : '';
+      return `
     <div class="asset-card" data-name="${asset.name}">
       ${CommonAssetsPreview.renderGridThumb(asset.category, asset)}
       <div class="asset-name">${asset.name}</div>
+      ${tagChips}
       <div class="asset-meta">${formatBytes(asset.size)} · ${new Date(asset.uploadedAt).toLocaleString()}</div>
       <div class="asset-actions">
         <button class="btn-preview" data-action="preview" data-name="${asset.name}">Preview</button>
         <button class="btn-copy" data-action="copy" data-name="${asset.name}">Copy URL</button>
+        <button class="btn-tags-edit" data-action="tags" data-name="${asset.name}">Edit Tags</button>
         <button class="btn-delete" data-action="delete" data-name="${asset.name}">Delete</button>
       </div>
     </div>
-  `
-    )
+  `;
+    })
     .join('');
 }
 
@@ -65,7 +84,7 @@ async function copyAssetUrl(asset) {
 
 function openPreview(asset) {
   const cat = asset.category || activeCategory;
-  const items = (assetsByCategory[activeCategory] || []).map((a) => ({
+  const items = getFilteredItems().map((a) => ({
     ...a,
     category: a.category || activeCategory,
   }));
@@ -81,6 +100,56 @@ function openPreview(asset) {
   });
 }
 
+async function editAssetTags(asset) {
+  if (!window.AssetTagsUI) return;
+  const cat = asset.category || activeCategory;
+  await AssetTagsUI.openEditTagsModal({
+    assetName: asset.name,
+    tags: asset.tags || [],
+    theme: 'light',
+    onSave: async (tags) => {
+      const res = await adminFetch(
+        `/admin/common-assets/${encodeURIComponent(cat)}/${encodeURIComponent(asset.name)}/tags`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tags }),
+        }
+      );
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Failed to save tags');
+      asset.tags = data.tags || [];
+      const listAsset = (assetsByCategory[cat] || []).find((a) => a.name === asset.name);
+      if (listAsset) listAsset.tags = asset.tags;
+      renderAssets();
+      return true;
+    },
+  });
+}
+
+async function openTagBrowser() {
+  if (!window.AssetTagsUI) return;
+  try {
+    const res = await adminFetch('/admin/common-assets/tags');
+    const data = await res.json();
+    const tags = data.success ? data.tags || [] : [];
+    AssetTagsUI.openTagBrowserModal({
+      tags,
+      theme: 'light',
+      onSelectTag: (tag) => {
+        const input = document.getElementById('asset-search');
+        if (!input) return;
+        const current = input.value.trim();
+        input.value = current ? `${current}, ${tag}` : tag;
+        searchQuery = input.value;
+        renderAssets();
+      },
+    });
+  } catch (err) {
+    if (err.code !== 'AUTH_REQUIRED') alert(err.message || 'Failed to load tags');
+  }
+}
+
 async function deleteAsset(name) {
   if (!confirm(`Delete ${name}?`)) return;
   const res = await adminFetch(
@@ -94,6 +163,8 @@ async function deleteAsset(name) {
 
 async function uploadFiles(fileList) {
   const status = document.getElementById('upload-status');
+  const tagsInput = document.getElementById('upload-tags-input');
+  const uploadTags = tagsInput && tagsInput.value.trim() ? tagsInput.value.trim() : '';
   const files = Array.from(fileList || []);
   if (!files.length) return;
 
@@ -107,6 +178,7 @@ async function uploadFiles(fileList) {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('category', activeCategory);
+    if (uploadTags) fd.append('tags', uploadTags);
     const res = await adminFetch('/admin/common-assets/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (!data.success) {
@@ -116,6 +188,7 @@ async function uploadFiles(fileList) {
   }
 
   status.textContent = 'Upload complete.';
+  if (tagsInput) tagsInput.value = '';
   await loadAssets();
   setTimeout(() => {
     status.textContent = '';
@@ -151,6 +224,18 @@ function setupTabs() {
   });
 }
 
+function setupSearch() {
+  const input = document.getElementById('asset-search');
+  if (input) {
+    input.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      renderAssets();
+    });
+  }
+  const showBtn = document.getElementById('show-tags-btn');
+  if (showBtn) showBtn.addEventListener('click', () => openTagBrowser());
+}
+
 function setupAssetList() {
   document.getElementById('asset-list').addEventListener('click', async (e) => {
     if (e.target.closest('audio, video')) return;
@@ -172,6 +257,7 @@ function setupAssetList() {
     try {
       if (btn.dataset.action === 'preview') openPreview(asset);
       if (btn.dataset.action === 'copy') await copyAssetUrl(asset);
+      if (btn.dataset.action === 'tags') await editAssetTags(asset);
       if (btn.dataset.action === 'delete') await deleteAsset(name);
     } catch (err) {
       if (err.code === 'AUTH_REQUIRED') {
@@ -242,6 +328,7 @@ function initMainApp() {
   setupUploadToggle();
   setupStudentPeekDropdown();
   setupUploadZone();
+  setupSearch();
   setupTabs();
   setupAssetList();
   loadStudentPeekDropdown();

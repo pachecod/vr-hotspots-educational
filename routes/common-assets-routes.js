@@ -15,6 +15,15 @@ const {
   handleAdminLogout,
   handleAdminSessionStatus,
 } = require('../admin-auth');
+const {
+  buildCommonAssetKey,
+  COMMON_SCOPE_PREFIX,
+  parseTagsFromBody,
+  attachTagsToCommonAssets,
+  setTagsForKey,
+  deleteTagsForKey,
+  listTagsForScope,
+} = require('../lib/asset-tags');
 
 const COMMON_ASSETS_LIST_CACHE_MS = 2 * 60 * 1000;
 let commonAssetsListCache = { data: null, expiresAt: 0 };
@@ -85,6 +94,7 @@ async function listCommonAssets() {
     grouped[category].sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
   }
 
+  await attachTagsToCommonAssets(grouped);
   return grouped;
 }
 
@@ -126,6 +136,16 @@ function registerCommonAssetRoutes(app, upload) {
         success: false,
         message: (b2Message || err.message || 'Failed to list assets') + hint,
       });
+    }
+  });
+
+  app.get('/admin/common-assets/tags', requireAdmin, async (req, res) => {
+    try {
+      const tags = await listTagsForScope(COMMON_SCOPE_PREFIX);
+      res.json({ success: true, tags });
+    } catch (err) {
+      console.error('List common asset tags error:', err);
+      res.status(500).json({ success: false, message: err.message });
     }
   });
 
@@ -185,6 +205,16 @@ function registerCommonAssetRoutes(app, upload) {
       await b2Service.uploadCommonAsset(tempPath, remotePath, validation.contentType);
       invalidateCommonAssetsListCache();
 
+      const tags = parseTagsFromBody(req.body);
+      let savedTags = [];
+      if (tags.length) {
+        savedTags = await setTagsForKey(
+          buildCommonAssetKey(validation.category, storedFilename),
+          tags
+        );
+        invalidateCommonAssetsListCache();
+      }
+
       res.json({
         success: true,
         asset: {
@@ -194,6 +224,7 @@ function registerCommonAssetRoutes(app, upload) {
           uploadedAt: new Date().toISOString(),
           url: await buildPublicAssetUrl(validation.category, storedFilename),
           contentType: validation.contentType,
+          tags: savedTags,
         },
       });
     } catch (err) {
@@ -208,6 +239,26 @@ function registerCommonAssetRoutes(app, upload) {
     }
   });
 
+  app.put('/admin/common-assets/:category/:filename/tags', requireAdmin, async (req, res) => {
+    try {
+      const category = req.params.category;
+      const filename = sanitizeAssetFilenameParam(req.params.filename);
+      if (!isValidCategory(category) || !filename) {
+        return res.status(400).json({ success: false, message: 'Invalid category or filename' });
+      }
+
+      const tags = await setTagsForKey(buildCommonAssetKey(category, filename), req.body && req.body.tags);
+      invalidateCommonAssetsListCache();
+      res.json({ success: true, tags });
+    } catch (err) {
+      if (err.statusCode === 503) {
+        return res.status(503).json({ success: false, message: err.message });
+      }
+      console.error('Update common asset tags error:', err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.delete('/admin/common-assets/:category/:filename', requireAdmin, async (req, res) => {
     try {
       const category = req.params.category;
@@ -218,6 +269,7 @@ function registerCommonAssetRoutes(app, upload) {
 
       const remotePath = buildRemotePath(category, filename);
       await b2Service.deleteCommonAsset(remotePath);
+      await deleteTagsForKey(buildCommonAssetKey(category, filename));
       invalidateCommonAssetsListCache();
       res.json({ success: true, message: 'Asset deleted' });
     } catch (err) {

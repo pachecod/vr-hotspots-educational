@@ -7,6 +7,11 @@ const {
   isValidCategory,
   getContentType,
 } = require('../lib/common-assets');
+const {
+  buildStudentAssetKey,
+  attachTagsToStudentAssets,
+  deleteTagsForKey,
+} = require('../lib/asset-tags');
 
 async function getStudentPeekMeta(studentId) {
   const { rows } = await query(
@@ -75,6 +80,8 @@ function registerAdminStudentPeekRoutes(app, { requireAdmin }) {
           url: assetPath,
         });
       }
+
+      await attachTagsToStudentAssets(grouped, studentId);
 
       return res.json({ success: true, assets: grouped, student: meta });
     } catch (err) {
@@ -153,6 +160,7 @@ function registerAdminStudentPeekRoutes(app, { requireAdmin }) {
           `DELETE FROM student_assets WHERE student_id = $1 AND category = $2 AND filename = $3`,
           [studentId, category, filename]
         );
+        await deleteTagsForKey(buildStudentAssetKey(studentId, category, filename));
 
         return res.json({ success: true });
       } catch (err) {

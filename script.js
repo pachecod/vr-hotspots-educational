@@ -124,8 +124,34 @@ const EDITOR_LAYER = Object.freeze({
   sceneOverlay: 100000,
   dialog: 100050,
   progress: 100055,
+  picker: 100060,
   toast: 100060,
 });
+
+function removeEditorOverlayDialogs() {
+  document.querySelectorAll('.editor-overlay-dialog').forEach((el) => el.remove());
+
+  const dialogZ = String(EDITOR_LAYER.dialog);
+  document.querySelectorAll('body > div').forEach((div) => {
+    if (div.id === 'common-assets-modal' || div.id === 'asset-preview-modal') return;
+    if (div.classList.contains('editor-overlay-dialog')) return;
+    const pos = div.style.position || getComputedStyle(div).position;
+    const z = div.style.zIndex || getComputedStyle(div).zIndex;
+    if (pos === 'fixed' && z === dialogZ) {
+      div.remove();
+    }
+  });
+}
+
+function showAssetLibraryModal() {
+  const modal = document.getElementById('common-assets-modal');
+  if (!modal) return null;
+  removeEditorOverlayDialogs();
+  document.body.appendChild(modal);
+  modal.style.zIndex = String(EDITOR_LAYER.picker);
+  modal.style.display = 'flex';
+  return modal;
+}
 
 // Hotspot Editor Manager
 const APP_VERSION = '2.0.0';
@@ -14062,7 +14088,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   showSceneManager() {
+    removeEditorOverlayDialogs();
+
     const dialog = document.createElement('div');
+    dialog.className = 'editor-overlay-dialog';
     dialog.style.cssText = `
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
       background: rgba(0,0,0,0.8); z-index: ${EDITOR_LAYER.dialog}; display: flex; 
@@ -14365,14 +14394,11 @@ document.addEventListener('DOMContentLoaded', () => {
           ? 'video'
           : 'image';
 
-    // Close current scene manager
-    document.querySelectorAll('div').forEach((div) => {
-      if (div.style.position === 'fixed' && div.style.zIndex === '10000') {
-        div.remove();
-      }
-    });
+    // Close scene manager and any other open editor overlay dialogs
+    removeEditorOverlayDialogs();
 
     const dialog = document.createElement('div');
+    dialog.className = 'editor-overlay-dialog';
     dialog.style.cssText = `
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
       background: rgba(0,0,0,0.8); z-index: ${EDITOR_LAYER.dialog}; display: flex; 
@@ -14397,7 +14423,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <option value="video" ${selectedMediaType === 'video' ? 'selected' : ''}>🎥 360° Video</option>
           </select>
           <p style="color: #999; font-size: 12px; margin: 8px 0 0;">
-            Choose <strong>360° Video</strong> first, then pick upload, online assets, or URL below.
+            Pick upload, online assets, or URL below for the selected media type.
           </p>
         </div>
 
@@ -14827,11 +14853,7 @@ document.addEventListener('DOMContentLoaded', () => {
     this.updateNavigationTargets();
 
     // Close and reopen scene manager to refresh the list
-    document.querySelectorAll('div').forEach((div) => {
-      if (div.style.position === 'fixed' && div.style.zIndex === '10000') {
-        div.remove();
-      }
-    });
+    removeEditorOverlayDialogs();
     this.showSceneManager();
   }
 }
@@ -15826,7 +15848,7 @@ class StudentSubmission {
           <p style="color: #888; font-size: 12px; margin: 8px 0 0;">Each submit creates a new version. You can keep working after submitting.</p>
         </div>
         
-        <div style="margin: 25px 0; text-align: center;">
+        <div id="submit-project-actions" style="margin: 25px 0; text-align: center;">
           <button id="submit-project-btn" style="
             background: #4CAF50; color: white; border: none; padding: 15px 25px;
             border-radius: 6px; cursor: pointer; margin: 5px; font-weight: bold;
@@ -15852,6 +15874,15 @@ class StudentSubmission {
     document.getElementById('cancel-submission-btn').addEventListener('click', () => {
       dialog.remove();
     });
+  }
+
+  static hideSubmissionFormControls() {
+    const actions = document.getElementById('submit-project-actions');
+    if (actions) actions.style.display = 'none';
+    const projectName = document.getElementById('project-name');
+    const note = document.getElementById('student-submit-note');
+    if (projectName) projectName.disabled = true;
+    if (note) note.disabled = true;
   }
 
   static createStatusOverlay(title) {
@@ -15920,12 +15951,16 @@ class StudentSubmission {
     });
     if (!exportMode) return;
 
+    StudentSubmission.hideSubmissionFormControls();
+
     const statusDiv = document.getElementById('submission-status');
     const submitBtn = document.getElementById('submit-project-btn');
     const cancelBtn = document.getElementById('cancel-submission-btn');
     if (submitBtn) submitBtn.disabled = true;
     if (cancelBtn) cancelBtn.disabled = true;
     if (statusDiv) statusDiv.innerHTML = '<p style="color: #4CAF50;">📦 Generating project...</p>';
+
+    let submissionSucceeded = false;
 
     try {
       // Generate the complete project using existing export functionality
@@ -16122,6 +16157,7 @@ class StudentSubmission {
       });
 
       if (result.success) {
+        submissionSucceeded = true;
         if (statusDiv) {
         statusDiv.innerHTML = `
           <p style="color: #4CAF50;">✅ ${options.successMessage || 'Project submitted successfully!'}</p>
@@ -16158,11 +16194,18 @@ class StudentSubmission {
         alert('Submission failed: ' + error.message);
       }
     } finally {
-      // Re-enable buttons so the user can retry or cancel
-      const submitBtn2 = document.getElementById('submit-project-btn');
-      const cancelBtn2 = document.getElementById('cancel-submission-btn');
-      if (submitBtn2) submitBtn2.disabled = false;
-      if (cancelBtn2) cancelBtn2.disabled = false;
+      if (!submissionSucceeded) {
+        const actions = document.getElementById('submit-project-actions');
+        if (actions) actions.style.display = '';
+        const projectName = document.getElementById('project-name');
+        const note = document.getElementById('student-submit-note');
+        if (projectName) projectName.disabled = false;
+        if (note) note.disabled = false;
+        const submitBtn2 = document.getElementById('submit-project-btn');
+        const cancelBtn2 = document.getElementById('cancel-submission-btn');
+        if (submitBtn2) submitBtn2.disabled = false;
+        if (cancelBtn2) cancelBtn2.disabled = false;
+      }
     }
   }
 }
@@ -16273,9 +16316,14 @@ const CommonAssetsPicker = {
     });
 
     document.getElementById('common-assets-search').addEventListener('input', (e) => {
-      this.searchQuery = e.target.value.toLowerCase();
+      this.searchQuery = e.target.value;
       this.render();
     });
+
+    const showTagsBtn = document.getElementById('ca-show-tags-btn');
+    if (showTagsBtn) {
+      showTagsBtn.addEventListener('click', () => this.openTagBrowser());
+    }
 
     document.getElementById('common-assets-list').addEventListener('click', (e) => {
       if (e.target.closest('audio, video')) return;
@@ -16297,6 +16345,7 @@ const CommonAssetsPicker = {
       if (btn.dataset.caAction === 'preview') this.openPreview(asset);
       if (btn.dataset.caAction === 'copy') this.copyUrl(asset.url);
       if (btn.dataset.caAction === 'use') this.useUrl(asset);
+      if (btn.dataset.caAction === 'tags') this.editAssetTags(asset);
       if (btn.dataset.caAction === 'delete') this.deleteStudentAsset(asset);
     });
 
@@ -16336,6 +16385,10 @@ const CommonAssetsPicker = {
     const fd = new FormData();
     fd.append('file', fileInput.files[0]);
     fd.append('category', this.activeCategory);
+    const tagsInput = document.getElementById('student-asset-tags');
+    if (tagsInput && tagsInput.value.trim()) {
+      fd.append('tags', tagsInput.value.trim());
+    }
     try {
       const res = await fetch('/api/student-assets/upload', {
         method: 'POST',
@@ -16349,6 +16402,7 @@ const CommonAssetsPicker = {
       }
       if (!data.success) throw new Error(data.message || 'Upload failed');
       fileInput.value = '';
+      if (tagsInput) tagsInput.value = '';
       await this.load();
     } catch (err) {
       alert(err.message || 'Upload failed');
@@ -16396,12 +16450,14 @@ const CommonAssetsPicker = {
     }
     this.renderTabs();
     this.updateSourceUi();
-    document.getElementById('common-assets-modal').style.display = 'flex';
+    showAssetLibraryModal();
     await this.load();
   },
 
   close() {
-    document.getElementById('common-assets-modal').style.display = 'none';
+    const modal = document.getElementById('common-assets-modal');
+    modal.style.display = 'none';
+    modal.style.zIndex = '';
     this.targetFieldId = null;
     this.onSelect = null;
     this.armPlacementAfterSelect = false;
@@ -16449,10 +16505,71 @@ const CommonAssetsPicker = {
 
   getFilteredItems() {
     let items = this.assets[this.activeCategory] || [];
-    if (this.searchQuery) {
-      items = items.filter((a) => a.name.toLowerCase().includes(this.searchQuery));
+    if (this.searchQuery && this.searchQuery.trim()) {
+      items = items.filter((a) =>
+        window.AssetTagsUI
+          ? AssetTagsUI.assetMatchesSearch(a, this.searchQuery)
+          : a.name.toLowerCase().includes(this.searchQuery.toLowerCase())
+      );
     }
     return items;
+  },
+
+  collectAllTagsFromAssets() {
+    const tagCounts = {};
+    for (const cat of Object.keys(this.assets)) {
+      for (const asset of this.assets[cat] || []) {
+        for (const tag of asset.tags || []) {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        }
+      }
+    }
+    return Object.entries(tagCounts)
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  },
+
+  openTagBrowser() {
+    if (!window.AssetTagsUI) return;
+    const tags = this.collectAllTagsFromAssets();
+    AssetTagsUI.openTagBrowserModal({
+      tags,
+      onSelectTag: (tag) => {
+        const input = document.getElementById('common-assets-search');
+        if (!input) return;
+        const current = input.value.trim();
+        input.value = current ? `${current}, ${tag}` : tag;
+        this.searchQuery = input.value;
+        this.render();
+      },
+    });
+  },
+
+  async editAssetTags(asset) {
+    if (!window.AssetTagsUI || this.assetSource !== 'my') return;
+    const cat = asset.category || this.activeCategory;
+    await AssetTagsUI.openEditTagsModal({
+      assetName: asset.name,
+      tags: asset.tags || [],
+      onSave: async (tags) => {
+        const res = await fetch(
+          `/api/student-assets/${encodeURIComponent(cat)}/${encodeURIComponent(asset.name)}/tags`,
+          {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tags }),
+          }
+        );
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'Failed to save tags');
+        asset.tags = data.tags || [];
+        const listAsset = (this.assets[cat] || []).find((a) => a.name === asset.name);
+        if (listAsset) listAsset.tags = asset.tags;
+        this.render();
+        return true;
+      },
+    });
   },
 
   openPreview(asset) {
@@ -16484,13 +16601,19 @@ const CommonAssetsPicker = {
         const icon = window.CommonAssetsPreview
           ? CommonAssetsPreview.renderPickerThumb(cat, asset)
           : `<div class="ca-item-thumb ca-item-thumb-fallback">📄</div>`;
+        const tagChips = window.AssetTagsUI ? AssetTagsUI.renderTagChips(asset.tags) : '';
+        const tagsBtn =
+          this.assetSource === 'my'
+            ? `<button data-ca-action="tags" data-name="${asset.name}" class="btn-tags-edit">Tags</button>`
+            : '';
         return `<div class="ca-item">
           ${icon}
-          <div class="ca-item-info"><div class="ca-item-name">${asset.name}</div></div>
+          <div class="ca-item-info"><div class="ca-item-name">${asset.name}</div>${tagChips}</div>
           <div class="ca-item-actions">
             <button data-ca-action="preview" data-name="${asset.name}" class="btn-preview-ca">Preview</button>
             <button data-ca-action="copy" data-name="${asset.name}" style="background:#6f42c1;color:#fff;">Copy</button>
             <button data-ca-action="use" data-name="${asset.name}" style="background:#4caf50;color:#fff;">Select</button>
+            ${tagsBtn}
             ${this.assetSource === 'my' ? `<button data-ca-action="delete" data-name="${asset.name}" style="background:#f44336;color:#fff;">Delete</button>` : ''}
           </div>
         </div>`;

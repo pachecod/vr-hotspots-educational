@@ -16,7 +16,9 @@ async function initAdminUsers() {
 
   const peekId = new URLSearchParams(window.location.search).get('peek');
   if (peekId && window.StudentPeek) {
-    await StudentPeek.open(peekId);
+    const returnTo =
+      new URLSearchParams(window.location.search).get('from') === 'assets' ? 'assets' : 'users';
+    await StudentPeek.open(peekId, { returnTo });
   }
 }
 

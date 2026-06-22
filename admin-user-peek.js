@@ -1,5 +1,6 @@
 const StudentPeek = {
   studentId: null,
+  returnTo: 'users',
   assetsByCategory: {},
   activeCategory: 'images',
   previewAsset: null,
@@ -48,8 +49,20 @@ const StudentPeek = {
     }, 1800);
   },
 
-  async open(studentId) {
+  getReturnFromUrl() {
+    return new URLSearchParams(window.location.search).get('from') === 'assets' ? 'assets' : 'users';
+  },
+
+  updateBackButton() {
+    const btn = document.getElementById('peek-back-btn');
+    if (!btn) return;
+    btn.textContent =
+      this.returnTo === 'assets' ? '← Back to Common Assets' : '← Back to Users';
+  },
+
+  async open(studentId, options = {}) {
     this.studentId = studentId;
+    this.returnTo = options.returnTo || this.getReturnFromUrl();
     const listView = document.getElementById('users-list-view');
     const peekView = document.getElementById('student-peek-view');
     if (listView) listView.style.display = 'none';
@@ -57,13 +70,25 @@ const StudentPeek = {
 
     const url = new URL(window.location.href);
     url.searchParams.set('peek', studentId);
+    if (this.returnTo === 'assets') {
+      url.searchParams.set('from', 'assets');
+    } else {
+      url.searchParams.delete('from');
+    }
     window.history.replaceState({}, '', url);
+    this.updateBackButton();
 
     await this.loadPeekData();
   },
 
   close() {
+    if (this.returnTo === 'assets') {
+      window.location.href = 'admin-common-assets.html';
+      return;
+    }
+
     this.studentId = null;
+    this.returnTo = 'users';
     const listView = document.getElementById('users-list-view');
     const peekView = document.getElementById('student-peek-view');
     if (listView) listView.style.display = 'block';
@@ -72,6 +97,7 @@ const StudentPeek = {
 
     const url = new URL(window.location.href);
     url.searchParams.delete('peek');
+    url.searchParams.delete('from');
     window.history.replaceState({}, '', url.pathname + (url.search || ''));
   },
 
@@ -309,7 +335,8 @@ const StudentPeek = {
 };
 
 window.StudentPeek = StudentPeek;
-window.openStudentPeek = (id) => StudentPeek.open(id);
+window.openStudentPeek = (id, returnTo) =>
+  StudentPeek.open(id, { returnTo: returnTo || 'users' });
 
 document.addEventListener('DOMContentLoaded', () => {
   StudentPeek.bindUi();

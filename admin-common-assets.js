@@ -185,14 +185,56 @@ function setupPreviewModal() {
   });
 }
 
+function setupStudentPeekDropdown() {
+  const select = document.getElementById('student-peek-select');
+  if (!select) return;
+
+  select.addEventListener('change', () => {
+    const studentId = select.value;
+    if (!studentId) return;
+    window.location.href = `admin-users.html?peek=${encodeURIComponent(studentId)}&from=assets`;
+  });
+}
+
+async function loadStudentPeekDropdown() {
+  const select = document.getElementById('student-peek-select');
+  if (!select) return;
+
+  try {
+    const res = await adminFetch('/admin/students');
+    const list = await res.json();
+    if (!Array.isArray(list) || !list.length) return;
+
+    const sorted = [...list].sort((a, b) => {
+      const classCmp = (a.class_name || '').localeCompare(b.class_name || '');
+      if (classCmp !== 0) return classCmp;
+      return (a.display_name || '').localeCompare(b.display_name || '');
+    });
+
+    sorted.forEach((s) => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      const classLabel = s.class_name ? ` (${s.class_name})` : '';
+      opt.textContent = `${s.display_name || s.username || 'Student'}${classLabel}`;
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    if (err.code !== 'AUTH_REQUIRED') {
+      console.warn('Could not load students for peek dropdown:', err);
+    }
+  }
+}
+
 function initMainApp() {
   document.getElementById('login-root').innerHTML = '';
   document.getElementById('main-content').style.display = 'block';
   renderAdminNav('assets');
+  setupStudentPeekDropdown();
   setupUploadZone();
   setupTabs();
   setupAssetList();
   setupPreviewModal();
+  loadStudentPeekDropdown();
   loadAssets().catch((err) => {
     if (err.code === 'AUTH_REQUIRED') location.reload();
     else alert(err.message || 'Failed to load assets');

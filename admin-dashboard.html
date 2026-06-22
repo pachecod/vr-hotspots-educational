@@ -396,17 +396,35 @@
 
       async function downloadProject(filename) {
         try {
-          // Create a temporary link element for download
+          const response = await adminFetch(`/admin/download/${encodeURIComponent(filename)}`);
+          const contentType = response.headers.get('content-type') || '';
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || err.error || `Download failed (${response.status})`);
+          }
+          if (contentType.includes('application/json')) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || err.error || 'Download failed');
+          }
+          const blob = await response.blob();
+          if (blob.size < 100) {
+            const text = await blob.text();
+            throw new Error(text || 'Downloaded file is too small to be a valid ZIP');
+          }
+          const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
-          link.href = `/admin/download/${filename}`;
+          link.href = url;
           link.download = filename;
           link.style.display = 'none';
-
-          // Add to document, click, and remove
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
+          URL.revokeObjectURL(url);
         } catch (error) {
+          if (error.code === 'AUTH_REQUIRED') {
+            location.reload();
+            return;
+          }
           alert('Error downloading project: ' + error.message);
         }
       }

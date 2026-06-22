@@ -72,14 +72,54 @@ function writeSubmissionsLog(entries) {
 }
 
 async function resolveSubmissionRemotePath(filename) {
+  const candidates = new Set();
   if (isDbEnabled()) {
     const row = await submissionsDb.getSubmissionByFileName(filename);
-    if (row && row.remote_path) return row.remote_path;
+    if (row && row.remote_path) candidates.add(row.remote_path);
   }
   const logs = loadSubmissionsLog();
   const submission = logs.find((sub) => sub.fileName === filename);
-  if (submission && submission.remotePath) return submission.remotePath;
+  if (submission && submission.remotePath) candidates.add(submission.remotePath);
+  candidates.add(`student-projects/${filename}`);
+
+  for (const remotePath of candidates) {
+    try {
+      const info = await b2Service.getFileInfo(remotePath);
+      if (info) return remotePath;
+    } catch (_) {
+      /* try next candidate */
+    }
+  }
+
+  try {
+    const files = await b2Service.listFiles('student-projects/');
+    const match = files.find(
+      (f) =>
+        f.fileName === `student-projects/${filename}` || f.fileName.endsWith(`/${filename}`)
+    );
+    if (match) return match.fileName;
+  } catch (err) {
+    console.warn('B2 listFiles fallback failed:', err.message);
+  }
+
   return `student-projects/${filename}`;
+}
+
+function assertValidZipFile(localPath) {
+  const stat = fs.statSync(localPath);
+  if (!stat.isFile() || stat.size < 22) {
+    throw new Error(`Downloaded file is too small to be a valid ZIP (${stat.size} bytes)`);
+  }
+  const fd = fs.openSync(localPath, 'r');
+  try {
+    const header = Buffer.alloc(4);
+    fs.readSync(fd, header, 0, 4, 0);
+    if (header[0] !== 0x50 || header[1] !== 0x4b) {
+      throw new Error('Downloaded file is not a valid ZIP archive');
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 async function tryDeriveProjectMetaFromZip(zipPath) {
@@ -1713,39 +1753,48 @@ app.post('/admin/sync-b2', async (req, res) => {
 
 // Admin can download individual projects
 app.get('/admin/download/:filename', async (req, res) => {
+  let tempPath = null;
   try {
     const filename = req.params.filename;
     const remotePath = await resolveSubmissionRemotePath(filename);
-    const tempPath = path.join('temp-uploads', `download_${Date.now()}_${filename}`);
+    tempPath = path.join('temp-uploads', `download_${Date.now()}_${filename}`);
 
-    // Download from B2 to temp location
+    console.log(`📥 Downloading submission from B2: ${remotePath}`);
     await b2Service.downloadFile(remotePath, tempPath);
+    assertValidZipFile(tempPath);
 
-    // Set proper headers for download
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'application/zip');
 
-    // Send file and clean up
     res.download(tempPath, filename, (err) => {
-      // Clean up temp file
       try {
-        if (fs.existsSync(tempPath)) {
-          fs.unlinkSync(tempPath);
-        }
+        if (tempPath && fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
       } catch (cleanupErr) {
         console.error('Temp file cleanup error:', cleanupErr);
       }
-
       if (err) {
         console.error('Download error:', err);
         if (!res.headersSent) {
-          res.status(500).json({ error: 'Download failed' });
+          res.status(500).json({ success: false, message: 'Download failed' });
         }
       }
     });
   } catch (error) {
+    if (tempPath) {
+      try {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      } catch (_) {}
+    }
     console.error('Download endpoint error:', error);
-    res.status(500).json({ error: 'Server error during download' });
+    const notFound =
+      error.response?.status === 404 ||
+      /404|not found/i.test(String(error.message || ''));
+    res.status(notFound ? 404 : 500).json({
+      success: false,
+      message: notFound
+        ? 'Project ZIP not found in cloud storage. The student may need to submit again.'
+        : error.message || 'Server error during download',
+    });
   }
 });
 
@@ -1823,6 +1872,7 @@ app.post('/admin/host/:filename', async (req, res) => {
 
     // Download from B2
     await b2Service.downloadFile(remotePath, tempPath);
+    assertValidZipFile(tempPath);
 
     // Clear existing hosted directory if it exists
     if (fs.existsSync(hostedDir)) {

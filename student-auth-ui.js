@@ -26,9 +26,20 @@ async function studentLogout() {
   await fetch('/api/student/logout', { method: 'POST', credentials: 'include' });
 }
 
+function hideSceneLoadingOverlay() {
+  const overlay = document.getElementById('scene-loading-overlay');
+  if (overlay) {
+    overlay.style.pointerEvents = 'none';
+    overlay.style.opacity = '0';
+    overlay.style.display = 'none';
+  }
+}
+
 function renderStudentLoginGate(containerId, onAuthenticated) {
   const container = document.getElementById(containerId);
   if (!container) return;
+
+  hideSceneLoadingOverlay();
 
   let classes = [];
   let selectedClass = null;
@@ -37,7 +48,7 @@ function renderStudentLoginGate(containerId, onAuthenticated) {
 
   container.innerHTML = `
     <div id="student-login-shell" style="
-      position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:10000;
+      position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:100000;
       display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;">
       <div style="background:#2a2a2a;color:#fff;border-radius:12px;padding:32px;max-width:420px;width:90%;border:2px solid #4caf50;">
         <h2 style="margin:0 0 8px;color:#4caf50;">VR Hotspots</h2>
@@ -197,6 +208,7 @@ async function requireStudentSession(containerId, onAuthenticated) {
     onAuthenticated(status.student);
     return;
   }
+  hideSceneLoadingOverlay();
   renderStudentLoginGate(containerId, onAuthenticated);
 }
 

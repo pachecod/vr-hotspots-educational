@@ -106,33 +106,45 @@ function renderStudents() {
 
 async function addStudent() {
   const displayName = document.getElementById('new-student-name').value.trim();
+  const password = document.getElementById('new-student-password').value;
   const classId = document.getElementById('filter-class').value;
   if (!displayName) return alert('Student name required');
   if (classId === 'all') return alert('Select a specific class first');
+  const body = { classId, displayName };
+  if (password.trim()) body.password = password.trim();
   const res = await adminFetch('/admin/students', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ classId, displayName }),
+    body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!data.success) return alert(data.message);
   const msg = document.getElementById('students-msg');
   msg.className = 'success';
-  msg.textContent = `Added ${data.student.display_name}. Username: ${data.student.username} — Password: ${data.password} (save this now!)`;
+  msg.textContent = `Added ${data.student.display_name}. Username: ${data.student.username} — Password: ${data.password} (saved on server; download CSV anytime)`;
   document.getElementById('new-student-name').value = '';
+  document.getElementById('new-student-password').value = '';
   await loadStudents();
   await loadClasses();
 }
 
 async function resetPassword(id) {
+  const custom = prompt(
+    'Enter a new password for this student, or leave blank to auto-generate one:'
+  );
+  if (custom === null) return;
+  const body = {};
+  if (custom.trim()) body.password = custom.trim();
   const res = await adminFetch(`/admin/students/${id}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!data.success) return alert(data.message);
-  alert(`New password for ${data.student.display_name}: ${data.password}`);
+  alert(
+    `New password for ${data.student.display_name}: ${data.password}\n\nSaved on server — included in CSV download.`
+  );
 }
 
 async function deleteStudent(id) {
@@ -143,12 +155,21 @@ async function deleteStudent(id) {
 }
 
 async function exportPasswords() {
-  const res = await adminFetch('/admin/students/password-report?format=csv');
-  const blob = await res.blob();
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'password-report.csv';
-  a.click();
+  try {
+    const res = await adminFetch('/admin/students/password-report?format=csv');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `Export failed (${res.status})`);
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'student-passwords.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (err) {
+    alert('Could not download passwords: ' + err.message);
+  }
 }
 
 function escapeHtml(str) {

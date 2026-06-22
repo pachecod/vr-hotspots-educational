@@ -49,9 +49,13 @@
         <div style="margin-bottom:12px;">
           <select id="filter-class"></select>
           <input type="text" id="new-student-name" placeholder="Student display name" />
+          <input type="text" id="new-student-password" placeholder="Password (optional — auto-generated if blank)" />
           <button class="btn-primary" id="add-student-btn">Add Student</button>
-          <button class="btn-secondary" id="export-passwords-btn">Export Password Report (CSV)</button>
+          <button class="btn-secondary" id="export-passwords-btn">Download All Passwords (CSV)</button>
         </div>
+        <p style="color:#666;font-size:13px;margin:0 0 12px;">
+          Passwords are saved on the server so you can download them later. Use Reset Password for students added before this update.
+        </p>
         <div id="students-msg"></div>
         <div id="students-list"></div>
       </div>

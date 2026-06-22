@@ -25,14 +25,35 @@ async function runMigrations() {
   ]);
   if (rows.length > 0) {
     console.log('✅ Database schema already applied');
-    return true;
+  } else {
+    console.log('🔄 Applying database schema...');
+    await pool.query(schemaSql);
+    await pool.query(`INSERT INTO schema_migrations (name) VALUES ($1)`, ['initial_schema_v1']);
+    console.log('✅ Database schema applied');
   }
 
-  console.log('🔄 Applying database schema...');
-  await pool.query(schemaSql);
-  await pool.query(`INSERT INTO schema_migrations (name) VALUES ($1)`, ['initial_schema_v1']);
-  console.log('✅ Database schema applied');
+  await applyIncrementalMigrations(pool);
   return true;
+}
+
+async function applyIncrementalMigrations(pool) {
+  const migrations = [
+    {
+      name: 'students_password_encrypted_v1',
+      sql: `ALTER TABLE students ADD COLUMN IF NOT EXISTS password_encrypted TEXT;`,
+    },
+  ];
+
+  for (const migration of migrations) {
+    const { rows } = await pool.query(`SELECT name FROM schema_migrations WHERE name = $1`, [
+      migration.name,
+    ]);
+    if (rows.length > 0) continue;
+    console.log(`🔄 Applying migration: ${migration.name}`);
+    await pool.query(migration.sql);
+    await pool.query(`INSERT INTO schema_migrations (name) VALUES ($1)`, [migration.name]);
+    console.log(`✅ Migration applied: ${migration.name}`);
+  }
 }
 
 async function importSubmissionsFromJson(loadSubmissionsLog, writeSubmissionsLog) {

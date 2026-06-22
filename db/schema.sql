@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS students (
   display_name TEXT NOT NULL,
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
+  password_encrypted TEXT,
   password_set_at TIMESTAMPTZ,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

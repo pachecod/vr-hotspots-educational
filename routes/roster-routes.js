@@ -6,6 +6,10 @@ const {
   isDbEnabled,
 } = require('../services/db-service');
 const { hashPassword } = require('../student-auth');
+const {
+  encryptAdminPassword,
+  decryptAdminPassword,
+} = require('../lib/admin-password-store');
 
 async function ensureClassBillingAccount(classId) {
   const existing = await query(
@@ -108,12 +112,13 @@ async function ensureUniqueUsername(baseUsername) {
 async function createStudent({ classId, displayName, password }) {
   const plainPassword = password || generateRandomPassword();
   const passwordHash = await hashPassword(plainPassword);
+  const passwordEncrypted = encryptAdminPassword(plainPassword);
   const baseUsername = generateUsername(displayName);
   const username = await ensureUniqueUsername(baseUsername);
   const { rows } = await query(
-    `INSERT INTO students (class_id, display_name, username, password_hash, password_set_at)
-     VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
-    [classId, displayName.trim(), username, passwordHash]
+    `INSERT INTO students (class_id, display_name, username, password_hash, password_encrypted, password_set_at)
+     VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
+    [classId, displayName.trim(), username, passwordHash, passwordEncrypted]
   );
   return { student: rows[0], plainPassword };
 }
@@ -151,22 +156,26 @@ async function deleteStudent(id) {
 async function resetStudentPassword(id, password) {
   const plainPassword = password || generateRandomPassword();
   const passwordHash = await hashPassword(plainPassword);
+  const passwordEncrypted = encryptAdminPassword(plainPassword);
   const { rows } = await query(
-    `UPDATE students SET password_hash = $1, password_set_at = NOW(), updated_at = NOW()
-     WHERE id = $2 RETURNING id, display_name, username, class_id`,
-    [passwordHash, id]
+    `UPDATE students SET password_hash = $1, password_encrypted = $2, password_set_at = NOW(), updated_at = NOW()
+     WHERE id = $3 RETURNING id, display_name, username, class_id`,
+    [passwordHash, passwordEncrypted, id]
   );
   return { student: rows[0], plainPassword };
 }
 
 async function getPasswordReport() {
   const { rows } = await query(
-    `SELECT s.id, s.display_name, s.username, s.password_set_at, s.is_active,
+    `SELECT s.id, s.display_name, s.username, s.password_encrypted, s.password_set_at, s.is_active,
             c.name AS class_name
      FROM students s JOIN classes c ON c.id = s.class_id
      ORDER BY c.name, s.display_name`
   );
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    password: decryptAdminPassword(row.password_encrypted),
+  }));
 }
 
 function registerRosterRoutes(app, { requireAdmin }) {
@@ -305,19 +314,35 @@ function registerRosterRoutes(app, { requireAdmin }) {
       const format = req.query.format || 'json';
       const rows = await getPasswordReport();
       if (format === 'csv') {
-        const header = 'class_name,display_name,username,password_set_at,is_active\n';
+        const header = 'class_name,display_name,username,password,password_set_at,is_active\n';
         const body = rows
           .map((r) =>
-            [r.class_name, r.display_name, r.username, r.password_set_at || '', r.is_active]
+            [
+              r.class_name,
+              r.display_name,
+              r.username,
+              r.password || '',
+              r.password_set_at || '',
+              r.is_active,
+            ]
               .map((v) => `"${String(v).replace(/"/g, '""')}"`)
               .join(',')
           )
           .join('\n');
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename="password-report.csv"');
+        res.setHeader('Content-Disposition', 'attachment; filename="student-passwords.csv"');
         return res.send(header + body);
       }
-      res.json(rows);
+      res.json(
+        rows.map((r) => ({
+          class_name: r.class_name,
+          display_name: r.display_name,
+          username: r.username,
+          password: r.password || null,
+          password_set_at: r.password_set_at,
+          is_active: r.is_active,
+        }))
+      );
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }

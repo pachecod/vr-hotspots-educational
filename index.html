@@ -400,9 +400,9 @@
 
       .student-editor-session {
         display: none;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
         margin: 12px 16px 0;
         padding: 10px 14px;
         background: rgba(76, 175, 80, 0.12);
@@ -417,8 +417,8 @@
       }
 
       .student-editor-session-text {
-        min-width: 0;
-        line-height: 1.4;
+        width: 100%;
+        line-height: 1.45;
       }
 
       .student-editor-session-text strong {
@@ -426,10 +426,19 @@
       }
 
       .student-editor-class {
-        display: block;
         color: #aaa;
         font-size: 12px;
-        margin-top: 2px;
+      }
+
+      .student-editor-class:not(:empty)::before {
+        content: ' · ';
+        color: #888;
+      }
+
+      .student-editor-session-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
       }
 
       .student-editor-logout-btn {
@@ -688,6 +697,7 @@
       #common-assets-modal .modal-body {
         padding: 16px 20px;
         overflow-y: auto;
+        color: #e0e0e0;
       }
       #common-assets-modal .ca-tabs {
         display: flex;
@@ -722,10 +732,11 @@
         gap: 12px;
         align-items: center;
         padding: 10px;
-        border: 1px solid #444;
+        border: 1px solid #555;
         border-radius: 6px;
         margin-bottom: 8px;
-        background: #333;
+        background: #3a3a3a;
+        color: #e8e8e8;
       }
       #common-assets-modal .ca-item-thumb {
         width: 56px;
@@ -780,6 +791,7 @@
         font-size: 13px;
         font-weight: bold;
         word-break: break-all;
+        color: #f0f0f0;
       }
       #common-assets-modal .ca-item-actions {
         display: flex;
@@ -945,13 +957,14 @@
       <div id="hotspot-editor-content">
       <div id="student-editor-session" class="student-editor-session" aria-live="polite">
         <div class="student-editor-session-text">
-          <span>Signed in as <strong id="student-editor-name"></strong></span>
-          <span id="student-editor-class" class="student-editor-class"></span>
+          <span>Signed in as <strong id="student-editor-name"></strong><span id="student-editor-class" class="student-editor-class"></span></span>
         </div>
-        <button type="button" id="student-editor-logout-btn" class="student-editor-logout-btn">Logout</button>
-        <button type="button" id="student-my-submissions-btn" class="student-my-submissions-btn" style="display:none;">
-          My Submissions
-        </button>
+        <div class="student-editor-session-actions">
+          <button type="button" id="student-editor-logout-btn" class="student-editor-logout-btn">Logout</button>
+          <button type="button" id="student-my-submissions-btn" class="student-my-submissions-btn" style="display:none;">
+            My Submissions
+          </button>
+        </div>
       </div>
       <div id="admin-review-bar" aria-live="polite">
         <div><strong>Admin Review</strong> — <span id="admin-review-meta"></span></div>

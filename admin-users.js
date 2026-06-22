@@ -13,6 +13,11 @@ async function initAdminUsers() {
   await loadClasses();
   await loadStudents();
   bindEvents();
+
+  const peekId = new URLSearchParams(window.location.search).get('peek');
+  if (peekId && window.StudentPeek) {
+    await StudentPeek.open(peekId);
+  }
 }
 
 function bindEvents() {
@@ -98,6 +103,7 @@ function renderStudents() {
         <td>${escapeHtml(s.class_name || '')}</td>
         <td>${s.is_active ? 'Yes' : 'No'}</td>
         <td>
+          <button class="btn-peek" onclick="openStudentPeek('${s.id}')">Peek</button>
           <button class="btn-secondary" onclick="resetPassword('${s.id}')">Reset Password</button>
           <button class="btn-danger" onclick="deleteStudent('${s.id}')">Delete</button>
         </td>

@@ -17,10 +17,13 @@ const CommonAssetsPreview = {
   },
 
   get3dModelProxyUrl(asset) {
+    if (asset && asset.url) {
+      return asset.url;
+    }
     if (asset && asset.category && asset.name) {
       return `/common-assets/${encodeURIComponent(asset.category)}/${encodeURIComponent(asset.name)}`;
     }
-    return asset && asset.url ? asset.url : '';
+    return '';
   },
 
   get3dPreviewPageUrl(asset) {

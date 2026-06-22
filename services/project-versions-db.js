@@ -320,6 +320,22 @@ async function getUnreadFeedbackCount(studentId) {
   return rows[0]?.count || 0;
 }
 
+async function listAllVersionsForStudent(studentId) {
+  const { rows } = await query(
+    `SELECT pv.*, pt.project_name, pt.project_slug, pt.student_id,
+            s.display_name AS student_display_name, c.name AS class_name, c.id AS class_id,
+            c.slug AS class_slug
+     FROM project_versions pv
+     JOIN project_threads pt ON pt.id = pv.thread_id
+     LEFT JOIN students s ON s.id = pt.student_id
+     LEFT JOIN classes c ON c.id = s.class_id
+     WHERE pt.student_id = $1
+     ORDER BY pv.created_at DESC`,
+    [studentId]
+  );
+  return rows.map(formatVersionRow);
+}
+
 async function importLegacySubmissions() {
   if (!isDbEnabled()) return { imported: 0 };
   const { rows: subs } = await query(`SELECT * FROM submissions ORDER BY submitted_at ASC`);
@@ -372,6 +388,7 @@ module.exports = {
   listStudentProjects,
   listThreadVersions,
   listAdminInbox,
+  listAllVersionsForStudent,
   markVersionSeen,
   updateVersionHosting,
   deleteVersion,

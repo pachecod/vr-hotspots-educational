@@ -5,10 +5,19 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.85);
-  z-index: 10050;
+  z-index: 100060;
   align-items: center;
   justify-content: center;
   padding: 16px;
+}
+
+#asset-preview-modal.replaces-chooser {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+#asset-preview-modal.replaces-chooser .asset-preview-panel {
+  width: min(720px, 100%);
+  max-height: 85vh;
 }
 
 #asset-preview-modal.is-open {

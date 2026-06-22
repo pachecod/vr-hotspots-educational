@@ -8,6 +8,8 @@ const AssetPreview = {
   currentCategory: '',
   currentAsset: null,
   options: {},
+  replacedHostEl: null,
+  _hostDisplay: '',
 
   init() {
     if (this._bound) return;
@@ -32,7 +34,7 @@ const AssetPreview = {
 
     document.getElementById('asset-preview-select-btn')?.addEventListener('click', () => {
       if (this.options.onSelect) this.options.onSelect(this.currentAsset);
-      this.close();
+      this.close({ restoreHost: false });
     });
 
     document.getElementById('asset-preview-prev-btn')?.addEventListener('click', () =>
@@ -76,11 +78,23 @@ const AssetPreview = {
       showSelect = false,
       onSelect,
       onCopy,
+      replaceHost = null,
     } = opts || {};
 
     if (!asset) return;
 
     this.options = { showCopyUrl, showSelect, onSelect, onCopy };
+    this.replacedHostEl = null;
+    this._hostDisplay = '';
+    if (replaceHost) {
+      const host =
+        typeof replaceHost === 'string' ? document.querySelector(replaceHost) : replaceHost;
+      if (host && host.style.display !== 'none') {
+        this.replacedHostEl = host;
+        this._hostDisplay = host.style.display || 'flex';
+        host.style.display = 'none';
+      }
+    }
     this.currentCategory = category || asset.category || 'images';
     this.currentItems = items.length ? items : [asset];
     this.currentIndex = Math.max(0, Math.min(index, this.currentItems.length - 1));
@@ -91,6 +105,7 @@ const AssetPreview = {
     if (!modal) return;
 
     this.render();
+    modal.classList.toggle('replaces-chooser', !!this.replacedHostEl);
     modal.classList.add('is-open');
     document.body.style.overflow = 'hidden';
   },
@@ -187,15 +202,23 @@ const AssetPreview = {
     this.render();
   },
 
-  close() {
+  close({ restoreHost = true } = {}) {
     const modal = document.getElementById('asset-preview-modal');
     const body = document.getElementById('asset-preview-body');
     if (body && window.CommonAssetsPreview) CommonAssetsPreview.stopMedia(body);
-    if (modal) modal.classList.remove('is-open');
+    if (modal) {
+      modal.classList.remove('is-open');
+      modal.classList.remove('replaces-chooser');
+    }
+    if (restoreHost && this.replacedHostEl) {
+      this.replacedHostEl.style.display = this._hostDisplay || 'flex';
+    }
     document.body.style.overflow = '';
     this.currentAsset = null;
     this.currentItems = [];
     this.options = {};
+    this.replacedHostEl = null;
+    this._hostDisplay = '';
   },
 };
 

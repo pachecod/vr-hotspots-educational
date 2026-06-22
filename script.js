@@ -16450,6 +16450,7 @@ const CommonAssetsPicker = {
       items: items.map((a) => ({ ...a, category: a.category || this.activeCategory })),
       index: index >= 0 ? index : 0,
       showSelect: true,
+      replaceHost: '#common-assets-modal',
       onSelect: (selected) => this.useUrl(selected),
     });
   },

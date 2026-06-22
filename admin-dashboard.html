@@ -418,15 +418,15 @@
             const text = await blob.text();
             throw new Error(text || 'Downloaded file is too small to be a valid ZIP');
           }
-          const url = URL.createObjectURL(blob);
+          const blobUrl = URL.createObjectURL(blob);
           const link = document.createElement('a');
-          link.href = url;
+          link.href = blobUrl;
           link.download = filename;
           link.style.display = 'none';
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          URL.revokeObjectURL(url);
+          URL.revokeObjectURL(blobUrl);
         } catch (error) {
           if (error.code === 'AUTH_REQUIRED') {
             location.reload();
@@ -634,8 +634,6 @@
       document.addEventListener('mousemove', () => {
         lastActivity = Date.now();
       });
-
-      startAutoRefresh();
 
       // Backup & Restore Functions - Remove downloadBackup() and restoreBackup()
 

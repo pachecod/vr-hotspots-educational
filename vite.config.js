@@ -26,7 +26,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
-        admin: resolve(__dirname, 'admin-dashboard.html'),
+        admin: resolve(__dirname, 'admin-submissions.html'),
         adminAssets: resolve(__dirname, 'admin-common-assets.html'),
         adminUsers: resolve(__dirname, 'admin-users.html'),
         adminBilling: resolve(__dirname, 'admin-billing.html'),

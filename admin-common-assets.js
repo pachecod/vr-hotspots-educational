@@ -188,14 +188,11 @@ function setupPreviewModal() {
 function initMainApp() {
   document.getElementById('login-root').innerHTML = '';
   document.getElementById('main-content').style.display = 'block';
+  renderAdminNav('assets');
   setupUploadZone();
   setupTabs();
   setupAssetList();
   setupPreviewModal();
-  document.getElementById('logout-btn').addEventListener('click', async () => {
-    await adminLogout();
-    location.reload();
-  });
   loadAssets().catch((err) => {
     if (err.code === 'AUTH_REQUIRED') location.reload();
     else alert(err.message || 'Failed to load assets');

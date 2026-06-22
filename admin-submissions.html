@@ -2,32 +2,45 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Submissions Inbox - VR Hotspots Admin</title>
+    <title>Submissions — VR Hotspots Admin</title>
+    <link rel="stylesheet" href="admin-nav.css" />
     <style>
       body {
         font-family: Arial, sans-serif;
         margin: 20px;
         max-width: 1100px;
       }
-      .admin-nav {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
+      .import-panel {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
         margin-bottom: 24px;
-        padding-bottom: 12px;
-        border-bottom: 2px solid #dee2e6;
+        border: 2px solid #dee2e6;
       }
-      .admin-nav a {
-        padding: 8px 14px;
-        text-decoration: none;
+      .import-panel h2 {
+        margin-top: 0;
         color: #495057;
-        border-radius: 4px;
-        border: 1px solid #dee2e6;
+        font-size: 1.1em;
       }
-      .admin-nav a.active {
-        background: #007bff;
-        color: #fff;
-        border-color: #007bff;
+      .import-btn {
+        background: #6f42c1;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+      }
+      .import-btn:hover {
+        background: #5e37a3;
+      }
+      #import-status {
+        margin-top: 12px;
+        padding: 10px;
+        border-radius: 5px;
+        display: none;
+        font-size: 14px;
       }
       .filters {
         display: flex;
@@ -137,18 +150,24 @@
       }
     </style>
     <script src="admin-auth-ui.js"></script>
+    <script src="admin-nav.js"></script>
   </head>
   <body>
     <div id="login-root"></div>
     <div id="main-content" style="display: none">
-    <h1>📥 Submissions Inbox</h1>
-    <div class="admin-nav">
-      <a href="admin-dashboard.html">Legacy Dashboard</a>
-      <a href="admin-submissions.html" class="active">Submissions Inbox</a>
-      <a href="admin-common-assets.html">Common Assets</a>
-      <a href="admin-users.html">Users & Classes</a>
-      <a href="admin-billing.html" id="billing-nav" style="display: none">Billing</a>
-      <button type="button" id="logout-btn" style="padding: 8px 14px; cursor: pointer">Logout</button>
+    <nav id="admin-nav" data-active="submissions"></nav>
+    <h1>Submissions</h1>
+
+    <div class="import-panel">
+      <h2>Import project ZIP</h2>
+      <p style="color: #6c757d; margin-bottom: 15px">
+        Upload a previously exported VR project ZIP (e.g. from a local export or backup).
+      </p>
+      <button type="button" class="import-btn" onclick="document.getElementById('import-project-zip-input').click()">
+        Import Project ZIP
+      </button>
+      <input type="file" id="import-project-zip-input" accept=".zip" style="display: none" />
+      <div id="import-status"></div>
     </div>
 
     <div class="filters">

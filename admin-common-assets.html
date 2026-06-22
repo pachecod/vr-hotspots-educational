@@ -2,35 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Admin - Common Assets</title>
+    <title>Assets — VR Hotspots Admin</title>
+    <link rel="stylesheet" href="admin-nav.css" />
     <style>
       body {
         font-family: Arial, sans-serif;
         margin: 20px;
         color: #333;
-      }
-      .admin-nav {
-        display: flex;
-        gap: 12px;
-        margin-bottom: 24px;
-        flex-wrap: wrap;
-        align-items: center;
-      }
-      .admin-nav a,
-      .admin-nav button {
-        padding: 8px 14px;
-        border-radius: 4px;
-        text-decoration: none;
-        border: 1px solid #dee2e6;
-        background: #f8f9fa;
-        color: #333;
-        cursor: pointer;
-        font-size: 14px;
-      }
-      .admin-nav a.active {
-        background: #007bff;
-        color: #fff;
-        border-color: #007bff;
+        max-width: 1100px;
       }
       .tabs {
         display: flex;
@@ -258,20 +237,16 @@
         text-align: center;
       }
     </style>
+    <script src="admin-auth-ui.js"></script>
+    <script src="admin-nav.js"></script>
   </head>
   <body>
     <div id="app-root">
       <div id="login-root"></div>
       <div id="main-content" style="display: none">
-        <div class="admin-nav">
-          <a href="admin-dashboard.html">Submissions</a>
-          <a href="admin-common-assets.html" class="active">Common Assets</a>
-          <a href="admin-users.html">Users & Classes</a>
-          <a href="admin-billing.html" id="billing-nav" style="display:none;">Billing</a>
-          <button type="button" id="logout-btn">Logout</button>
-        </div>
+        <nav id="admin-nav" data-active="assets"></nav>
 
-        <h1>Common Assets</h1>
+        <h1>Assets</h1>
         <p style="color: #666">
           Upload shared flat images, 360° photos/videos, audio, and 3D models. Students can copy
           stable URLs into hotspot fields or use 360° assets for scenes.
@@ -317,7 +292,6 @@
 
     <div id="toast">Copied!</div>
 
-    <script src="admin-auth-ui.js"></script>
     <script src="common-assets-preview.js"></script>
     <script src="admin-common-assets.js"></script>
   </body>

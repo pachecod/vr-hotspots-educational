@@ -89,5 +89,6 @@ window.openPortal = openPortal;
 requireAdminSession('admin-gate', () => {
   document.getElementById('admin-gate').style.display = 'none';
   document.getElementById('admin-content').style.display = 'block';
+  renderAdminNav('users');
   initBilling();
 });

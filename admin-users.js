@@ -3,11 +3,11 @@ let students = [];
 let filterClassId = 'all';
 
 async function initAdminUsers() {
-  const billingNav = document.getElementById('billing-nav');
+  const billingLink = document.getElementById('billing-link-wrap');
   try {
     const res = await fetch('/api/billing/enabled');
     const data = await res.json();
-    if (data.enabled && billingNav) billingNav.style.display = '';
+    if (data.enabled && billingLink) billingLink.style.display = '';
   } catch (_) {}
 
   await loadClasses();
@@ -183,5 +183,6 @@ window.resetPassword = resetPassword;
 requireAdminSession('admin-gate', () => {
   document.getElementById('admin-gate').style.display = 'none';
   document.getElementById('admin-content').style.display = 'block';
+  renderAdminNav('users');
   initAdminUsers();
 });

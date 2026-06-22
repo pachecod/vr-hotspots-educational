@@ -2266,7 +2266,7 @@ async function startServer() {
   const server = https.createServer(options, app).listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Server running on https://localhost:${PORT}`);
     console.log(`🌐 Also accessible at https://192.168.1.80:${PORT}`);
-    console.log(`👨‍💼 Admin dashboard: https://localhost:${PORT}/admin-dashboard.html`);
+    console.log(`👨‍💼 Admin submissions: https://localhost:${PORT}/admin-submissions.html`);
   });
   server.timeout = 0; // Disable idle timeout 
   server.requestTimeout = 0; // Disable 5-minute request timeout (for huge uploads/downloads)
@@ -2275,7 +2275,7 @@ async function startServer() {
   // Production HTTP setup (e.g., Render, Heroku)
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Server running on http://localhost:${PORT}`);
-    console.log(`👨‍🏫 Professor dashboard: http://localhost:${PORT}/admin-dashboard.html`);
+    console.log(`👨‍🏫 Admin submissions: http://localhost:${PORT}/admin-submissions.html`);
     console.log('ℹ️  Running in HTTP mode (no SSL certificates found)');
   });
   server.timeout = 0; 

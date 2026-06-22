@@ -15658,12 +15658,12 @@ const AdminReviewMode = {
       const res = await fetch('/admin/session', { credentials: 'include' });
       const data = await res.json();
       if (!data.authenticated) {
-        window.location.href = '/admin-dashboard.html';
+        window.location.href = '/admin-submissions.html';
         return;
       }
       startEditor();
     } catch (_) {
-      window.location.href = '/admin-dashboard.html';
+      window.location.href = '/admin-submissions.html';
     }
   },
 

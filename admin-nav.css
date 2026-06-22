@@ -1,0 +1,39 @@
+.admin-nav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.admin-nav a {
+  padding: 8px 14px;
+  text-decoration: none;
+  color: #495057;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+  font-size: 14px;
+}
+
+.admin-nav a.active {
+  background: #007bff;
+  color: #fff;
+  border-color: #007bff;
+}
+
+.admin-nav-logout {
+  margin-left: auto;
+  padding: 8px 14px;
+  background: #6c757d;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.admin-nav-logout:hover {
+  background: #5a6268;
+}

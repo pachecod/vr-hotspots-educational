@@ -19,6 +19,7 @@ const { registerStudentRoutes } = require('./routes/student-routes');
 const { registerRosterRoutes } = require('./routes/roster-routes');
 const { registerStudentAssetRoutes } = require('./routes/student-assets-routes');
 const { registerBillingRoutes } = require('./routes/billing-routes');
+const { registerSubmissionVersionRoutes } = require('./routes/submission-version-routes');
 const { runMigrations, importSubmissionsFromJson } = require('./db/migrate');
 const { isDbEnabled } = require('./services/db-service');
 const {
@@ -27,6 +28,7 @@ const {
   getStudentSession,
 } = require('./student-auth');
 const submissionsDb = require('./services/submissions-db');
+const projectVersionsDb = require('./services/project-versions-db');
 const { assertCanSubmit } = require('./services/usage-quota');
 const { parseCookies } = require('./lib/session');
 
@@ -71,9 +73,15 @@ function writeSubmissionsLog(entries) {
   fs.writeFileSync(file, data, 'utf8');
 }
 
-async function resolveSubmissionRemotePath(filename) {
+async function resolveSubmissionRemotePath(filename, versionId) {
   const candidates = new Set();
   if (isDbEnabled()) {
+    if (versionId) {
+      const ver = await projectVersionsDb.getVersionById(versionId);
+      if (ver && ver.b2Path) candidates.add(ver.b2Path);
+    }
+    const verByFile = await projectVersionsDb.getVersionByFileName(filename);
+    if (verByFile && verByFile.b2Path) candidates.add(verByFile.b2Path);
     const row = await submissionsDb.getSubmissionByFileName(filename);
     if (row && row.remote_path) candidates.add(row.remote_path);
   }
@@ -275,6 +283,11 @@ registerStudentRoutes(app);
 registerRosterRoutes(app, { requireAdmin });
 registerStudentAssetRoutes(app, upload);
 registerBillingRoutes(app);
+registerSubmissionVersionRoutes(app, {
+  upload,
+  assertValidZipFile,
+  extractZipToDirSafe,
+});
 
 if (process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_BUCKET_NAME) {
   b2Service
@@ -1296,10 +1309,38 @@ app.post('/api/submit-project-meta', express.json(), async (req, res) => {
         }
       }
 
-      const { projectName, fileName, remotePath } = req.body || {};
+      const {
+        projectName,
+        fileName,
+        remotePath,
+        studentNote,
+        threadId,
+        versionNumber,
+        kind = 'submitted',
+      } = req.body || {};
       const safeProject = projectName || 'VR_Project';
 
-      if (isDbEnabled()) {
+      let versionResult = null;
+      if (isDbEnabled() && studentId && kind !== 'legacy') {
+        versionResult = await projectVersionsDb.createVersion({
+          studentId,
+          projectName: safeProject,
+          fileName,
+          b2Path: remotePath,
+          kind: kind === 'draft' ? 'draft' : 'submitted',
+          createdBy: 'student',
+          studentNote,
+          threadId: threadId || null,
+          versionNumber: versionNumber || null,
+        });
+        await submissionsDb.createSubmission({
+          studentId,
+          studentName,
+          projectName: safeProject,
+          fileName,
+          remotePath,
+        });
+      } else if (isDbEnabled()) {
         await submissionsDb.createSubmission({
           studentId,
           studentName,
@@ -1334,6 +1375,9 @@ app.post('/api/submit-project-meta', express.json(), async (req, res) => {
         fileName,
         studentName,
         projectName: safeProject,
+        versionId: versionResult?.version?.id || null,
+        threadId: versionResult?.thread?.id || threadId || null,
+        versionNumber: versionResult?.versionNumber || versionNumber || null,
       });
     } catch (err) {
       if (err.statusCode === 402) {
@@ -1545,6 +1589,48 @@ app.get('/admin/submissions', async (req, res) => {
     const studentId = req.query.studentId || null;
 
     if (isDbEnabled()) {
+      const inbox = await projectVersionsDb.listAdminInbox({ classId, studentId });
+      if (inbox.length > 0) {
+        const enriched = inbox.map((submission) => {
+          try {
+            const hostedPath = submission.hostedPath;
+            if (hostedPath && typeof hostedPath === 'string') {
+              const hostedDir = path.join('hosted-projects', hostedPath);
+              let updatedISO = undefined;
+              const cfg = path.join(hostedDir, 'config.json');
+              if (fs.existsSync(cfg)) {
+                updatedISO = fs.statSync(cfg).mtime.toISOString();
+              } else {
+                const idx = path.join(hostedDir, 'index.html');
+                if (fs.existsSync(idx)) updatedISO = fs.statSync(idx).mtime.toISOString();
+              }
+              if (updatedISO) submission.updatedAt = updatedISO;
+            }
+          } catch (_) {}
+          return {
+            versionId: submission.id,
+            threadId: submission.threadId,
+            versionNumber: submission.versionNumber,
+            studentName: submission.studentDisplayName,
+            studentId: submission.studentId,
+            className: submission.className,
+            classId: submission.classId,
+            projectName: submission.projectName,
+            fileName: submission.fileName,
+            remotePath: submission.b2Path,
+            studentNote: submission.studentNote,
+            adminNote: submission.adminNote,
+            hostedPath: submission.hostedPath,
+            hostedUrl: submission.hostedUrl,
+            hostedAt: submission.hostedAt,
+            isHosted: submission.isHosted,
+            submittedAt: submission.submittedAt,
+            updatedAt: submission.updatedAt,
+          };
+        });
+        return res.json(enriched);
+      }
+
       const dbSubs = await submissionsDb.listSubmissions({ classId, studentId });
       if (dbSubs.length > 0) {
         const enriched = dbSubs.map((submission) => {

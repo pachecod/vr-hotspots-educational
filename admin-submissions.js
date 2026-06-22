@@ -1,0 +1,206 @@
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function kindBadge(kind) {
+  const labels = {
+    submitted: 'Submitted',
+    admin_return: 'Teacher feedback',
+    draft: 'Draft',
+  };
+  const cls = kind === 'admin_return' ? 'badge-return' : kind === 'draft' ? 'badge-draft' : 'badge-submitted';
+  return `<span class="badge ${cls}">${labels[kind] || kind}</span>`;
+}
+
+async function loadClassesAndStudents() {
+  try {
+    const res = await adminFetch('/api/classes');
+    const classes = await res.json();
+    const classSel = document.getElementById('filter-class');
+    const studentSel = document.getElementById('filter-student');
+    if (!classSel) return;
+
+    classes.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      classSel.appendChild(opt);
+    });
+
+    classSel.addEventListener('change', async () => {
+      studentSel.innerHTML = '<option value="">All students</option>';
+      const classId = classSel.value;
+      if (!classId) return;
+      const sRes = await adminFetch(`/api/classes/${classId}/students`);
+      const students = await sRes.json();
+      students.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.displayName || s.display_name;
+        studentSel.appendChild(opt);
+      });
+    });
+  } catch (err) {
+    console.warn('Could not load class filters:', err);
+  }
+}
+
+async function loadInbox() {
+  const container = document.getElementById('inbox-list');
+  try {
+    const classId = document.getElementById('filter-class')?.value || '';
+    const studentId = document.getElementById('filter-student')?.value || '';
+    const filter = document.getElementById('filter-notes')?.value || 'all';
+    const params = new URLSearchParams();
+    if (classId) params.set('classId', classId);
+    if (studentId) params.set('studentId', studentId);
+    if (filter && filter !== 'all') params.set('filter', filter);
+    const url = '/admin/submissions-inbox' + (params.toString() ? '?' + params.toString() : '');
+    const response = await adminFetch(url);
+    const submissions = await response.json();
+
+    if (!submissions.length) {
+      container.innerHTML = '<p>No submissions yet.</p>';
+      return;
+    }
+
+    container.innerHTML = submissions
+      .map((sub) => {
+        const versionId = sub.id;
+        const threadId = sub.threadId;
+        const noteBlock = sub.studentNote
+          ? `<div class="note-block"><strong>Student note:</strong>${escapeHtml(sub.studentNote)}</div>`
+          : '';
+        const hostedLink = sub.hostedUrl
+          ? `<br><strong>Hosted:</strong> <a href="${sub.hostedUrl}" target="_blank">${sub.hostedPath || 'View'}</a>`
+          : '';
+
+        return `
+          <div class="submission-card" data-version-id="${versionId}" data-thread-id="${threadId}">
+            <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}</h3>
+            <div class="meta">
+              <strong>Student:</strong> ${escapeHtml(sub.studentDisplayName || sub.studentName || 'Unknown')}
+              ${sub.className ? ` (${escapeHtml(sub.className)})` : ''}<br>
+              <strong>Version:</strong> #${sub.versionNumber || 1}<br>
+              <strong>Submitted:</strong> ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '—'}<br>
+              <strong>File:</strong> ${escapeHtml(sub.fileName)}${hostedLink}
+            </div>
+            ${noteBlock}
+            <div class="actions">
+              <button class="btn-download" onclick="downloadVersion('${versionId}', '${escapeHtml(sub.fileName)}')">📥 Download</button>
+              <button class="btn-host" onclick="hostVersion('${versionId}', '${escapeHtml(sub.studentDisplayName || sub.studentName || 'project')}')">🌐 Host</button>
+              <a class="btn btn-review" href="/index.html?adminReview=1&versionId=${versionId}">✏️ Review in Editor</a>
+              <button class="btn-history" onclick="toggleHistory('${threadId}', this)">📜 Version history</button>
+              <button class="btn-delete" onclick="deleteVersion('${versionId}')">🗑️ Delete</button>
+            </div>
+            <div class="version-history" id="history-${threadId}"></div>
+          </div>`;
+      })
+      .join('');
+  } catch (error) {
+    if (error.code === 'AUTH_REQUIRED') {
+      location.reload();
+      return;
+    }
+    container.innerHTML = '<p style="color:#dc3545;">Error loading inbox.</p>';
+  }
+}
+
+async function downloadVersion(versionId, fileName) {
+  try {
+    const response = await adminFetch(`/admin/versions/${versionId}/download`);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Download failed');
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Download failed: ' + err.message);
+  }
+}
+
+async function hostVersion(versionId, studentName) {
+  const suggestedPath = studentName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+  const urlPath = prompt('URL path for hosting (e.g. john_doe):', suggestedPath);
+  if (!urlPath || !/^[a-zA-Z0-9_-]+$/.test(urlPath)) {
+    if (urlPath) alert('Invalid URL path.');
+    return;
+  }
+  try {
+    const response = await adminFetch(`/admin/host-version/${versionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urlPath }),
+    });
+    const result = await response.json();
+    if (result.success) {
+      alert('Hosted at ' + result.hostedUrl);
+      loadInbox();
+    } else {
+      alert(result.message || 'Hosting failed');
+    }
+  } catch (err) {
+    alert('Hosting failed: ' + err.message);
+  }
+}
+
+async function deleteVersion(versionId) {
+  if (!confirm('Delete this version from cloud storage?')) return;
+  try {
+    const response = await adminFetch(`/admin/delete-version/${versionId}`, { method: 'DELETE' });
+    const result = await response.json();
+    if (result.success) loadInbox();
+    else alert(result.message || 'Delete failed');
+  } catch (err) {
+    alert('Delete failed: ' + err.message);
+  }
+}
+
+async function toggleHistory(threadId, btn) {
+  const panel = document.getElementById('history-' + threadId);
+  if (!panel) return;
+  if (panel.classList.contains('open')) {
+    panel.classList.remove('open');
+    return;
+  }
+  panel.innerHTML = 'Loading...';
+  panel.classList.add('open');
+  try {
+    const res = await adminFetch(`/admin/projects/${threadId}/versions`);
+    const data = await res.json();
+    const versions = data.versions || [];
+    panel.innerHTML = versions
+      .map((v) => {
+        const note =
+          v.studentNote || v.adminNote
+            ? `<br><em>${escapeHtml(v.studentNote || v.adminNote)}</em>`
+            : '';
+        return `<div class="version-row">
+          ${kindBadge(v.kind)} v${v.versionNumber} — ${v.submittedAt || v.createdAt ? new Date(v.submittedAt || v.createdAt).toLocaleString() : ''}
+          ${note}
+          <button onclick="downloadVersion('${v.id}', '${escapeHtml(v.fileName)}')" style="margin-left:8px;font-size:11px;">Download</button>
+        </div>`;
+      })
+      .join('');
+  } catch (err) {
+    panel.innerHTML = 'Could not load history.';
+  }
+}
+
+document.getElementById('apply-filters')?.addEventListener('click', loadInbox);
+
+requireAdminSession(async () => {
+  await loadClassesAndStudents();
+  await loadInbox();
+});

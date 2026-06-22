@@ -30,6 +30,8 @@ export default defineConfig({
         adminAssets: resolve(__dirname, 'admin-common-assets.html'),
         adminUsers: resolve(__dirname, 'admin-users.html'),
         adminBilling: resolve(__dirname, 'admin-billing.html'),
+        adminSubmissions: resolve(__dirname, 'admin-submissions.html'),
+        adminReview: resolve(__dirname, 'admin-review.html'),
         styleEditor: resolve(__dirname, 'style-editor.html'),
       },
     },

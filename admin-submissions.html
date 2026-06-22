@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Submissions Inbox - VR Hotspots Admin</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        max-width: 1100px;
+      }
+      .admin-nav {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #dee2e6;
+      }
+      .admin-nav a {
+        padding: 8px 14px;
+        text-decoration: none;
+        color: #495057;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+      }
+      .admin-nav a.active {
+        background: #007bff;
+        color: #fff;
+        border-color: #007bff;
+      }
+      .filters {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .submission-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: #fafafa;
+      }
+      .submission-card h3 {
+        margin: 0 0 8px;
+      }
+      .meta {
+        color: #555;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .note-block {
+        margin: 10px 0;
+        padding: 10px 12px;
+        background: #fff8e1;
+        border-left: 4px solid #ffc107;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      .note-block strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+      .actions {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .actions button,
+      .actions a.btn {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        text-decoration: none;
+        display: inline-block;
+      }
+      .btn-download {
+        background: #007bff;
+        color: #fff;
+      }
+      .btn-host {
+        background: #28a745;
+        color: #fff;
+      }
+      .btn-review {
+        background: #6f42c1;
+        color: #fff;
+      }
+      .btn-history {
+        background: #6c757d;
+        color: #fff;
+      }
+      .btn-delete {
+        background: #dc3545;
+        color: #fff;
+      }
+      .version-history {
+        margin-top: 12px;
+        padding: 12px;
+        background: #fff;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        display: none;
+      }
+      .version-history.open {
+        display: block;
+      }
+      .version-row {
+        padding: 8px 0;
+        border-bottom: 1px solid #eee;
+        font-size: 13px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: bold;
+        text-transform: uppercase;
+      }
+      .badge-submitted {
+        background: #d4edda;
+        color: #155724;
+      }
+      .badge-return {
+        background: #cce5ff;
+        color: #004085;
+      }
+      .badge-draft {
+        background: #e2e3e5;
+        color: #383d41;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>📥 Submissions Inbox</h1>
+    <div class="admin-nav">
+      <a href="admin-dashboard.html">Legacy Dashboard</a>
+      <a href="admin-submissions.html" class="active">Submissions Inbox</a>
+      <a href="admin-common-assets.html">Common Assets</a>
+      <a href="admin-users.html">Users & Classes</a>
+      <a href="admin-billing.html" id="billing-nav" style="display: none">Billing</a>
+    </div>
+
+    <div class="filters">
+      <label
+        >Class:
+        <select id="filter-class"><option value="">All classes</option></select></label
+      >
+      <label
+        >Student:
+        <select id="filter-student"><option value="">All students</option></select></label
+      >
+      <label
+        >Notes:
+        <select id="filter-notes">
+          <option value="all">All</option>
+          <option value="with_notes">With notes</option>
+          <option value="without_notes">Without notes</option>
+        </select></label
+      >
+      <button type="button" id="apply-filters">Apply filters</button>
+    </div>
+
+    <div id="inbox-list">Loading submissions...</div>
+
+    <script src="admin-auth.js"></script>
+    <script src="admin-submissions.js"></script>
+  </body>
+</html>

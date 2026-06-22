@@ -168,6 +168,8 @@
     <div id="login-root"></div>
     <div id="main-content" style="display: none">
     <div class="admin-nav">
+      <a href="admin-dashboard.html">Legacy Dashboard</a>
+      <a href="admin-submissions.html">Submissions Inbox</a>
       <a href="admin-dashboard.html" class="active">Submissions</a>
       <a href="admin-common-assets.html">Common Assets</a>
       <a href="admin-users.html">Users & Classes</a>
@@ -331,9 +333,6 @@
           container.innerHTML = submissions
             .map((submission) => {
               const isHosted = submission.isHosted || submission.hostedUrl;
-              const hostButton = isHosted
-                ? `<button class="unhost-btn" onclick="unhostProject('${submission.fileName}')">🔗 Unhost</button>`
-                : `<button class="host-btn" onclick="hostProject('${submission.fileName}', '${submission.studentName}')">🌐 Host</button>`;
 
               return `
                     <div class="submission" data-filename="${submission.fileName}">
@@ -371,11 +370,16 @@
                         <br>
                         <button class="download-btn" onclick="downloadProject('${
                           submission.fileName
-                        }')">📥 Download</button>
-                        ${hostButton}
+                        }'${submission.versionId ? `, '${submission.versionId}'` : ''})">📥 Download</button>
+                        ${submission.versionId
+                          ? `<button class="host-btn" onclick="hostProjectVersion('${submission.versionId}', '${submission.studentName}')">🌐 Host</button>
+                             <a href="/index.html?adminReview=1&versionId=${submission.versionId}" style="padding:8px 15px;background:#6f42c1;color:#fff;border-radius:3px;text-decoration:none;margin-right:10px;">✏️ Review</a>`
+                          : isHosted
+                          ? `<button class="unhost-btn" onclick="unhostProject('${submission.fileName}')">🔗 Unhost</button>`
+                          : `<button class="host-btn" onclick="hostProject('${submission.fileName}', '${submission.studentName}')">🌐 Host</button>`}
                         <button class="delete-btn" onclick="deleteProject('${
                           submission.fileName
-                        }')">🗑️ Delete</button>
+                        }'${submission.versionId ? `, '${submission.versionId}'` : ''})">🗑️ Delete</button>
                     </div>
                 `;
             })
@@ -394,9 +398,12 @@
     }
       }
 
-      async function downloadProject(filename) {
+      async function downloadProject(filename, versionId) {
         try {
-          const response = await adminFetch(`/admin/download/${encodeURIComponent(filename)}`);
+          const url = versionId
+            ? `/admin/versions/${versionId}/download`
+            : `/admin/download/${encodeURIComponent(filename)}`;
+          const response = await adminFetch(url);
           const contentType = response.headers.get('content-type') || '';
           if (!response.ok) {
             const err = await response.json().catch(() => ({}));
@@ -426,6 +433,29 @@
             return;
           }
           alert('Error downloading project: ' + error.message);
+        }
+      }
+
+      async function hostProjectVersion(versionId, studentName) {
+        const suggestedPath = studentName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const urlPath = prompt('Host at URL path:', suggestedPath);
+        if (!urlPath || !/^[a-zA-Z0-9_-]+$/.test(urlPath)) return;
+        try {
+          startHostingOverlay({ title: 'Hosting project…' });
+          const response = await adminFetch(`/admin/host-version/${versionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ urlPath }),
+          });
+          const result = await response.json();
+          await finishHostingOverlay(result.success);
+          if (result.success) {
+            alert('Hosted at ' + result.hostedUrl);
+            loadSubmissions();
+          } else alert(result.message || 'Hosting failed');
+        } catch (error) {
+          await finishHostingOverlay(false);
+          alert('Error: ' + error.message);
         }
       }
 
@@ -511,13 +541,15 @@
         }
       }
 
-      async function deleteProject(filename) {
+      async function deleteProject(filename, versionId) {
         if (!confirm(`Are you sure you want to delete ${filename}?`)) {
           return;
         }
 
         try {
-          const response = await adminFetch(`/admin/delete/${filename}`, {
+          const response = versionId
+            ? await adminFetch(`/admin/delete-version/${versionId}`, { method: 'DELETE' })
+            : await adminFetch(`/admin/delete/${filename}`, {
             method: 'DELETE',
           });
 

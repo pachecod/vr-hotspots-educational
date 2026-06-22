@@ -448,6 +448,69 @@
         background: #f44336;
       }
 
+      .student-my-submissions-btn {
+        background: #3d5a80;
+        color: #fff;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        flex-shrink: 0;
+        position: relative;
+      }
+
+      .student-my-submissions-btn .unread-badge {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: #f44336;
+        color: #fff;
+        border-radius: 10px;
+        padding: 1px 6px;
+        font-size: 10px;
+        font-weight: bold;
+      }
+
+      #admin-review-bar {
+        display: none;
+        background: #4a148c;
+        color: #fff;
+        padding: 10px 14px;
+        margin: 12px 16px 0;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+
+      #admin-review-bar.visible {
+        display: block;
+      }
+
+      #admin-review-bar .review-actions {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      #admin-review-bar button {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+
+      #admin-save-send-btn {
+        background: #4caf50;
+        color: #fff;
+      }
+
+      #admin-review-close-btn {
+        background: #666;
+        color: #fff;
+      }
+
       .editor-info-btn {
         width: 28px;
         height: 28px;
@@ -886,6 +949,17 @@
           <span id="student-editor-class" class="student-editor-class"></span>
         </div>
         <button type="button" id="student-editor-logout-btn" class="student-editor-logout-btn">Logout</button>
+        <button type="button" id="student-my-submissions-btn" class="student-my-submissions-btn" style="display:none;">
+          My Submissions
+        </button>
+      </div>
+      <div id="admin-review-bar" aria-live="polite">
+        <div><strong>Admin Review</strong> — <span id="admin-review-meta"></span></div>
+        <div id="admin-review-student-note" style="margin-top:6px;font-style:italic;"></div>
+        <div class="review-actions">
+          <button type="button" id="admin-save-send-btn">💾 Save and Send to Student</button>
+          <button type="button" id="admin-review-close-btn">Close</button>
+        </div>
       </div>
       <div class="panel-header">
         <div class="panel-header-row">
@@ -1435,6 +1509,7 @@
           <input type="text" id="template-name" placeholder="Enter template name" />
         </div>
         <button class="btn btn-primary" id="save-template">Save Template</button>
+        <button class="btn btn-secondary" id="save-cloud-draft" style="display:none;">☁️ Save to Cloud</button>
         <button class="btn btn-secondary" id="load-template">Load Template</button>
         <!-- Temporarily hidden — GitHub upload still wired in script.js -->
         <button class="btn btn-secondary btn-with-icon" id="upload-github" hidden style="display: none">

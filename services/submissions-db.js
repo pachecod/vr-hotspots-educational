@@ -13,12 +13,6 @@ async function createSubmission({
     `INSERT INTO submissions (
       student_id, student_name, project_name, file_name, remote_path, synced_from_b2
     ) VALUES ($1, $2, $3, $4, $5, $6)
-    ON CONFLICT (file_name) DO UPDATE SET
-      student_id = EXCLUDED.student_id,
-      student_name = EXCLUDED.student_name,
-      project_name = EXCLUDED.project_name,
-      remote_path = EXCLUDED.remote_path,
-      updated_at = NOW()
     RETURNING *`,
     [studentId || null, studentName, projectName, fileName, remotePath, syncedFromB2]
   );

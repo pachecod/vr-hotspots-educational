@@ -42,6 +42,43 @@ async function applyIncrementalMigrations(pool) {
       name: 'students_password_encrypted_v1',
       sql: `ALTER TABLE students ADD COLUMN IF NOT EXISTS password_encrypted TEXT;`,
     },
+    {
+      name: 'project_versions_v1',
+      sql: `
+        CREATE TABLE IF NOT EXISTS project_threads (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+          project_name TEXT NOT NULL,
+          project_slug TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (student_id, project_slug)
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_threads_student_id ON project_threads(student_id);
+
+        CREATE TABLE IF NOT EXISTS project_versions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          thread_id UUID NOT NULL REFERENCES project_threads(id) ON DELETE CASCADE,
+          version_number INT NOT NULL,
+          kind TEXT NOT NULL CHECK (kind IN ('draft', 'submitted', 'admin_return')),
+          b2_path TEXT NOT NULL UNIQUE,
+          file_name TEXT NOT NULL UNIQUE,
+          student_note TEXT,
+          admin_note TEXT,
+          parent_version_id UUID REFERENCES project_versions(id) ON DELETE SET NULL,
+          created_by TEXT NOT NULL CHECK (created_by IN ('student', 'admin')),
+          student_seen_at TIMESTAMPTZ,
+          submitted_at TIMESTAMPTZ,
+          hosted_path TEXT,
+          hosted_url TEXT,
+          hosted_at TIMESTAMPTZ,
+          is_hosted BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (thread_id, version_number)
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_versions_thread_id ON project_versions(thread_id);
+        CREATE INDEX IF NOT EXISTS idx_project_versions_kind ON project_versions(kind, submitted_at DESC);
+      `,
+    },
   ];
 
   for (const migration of migrations) {
@@ -53,6 +90,17 @@ async function applyIncrementalMigrations(pool) {
     await pool.query(migration.sql);
     await pool.query(`INSERT INTO schema_migrations (name) VALUES ($1)`, [migration.name]);
     console.log(`✅ Migration applied: ${migration.name}`);
+  }
+
+  const { rows: pvRows } = await pool.query(
+    `SELECT name FROM schema_migrations WHERE name = $1`,
+    ['project_versions_import_v1']
+  );
+  if (pvRows.length === 0) {
+    const projectVersionsDb = require('../services/project-versions-db');
+    const result = await projectVersionsDb.importLegacySubmissions();
+    await pool.query(`INSERT INTO schema_migrations (name) VALUES ($1)`, ['project_versions_import_v1']);
+    console.log(`✅ Imported ${result.imported} legacy submission(s) into project_versions`);
   }
 }
 

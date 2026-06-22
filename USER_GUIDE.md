@@ -33,7 +33,8 @@ Your instructor or admin will give you a URL. Common examples:
 | Role | Page |
 |------|------|
 | **Student (editor)** | `/` or `/index.html` |
-| **Admin (submissions)** | `/admin-dashboard.html` |
+| **Admin (submissions inbox)** | `/admin-submissions.html` |
+| **Admin (legacy dashboard)** | `/admin-dashboard.html` |
 | **Admin (shared assets)** | `/admin-common-assets.html` |
 | **Admin (users & classes)** | `/admin-users.html` |
 | **Admin (billing)** | `/admin-billing.html` (when Stripe is enabled) |
@@ -55,6 +56,8 @@ After sign-in you can:
 
 - Use **My Assets** in the asset browser to upload and reuse your own images, audio, and 3D files
 - **Submit** projects tied to your account (not just a free-text project name)
+- Open **My Submissions** to see version history and teacher feedback
+- **Save to Cloud** drafts without notifying the teacher (submit when ready)
 
 Ask your teacher to reset your password from **Users & Classes** if you forget it.
 
@@ -208,11 +211,16 @@ Files you uploaded only in your browser are **always included** so the export do
 When your project is ready:
 
 1. Click **📤 Submit to Admin**
-2. Enter your **Project Name** (use the name your instructor asked for — e.g. include your name or class section if required)
-3. Choose **Include media** or **Keep online URLs**
-4. Wait for the upload to finish — do not close the tab until you see success
+2. Enter your **Project Name** (use the name your instructor asked for)
+3. Optionally add a **note for your teacher** (questions, context, or what you want feedback on)
+4. Choose **Include media** or **Keep online URLs**
+5. Wait for the upload to finish — do not close the tab until you see success
 
-The admin receives a ZIP of your full project on the dashboard.
+Each submit creates a **new version**. You can keep editing and submit again; earlier versions stay on the server.
+
+**My Submissions** (in the signed-in bar at the top of the editor) shows your project history, downloads, and any **teacher feedback** returned from review.
+
+**Save to Cloud** (under Template) saves a draft to your account without appearing in the teacher inbox until you submit.
 
 **Note:** Submitting requires the server to be running and configured (your instructor’s hosted URL or local class server). Opening `index.html` alone from your hard drive cannot submit.
 
@@ -220,11 +228,27 @@ The admin receives a ZIP of your full project on the dashboard.
 
 ## Admin: review submissions
 
-1. Open **Admin Dashboard** (`/admin-dashboard.html`)
+### Submissions Inbox
+
+1. Open **Submissions Inbox** (`/admin-submissions.html`)
 2. Sign in if prompted
-3. View the list of student submissions (name, project, date)
-4. **Download** a ZIP for any submission
-5. Unzip and open **`index.html`** in a browser to experience the student’s VR project
+3. Filter by class, student, or whether the student left a note
+4. Per submission: **Download**, **Host**, **Review in Editor**, or expand **Version history**
+
+### Review in Editor and return feedback
+
+1. Click **Review in Editor** on a submission
+2. The student’s ZIP loads in the hotspot editor
+3. Make edits as needed
+4. Click **Save and Send to Student**, add an optional feedback note, and confirm
+
+This creates a new **admin return** version. The student’s original ZIP is never overwritten. The student sees the feedback in **My Submissions** and can open your returned version in the editor.
+
+### Legacy dashboard
+
+1. Open **Admin Dashboard** (`/admin-dashboard.html`) for the older flat list view
+2. **Download** a ZIP for any submission
+3. Unzip and open **`index.html`** in a browser to experience the student’s VR project offline
 
 ---
 

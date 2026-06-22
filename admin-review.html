@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Admin Review</title>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const fromPath = window.location.pathname.match(/\/admin\/review\/([^/]+)/);
+      const versionId = params.get('versionId') || (fromPath && fromPath[1]);
+      if (versionId) {
+        window.location.replace('/index.html?adminReview=1&versionId=' + encodeURIComponent(versionId));
+      } else {
+        document.addEventListener('DOMContentLoaded', () => {
+          document.body.innerHTML = '<p>Missing versionId.</p>';
+        });
+      }
+    </script>
+  </head>
+  <body><p>Redirecting to review editor…</p></body>
+</html>

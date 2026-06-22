@@ -37,6 +37,10 @@ const AssetPreview = {
       this.close({ restoreHost: false });
     });
 
+    document.getElementById('asset-preview-tags-btn')?.addEventListener('click', () => {
+      if (this.options.onEditTags) this.options.onEditTags(this.currentAsset);
+    });
+
     document.getElementById('asset-preview-prev-btn')?.addEventListener('click', () =>
       this.navigate(-1)
     );
@@ -76,14 +80,16 @@ const AssetPreview = {
       index = 0,
       showCopyUrl = false,
       showSelect = false,
+      showEditTags = false,
       onSelect,
       onCopy,
+      onEditTags,
       replaceHost = null,
     } = opts || {};
 
     if (!asset) return;
 
-    this.options = { showCopyUrl, showSelect, onSelect, onCopy };
+    this.options = { showCopyUrl, showSelect, showEditTags, onSelect, onCopy, onEditTags };
     this.replacedHostEl = null;
     this._hostDisplay = '';
     if (replaceHost) {
@@ -144,6 +150,9 @@ const AssetPreview = {
 
     const selectBtn = document.getElementById('asset-preview-select-btn');
     if (selectBtn) selectBtn.style.display = this.options.showSelect ? '' : 'none';
+
+    const tagsBtn = document.getElementById('asset-preview-tags-btn');
+    if (tagsBtn) tagsBtn.style.display = this.options.showEditTags ? '' : 'none';
 
     const prevBtn = document.getElementById('asset-preview-prev-btn');
     const nextBtn = document.getElementById('asset-preview-next-btn');

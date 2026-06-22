@@ -16262,6 +16262,7 @@ const CommonAssetsPicker = {
   assets: {},
   activeCategory: 'images',
   assetSource: 'my',
+  canManageStudentAssets: false,
   searchQuery: '',
   targetFieldId: null,
   filterCategory: null,
@@ -16288,8 +16289,16 @@ const CommonAssetsPicker = {
   updateSourceUi() {
     const uploadEl = document.getElementById('my-assets-upload');
     const introEl = document.getElementById('shared-assets-intro');
-    if (uploadEl) uploadEl.style.display = this.assetSource === 'my' ? 'block' : 'none';
+    const signInEl = document.getElementById('my-assets-signin-hint');
+    const onMyAssets = this.assetSource === 'my';
+    const canUpload = onMyAssets && this.canManageStudentAssets;
+    if (uploadEl) uploadEl.style.display = canUpload ? 'block' : 'none';
     if (introEl) introEl.style.display = this.assetSource === 'shared' ? 'block' : 'none';
+    if (signInEl) signInEl.style.display = onMyAssets && !this.canManageStudentAssets ? 'block' : 'none';
+  },
+
+  canEditTags() {
+    return this.assetSource === 'my' && this.canManageStudentAssets;
   },
 
   init() {
@@ -16374,6 +16383,8 @@ const CommonAssetsPicker = {
     if (uploadBtn) {
       uploadBtn.addEventListener('click', () => this.uploadStudentAsset());
     }
+
+    this.updateSourceUi();
   },
 
   async uploadStudentAsset() {
@@ -16474,6 +16485,7 @@ const CommonAssetsPicker = {
       if (this.assetSource === 'my') {
         const res = await fetch('/api/student-assets', { credentials: 'include' });
         if (res.status === 401) {
+          this.canManageStudentAssets = false;
           this.assetSource = 'shared';
           document.querySelectorAll('.ca-source-tab').forEach((t) => {
             const active = t.dataset.source === 'shared';
@@ -16483,6 +16495,7 @@ const CommonAssetsPicker = {
           this.updateSourceUi();
           return this.load();
         }
+        this.canManageStudentAssets = true;
         const data = await res.json();
         if (!data.success) throw new Error(data.message || 'Failed to load');
         this.assets = data.assets || {};
@@ -16492,6 +16505,7 @@ const CommonAssetsPicker = {
         if (!data.success) throw new Error(data.message || 'Failed to load');
         this.assets = data.assets || {};
       }
+      this.updateSourceUi();
       this.render();
     } catch (err) {
       list.innerHTML =
@@ -16531,22 +16545,35 @@ const CommonAssetsPicker = {
 
   openTagBrowser() {
     if (!window.AssetTagsUI) return;
-    const tags = this.collectAllTagsFromAssets();
-    AssetTagsUI.openTagBrowserModal({
-      tags,
-      onSelectTag: (tag) => {
-        const input = document.getElementById('common-assets-search');
-        if (!input) return;
-        const current = input.value.trim();
-        input.value = current ? `${current}, ${tag}` : tag;
-        this.searchQuery = input.value;
-        this.render();
-      },
-    });
+    const openModal = (tags) => {
+      AssetTagsUI.openTagBrowserModal({
+        tags,
+        onSelectTag: (tag) => {
+          const input = document.getElementById('common-assets-search');
+          if (!input) return;
+          const current = input.value.trim();
+          input.value = current ? `${current}, ${tag}` : tag;
+          this.searchQuery = input.value;
+          this.render();
+        },
+      });
+    };
+
+    if (this.canEditTags()) {
+      fetch('/api/student-assets/tags', { credentials: 'include' })
+        .then((res) => res.json())
+        .then((data) => {
+          openModal(data.success && data.tags && data.tags.length ? data.tags : this.collectAllTagsFromAssets());
+        })
+        .catch(() => openModal(this.collectAllTagsFromAssets()));
+      return;
+    }
+
+    openModal(this.collectAllTagsFromAssets());
   },
 
   async editAssetTags(asset) {
-    if (!window.AssetTagsUI || this.assetSource !== 'my') return;
+    if (!window.AssetTagsUI || !this.canEditTags()) return;
     const cat = asset.category || this.activeCategory;
     await AssetTagsUI.openEditTagsModal({
       assetName: asset.name,
@@ -16577,14 +16604,20 @@ const CommonAssetsPicker = {
     const index = items.findIndex((a) => a.name === asset.name);
     const cat = asset.category || this.activeCategory;
     if (!window.AssetPreview) return;
+    const canEditTags = this.canEditTags();
     AssetPreview.open({
       category: cat,
       asset: { ...asset, category: cat },
       items: items.map((a) => ({ ...a, category: a.category || this.activeCategory })),
       index: index >= 0 ? index : 0,
       showSelect: true,
+      showEditTags: canEditTags,
       replaceHost: '#common-assets-modal',
       onSelect: (selected) => this.useUrl(selected),
+      onEditTags: (selected) => {
+        AssetPreview.close({ restoreHost: true });
+        this.editAssetTags(selected);
+      },
     });
   },
 
@@ -16592,7 +16625,15 @@ const CommonAssetsPicker = {
     const list = document.getElementById('common-assets-list');
     let items = this.getFilteredItems();
     if (!items.length) {
-      list.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">No assets found.</p>';
+      if (this.canEditTags()) {
+        list.innerHTML =
+          '<p style="color:#888;text-align:center;padding:20px;">No files in this category yet. Use the upload section above to add a file and tags.</p>';
+      } else if (this.assetSource === 'my') {
+        list.innerHTML =
+          '<p style="color:#888;text-align:center;padding:20px;">Sign in to upload your own files and add tags.</p>';
+      } else {
+        list.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">No assets found.</p>';
+      }
       return;
     }
     list.innerHTML = items
@@ -16602,19 +16643,18 @@ const CommonAssetsPicker = {
           ? CommonAssetsPreview.renderPickerThumb(cat, asset)
           : `<div class="ca-item-thumb ca-item-thumb-fallback">📄</div>`;
         const tagChips = window.AssetTagsUI ? AssetTagsUI.renderTagChips(asset.tags) : '';
-        const tagsBtn =
-          this.assetSource === 'my'
-            ? `<button data-ca-action="tags" data-name="${asset.name}" class="btn-tags-edit">Tags</button>`
+        const tagsBtn = this.canEditTags()
+            ? `<button data-ca-action="tags" data-name="${asset.name}" class="btn-tags-edit">Edit Tags</button>`
             : '';
         return `<div class="ca-item">
           ${icon}
           <div class="ca-item-info"><div class="ca-item-name">${asset.name}</div>${tagChips}</div>
           <div class="ca-item-actions">
+            ${tagsBtn}
             <button data-ca-action="preview" data-name="${asset.name}" class="btn-preview-ca">Preview</button>
             <button data-ca-action="copy" data-name="${asset.name}" style="background:#6f42c1;color:#fff;">Copy</button>
             <button data-ca-action="use" data-name="${asset.name}" style="background:#4caf50;color:#fff;">Select</button>
-            ${tagsBtn}
-            ${this.assetSource === 'my' ? `<button data-ca-action="delete" data-name="${asset.name}" style="background:#f44336;color:#fff;">Delete</button>` : ''}
+            ${this.canEditTags() ? `<button data-ca-action="delete" data-name="${asset.name}" style="background:#f44336;color:#fff;">Delete</button>` : ''}
           </div>
         </div>`;
       })

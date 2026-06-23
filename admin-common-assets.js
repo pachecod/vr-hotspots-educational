@@ -185,6 +185,144 @@ async function refreshVideoPipelineBanner() {
   }
 }
 
+function getUploadProgressEls() {
+  return {
+    panel: document.getElementById('upload-progress-panel'),
+    uploadLabel: document.getElementById('upload-bytes-label'),
+    uploadPct: document.getElementById('upload-bytes-pct'),
+    uploadFill: document.getElementById('upload-bytes-fill'),
+    transcodeStep: document.getElementById('transcode-progress-step'),
+    transcodeLabel: document.getElementById('transcode-phase-label'),
+    transcodePct: document.getElementById('transcode-phase-pct'),
+    transcodeFill: document.getElementById('transcode-phase-fill'),
+  };
+}
+
+function resetUploadProgress() {
+  const els = getUploadProgressEls();
+  if (!els.panel) return;
+  els.panel.classList.remove('is-active');
+  if (els.uploadFill) {
+    els.uploadFill.style.width = '0%';
+    els.uploadFill.classList.remove('is-indeterminate');
+  }
+  if (els.transcodeFill) {
+    els.transcodeFill.style.width = '0%';
+    els.transcodeFill.classList.remove('is-indeterminate');
+  }
+  if (els.transcodeStep) els.transcodeStep.style.display = 'none';
+  if (els.uploadLabel) els.uploadLabel.textContent = 'Uploading file…';
+  if (els.uploadPct) els.uploadPct.textContent = '0%';
+  if (els.transcodeLabel) els.transcodeLabel.textContent = 'Compressing video…';
+  if (els.transcodePct) els.transcodePct.textContent = '0%';
+}
+
+function showUploadByteProgress(file, loaded, total) {
+  const els = getUploadProgressEls();
+  if (!els.panel) return;
+  els.panel.classList.add('is-active');
+  const pct = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+  if (els.uploadFill) els.uploadFill.style.width = `${pct}%`;
+  if (els.uploadPct) els.uploadPct.textContent = `${pct}%`;
+  if (els.uploadLabel) {
+    els.uploadLabel.textContent =
+      total > 0
+        ? `Uploading ${file.name} (${formatBytes(loaded)} / ${formatBytes(total)})`
+        : `Uploading ${file.name}…`;
+  }
+}
+
+function showTranscodeProgress(job) {
+  const els = getUploadProgressEls();
+  if (!els.panel || !els.transcodeStep) return;
+  els.transcodeStep.style.display = 'block';
+  if (els.uploadFill) els.uploadFill.style.width = '100%';
+  if (els.uploadPct) els.uploadPct.textContent = '100%';
+  if (els.uploadLabel) els.uploadLabel.textContent = 'Upload complete';
+
+  const phase = job.phase || 'transcoding';
+  const pct = typeof job.transcodePercent === 'number' ? job.transcodePercent : 0;
+  const message = job.message || 'Compressing video…';
+
+  if (els.transcodeLabel) els.transcodeLabel.textContent = message;
+  if (els.transcodeFill) {
+    els.transcodeFill.classList.remove('is-indeterminate');
+    if (phase === 'transcoding' && pct <= 0) {
+      els.transcodeFill.classList.add('is-indeterminate');
+      if (els.transcodePct) els.transcodePct.textContent = '…';
+    } else if (phase === 'storing') {
+      els.transcodeFill.style.width = '100%';
+      if (els.transcodePct) els.transcodePct.textContent = '100%';
+    } else {
+      els.transcodeFill.style.width = `${Math.max(pct, phase === 'done' ? 100 : 0)}%`;
+      if (els.transcodePct) els.transcodePct.textContent = `${Math.max(pct, 0)}%`;
+    }
+  }
+}
+
+function postFormWithUploadProgress(url, formData, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+    xhr.upload.addEventListener('progress', (e) => {
+      const loaded = e.loaded || 0;
+      const total = e.lengthComputable ? e.total : file.size || 0;
+      if (onProgress) onProgress(loaded, total);
+    });
+    xhr.addEventListener('load', () => {
+      let data = null;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch (_) {}
+      if (xhr.status === 401) {
+        const err = new Error('Admin authentication required');
+        err.code = 'AUTH_REQUIRED';
+        reject(err);
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && data) {
+        resolve({ ok: true, data, status: xhr.status });
+        return;
+      }
+      reject(new Error((data && data.message) || 'Upload failed'));
+    });
+    xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+    xhr.send(formData);
+  });
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollUploadJob(jobId, onUpdate) {
+  for (let i = 0; i < 1200; i++) {
+    const res = await adminFetch(`/admin/common-assets/upload-jobs/${jobId}`);
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.message || 'Could not check upload status');
+    }
+    if (onUpdate) onUpdate(data);
+    if (data.phase === 'done') return data;
+    if (data.phase === 'error') {
+      throw new Error(data.error || data.message || 'Video processing failed');
+    }
+    await wait(500);
+  }
+  throw new Error('Video processing timed out');
+}
+
+function describeUploadResult(fileName, asset) {
+  if (asset.transcoded && asset.originalSize && asset.size) {
+    return `Uploaded ${fileName} — compressed ${formatBytes(asset.originalSize)} → ${formatBytes(asset.size)}`;
+  }
+  if (activeCategory === '360-videos') {
+    return `Uploaded ${fileName} (${formatBytes(asset.size)}) — stored original (compression not applied)`;
+  }
+  return `Uploaded ${fileName}`;
+}
+
 async function uploadFiles(fileList) {
   const status = document.getElementById('upload-status');
   const tagsInput = document.getElementById('upload-tags-input');
@@ -192,30 +330,54 @@ async function uploadFiles(fileList) {
   const files = Array.from(fileList || []);
   if (!files.length) return;
 
+  resetUploadProgress();
+
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     if (!file.size) {
       status.textContent = `Skipped ${file.name}: file is empty (0 bytes).`;
       continue;
     }
+
+    resetUploadProgress();
     status.textContent = `Uploading ${i + 1}/${files.length}: ${file.name}...`;
     const fd = new FormData();
     fd.append('file', file);
     fd.append('category', activeCategory);
     if (uploadTags) fd.append('tags', uploadTags);
-    const res = await adminFetch('/admin/common-assets/upload', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!data.success) {
-      status.textContent = `Failed: ${file.name} — ${data.message}`;
-      continue;
-    }
-    const asset = data.asset || {};
-    if (asset.transcoded && asset.originalSize && asset.size) {
-      status.textContent = `Uploaded ${file.name} — compressed ${formatBytes(asset.originalSize)} → ${formatBytes(asset.size)}`;
-    } else if (activeCategory === '360-videos') {
-      status.textContent = `Uploaded ${file.name} (${formatBytes(asset.size || file.size)}) — stored original (compression not applied)`;
+
+    try {
+      const { data } = await postFormWithUploadProgress(
+        '/admin/common-assets/upload',
+        fd,
+        file,
+        (loaded, total) => showUploadByteProgress(file, loaded, total)
+      );
+
+      if (!data.success) {
+        status.textContent = `Failed: ${file.name} — ${data.message}`;
+        continue;
+      }
+
+      let asset = data.asset || null;
+
+      if (data.async && data.jobId) {
+        const jobResult = await pollUploadJob(data.jobId, showTranscodeProgress);
+        asset = jobResult.asset || null;
+      }
+
+      if (asset) {
+        status.textContent = describeUploadResult(file.name, asset);
+      } else {
+        status.textContent = `Uploaded ${file.name}`;
+      }
+    } catch (err) {
+      if (err.code === 'AUTH_REQUIRED') throw err;
+      status.textContent = `Failed: ${file.name} — ${err.message}`;
     }
   }
+
+  resetUploadProgress();
 
   status.textContent = 'Upload complete.';
   if (tagsInput) tagsInput.value = '';

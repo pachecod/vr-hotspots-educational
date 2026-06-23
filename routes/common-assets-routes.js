@@ -25,7 +25,16 @@ const {
   listTagsForScope,
   parseTagSortParam,
 } = require('../lib/asset-tags');
-const { prepareVideoForStorage, cleanupTempFiles } = require('../lib/video-pipeline');
+const { prepareVideoForStorage, cleanupTempFiles, VIDEO_CATEGORY } = require('../lib/video-pipeline');
+const { isTranscodeEnabledFor } = require('../lib/video-config');
+const { isFfmpegAvailable } = require('../lib/video-transcode');
+const {
+  createUploadJob,
+  updateUploadJob,
+  getUploadJob,
+  completeUploadJob,
+  failUploadJob,
+} = require('../lib/video-upload-jobs');
 
 const COMMON_ASSETS_LIST_CACHE_MS = 2 * 60 * 1000;
 let commonAssetsListCache = { data: null, expiresAt: 0 };
@@ -113,6 +122,113 @@ async function getCachedCommonAssets() {
   return data;
 }
 
+function shouldAsyncTranscodeCommonVideo(category) {
+  return (
+    category === VIDEO_CATEGORY &&
+    isTranscodeEnabledFor('admin-common') &&
+    isFfmpegAvailable()
+  );
+}
+
+async function finalizeCommonAssetUpload({
+  tempPath,
+  originalName,
+  originalSize,
+  category,
+  tags,
+  cleanupPaths,
+  onProgress,
+  onPhase,
+}) {
+  const paths = [...(cleanupPaths || [tempPath])];
+
+  const prepared = await prepareVideoForStorage({
+    tempPath,
+    originalName,
+    category,
+    context: 'admin-common',
+    onProgress,
+  });
+  if (prepared.path !== tempPath) {
+    paths.push(prepared.path);
+  }
+
+  const storedFilename = prepared.storedFilename || sanitizeFilename(originalName);
+  if (!storedFilename) {
+    throw new Error('Invalid filename');
+  }
+
+  if (onPhase) onPhase('storing');
+
+  const remotePath = buildRemotePath(category, storedFilename);
+  const uploadContentType = prepared.contentType || getContentType(originalName);
+  await b2Service.uploadCommonAsset(prepared.path, remotePath, uploadContentType);
+  invalidateCommonAssetsListCache();
+
+  let savedTags = [];
+  if (tags.length) {
+    savedTags = await setTagsForKey(buildCommonAssetKey(category, storedFilename), tags);
+    invalidateCommonAssetsListCache();
+  }
+
+  const asset = {
+    name: storedFilename,
+    category,
+    size: prepared.size,
+    uploadedAt: new Date().toISOString(),
+    url: await buildPublicAssetUrl(category, storedFilename),
+    contentType: uploadContentType,
+    tags: savedTags,
+    transcoded: Boolean(prepared.transcoded),
+    originalSize: prepared.originalSize || originalSize,
+  };
+
+  cleanupTempFiles(paths);
+  return asset;
+}
+
+async function runAsyncCommonAssetVideoJob(jobId, { tempPath, originalName, originalSize, category, tags }) {
+  const cleanupPaths = [tempPath];
+  try {
+    updateUploadJob(jobId, {
+      phase: 'transcoding',
+      transcodePercent: 0,
+      message: 'Compressing video…',
+    });
+
+    const asset = await finalizeCommonAssetUpload({
+      tempPath,
+      originalName,
+      originalSize,
+      category,
+      tags,
+      cleanupPaths,
+      onProgress: (pct) => {
+        updateUploadJob(jobId, {
+          phase: 'transcoding',
+          transcodePercent: pct,
+          message: pct > 0 ? `Compressing video… ${pct}%` : 'Compressing video…',
+        });
+      },
+      onPhase: (phase) => {
+        if (phase === 'storing') {
+          updateUploadJob(jobId, {
+            phase: 'storing',
+            transcodePercent: 100,
+            message: 'Saving to cloud storage…',
+          });
+        }
+      },
+    });
+
+    completeUploadJob(jobId, asset);
+  } catch (err) {
+    console.error('Async common asset video job error:', err);
+    failUploadJob(jobId, err.message || 'Upload failed');
+    cleanupTempFiles(cleanupPaths);
+  }
+}
+
 function registerCommonAssetRoutes(app, upload) {
   app.post('/admin/login', handleAdminLogin);
   app.post('/admin/logout', handleAdminLogout);
@@ -175,12 +291,34 @@ function registerCommonAssetRoutes(app, upload) {
     }
   });
 
+  app.get('/admin/common-assets/upload-jobs/:jobId', requireAdmin, (req, res) => {
+    const job = getUploadJob(req.params.jobId);
+    if (!job) {
+      return res.status(404).json({ success: false, message: 'Upload job not found' });
+    }
+    return res.json({
+      success: true,
+      jobId: job.id,
+      phase: job.phase,
+      transcodePercent: job.transcodePercent,
+      message: job.message,
+      fileName: job.fileName,
+      category: job.category,
+      asset: job.asset,
+      error: job.error,
+      startedAt: job.startedAt,
+      updatedAt: job.updatedAt,
+    });
+  });
+
   app.post('/admin/common-assets/upload', requireAdmin, upload.single('file'), async (req, res) => {
     const tempPath = req.file && req.file.path;
     const cleanupPaths = tempPath ? [tempPath] : [];
     try {
       if (!req.file) {
-        return res.status(400).json({ success: false, message: 'No file uploaded' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'No file uploaded' });
       }
 
       const validation = validateCommonAssetFile(
@@ -200,50 +338,43 @@ function registerCommonAssetRoutes(app, upload) {
         });
       }
 
-      const prepared = await prepareVideoForStorage({
+      const tags = parseTagsFromBody(req.body);
+
+      if (shouldAsyncTranscodeCommonVideo(validation.category)) {
+        const job = createUploadJob({
+          fileName: req.file.originalname,
+          category: validation.category,
+        });
+        const ownedTempPath = tempPath;
+        cleanupPaths.length = 0;
+        setImmediate(() => {
+          runAsyncCommonAssetVideoJob(job.id, {
+            tempPath: ownedTempPath,
+            originalName: req.file.originalname,
+            originalSize: diskSize,
+            category: validation.category,
+            tags,
+          });
+        });
+        return res.json({
+          success: true,
+          async: true,
+          jobId: job.id,
+          fileName: req.file.originalname,
+        });
+      }
+
+      const asset = await finalizeCommonAssetUpload({
         tempPath,
         originalName: req.file.originalname,
+        originalSize: diskSize,
         category: validation.category,
-        context: 'admin-common',
+        tags,
+        cleanupPaths,
       });
-      if (prepared.path !== tempPath) {
-        cleanupPaths.push(prepared.path);
-      }
+      cleanupPaths.length = 0;
 
-      const storedFilename = prepared.storedFilename || sanitizeFilename(req.file.originalname);
-      if (!storedFilename) {
-        return res.status(400).json({ success: false, message: 'Invalid filename' });
-      }
-
-      const remotePath = buildRemotePath(validation.category, storedFilename);
-      const uploadContentType = prepared.contentType || validation.contentType;
-      await b2Service.uploadCommonAsset(prepared.path, remotePath, uploadContentType);
-      invalidateCommonAssetsListCache();
-
-      const tags = parseTagsFromBody(req.body);
-      let savedTags = [];
-      if (tags.length) {
-        savedTags = await setTagsForKey(
-          buildCommonAssetKey(validation.category, storedFilename),
-          tags
-        );
-        invalidateCommonAssetsListCache();
-      }
-
-      res.json({
-        success: true,
-        asset: {
-          name: storedFilename,
-          category: validation.category,
-          size: prepared.size,
-          uploadedAt: new Date().toISOString(),
-          url: await buildPublicAssetUrl(validation.category, storedFilename),
-          contentType: uploadContentType,
-          tags: savedTags,
-          transcoded: Boolean(prepared.transcoded),
-          originalSize: prepared.originalSize || req.file.size,
-        },
-      });
+      res.json({ success: true, asset });
     } catch (err) {
       console.error('Common asset upload error:', err);
       res.status(500).json({ success: false, message: err.message || 'Upload failed' });

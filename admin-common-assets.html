@@ -94,6 +94,57 @@
         border-color: #007bff;
         background: #e7f1ff;
       }
+      .upload-progress-panel {
+        display: none;
+        margin-top: 12px;
+        padding: 12px;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        text-align: left;
+      }
+      .upload-progress-panel.is-active {
+        display: block;
+      }
+      .upload-progress-step {
+        margin-bottom: 14px;
+      }
+      .upload-progress-step:last-child {
+        margin-bottom: 0;
+      }
+      .upload-progress-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin-bottom: 6px;
+        color: #333;
+      }
+      .upload-progress-track {
+        width: 100%;
+        height: 10px;
+        background: #e9ecef;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .upload-progress-fill {
+        height: 100%;
+        width: 0%;
+        background: #007bff;
+        border-radius: 999px;
+        transition: width 0.15s ease;
+      }
+      .upload-progress-fill.is-transcode {
+        background: #28a745;
+      }
+      .upload-progress-fill.is-indeterminate {
+        width: 35% !important;
+        animation: upload-progress-pulse 1.2s ease-in-out infinite;
+      }
+      @keyframes upload-progress-pulse {
+        0% { margin-left: 0%; }
+        50% { margin-left: 65%; }
+        100% { margin-left: 0%; }
+      }
       .asset-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -333,6 +384,26 @@
             Browse Files
           </button>
           <div id="video-pipeline-banner" style="display: none; margin-top: 10px; padding: 10px 12px; border-radius: 6px; font-size: 13px; line-height: 1.45;"></div>
+          <div id="upload-progress-panel" class="upload-progress-panel" aria-live="polite">
+            <div class="upload-progress-step">
+              <div class="upload-progress-label">
+                <span id="upload-bytes-label">Uploading file…</span>
+                <span id="upload-bytes-pct">0%</span>
+              </div>
+              <div class="upload-progress-track">
+                <div id="upload-bytes-fill" class="upload-progress-fill"></div>
+              </div>
+            </div>
+            <div class="upload-progress-step" id="transcode-progress-step" style="display: none;">
+              <div class="upload-progress-label">
+                <span id="transcode-phase-label">Compressing video…</span>
+                <span id="transcode-phase-pct">0%</span>
+              </div>
+              <div class="upload-progress-track">
+                <div id="transcode-phase-fill" class="upload-progress-fill is-transcode"></div>
+              </div>
+            </div>
+          </div>
           <div id="upload-status" style="margin-top: 10px; font-size: 13px"></div>
         </div>
 

@@ -330,12 +330,24 @@ async function uploadFiles(fileList) {
   const files = Array.from(fileList || []);
   if (!files.length) return;
 
+  let hadFailure = false;
+  let hadSuccess = false;
+
   resetUploadProgress();
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     if (!file.size) {
       status.textContent = `Skipped ${file.name}: file is empty (0 bytes).`;
+      hadFailure = true;
+      continue;
+    }
+
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const isVideo = ['mp4', 'webm', 'mov'].includes(ext);
+    if (isVideo && activeCategory !== '360-videos') {
+      status.textContent = `Select the 360 Videos tab before uploading ${file.name}.`;
+      hadFailure = true;
       continue;
     }
 
@@ -356,35 +368,48 @@ async function uploadFiles(fileList) {
 
       if (!data.success) {
         status.textContent = `Failed: ${file.name} — ${data.message}`;
+        hadFailure = true;
         continue;
       }
 
       let asset = data.asset || null;
 
       if (data.async && data.jobId) {
+        status.textContent = `Upload finished — compressing ${file.name}…`;
         const jobResult = await pollUploadJob(data.jobId, showTranscodeProgress);
         asset = jobResult.asset || null;
       }
 
       if (asset) {
         status.textContent = describeUploadResult(file.name, asset);
+        hadSuccess = true;
       } else {
         status.textContent = `Uploaded ${file.name}`;
+        hadSuccess = true;
       }
     } catch (err) {
       if (err.code === 'AUTH_REQUIRED') throw err;
       status.textContent = `Failed: ${file.name} — ${err.message}`;
+      hadFailure = true;
+    }
+  }
+
+  if (hadSuccess) {
+    status.textContent = hadFailure
+      ? 'Some uploads finished. Refreshing list…'
+      : 'Upload complete. Refreshing list…';
+    await loadAssets();
+    if (!hadFailure) {
+      status.textContent = 'Upload complete.';
     }
   }
 
   resetUploadProgress();
 
-  status.textContent = 'Upload complete.';
   if (tagsInput) tagsInput.value = '';
-  await loadAssets();
   setTimeout(() => {
-    status.textContent = '';
-  }, 2000);
+    if (!hadFailure) status.textContent = '';
+  }, 4000);
 }
 
 function setupUploadZone() {

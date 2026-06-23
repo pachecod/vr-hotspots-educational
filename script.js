@@ -607,23 +607,28 @@ class HotspotEditor {
       surface.id = 'hotspot-raycast-surface';
       surface.classList.add('scene-media-surface');
       surface.setAttribute('class', 'scene-media-surface');
-      surface.setAttribute('geometry', {
-        primitive: 'sphere',
-        radius: 5000,
-        segmentsWidth: 64,
-        segmentsHeight: 32,
-      });
-      surface.setAttribute('material', {
-        shader: 'flat',
-        color: '#000',
-        opacity: 0,
-        transparent: true,
-        side: 'back',
-      });
       surface.setAttribute('rotation', '0 -90 0');
       sceneEl.appendChild(surface);
     }
+    // Slightly smaller than videosphere (5000) so placement raycasts hit this shell first on iOS
+    surface.setAttribute('geometry', {
+      primitive: 'sphere',
+      radius: 4990,
+      segmentsWidth: 64,
+      segmentsHeight: 32,
+    });
+    surface.setAttribute('material', {
+      shader: 'flat',
+      color: '#000',
+      opacity: 0.001,
+      transparent: true,
+      depthWrite: true,
+      side: 'back',
+    });
     surface.setAttribute('visible', 'true');
+    if (surface.object3D) {
+      surface.object3D.updateMatrixWorld(true);
+    }
     return surface;
   }
 
@@ -650,25 +655,113 @@ class HotspotEditor {
     });
   }
 
+  _isTouchDevice() {
+    return (
+      'ontouchstart' in window ||
+      (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches)
+    );
+  }
+
+  _configureTouchCursors() {
+    if (!this._isTouchDevice()) return;
+    const mouseCursor = document.getElementById('mouse-cursor');
+    if (mouseCursor) mouseCursor.setAttribute('visible', 'false');
+  }
+
+  _hasValidIntersectionPoint(hit) {
+    return (
+      hit?.point &&
+      Number.isFinite(hit.point.x) &&
+      Number.isFinite(hit.point.y) &&
+      Number.isFinite(hit.point.z)
+    );
+  }
+
+  _resolveSceneMediaIntersection(evt) {
+    let intersection = evt?.detail?.intersection;
+    const hitEl = intersection?.el || evt?.target;
+
+    const needsManualRaycast =
+      !this._hasValidIntersectionPoint(intersection) || !this.isSceneMediaSurface(hitEl);
+
+    if (needsManualRaycast) {
+      intersection = this._raycastSceneMediaFromPointer(
+        evt?.detail?.mouseEvent || evt?.detail?.sourceEvent || evt
+      );
+    }
+
+    if (!this._hasValidIntersectionPoint(intersection) && this._isTouchDevice()) {
+      intersection = this._buildViewCenterIntersection();
+    }
+
+    return this._hasValidIntersectionPoint(intersection) ? intersection : null;
+  }
+
   _trackScenePointer() {
     const sceneEl = document.querySelector('a-scene');
+    const canvas = sceneEl?.canvas;
+    if (!canvas) return;
+
     const track = (evt) => {
       this._lastScenePointer = {
         clientX: evt.clientX,
         clientY: evt.clientY,
       };
     };
-    sceneEl?.canvas?.addEventListener('pointerdown', track, { passive: true });
+    canvas.addEventListener('pointerdown', track, { passive: true });
+
+    if (this._isTouchDevice()) {
+      let touchStart = null;
+      const TAP_MOVE_THRESHOLD_PX = 10;
+
+      canvas.addEventListener(
+        'touchstart',
+        (evt) => {
+          const touch = evt.touches?.[0];
+          if (!touch) return;
+          touchStart = { clientX: touch.clientX, clientY: touch.clientY };
+          this._lastScenePointer = { clientX: touch.clientX, clientY: touch.clientY };
+        },
+        { passive: true }
+      );
+
+      canvas.addEventListener(
+        'touchend',
+        (evt) => {
+          if (!this.editMode && !this.repositioningHotspotId) return;
+          const touch = evt.changedTouches?.[0];
+          if (!touch || !touchStart) return;
+
+          const dx = touch.clientX - touchStart.clientX;
+          const dy = touch.clientY - touchStart.clientY;
+          touchStart = null;
+          if (Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD_PX) return;
+
+          this._handleScenePlacementClick({
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+          });
+        },
+        { passive: true }
+      );
+    }
+
     ['mouse-cursor', 'gaze-cursor'].forEach((id) => {
       document.getElementById(id)?.addEventListener('click', (evt) => {
         this._handleScenePlacementClick(evt);
       });
     });
+
+    this._configureTouchCursors();
   }
 
-  _getSceneMediaMeshes() {
+  _getSceneMediaMeshes(options = {}) {
+    const { placementOnly = false } = options;
+    const ids = placementOnly
+      ? ['hotspot-raycast-surface', 'skybox']
+      : ['hotspot-raycast-surface', 'videosphere', 'skybox'];
     const meshes = [];
-    ['hotspot-raycast-surface', 'videosphere', 'skybox'].forEach((id) => {
+    ids.forEach((id) => {
       const el = document.getElementById(id);
       if (!el || el.getAttribute('visible') === 'false') return;
       const mesh = el.getObject3D?.('mesh');
@@ -679,7 +772,8 @@ class HotspotEditor {
 
   _raycastSceneMediaFromPointer(sourceEvent) {
     const sceneEl = document.querySelector('a-scene');
-    const camera = sceneEl?.camera || document.getElementById('cam')?.getObject3D?.('camera');
+    const camEl = document.getElementById('cam');
+    const camera = camEl?.getObject3D?.('camera') || sceneEl?.camera;
     const canvas = sceneEl?.canvas;
     if (!camera || !canvas || typeof THREE === 'undefined') return null;
 
@@ -687,6 +781,9 @@ class HotspotEditor {
       ? sourceEvent
       : this._lastScenePointer;
     if (!pointer) return null;
+
+    sceneEl?.object3D?.updateMatrixWorld(true);
+    camEl?.object3D?.updateMatrixWorld(true);
 
     const rect = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
@@ -696,7 +793,10 @@ class HotspotEditor {
 
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(ndc, camera);
-    const hits = raycaster.intersectObjects(this._getSceneMediaMeshes(), false);
+    const hits = raycaster.intersectObjects(
+      this._getSceneMediaMeshes({ placementOnly: true }),
+      false
+    );
     return hits[0] || null;
   }
 
@@ -3151,13 +3251,7 @@ class HotspotEditor {
       return;
     }
 
-    let intersection = evt?.detail?.intersection;
-    const hitEl = intersection?.el || evt?.target;
-    if (!intersection || !this.isSceneMediaSurface(hitEl)) {
-      intersection = this._raycastSceneMediaFromPointer(
-        evt?.detail?.mouseEvent || evt?.detail?.sourceEvent || evt
-      );
-    }
+    const intersection = this._resolveSceneMediaIntersection(evt);
     if (!intersection) return;
 
     this._finalizeHotspotPlacement(intersection);
@@ -5991,7 +6085,7 @@ class HotspotEditor {
       return;
     }
 
-    const intersection = evt.detail.intersection;
+    const intersection = this._resolveSceneMediaIntersection(evt);
     if (!intersection) return;
     const camera = document.querySelector('#cam');
     const pos = this.calculateOptimalPosition(intersection, camera);

@@ -144,6 +144,47 @@ async function deleteAsset(name) {
   await loadAssets();
 }
 
+async function refreshVideoPipelineBanner() {
+  const banner = document.getElementById('video-pipeline-banner');
+  if (!banner) return;
+  if (activeCategory !== '360-videos') {
+    banner.style.display = 'none';
+    return;
+  }
+  try {
+    const res = await fetch('/api/video-pipeline/status');
+    const data = await res.json();
+    if (!data.success) {
+      banner.style.display = 'none';
+      return;
+    }
+    banner.style.display = 'block';
+    if (!data.transcodeEnabled) {
+      banner.style.background = '#fff3cd';
+      banner.style.color = '#856404';
+      banner.style.border = '1px solid #ffeeba';
+      banner.textContent =
+        'Video compression is OFF on this server (VIDEO_TRANSCODE_ENABLED is not true). Uploads store the original file. Enable the flag in Render Environment and restart the service to compress 360° videos on upload.';
+      return;
+    }
+    if (!data.ffmpegAvailable) {
+      banner.style.background = '#f8d7da';
+      banner.style.color = '#721c24';
+      banner.style.border = '1px solid #f5c6cb';
+      banner.textContent =
+        'VIDEO_TRANSCODE_ENABLED is on, but FFmpeg is unavailable on this server. Uploads will store the original file.';
+      return;
+    }
+    banner.style.background = '#d4edda';
+    banner.style.color = '#155724';
+    banner.style.border = '1px solid #c3e6cb';
+    banner.textContent =
+      'Video compression is ON. New 360° video uploads are transcoded on the server before storage.';
+  } catch (_) {
+    banner.style.display = 'none';
+  }
+}
+
 async function uploadFiles(fileList) {
   const status = document.getElementById('upload-status');
   const tagsInput = document.getElementById('upload-tags-input');
@@ -167,6 +208,12 @@ async function uploadFiles(fileList) {
     if (!data.success) {
       status.textContent = `Failed: ${file.name} — ${data.message}`;
       continue;
+    }
+    const asset = data.asset || {};
+    if (asset.transcoded && asset.originalSize && asset.size) {
+      status.textContent = `Uploaded ${file.name} — compressed ${formatBytes(asset.originalSize)} → ${formatBytes(asset.size)}`;
+    } else if (activeCategory === '360-videos') {
+      status.textContent = `Uploaded ${file.name} (${formatBytes(asset.size || file.size)}) — stored original (compression not applied)`;
     }
   }
 
@@ -203,6 +250,7 @@ function setupTabs() {
     activeCategory = tab.dataset.category;
     document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
     tab.classList.add('active');
+    refreshVideoPipelineBanner();
     renderAssets();
   });
 }
@@ -331,6 +379,7 @@ function initMainApp() {
   initTagFilterBar();
   setupTabs();
   setupAssetList();
+  refreshVideoPipelineBanner();
   loadStudentPeekDropdown();
   loadAssets().catch((err) => {
     if (err.code === 'AUTH_REQUIRED') location.reload();

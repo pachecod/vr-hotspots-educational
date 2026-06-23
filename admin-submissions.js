@@ -7,6 +7,14 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;');
 }
 
+function isLegacyVersion(versionId) {
+  return String(versionId || '').startsWith('legacy:');
+}
+
+function legacyFileName(versionId, fileName) {
+  return fileName || String(versionId).replace(/^legacy:/, '');
+}
+
 function kindBadge(kind) {
   const labels = {
     submitted: 'Submitted',
@@ -80,9 +88,17 @@ async function loadInbox() {
           ? `<br><strong>Hosted:</strong> <a href="${sub.hostedUrl}" target="_blank">${sub.hostedPath || 'View'}</a>`
           : '';
 
+        const legacy = isLegacyVersion(versionId);
+        const historyBtn = legacy
+          ? ''
+          : `<button class="btn-history" onclick="toggleHistory('${threadId}', this)">📜 Version history</button>`;
+        const reviewLink = legacy
+          ? ''
+          : `<a class="btn btn-review" href="/index.html?adminReview=1&versionId=${versionId}">✏️ Review in Editor</a>`;
+
         return `
           <div class="submission-card" data-version-id="${versionId}" data-thread-id="${threadId}">
-            <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}</h3>
+            <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}${legacy ? ' <span class="badge badge-draft">B2 only</span>' : ''}</h3>
             <div class="meta">
               <strong>Student:</strong> ${escapeHtml(sub.studentDisplayName || sub.studentName || 'Unknown')}
               ${sub.className ? ` (${escapeHtml(sub.className)})` : ''}<br>
@@ -94,8 +110,8 @@ async function loadInbox() {
             <div class="actions">
               <button class="btn-download" onclick="downloadVersion('${versionId}', '${escapeHtml(sub.fileName)}')">📥 Download</button>
               <button class="btn-host" onclick="hostVersion('${versionId}', '${escapeHtml(sub.studentDisplayName || sub.studentName || 'project')}')">🌐 Host</button>
-              <a class="btn btn-review" href="/index.html?adminReview=1&versionId=${versionId}">✏️ Review in Editor</a>
-              <button class="btn-history" onclick="toggleHistory('${threadId}', this)">📜 Version history</button>
+              ${reviewLink}
+              ${historyBtn}
               <button class="btn-delete" onclick="deleteVersion('${versionId}')">🗑️ Delete</button>
             </div>
             <div class="version-history" id="history-${threadId}"></div>
@@ -115,7 +131,10 @@ async function loadInbox() {
 
 async function downloadVersion(versionId, fileName) {
   try {
-    const response = await adminFetch(`/admin/versions/${versionId}/download`);
+    const downloadUrl = isLegacyVersion(versionId)
+      ? `/admin/download/${encodeURIComponent(legacyFileName(versionId, fileName))}`
+      : `/admin/versions/${versionId}/download`;
+    const response = await adminFetch(downloadUrl);
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.message || 'Download failed');
@@ -140,7 +159,10 @@ async function hostVersion(versionId, studentName) {
     return;
   }
   try {
-    const response = await adminFetch(`/admin/host-version/${versionId}`, {
+    const hostUrl = isLegacyVersion(versionId)
+      ? `/admin/host/${encodeURIComponent(legacyFileName(versionId))}`
+      : `/admin/host-version/${versionId}`;
+    const response = await adminFetch(hostUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ urlPath }),
@@ -160,7 +182,10 @@ async function hostVersion(versionId, studentName) {
 async function deleteVersion(versionId) {
   if (!confirm('Delete this version from cloud storage?')) return;
   try {
-    const response = await adminFetch(`/admin/delete-version/${versionId}`, { method: 'DELETE' });
+    const deleteUrl = isLegacyVersion(versionId)
+      ? `/admin/delete/${encodeURIComponent(legacyFileName(versionId))}`
+      : `/admin/delete-version/${versionId}`;
+    const response = await adminFetch(deleteUrl, { method: 'DELETE' });
     const result = await response.json();
     if (result.success) loadInbox();
     else alert(result.message || 'Delete failed');

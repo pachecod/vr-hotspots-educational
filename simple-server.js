@@ -18,6 +18,7 @@ const { registerStripeWebhook } = require('./routes/stripe-webhook');
 const { registerStudentRoutes } = require('./routes/student-routes');
 const { registerRosterRoutes } = require('./routes/roster-routes');
 const { registerStudentAssetRoutes } = require('./routes/student-assets-routes');
+const { registerSceneVideoRoutes } = require('./routes/scene-video-routes');
 const { registerBillingRoutes } = require('./routes/billing-routes');
 const { registerSubmissionVersionRoutes } = require('./routes/submission-version-routes');
 const { registerAdminStudentPeekRoutes } = require('./routes/admin-student-peek-routes');
@@ -283,6 +284,7 @@ registerCommonAssetRoutes(app, upload);
 registerStudentRoutes(app);
 registerRosterRoutes(app, { requireAdmin });
 registerStudentAssetRoutes(app, upload);
+registerSceneVideoRoutes(app, upload);
 registerBillingRoutes(app);
 registerSubmissionVersionRoutes(app, {
   upload,

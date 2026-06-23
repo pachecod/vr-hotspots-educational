@@ -22,6 +22,7 @@ const {
   listTagsForScope,
   parseTagSortParam,
 } = require('../lib/asset-tags');
+const { prepareVideoForStorage, cleanupTempFiles } = require('../lib/video-pipeline');
 
 function buildStudentAssetPath(classSlug, studentId, category, filename) {
   return `student-assets/${classSlug}/${studentId}/${category}/${filename}`;
@@ -92,6 +93,7 @@ function registerStudentAssetRoutes(app, upload) {
     upload.single('file'),
     async (req, res) => {
       const tempPath = req.file && req.file.path;
+      const cleanupPaths = tempPath ? [tempPath] : [];
       try {
         if (!req.file) {
           return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -113,26 +115,36 @@ function registerStudentAssetRoutes(app, upload) {
         const ctx = await getStudentContext(studentId);
         if (!ctx) return res.status(401).json({ success: false, message: 'Student not found' });
 
+        const prepared = await prepareVideoForStorage({
+          tempPath,
+          originalName: req.file.originalname,
+          category,
+          context: 'student-asset',
+        });
+        if (prepared.path !== tempPath) {
+          cleanupPaths.push(prepared.path);
+        }
+
         await assertCanUploadAsset({
           classId: ctx.class_id,
           studentId,
-          additionalBytes: req.file.size,
+          additionalBytes: prepared.size,
         });
 
-        const storedFilename = sanitizeFilename(req.file.originalname);
+        const storedFilename = prepared.storedFilename || sanitizeFilename(req.file.originalname);
         if (!storedFilename) {
           return res.status(400).json({ success: false, message: 'Invalid filename' });
         }
         const b2Path = buildStudentAssetPath(ctx.class_slug, studentId, category, storedFilename);
-        const contentType = getContentType(storedFilename);
+        const contentType = prepared.contentType || getContentType(storedFilename);
 
-        await b2Service.uploadFile(tempPath, b2Path, contentType);
+        await b2Service.uploadFile(prepared.path, b2Path, contentType);
         await query(
           `INSERT INTO student_assets (student_id, category, filename, b2_path, size)
            VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (student_id, category, filename)
            DO UPDATE SET b2_path = EXCLUDED.b2_path, size = EXCLUDED.size, uploaded_at = NOW()`,
-          [studentId, category, storedFilename, b2Path, req.file.size]
+          [studentId, category, storedFilename, b2Path, prepared.size]
         );
 
         const tags = parseTagsFromBody(req.body);
@@ -150,8 +162,10 @@ function registerStudentAssetRoutes(app, upload) {
             name: storedFilename,
             category,
             url: `/student-assets/${studentId}/${category}/${encodeURIComponent(storedFilename)}`,
-            size: req.file.size,
+            size: prepared.size,
             tags: savedTags,
+            transcoded: Boolean(prepared.transcoded),
+            originalSize: prepared.originalSize || req.file.size,
           },
         });
       } catch (err) {
@@ -161,11 +175,7 @@ function registerStudentAssetRoutes(app, upload) {
         console.error('Student asset upload error:', err);
         res.status(500).json({ success: false, message: err.message || 'Upload failed' });
       } finally {
-        if (tempPath) {
-          try {
-            fs.unlinkSync(tempPath);
-          } catch (_) {}
-        }
+        cleanupTempFiles(cleanupPaths);
       }
     }
   );

@@ -345,6 +345,8 @@ class HotspotEditor {
     // Try to persist storage for larger assets
     this.requestPersistentStorage();
 
+    this.loadVideoPipelineConfig().catch(() => {});
+
     // Rehydrate any image/video/audio blob URLs from IndexedDB, then load the scene
     this.rehydrateImageSourcesFromIDB()
       .catch(() => {})
@@ -406,6 +408,134 @@ class HotspotEditor {
     delete target.previewCommonAssetUrl;
     delete target.previewCommonAssetCategory;
     delete target.previewCommonAssetName;
+    this.clearHostedVideoProvenance(target);
+  }
+
+  applyHostedVideoProvenance(target, uploadResult) {
+    if (!target || !uploadResult) return;
+    target.hostedVideoUrl = uploadResult.url || null;
+    target.hostedVideoProxyUrl = uploadResult.proxyUrl || null;
+  }
+
+  clearHostedVideoProvenance(target) {
+    if (!target) return;
+    delete target.hostedVideoUrl;
+    delete target.hostedVideoProxyUrl;
+  }
+
+  async loadVideoPipelineConfig() {
+    try {
+      const res = await fetch('/api/app-config', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      this._videoPipelineConfig = data.videoPipeline || {};
+    } catch (_) {
+      this._videoPipelineConfig = {};
+    }
+  }
+
+  _shouldUseSceneVideoServerUpload() {
+    return Boolean(this._videoPipelineConfig?.videoSceneServerUpload);
+  }
+
+  get _videoExportUrlModeEnabled() {
+    return Boolean(this._videoPipelineConfig?.videoExportUrlMode);
+  }
+
+  async _isStudentAuthenticated() {
+    if (window.currentStudent) return true;
+    try {
+      const res = await fetch('/api/student/session', { credentials: 'include' });
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data.authenticated && data.student) {
+        window.currentStudent = data.student;
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  _uploadSceneVideoToServer(file) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append('file', file);
+      xhr.addEventListener('load', () => {
+        let data = null;
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch (_) {}
+        if (xhr.status >= 200 && xhr.status < 300 && data?.success) {
+          resolve(data);
+          return;
+        }
+        reject(new Error((data && data.message) || 'Video upload failed'));
+      });
+      xhr.addEventListener('error', () => reject(new Error('Video upload failed')));
+      xhr.open('POST', '/api/scene-video/upload');
+      xhr.withCredentials = true;
+      xhr.send(formData);
+    });
+  }
+
+  async processLocalVideoFileForScene({ file, storageKey }) {
+    const storageKeyFinal = storageKey || `video_scene_${Date.now()}`;
+
+    if (this._shouldUseSceneVideoServerUpload() && (await this._isStudentAuthenticated())) {
+      try {
+        this.showLoadingIndicator('Uploading and compressing video...');
+        const result = await this._uploadSceneVideoToServer(file);
+        const fetchUrl = result.proxyUrl || result.url;
+        if (fetchUrl) {
+          const resp = await fetch(fetchUrl, { credentials: 'include' });
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const storedName = result.filename || file.name;
+            const storedFile = new File([blob], storedName, {
+              type: blob.type || result.contentType || 'video/mp4',
+            });
+            await this.saveVideoToIDB(storageKeyFinal, storedFile);
+            return {
+              videoSrc: URL.createObjectURL(storedFile),
+              videoStorageKey: storageKeyFinal,
+              videoFileName: storedName,
+              hostedVideoUrl: result.url || null,
+              hostedVideoProxyUrl: result.proxyUrl || null,
+              transcoded: Boolean(result.transcoded),
+              originalSize: result.originalSize || file.size,
+              compressedSize: result.size,
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Server video upload/compression failed; using local storage', err);
+      } finally {
+        this.hideLoadingIndicator();
+      }
+    }
+
+    await this.saveVideoToIDB(storageKeyFinal, file);
+    return {
+      videoSrc: URL.createObjectURL(file),
+      videoStorageKey: storageKeyFinal,
+      videoFileName: file.name,
+      hostedVideoUrl: null,
+      hostedVideoProxyUrl: null,
+    };
+  }
+
+  _getDefaultExportModeForProject() {
+    if (!this._videoExportUrlModeEnabled) return 'bundle';
+    const scenes = Object.values(this.scenes || {});
+    const videoScenes = scenes.filter((s) => s && s.type === 'video');
+    if (!videoScenes.length) return 'bundle';
+    const allHosted = videoScenes.every(
+      (s) =>
+        this.isCommonAssetObject(s) ||
+        (typeof s.hostedVideoUrl === 'string' && /^https?:\/\//i.test(s.hostedVideoUrl))
+    );
+    return allHosted ? 'urls' : 'bundle';
   }
 
   clearCommonAssetDataset(el) {
@@ -465,7 +595,11 @@ class HotspotEditor {
   resolveSceneVideoSrc(scene) {
     if (!scene || scene.type !== 'video') return '';
     let src = '';
-    if (typeof scene.videoSrc === 'string' && scene.videoSrc.trim()) {
+    if (typeof scene.hostedVideoProxyUrl === 'string' && scene.hostedVideoProxyUrl.trim()) {
+      src = scene.hostedVideoProxyUrl.trim();
+    } else if (typeof scene.hostedVideoUrl === 'string' && scene.hostedVideoUrl.trim()) {
+      src = scene.hostedVideoUrl.trim();
+    } else if (typeof scene.videoSrc === 'string' && scene.videoSrc.trim()) {
       src = scene.videoSrc.trim();
     } else if (this.isCommonAssetObject(scene)) {
       const proxy = this.buildCommonAssetProxyPath(scene);
@@ -6273,8 +6407,14 @@ class HotspotEditor {
   }
 
   showExportModeDialog(options = {}) {
-    const { title = 'Export Project', description = 'Choose how media should be included.' } =
-      options;
+    const {
+      title = 'Export Project',
+      description = 'Choose how media should be included.',
+      defaultMode = 'bundle',
+    } = options;
+    const videoUrlModeEnabled = Boolean(this._videoExportUrlModeEnabled);
+    const bundleChecked = defaultMode !== 'urls';
+    const urlsChecked = defaultMode === 'urls';
 
     return new Promise((resolve) => {
       const dialog = document.createElement('div');
@@ -6290,7 +6430,7 @@ class HotspotEditor {
           <p style="color: #ccc; margin: 0 0 20px 0; line-height: 1.5; font-size: 14px;">${description}</p>
 
           <label style="display: block; margin-bottom: 12px; padding: 14px; border: 2px solid #4CAF50; border-radius: 8px; cursor: pointer; background: rgba(76,175,80,0.08);">
-            <input type="radio" name="export-mode" value="bundle" checked style="margin-right: 10px;" />
+            <input type="radio" name="export-mode" value="bundle" ${bundleChecked ? 'checked' : ''} style="margin-right: 10px;" />
             <strong>Include media in the package</strong>
             <div style="color: #aaa; font-size: 12px; margin: 6px 0 0 24px; line-height: 1.45;">
               Downloads videos, images, and audio into the ZIP. Best for offline use or sharing a self-contained project. Larger file size.
@@ -6298,15 +6438,28 @@ class HotspotEditor {
           </label>
 
           <label style="display: block; margin-bottom: 22px; padding: 14px; border: 2px solid #555; border-radius: 8px; cursor: pointer;">
-            <input type="radio" name="export-mode" value="urls" style="margin-right: 10px;" />
+            <input type="radio" name="export-mode" value="urls" ${urlsChecked ? 'checked' : ''} style="margin-right: 10px;" />
             <strong>Keep online URLs</strong>
             <div style="color: #aaa; font-size: 12px; margin: 6px 0 0 24px; line-height: 1.45;">
               Leaves hosted media (Backblaze, common assets, remote links) as URLs in config.json. Smaller ZIP — requires internet when viewing.
             </div>
           </label>
 
+          ${
+            videoUrlModeEnabled
+              ? `<p style="color: #ffb74d; font-size: 12px; margin: 0 0 12px 0; line-height: 1.45;">
+            <strong>Video note:</strong> Internet connection is required to play videos when using Keep online URLs.
+            Compressed videos uploaded to the server can stay online instead of being copied into the ZIP.
+          </p>`
+              : ''
+          }
+
           <p style="color: #888; font-size: 12px; margin: 0 0 18px 0; line-height: 1.4;">
-            Files uploaded only to this browser are always included so the export does not break.
+            ${
+              videoUrlModeEnabled
+                ? 'Videos stored only in this browser are always included so the export does not break.'
+                : 'Files uploaded only to this browser are always included so the export does not break.'
+            }
           </p>
 
           <div style="display: flex; gap: 10px; justify-content: flex-end;">
@@ -6785,14 +6938,43 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
 
       // If this is a video scene and the source is a blob URL or local, try to export the actual file from IDB
       if (newScene.type === 'video' && !sceneUsesCommonAsset) {
-        if (preserveUrls && this._isRemoteMediaUrl(scene.videoSrc)) {
+        if (
+          this._videoExportUrlModeEnabled &&
+          preserveUrls &&
+          typeof scene.hostedVideoUrl === 'string' &&
+          /^https?:\/\//i.test(scene.hostedVideoUrl)
+        ) {
+          newScene.videoSrc = scene.hostedVideoUrl;
+        } else if (preserveUrls && this._isRemoteMediaUrl(scene.videoSrc)) {
           newScene.videoSrc = scene.videoSrc;
+        } else if (
+          this._videoExportUrlModeEnabled &&
+          typeof scene.hostedVideoUrl === 'string' &&
+          /^https?:\/\//i.test(scene.hostedVideoUrl) &&
+          videosFolder
+        ) {
+          const ext = /\.webm(\?|$)/i.test(scene.hostedVideoUrl) ? '.webm' : '.mp4';
+          const bundled = await this._bundleRemoteAssetToFolder(
+            scene.hostedVideoUrl,
+            videosFolder,
+            `${sceneId}${ext}`,
+            'videos'
+          );
+          if (bundled) newScene.videoSrc = bundled;
         } else try {
           const isBlobUrl =
             typeof scene.videoSrc === 'string' && scene.videoSrc.startsWith('blob:');
           const isDataUrl =
             typeof scene.videoSrc === 'string' && scene.videoSrc.startsWith('data:');
           if (isBlobUrl || isDataUrl || scene.videoStorageKey) {
+            if (
+              this._videoExportUrlModeEnabled &&
+              preserveUrls &&
+              typeof scene.hostedVideoUrl === 'string' &&
+              /^https?:\/\//i.test(scene.hostedVideoUrl)
+            ) {
+              newScene.videoSrc = scene.hostedVideoUrl;
+            } else {
             const db = await this.openVideoDB();
             if (db) {
               const rec = await this.getVideoFromIDB(scene.videoStorageKey || sceneId);
@@ -6809,6 +6991,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
                   newScene.videoSrc = './videos/' + cleanName;
                 }
               }
+            }
             }
           }
         } catch (_) {
@@ -14051,7 +14234,7 @@ document.addEventListener('DOMContentLoaded', () => {
     input.type = 'file';
     input.accept = 'video/mp4,video/webm';
 
-    input.addEventListener('change', (e) => {
+    input.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
@@ -14073,37 +14256,48 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const sceneId = `scene_${Date.now()}`;
-      // Save file in IndexedDB for persistence across refreshes
       const storageKey = `video_${sceneId}`;
-      this.saveVideoToIDB(storageKey, file);
 
-      // Create object URL for immediate playback
-      const videoURL = URL.createObjectURL(file);
-      this.scenes[sceneId] = {
-        name: name,
-        type: 'video',
-        image: './images/scene1.jpg', // Placeholder image
-        videoSrc: videoURL,
-        videoStorageKey: storageKey,
-        videoFileName: file.name,
-        videoVolume: 0.5,
-        hotspots: [],
-        startingPoint: null,
-        globalSound: null,
-        ground: {
-          enabled: false,
-          diffuseMap: null,
-          normalMap: null,
-          roughnessMap: null,
-          aoMap: null,
-          displacementMap: null,
-          size: { width: 50, depth: 50 },
-          position: { x: 0, y: 0, z: 0 },
-          repeat: 20,
-        },
-      };
+      try {
+        const processed = await this.processLocalVideoFileForScene({ file, storageKey });
+        const scene = {
+          name: name,
+          type: 'video',
+          image: './images/scene1.jpg',
+          videoSrc: processed.videoSrc,
+          videoStorageKey: processed.videoStorageKey,
+          videoFileName: processed.videoFileName,
+          videoVolume: 0.5,
+          hotspots: [],
+          startingPoint: null,
+          globalSound: null,
+          ground: {
+            enabled: false,
+            diffuseMap: null,
+            normalMap: null,
+            roughnessMap: null,
+            aoMap: null,
+            displacementMap: null,
+            size: { width: 50, depth: 50 },
+            position: { x: 0, y: 0, z: 0 },
+            repeat: 20,
+          },
+        };
+        this.clearCommonAssetProvenance(scene);
+        this.applyHostedVideoProvenance(scene, processed);
+        this.scenes[sceneId] = scene;
 
-      this.finalizeNewScene(sceneId, name);
+        if (processed.transcoded && processed.originalSize && processed.compressedSize) {
+          this.showStartingPointFeedback(
+            `Video compressed (${Math.round(processed.originalSize / 1024 / 1024)}MB → ${Math.round(processed.compressedSize / 1024 / 1024)}MB).`
+          );
+        }
+
+        this.finalizeNewScene(sceneId, name);
+      } catch (err) {
+        console.error('Failed to add scene video', err);
+        alert('Failed to add video scene.');
+      }
     });
 
     input.click();
@@ -14744,26 +14938,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         (async () => {
           try {
-            // Persist into IndexedDB so refresh works (saveScenesData strips blob: URLs)
             const storageKey = scene.videoStorageKey || `video_${sceneId}`;
-            const saved = await this.saveVideoToIDB(storageKey, file);
-            if (!saved) {
+            const processed = await this.processLocalVideoFileForScene({ file, storageKey });
+            if (!processed.videoStorageKey) {
               alert(
                 'Failed to save video locally.\n\nTip: Try a smaller file or enable persistent storage permissions in your browser.'
               );
               return;
             }
 
-            const videoURL = URL.createObjectURL(file);
             scene.type = 'video';
-            scene.videoSrc = videoURL;
-            scene.videoStorageKey = storageKey;
-            scene.videoFileName = file.name;
+            scene.videoSrc = processed.videoSrc;
+            scene.videoStorageKey = processed.videoStorageKey;
+            scene.videoFileName = processed.videoFileName;
             scene.videoVolume = scene.videoVolume || 0.5;
             this.clearCommonAssetProvenance(scene);
+            this.applyHostedVideoProvenance(scene, processed);
 
-            // If this scene previously had an image stored in IDB, keep it; it can still be used for previews.
-            // Ensure we don't keep stale video download flags, etc.
             this.saveScenesData();
 
             if (sceneId === this.currentScene) {
@@ -14772,7 +14963,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             close(true);
-            this.showStartingPointFeedback(`Video "${file.name}" saved locally and loaded!`);
+            const msg =
+              processed.transcoded && processed.originalSize && processed.compressedSize
+                ? `Video compressed (${Math.round(processed.originalSize / 1024 / 1024)}MB → ${Math.round(processed.compressedSize / 1024 / 1024)}MB) and loaded!`
+                : `Video "${file.name}" saved and loaded!`;
+            this.showStartingPointFeedback(msg);
           } catch (err) {
             console.error('Failed to store video', err);
             alert('Failed to store video locally.');
@@ -16042,6 +16237,7 @@ class StudentSubmission {
     const exportMode = await window.hotspotEditor.showExportModeDialog({
       title: 'Submit to Admin',
       description: 'Choose how media should be included in the package uploaded to admin.',
+      defaultMode: window.hotspotEditor._getDefaultExportModeForProject(),
     });
     if (!exportMode) return;
 

@@ -9,6 +9,7 @@ const {
   getStudentSession,
 } = require('../student-auth');
 const { assertCanSubmit } = require('../services/usage-quota');
+const { listLegacyInbox, mergeB2OrphansIntoInbox } = require('../lib/legacy-submissions');
 
 function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe }) {
   app.post('/api/student/projects/prepare-upload', async (req, res) => {
@@ -221,15 +222,25 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
 
   app.get('/admin/submissions-inbox', async (req, res) => {
     try {
-      if (!isDbEnabled()) {
-        return res.json([]);
-      }
       const { classId, studentId, filter } = req.query;
-      const inbox = await projectVersionsDb.listAdminInbox({
+      const filterVal = filter || 'all';
+
+      if (!isDbEnabled()) {
+        const inbox = await listLegacyInbox(b2Service, { filter: filterVal });
+        return res.json(inbox);
+      }
+
+      let inbox = await projectVersionsDb.listAdminInbox({
         classId: classId || null,
         studentId: studentId || null,
-        filter: filter || 'all',
+        filter: filterVal,
       });
+
+      // Include B2 uploads that never received a DB row (e.g. local dev without DATABASE_URL).
+      if (!classId && !studentId) {
+        inbox = await mergeB2OrphansIntoInbox(inbox, b2Service, { filter: filterVal });
+      }
+
       return res.json(inbox);
     } catch (err) {
       console.error('submissions-inbox error:', err);

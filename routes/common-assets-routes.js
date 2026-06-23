@@ -25,6 +25,7 @@ const {
   listTagsForScope,
   parseTagSortParam,
 } = require('../lib/asset-tags');
+const { prepareVideoForStorage, cleanupTempFiles } = require('../lib/video-pipeline');
 
 const COMMON_ASSETS_LIST_CACHE_MS = 2 * 60 * 1000;
 let commonAssetsListCache = { data: null, expiresAt: 0 };
@@ -176,6 +177,7 @@ function registerCommonAssetRoutes(app, upload) {
 
   app.post('/admin/common-assets/upload', requireAdmin, upload.single('file'), async (req, res) => {
     const tempPath = req.file && req.file.path;
+    const cleanupPaths = tempPath ? [tempPath] : [];
     try {
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -198,13 +200,24 @@ function registerCommonAssetRoutes(app, upload) {
         });
       }
 
-      const storedFilename = sanitizeFilename(req.file.originalname);
+      const prepared = await prepareVideoForStorage({
+        tempPath,
+        originalName: req.file.originalname,
+        category: validation.category,
+        context: 'admin-common',
+      });
+      if (prepared.path !== tempPath) {
+        cleanupPaths.push(prepared.path);
+      }
+
+      const storedFilename = prepared.storedFilename || sanitizeFilename(req.file.originalname);
       if (!storedFilename) {
         return res.status(400).json({ success: false, message: 'Invalid filename' });
       }
 
       const remotePath = buildRemotePath(validation.category, storedFilename);
-      await b2Service.uploadCommonAsset(tempPath, remotePath, validation.contentType);
+      const uploadContentType = prepared.contentType || validation.contentType;
+      await b2Service.uploadCommonAsset(prepared.path, remotePath, uploadContentType);
       invalidateCommonAssetsListCache();
 
       const tags = parseTagsFromBody(req.body);
@@ -222,22 +235,20 @@ function registerCommonAssetRoutes(app, upload) {
         asset: {
           name: storedFilename,
           category: validation.category,
-          size: req.file.size,
+          size: prepared.size,
           uploadedAt: new Date().toISOString(),
           url: await buildPublicAssetUrl(validation.category, storedFilename),
-          contentType: validation.contentType,
+          contentType: uploadContentType,
           tags: savedTags,
+          transcoded: Boolean(prepared.transcoded),
+          originalSize: prepared.originalSize || req.file.size,
         },
       });
     } catch (err) {
       console.error('Common asset upload error:', err);
       res.status(500).json({ success: false, message: err.message || 'Upload failed' });
     } finally {
-      if (tempPath) {
-        try {
-          fs.unlinkSync(tempPath);
-        } catch (_) {}
-      }
+      cleanupTempFiles(cleanupPaths);
     }
   });
 

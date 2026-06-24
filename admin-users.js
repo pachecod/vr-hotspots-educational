@@ -4,11 +4,7 @@ let filterClassId = 'all';
 
 async function initAdminUsers() {
   const billingLink = document.getElementById('billing-link-wrap');
-  try {
-    const res = await fetch('/api/billing/enabled');
-    const data = await res.json();
-    if (data.enabled && billingLink) billingLink.style.display = '';
-  } catch (_) {}
+  if (billingLink) billingLink.style.display = '';
 
   await loadClasses();
   await loadStudents();
@@ -55,6 +51,7 @@ function renderClasses() {
         <td>${c.student_count || 0}</td>
         <td>${escapeHtml(c.plan_tier || 'free')}</td>
         <td>
+          <a class="btn btn-secondary" href="admin-billing.html?classId=${encodeURIComponent(c.id)}">Limits</a>
           <button class="btn-danger" onclick="deleteClass('${c.id}')">Delete</button>
         </td>
       </tr>`).join('')}</tbody></table>`;

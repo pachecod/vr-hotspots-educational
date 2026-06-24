@@ -24,8 +24,8 @@ async function getOrCreateBillingAccount(scopeType, scopeId) {
   if (existing.rows.length) return existing.rows[0];
 
   const inserted = await query(
-    `INSERT INTO billing_accounts (scope_type, scope_id, plan_tier, status)
-     VALUES ($1, $2, 'free', 'active') RETURNING *`,
+    `INSERT INTO billing_accounts (scope_type, scope_id, plan_tier, status, limit_overrides)
+     VALUES ($1, $2, 'free', 'active', '{}'::jsonb) RETURNING *`,
     [scopeType, scopeId]
   );
   return inserted.rows[0];

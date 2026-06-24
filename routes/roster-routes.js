@@ -18,8 +18,8 @@ async function ensureClassBillingAccount(classId) {
   );
   if (existing.rows.length) return existing.rows[0].id;
   const inserted = await query(
-    `INSERT INTO billing_accounts (scope_type, scope_id, plan_tier, status)
-     VALUES ('class', $1, 'free', 'active') RETURNING id`,
+    `INSERT INTO billing_accounts (scope_type, scope_id, plan_tier, status, limit_overrides)
+     VALUES ('class', $1, 'free', 'active', '{}'::jsonb) RETURNING id`,
     [classId]
   );
   return inserted.rows[0].id;

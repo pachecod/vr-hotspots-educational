@@ -1,9 +1,26 @@
 const { requireAdmin } = require('../admin-auth');
 const { requireStudentStrict } = require('../student-auth');
 const { isStripeEnabled, createCheckoutSession, createPortalSession } = require('../services/stripe-service');
-const { getUsageSummary } = require('../services/usage-quota');
+const { getUsageSummary, getClassBillingAccount } = require('../services/usage-quota');
 const { query } = require('../services/db-service');
-const { PLAN_TIERS } = require('../lib/plan-tiers');
+const {
+  mergeLimitOverrides,
+  PLAN_TIERS,
+} = require('../lib/class-limits');
+
+const VALID_PLAN_TIERS = Object.keys(PLAN_TIERS);
+
+async function ensureClassBillingAccount(classId) {
+  const existing = await getClassBillingAccount(classId);
+  if (existing && existing.id) return existing;
+  const inserted = await query(
+    `INSERT INTO billing_accounts (scope_type, scope_id, plan_tier, status, limit_overrides)
+     VALUES ('class', $1, 'free', 'active', '{}'::jsonb)
+     RETURNING *`,
+    [classId]
+  );
+  return inserted.rows[0];
+}
 
 function getBaseUrl(req) {
   if (process.env.SERVER_BASE_URL) return process.env.SERVER_BASE_URL.replace(/\/$/, '');
@@ -28,13 +45,15 @@ function registerBillingRoutes(app) {
         return res.json({ classes: rows, stripeEnabled: isStripeEnabled() });
       }
       const usage = await getUsageSummary({ classId });
-      const { rows: billingRows } = await query(
-        `SELECT * FROM billing_accounts WHERE scope_type = 'class' AND scope_id = $1`,
-        [classId]
-      );
+      const billing = await ensureClassBillingAccount(classId);
       res.json({
         stripeEnabled: isStripeEnabled(),
-        billing: billingRows[0] || { plan_tier: 'free', status: 'active' },
+        billing: {
+          plan_tier: billing.plan_tier || 'free',
+          status: billing.status || 'active',
+          limit_overrides: billing.limit_overrides || {},
+          current_period_end: billing.current_period_end || null,
+        },
         usage,
       });
     } catch (err) {
@@ -47,6 +66,50 @@ function registerBillingRoutes(app) {
       const classId = req.query.classId;
       if (!classId) return res.status(400).json({ success: false, message: 'classId required' });
       res.json(await getUsageSummary({ classId }));
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.patch('/admin/billing/class-settings', requireAdmin, async (req, res) => {
+    try {
+      const { classId, planTier, limitOverrides, clearOverrides } = req.body || {};
+      if (!classId) {
+        return res.status(400).json({ success: false, message: 'classId required' });
+      }
+
+      const billing = await ensureClassBillingAccount(classId);
+      let nextTier = billing.plan_tier || 'free';
+      if (planTier != null && planTier !== '') {
+        if (!VALID_PLAN_TIERS.includes(planTier)) {
+          return res.status(400).json({ success: false, message: 'Invalid plan tier' });
+        }
+        nextTier = planTier;
+      }
+
+      let nextOverrides = billing.limit_overrides || {};
+      if (clearOverrides) {
+        nextOverrides = {};
+      } else if (limitOverrides && typeof limitOverrides === 'object') {
+        nextOverrides = mergeLimitOverrides(nextOverrides, limitOverrides);
+      }
+
+      const { rows } = await query(
+        `UPDATE billing_accounts
+         SET plan_tier = $1,
+             limit_overrides = $2::jsonb,
+             updated_at = NOW()
+         WHERE scope_type = 'class' AND scope_id = $3
+         RETURNING *`,
+        [nextTier, JSON.stringify(nextOverrides), classId]
+      );
+
+      const usage = await getUsageSummary({ classId });
+      res.json({
+        success: true,
+        billing: rows[0],
+        usage,
+      });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }

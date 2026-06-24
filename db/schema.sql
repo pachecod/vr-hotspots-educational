@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS billing_accounts (
   scope_id UUID NOT NULL,
   stripe_customer_id TEXT,
   plan_tier TEXT NOT NULL DEFAULT 'free',
+  limit_overrides JSONB NOT NULL DEFAULT '{}'::jsonb,
   status TEXT NOT NULL DEFAULT 'active',
   current_period_end TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

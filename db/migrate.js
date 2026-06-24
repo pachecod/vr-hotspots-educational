@@ -80,6 +80,10 @@ async function applyIncrementalMigrations(pool) {
       `,
     },
     {
+      name: 'billing_limit_overrides_v1',
+      sql: `ALTER TABLE billing_accounts ADD COLUMN IF NOT EXISTS limit_overrides JSONB NOT NULL DEFAULT '{}'::jsonb;`,
+    },
+    {
       name: 'asset_tags_v1',
       sql: `
         CREATE TABLE IF NOT EXISTS asset_tags (

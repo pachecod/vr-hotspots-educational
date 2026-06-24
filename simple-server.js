@@ -275,11 +275,17 @@ function protectAdminRoutes(req, res, next) {
   if (!req.path.startsWith('/admin')) return next();
   if (req.method === 'POST' && req.path === '/admin/login') return next();
   if (req.method === 'POST' && req.path === '/admin/logout') return next();
+  if (req.method === 'GET' && (req.path === '/admin' || req.path === '/admin/')) return next();
   if (req.method === 'GET' && req.path === '/admin/session') return next();
   return requireAdmin(req, res, next);
 }
 
 app.use(protectAdminRoutes);
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
 registerCommonAssetRoutes(app, upload);
 registerStudentRoutes(app);
 registerRosterRoutes(app, { requireAdmin });
@@ -2270,6 +2276,7 @@ async function startServer() {
   const server = https.createServer(options, app).listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Server running on https://localhost:${PORT}`);
     console.log(`🌐 Also accessible at https://192.168.1.80:${PORT}`);
+    console.log(`👨‍💼 Admin overview: https://localhost:${PORT}/admin`);
     console.log(`👨‍💼 Admin submissions: https://localhost:${PORT}/admin-submissions.html`);
   });
   server.timeout = 0; // Disable idle timeout 
@@ -2279,6 +2286,7 @@ async function startServer() {
   // Production HTTP setup (e.g., Render, Heroku)
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Server running on http://localhost:${PORT}`);
+    console.log(`👨‍🏫 Admin overview: http://localhost:${PORT}/admin`);
     console.log(`👨‍🏫 Admin submissions: http://localhost:${PORT}/admin-submissions.html`);
     console.log('ℹ️  Running in HTTP mode (no SSL certificates found)');
   });

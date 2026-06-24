@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Admin — VR Hotspots</title>
+    <link rel="stylesheet" href="admin-nav.css" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background: #f5f5f5;
+        max-width: 900px;
+        color: #333;
+      }
+      .panel {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+      .panel h1 {
+        margin: 0 0 8px;
+        font-size: 1.6em;
+      }
+      .intro {
+        color: #555;
+        line-height: 1.55;
+        margin: 0 0 20px;
+      }
+      .section-grid {
+        display: grid;
+        gap: 16px;
+      }
+      .section-card {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 18px 20px;
+        background: #fafafa;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+      .section-card:hover {
+        border-color: #007bff;
+        box-shadow: 0 2px 8px rgba(0, 123, 255, 0.12);
+      }
+      .section-card h2 {
+        margin: 0 0 8px;
+        font-size: 1.15em;
+        color: #007bff;
+      }
+      .section-card p {
+        margin: 0;
+        color: #555;
+        line-height: 1.5;
+        font-size: 14px;
+      }
+      .tips {
+        margin: 0;
+        padding-left: 20px;
+        color: #555;
+        line-height: 1.6;
+      }
+      .tips li {
+        margin-bottom: 8px;
+      }
+      #admin-gate {
+        min-height: 200px;
+      }
+    </style>
+    <script src="admin-auth-ui.js"></script>
+    <script src="admin-nav.js"></script>
+  </head>
+  <body>
+    <div id="admin-gate"></div>
+    <div id="admin-content" style="display: none">
+      <nav id="admin-nav" data-active="home"></nav>
+
+      <div class="panel">
+        <h1>VR Hotspots Admin</h1>
+        <p class="intro">
+          Use these tools to manage classes, shared media, student project submissions, and usage
+          limits. Sign in with your admin password on any admin page. Students use the main editor
+          at <a href="/">/</a>; this area is for teachers and site administrators only.
+        </p>
+        <p class="intro" style="margin-bottom: 0">
+          Choose a section below or use the navigation bar at the top of any admin page.
+        </p>
+      </div>
+
+      <div class="section-grid">
+        <a class="section-card" href="admin-submissions.html">
+          <h2>Submissions</h2>
+          <p>
+            Review projects students submit for grading. Download ZIPs, host tours online, return
+            work with feedback, import backups, and sync with cloud storage.
+          </p>
+        </a>
+        <a class="section-card" href="admin-common-assets.html">
+          <h2>Assets</h2>
+          <p>
+            Manage the shared asset library (360° images, videos, audio, flat images, models). Upload
+            files students can pick from the editor’s Asset Library.
+          </p>
+        </a>
+        <a class="section-card" href="admin-users.html">
+          <h2>Users</h2>
+          <p>
+            Create classes and student accounts, reset passwords, export login lists, and peek into a
+            student’s submissions and personal assets.
+          </p>
+        </a>
+        <a class="section-card" href="admin-billing.html">
+          <h2>Billing &amp; Limits</h2>
+          <p>
+            View usage per class and set limits for submissions, storage, hosted projects, and asset
+            uploads. Override tier defaults or set limits to unlimited without Stripe.
+          </p>
+        </a>
+      </div>
+
+      <div class="panel" style="margin-top: 20px">
+        <h2 style="margin-top: 0; font-size: 1.1em">Quick tips</h2>
+        <ul class="tips">
+          <li>Set up <strong>Users</strong> first — classes, students, and passwords — before students sign in.</li>
+          <li>Upload shared media in <strong>Assets</strong> so students can reuse approved files.</li>
+          <li>Students submit from the editor; new work appears in <strong>Submissions</strong>.</li>
+          <li>If submissions are blocked, check <strong>Billing &amp; Limits</strong> for monthly caps.</li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      requireAdminSession('admin-gate', () => {
+        document.getElementById('admin-gate').style.display = 'none';
+        document.getElementById('admin-content').style.display = 'block';
+        renderAdminNav('home');
+      });
+    </script>
+  </body>
+</html>

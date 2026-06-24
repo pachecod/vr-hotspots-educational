@@ -3,6 +3,7 @@ function renderAdminNav(activeTab) {
   if (!nav) return;
 
   const tabs = [
+    { id: 'home', label: 'Overview', href: '/admin' },
     { id: 'submissions', label: 'Submissions', href: 'admin-submissions.html' },
     { id: 'assets', label: 'Assets', href: 'admin-common-assets.html' },
     { id: 'users', label: 'Users', href: 'admin-users.html' },

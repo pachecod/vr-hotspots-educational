@@ -5705,10 +5705,10 @@ class HotspotEditor {
     const prev = this._activeInSceneHotspotEl;
     if (prev && prev !== hotspotEl) {
       this._setInSceneButtonsVisible(prev, false);
+      this._syncInSceneHint(prev);
     }
     this._activeInSceneHotspotEl = hotspotEl;
     this._setInSceneButtonsVisible(hotspotEl, true);
-    if (prev && prev !== hotspotEl) this._syncInSceneHint(prev);
     this._syncInSceneHint(hotspotEl);
     if (hotspotEl._repositionEditButtons) hotspotEl._repositionEditButtons();
     this._bringInSceneEditButtonsToFront(hotspotEl);
@@ -5722,6 +5722,12 @@ class HotspotEditor {
     this._syncInSceneHint(hotspotEl);
   }
 
+  hideAllInSceneButtons() {
+    if (this._activeInSceneHotspotEl) {
+      this.hideInSceneButtons(this._activeInSceneHotspotEl);
+    }
+  }
+
   toggleInSceneButtons(hotspotEl) {
     if (!hotspotEl) return;
     if (this._activeInSceneHotspotEl === hotspotEl) {
@@ -5731,22 +5737,42 @@ class HotspotEditor {
     }
   }
 
-  // Bind a click handler on the hotspot's media so clicking the photo/video toggles
-  // its edit/move buttons. Idempotent and safe to call repeatedly (e.g. after the
-  // flat-video billboard is remounted, which replaces the media element).
+  _bindInSceneRevealClick(el, hotspotEl) {
+    if (!el || !hotspotEl) return;
+    if (el._inSceneRevealHandler) {
+      el.removeEventListener('click', el._inSceneRevealHandler);
+    }
+    el._inSceneRevealHandler = (e) => {
+      if (this.navigationMode) return;
+      if (e) e.stopPropagation();
+      // Always reveal (never toggle off) — users expect a click to open the controls.
+      this.revealInSceneButtons(hotspotEl);
+    };
+    el.classList.add('clickable');
+    el.addEventListener('click', el._inSceneRevealHandler);
+  }
+
+  // Bind click handlers on the hotspot's media and hint label so clicking either
+  // reveals the Edit/Move buttons. Rebinds automatically when the media element
+  // is replaced (e.g. after edit-save rebuild or video remount).
   _bindInSceneRevealOnMedia(hotspotEl) {
     if (!hotspotEl) return;
     const media =
       hotspotEl.querySelector('.static-image-hotspot') ||
       hotspotEl.querySelector('.static-video-hotspot');
-    if (!media || media._inSceneRevealBound) return;
-    media._inSceneRevealBound = true;
-    media.classList.add('clickable');
-    media.addEventListener('click', (e) => {
-      if (this.navigationMode) return;
-      if (e) e.stopPropagation();
-      this.toggleInSceneButtons(hotspotEl);
-    });
+    const hint = hotspotEl.inSceneHintEl || hotspotEl.querySelector('.in-scene-edit-hint');
+
+    if (media && hotspotEl._inSceneRevealMediaEl !== media) {
+      this._bindInSceneRevealClick(media, hotspotEl);
+      hotspotEl._inSceneRevealMediaEl = media;
+    } else if (media && !media._inSceneRevealHandler) {
+      this._bindInSceneRevealClick(media, hotspotEl);
+      hotspotEl._inSceneRevealMediaEl = media;
+    }
+
+    if (hint && !hint._inSceneRevealHandler) {
+      this._bindInSceneRevealClick(hint, hotspotEl);
+    }
   }
 
   addInSceneEditButton(hotspotEl, data) {
@@ -5758,6 +5784,7 @@ class HotspotEditor {
       this._bringInSceneEditButtonsToFront(hotspotEl);
       if (hotspotEl._repositionEditButtons) hotspotEl._repositionEditButtons();
       this._refreshInSceneEditButtonMaterials(hotspotEl);
+      this._bindInSceneRevealOnMedia(hotspotEl);
       return;
     }
 
@@ -5860,11 +5887,11 @@ class HotspotEditor {
     hint.setAttribute('position', '0 -0.45 0.44');
     hint.setAttribute(
       'text',
-      'value: Click to edit or move; align: center; color: #FFFFFF; width: 0.6; baseline: center; wrapCount: 22'
+      'value: Click to edit or move; align: center; color: #FFFFFF; width: 1.8; baseline: center; wrapCount: 22'
     );
     hint.setAttribute('visible', 'false');
     hotspotEl.appendChild(hint);
-    this._attachIconButtonMesh(hint, this._createHintBackgroundMesh(0.62, 0.1));
+    this._attachIconButtonMesh(hint, this._createHintBackgroundMesh(1.86, 0.3));
     const styleHintText = () => {
       const t = hint.getObject3D('text');
       if (t) {
@@ -5903,7 +5930,7 @@ class HotspotEditor {
 
     syncButtonVisibility();
 
-    // Reveal/toggle this hotspot's buttons when its media (photo or video) is clicked.
+    // Reveal this hotspot's buttons when its media or hint label is clicked.
     this._bindInSceneRevealOnMedia(hotspotEl);
 
     // Hide these buttons once an action is chosen.
@@ -7406,7 +7433,10 @@ class HotspotEditor {
 
   _refreshHotspotEntity(hotspot) {
     const el = document.getElementById(`hotspot-${hotspot.id}`);
-    if (el && el.parentNode) el.parentNode.removeChild(el);
+    if (el) {
+      if (this._activeInSceneHotspotEl === el) this._activeInSceneHotspotEl = null;
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }
     // Ensure position persists
     const dataCopy = { ...hotspot };
     this.createHotspotElement(dataCopy);

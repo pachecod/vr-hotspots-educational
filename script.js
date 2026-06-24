@@ -32,6 +32,18 @@ function prepareFlatVideoHotspotElement(video, muted) {
   } catch (_) {}
 }
 
+function isVideoSkyboxActive() {
+  try {
+    const ed = window.hotspotEditor;
+    if (ed && typeof ed.isVideoSkyboxScene === 'function' && ed.isVideoSkyboxScene()) {
+      return true;
+    }
+    const hp = window.hotspotProject;
+    if (hp && hp._sceneMediaType === 'video') return true;
+  } catch (_) {}
+  return false;
+}
+
 function pauseScene360VideoForFlatHotspot() {
   const sceneVideo = document.getElementById('scene-video-dynamic');
   if (!sceneVideo) return;
@@ -42,6 +54,15 @@ function pauseScene360VideoForFlatHotspot() {
         sceneVideo.pause();
       } catch (_) {}
     }
+    try {
+      const ed = window.hotspotEditor;
+      const hp = window.hotspotProject;
+      if (ed && typeof ed.suspendVideoSkyboxForFlatHotspot === 'function') {
+        ed.suspendVideoSkyboxForFlatHotspot();
+      } else if (hp && typeof hp.suspendVideoSkyboxForFlatHotspot === 'function') {
+        hp.suspendVideoSkyboxForFlatHotspot();
+      }
+    } catch (_) {}
   }
   _flatVideoScene360PauseCount++;
 }
@@ -49,6 +70,18 @@ function pauseScene360VideoForFlatHotspot() {
 function resumeScene360VideoAfterFlatHotspot() {
   _flatVideoScene360PauseCount = Math.max(0, _flatVideoScene360PauseCount - 1);
   if (_flatVideoScene360PauseCount > 0) return;
+  try {
+    const ed = window.hotspotEditor;
+    const hp = window.hotspotProject;
+    if (ed && typeof ed.resumeVideoSkyboxAfterFlatHotspot === 'function') {
+      ed.resumeVideoSkyboxAfterFlatHotspot();
+      return;
+    }
+    if (hp && typeof hp.resumeVideoSkyboxAfterFlatHotspot === 'function') {
+      hp.resumeVideoSkyboxAfterFlatHotspot();
+      return;
+    }
+  } catch (_) {}
   const sceneVideo = document.getElementById('scene-video-dynamic');
   if (sceneVideo && sceneVideo._wasPlayingBeforeFlatHotspot) {
     try {
@@ -76,6 +109,28 @@ function hasVideoHotspotReference(h) {
   if (h.videoStorageKey) return true;
   if (h.commonAssetUrl) return true;
   return false;
+}
+
+function hasImageHotspotReference(h) {
+  if (!h || h.type !== 'image' || isVideoHotspot(h)) return false;
+  if (h.image instanceof File) return true;
+  if (typeof h.image === 'string' && h.image.trim() !== '') return true;
+  if (h.imageStorageKey) return true;
+  if (h.commonAssetUrl) return true;
+  if (h.imageFileName) return true;
+  return false;
+}
+
+function isEditorVideoSkyboxScene() {
+  try {
+    const ed = window.hotspotEditor;
+    if (!ed || !ed.scenes) return false;
+    const scene = ed.scenes[ed.currentScene];
+    if (!scene || scene.type !== 'video') return false;
+    return !!ed.resolveSceneVideoSrc(scene);
+  } catch (_) {
+    return false;
+  }
 }
 
 function resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl) {
@@ -112,38 +167,48 @@ function resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl) {
 function playFlatVideoHotspotVideos(videos, aVideoEl, muted) {
   if (!videos || !videos.length) return Promise.resolve(false);
   pauseScene360VideoForFlatHotspot();
-  videos.forEach((video) => prepareFlatVideoHotspotElement(video, muted));
-  const playOne = (video) => {
-    try {
-      if (video.readyState < 1) {
-        return new Promise((resolve) => {
-          const onReady = () => {
-            video.removeEventListener('loadeddata', onReady);
-            video.removeEventListener('canplay', onReady);
-            resolve(video.play().catch(function () { return false; }));
-          };
-          video.addEventListener('loadeddata', onReady, { once: true });
-          video.addEventListener('canplay', onReady, { once: true });
-          try {
-            video.load();
-          } catch (_) {}
-        });
+
+  const runPlayback = () => {
+    videos.forEach((video) => prepareFlatVideoHotspotElement(video, muted));
+    const playOne = (video) => {
+      try {
+        if (video.readyState < 1) {
+          return new Promise((resolve) => {
+            const onReady = () => {
+              video.removeEventListener('loadeddata', onReady);
+              video.removeEventListener('canplay', onReady);
+              resolve(video.play().catch(function () { return false; }));
+            };
+            video.addEventListener('loadeddata', onReady, { once: true });
+            video.addEventListener('canplay', onReady, { once: true });
+            try {
+              video.load();
+            } catch (_) {}
+          });
+        }
+        return video.play().catch(function () { return false; });
+      } catch (_) {
+        return Promise.resolve(false);
       }
-      return video.play().catch(function () { return false; });
-    } catch (_) {
-      return Promise.resolve(false);
-    }
+    };
+    return Promise.all(videos.map(playOne)).then(function () {
+      try {
+        if (aVideoEl) {
+          const mesh = aVideoEl.getObject3D && aVideoEl.getObject3D('mesh');
+          const map = mesh && mesh.material && mesh.material.map;
+          if (map) map.needsUpdate = true;
+        }
+      } catch (_) {}
+      return true;
+    });
   };
-  return Promise.all(videos.map(playOne)).then(function () {
-    try {
-      if (aVideoEl) {
-        const mesh = aVideoEl.getObject3D && aVideoEl.getObject3D('mesh');
-        const map = mesh && mesh.material && mesh.material.map;
-        if (map) map.needsUpdate = true;
-      }
-    } catch (_) {}
-    return true;
-  });
+
+  if (isVideoSkyboxActive()) {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(runPlayback()), 100);
+    });
+  }
+  return runPlayback();
 }
 
 function pauseFlatVideoHotspotVideos(videos, aVideoEl) {
@@ -164,19 +229,18 @@ function pauseFlatVideoHotspotVideos(videos, aVideoEl) {
 }
 
 function setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, playing, userAction, muted) {
-  if (!videos || !videos.length) return;
+  if (!videos || !videos.length) return Promise.resolve();
   if (userAction && parentEl) parentEl._flatVideoUserPaused = !playing;
   const useMuted = muted !== false;
-  if (playing) {
-    playFlatVideoHotspotVideos(videos, aVideoEl, useMuted);
-  } else {
-    pauseFlatVideoHotspotVideos(videos, aVideoEl);
-  }
+  const playbackPromise = playing
+    ? playFlatVideoHotspotVideos(videos, aVideoEl, useMuted)
+    : (pauseFlatVideoHotspotVideos(videos, aVideoEl), Promise.resolve());
   if (aVideoEl) {
     try {
       aVideoEl.setAttribute('autoplay', playing ? 'true' : 'false');
     } catch (_) {}
   }
+  return playbackPromise;
 }
 
 function setFlatVideoHotspotMuted(videos, muted) {
@@ -213,7 +277,6 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
   const buttonOpacity = String(styles?.audio?.buttonOpacity ?? 1.0);
   const btnY = options.controlY != null ? options.controlY : -0.35;
   const btnZ = options.controlZ != null ? options.controlZ : 0.12;
-  const btnSpacing = 0.32;
 
   const getVideos = () => resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl);
 
@@ -224,27 +287,8 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
   playBtn.setAttribute('height', '0.5');
   playBtn.setAttribute('material', 'color: ' + buttonColor);
   playBtn.setAttribute('opacity', buttonOpacity);
-  playBtn.setAttribute('position', -btnSpacing + ' ' + btnY + ' ' + btnZ);
+  playBtn.setAttribute('position', '0 ' + btnY + ' ' + btnZ);
   parentEl.appendChild(playBtn);
-
-  const audioBtn = document.createElement('a-plane');
-  audioBtn.setAttribute('class', 'clickable video-control video-audio-control');
-  audioBtn.setAttribute('width', '0.5');
-  audioBtn.setAttribute('height', '0.5');
-  audioBtn.setAttribute('position', btnSpacing + ' ' + btnY + ' ' + btnZ);
-  audioBtn.setAttribute(
-    'material',
-    'color: ' + buttonColor + '; opacity: ' + buttonOpacity + '; transparent: true'
-  );
-  parentEl.appendChild(audioBtn);
-  const audioLabel = document.createElement('a-text');
-  audioLabel.setAttribute('class', 'video-audio-label');
-  audioLabel.setAttribute('value', startMuted ? 'OFF' : 'ON');
-  audioLabel.setAttribute('align', 'center');
-  audioLabel.setAttribute('position', btnSpacing + ' ' + btnY + ' ' + (btnZ + 0.01));
-  audioLabel.setAttribute('color', '#222222');
-  audioLabel.setAttribute('scale', '1.2 1.2 1');
-  parentEl.appendChild(audioLabel);
 
   let isPlaying = false;
   let isMuted = startMuted;
@@ -257,7 +301,6 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
     isPlaying = !video.paused;
     isMuted = !!video.muted;
     playBtn.setAttribute('src', isPlaying ? pauseImage : playImage);
-    audioLabel.setAttribute('value', isMuted ? 'OFF' : 'ON');
   };
 
   const bindVideoListeners = () => {
@@ -286,25 +329,15 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
     }
     if (!videos.length) return;
     const nextPlaying = !isPlaying;
-    setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, nextPlaying, true, isMuted);
-    isPlaying = nextPlaying;
-    playBtn.setAttribute('src', isPlaying ? pauseImage : playImage);
-  };
-
-  const toggleMute = (e) => {
-    if (e) {
-      e.stopPropagation();
-      if (e.preventDefault) e.preventDefault();
-    }
-    const videos = getVideos();
-    if (!videos.length) return;
-    isMuted = !isMuted;
-    setFlatVideoHotspotMuted(videos, isMuted);
-    audioLabel.setAttribute('value', isMuted ? 'OFF' : 'ON');
-    if (!isMuted) setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, true, true, false);
+    setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, nextPlaying, true, isMuted).then(() => {
+      syncFromVideo();
+    });
   };
 
   const bindControl = (el, handler) => {
+    el.addEventListener('click', (e) => {
+      handler(e);
+    });
     el.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       handler(e);
@@ -313,23 +346,20 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
   };
 
   bindControl(playBtn, togglePlay);
-  bindControl(audioBtn, toggleMute);
 
-  [playBtn, audioBtn].forEach((btn) => {
-    btn.setAttribute('animation__hover_in', {
-      property: 'scale',
-      to: '1.2 1.2 1',
-      dur: 200,
-      easing: 'easeOutQuad',
-      startEvents: 'mouseenter',
-    });
-    btn.setAttribute('animation__hover_out', {
-      property: 'scale',
-      to: '1 1 1',
-      dur: 200,
-      easing: 'easeOutQuad',
-      startEvents: 'mouseleave',
-    });
+  playBtn.setAttribute('animation__hover_in', {
+    property: 'scale',
+    to: '1.2 1.2 1',
+    dur: 200,
+    easing: 'easeOutQuad',
+    startEvents: 'mouseenter',
+  });
+  playBtn.setAttribute('animation__hover_out', {
+    property: 'scale',
+    to: '1 1 1',
+    dur: 200,
+    easing: 'easeOutQuad',
+    startEvents: 'mouseleave',
   });
 
   if (!bindVideoListeners() && aVideoEl) {
@@ -341,7 +371,7 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
     setTimeout(() => clearInterval(poll), 8000);
   }
 
-  parentEl._flatVideoControls = { playBtn, audioBtn, audioLabel, syncFromVideo };
+  parentEl._flatVideoControls = { playBtn, syncFromVideo };
   return parentEl._flatVideoControls;
 }
 
@@ -376,7 +406,7 @@ function mountEditorFlatVideoBillboard(component, data, forceRemount) {
 
     const vid = document.createElement('a-video');
     vid.setAttribute('src', _src);
-    vid.setAttribute('autoplay', true);
+    vid.setAttribute('autoplay', false);
     vid.setAttribute('loop', data.videoLoop !== false);
     vid.setAttribute('muted', data.videoMuted !== false);
     vid.setAttribute('playsinline', true);
@@ -397,6 +427,17 @@ function mountEditorFlatVideoBillboard(component, data, forceRemount) {
     vid.classList.add('static-video-hotspot');
     vid.classList.add('clickable');
     if (assetId) vid.dataset.videoAssetId = assetId;
+    vid.setAttribute('visible', 'false');
+    disableImageHotspotCulling(vid);
+
+    const revealVideo = () => {
+      vid.setAttribute('visible', 'true');
+    };
+    vid.addEventListener('materialvideoloadeddata', revealVideo, { once: true });
+    vid.addEventListener('loadeddata', revealVideo, { once: true });
+    if (assetId && assetEl && assetEl.readyState >= 2) {
+      setTimeout(revealVideo, 0);
+    }
 
     let fusingTimer = null;
     let isExpanded = false;
@@ -459,6 +500,7 @@ function mountEditorFlatVideoBillboard(component, data, forceRemount) {
             if (!isNaN(id) && window.hotspotEditor)
               window.hotspotEditor._persistImageAspectRatio(id, ratio);
           } catch (_) {}
+          if (el._repositionEditButtons) el._repositionEditButtons();
         }
       } catch (_) {}
     };
@@ -469,22 +511,30 @@ function mountEditorFlatVideoBillboard(component, data, forceRemount) {
         prepareFlatVideoHotspotElement(videoEl, data.videoMuted !== false);
         videoEl.loop = data.videoLoop !== false;
         videoEl.addEventListener('loadedmetadata', applyVideoAR, { once: true });
-        videoEl.play().catch(() => {});
+        try {
+          videoEl.load();
+        } catch (_) {}
       }
     } catch (_) {}
 
     setTimeout(applyVideoAR, 250);
     setTimeout(applyVideoAR, 800);
     el.appendChild(vid);
+    el._flatVideoUserPaused = true;
     attachFlatVideoHotspotControls(el, _src, {
       aVideoEl: vid,
       startMuted: data.videoMuted !== false,
       styles: editor && editor.customStyles ? editor.customStyles : null,
     });
     component._mountedFlatVideoSrc = _src;
+    if (el._repositionEditButtons) el._repositionEditButtons();
+    try {
+      const ed = window.hotspotEditor;
+      if (ed) ed._refreshInSceneEditButtonMaterials(el);
+    } catch (_) {}
   };
 
-  if (assetEl && assetEl.readyState < 1) {
+  if (assetEl && assetEl.readyState < 2) {
     const onReady = () => {
       assetEl.removeEventListener('loadeddata', onReady);
       assetEl.removeEventListener('canplay', onReady);
@@ -507,31 +557,119 @@ function mountEditorFlatVideoBillboard(component, data, forceRemount) {
 }
 
 // Optimized global helper with caching + debouncing for rounded image masking (transparent corners)
-const IMAGE_MASK_CACHE = new Map(); // key: src|radius|bw|color -> dataURL
+const IMAGE_MASK_CACHE = new Map(); // key: src|styleKey -> dataURL
+const IMAGE_MASK_MAX_DIMENSION = 1024;
+const IMAGE_MASK_MAX_DATA_URL_LENGTH = 6_000_000;
+
+function imageMaskStyleKey(styleCfg) {
+  if (!styleCfg) return '0|0|';
+  return `${styleCfg.borderRadius || 0}|${styleCfg.borderWidth || 0}|${styleCfg.borderColor || ''}`;
+}
+
+function mergeAImageMaterial(aImgEl, patch) {
+  if (!aImgEl || !patch) return;
+  const current = aImgEl.getAttribute('material');
+  if (current && typeof current === 'object') {
+    aImgEl.setAttribute('material', Object.assign({}, current, patch));
+    return;
+  }
+  aImgEl.setAttribute(
+    'material',
+    Object.assign(
+      {
+        shader: 'flat',
+        side: 'double',
+        transparent: false,
+        opacity: 1,
+      },
+      patch
+    )
+  );
+}
+
+// A-Frame's <a-image> texture system silently fails to bind `blob:` URLs
+// (no `materialtextureloaded` event fires, material.map stays null), while it
+// binds `data:` and `http(s):` URLs fine. Flat image hotspots loaded from
+// IndexedDB / file uploads use blob URLs, which is why their billboards would
+// "flash then disappear". Convert blob URLs to data URLs before assigning them
+// to the element's `src` so the texture reliably binds.
+function setAImageHotspotSrc(imgEl, src) {
+  if (!imgEl || !src || typeof src !== 'string') return;
+  if (!src.startsWith('blob:')) {
+    imgEl.setAttribute('src', src);
+    return;
+  }
+  fetch(src)
+    .then((r) => r.blob())
+    .then(
+      (blob) =>
+        new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(fr.result);
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        })
+    )
+    .then((dataUrl) => {
+      if (document.body.contains(imgEl)) imgEl.setAttribute('src', dataUrl);
+    })
+    .catch(() => {
+      imgEl.setAttribute('src', src);
+    });
+}
+
+// A-Frame <a-image>/<a-video> billboard meshes whose geometry (width/height) and
+// position change AFTER creation (e.g. once the texture's real aspect ratio is known)
+// can be incorrectly frustum-culled by three.js because the cached bounding sphere /
+// world matrix used for culling goes stale. That produces a "flash then disappear":
+// the mesh renders once, then a later geometry/position update leaves it culled.
+// Disabling frustum culling on these few small billboards is the standard, low-cost fix.
+function disableImageHotspotCulling(aImgEl) {
+  if (!aImgEl) return;
+  const apply = () => {
+    try {
+      const mesh = aImgEl.getObject3D('mesh');
+      if (mesh) {
+        mesh.frustumCulled = false;
+        if (mesh.geometry && mesh.geometry.computeBoundingSphere) {
+          mesh.geometry.computeBoundingSphere();
+        }
+      }
+    } catch (_) {}
+  };
+  apply();
+  aImgEl.addEventListener('object3dset', apply);
+}
+
+function applyMaskedImageMaterial(aImgEl) {
+  mergeAImageMaterial(aImgEl, {
+    transparent: true,
+    shader: 'flat',
+    alphaTest: 0.01,
+    side: 'double',
+  });
+}
+
+function restoreUnmaskedImageMaterial(aImgEl) {
+  mergeAImageMaterial(aImgEl, { transparent: false, alphaTest: 0, opacity: 1 });
+}
+
 function applyRoundedMaskToAImage(aImgEl, styleCfg, force = false) {
   try {
     if (!aImgEl || !styleCfg) return Promise.resolve();
     const src = aImgEl.getAttribute('src');
-    if (!src) return Promise.resolve();
-    const key =
-      src +
-      '|' +
-      (styleCfg.borderRadius || 0) +
-      '|' +
-      (styleCfg.borderWidth || 0) +
-      '|' +
-      (styleCfg.borderColor || '');
-    if (!force && aImgEl.dataset.roundedAppliedRadius === key) return Promise.resolve();
-    if (IMAGE_MASK_CACHE.has(key)) {
-      const cached = IMAGE_MASK_CACHE.get(key);
-      if (!aImgEl.dataset.originalSrc) aImgEl.dataset.originalSrc = src;
+    if (!src || src.startsWith('data:image/gif')) return Promise.resolve();
+    const styleKey = imageMaskStyleKey(styleCfg);
+    const cacheKey = `${src}|${styleKey}`;
+    if (!force && aImgEl.dataset.roundedAppliedRadius === styleKey) return Promise.resolve();
+    if (IMAGE_MASK_CACHE.has(cacheKey)) {
+      const cached = IMAGE_MASK_CACHE.get(cacheKey);
+      if (!aImgEl.dataset.originalSrc && !src.startsWith('data:image')) {
+        aImgEl.dataset.originalSrc = src;
+      }
       aImgEl.setAttribute('src', cached);
-      aImgEl.setAttribute(
-        'material',
-        (aImgEl.getAttribute('material') || '') +
-          '; transparent:true; shader:flat; alphaTest:0.01; side:double'
-      );
-      aImgEl.dataset.roundedAppliedRadius = key;
+      applyMaskedImageMaterial(aImgEl);
+      aImgEl.dataset.roundedAppliedRadius = styleKey;
       return Promise.resolve();
     }
     if (aImgEl._maskTimer) clearTimeout(aImgEl._maskTimer);
@@ -539,17 +677,24 @@ function applyRoundedMaskToAImage(aImgEl, styleCfg, force = false) {
       aImgEl._maskTimer = setTimeout(() => {
         let originalSrc;
         try {
-          originalSrc = aImgEl.getAttribute('src');
+          originalSrc = aImgEl.dataset.originalSrc || aImgEl.getAttribute('src');
         } catch (_) {
           return resolve();
         }
+        if (!originalSrc || originalSrc.startsWith('data:image/gif')) return resolve();
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => {
           try {
-            const w = img.naturalWidth || 0;
-            const h = img.naturalHeight || 0;
+            let w = img.naturalWidth || 0;
+            let h = img.naturalHeight || 0;
             if (!w || !h) return resolve();
+            const maxDim = Math.max(w, h);
+            if (maxDim > IMAGE_MASK_MAX_DIMENSION) {
+              const scale = IMAGE_MASK_MAX_DIMENSION / maxDim;
+              w = Math.max(1, Math.round(w * scale));
+              h = Math.max(1, Math.round(h * scale));
+            }
             const canvas = document.createElement('canvas');
             canvas.width = w;
             canvas.height = h;
@@ -584,16 +729,34 @@ function applyRoundedMaskToAImage(aImgEl, styleCfg, force = false) {
             } catch (_) {
               return resolve();
             }
-            const masked = canvas.toDataURL('image/png');
-            IMAGE_MASK_CACHE.set(key, masked);
-            if (!aImgEl.dataset.originalSrc) aImgEl.dataset.originalSrc = originalSrc;
+            let masked = '';
+            try {
+              masked = canvas.toDataURL('image/png');
+            } catch (_) {
+              return resolve();
+            }
+            if (!masked || masked.length > IMAGE_MASK_MAX_DATA_URL_LENGTH) {
+              console.warn('[ImageRound] Mask output too large, keeping original texture');
+              return resolve();
+            }
+            IMAGE_MASK_CACHE.set(cacheKey, masked);
+            if (!aImgEl.dataset.originalSrc && !originalSrc.startsWith('data:image')) {
+              aImgEl.dataset.originalSrc = originalSrc;
+            }
             aImgEl.setAttribute('src', masked);
-            aImgEl.setAttribute(
-              'material',
-              (aImgEl.getAttribute('material') || '') +
-                '; transparent:true; shader:flat; alphaTest:0.01; side:double'
-            );
-            aImgEl.dataset.roundedAppliedRadius = key;
+            applyMaskedImageMaterial(aImgEl);
+            aImgEl.dataset.roundedAppliedRadius = styleKey;
+            setTimeout(() => {
+              try {
+                const mesh = aImgEl.getObject3D('mesh');
+                const texImg = mesh?.material?.map?.image;
+                if ((!texImg || !texImg.naturalWidth) && aImgEl.dataset.originalSrc) {
+                  aImgEl.setAttribute('src', aImgEl.dataset.originalSrc);
+                  restoreUnmaskedImageMaterial(aImgEl);
+                  delete aImgEl.dataset.roundedAppliedRadius;
+                }
+              } catch (_) {}
+            }, 800);
           } catch (_) {
             /* ignore */
           }
@@ -750,6 +913,8 @@ class HotspotEditor {
     this._activeVideoTexture = null;
     this._activeVideoSphere = null;
     this._videoTextureRenderHandler = null;
+    this._skyboxSuspendedForFlatHotspot = false;
+    this._skyboxWasPlayingBeforeFlat = false;
 
     this.init();
   }
@@ -839,6 +1004,8 @@ class HotspotEditor {
 
     // Rehydrate any image/video/audio blob URLs from IndexedDB, then load the scene
     this.rehydrateImageSourcesFromIDB()
+      .catch(() => {})
+      .then(() => this.rehydrateImageHotspotsFromIDB())
       .catch(() => {})
       .then(() => this.rehydrateVideoSourcesFromIDB())
       .catch(() => {})
@@ -1219,6 +1386,13 @@ class HotspotEditor {
     return !!(data && data.type === 'image' && data.mediaKind === 'video');
   }
 
+  isVideoSkyboxScene(sceneId) {
+    const id = sceneId != null ? sceneId : this.currentScene;
+    const scene = this.scenes && this.scenes[id];
+    if (!scene || scene.type !== 'video') return false;
+    return !!this.resolveSceneVideoSrc(scene);
+  }
+
   syncImageMediaFieldsVisibility() {
     if (this.selectedHotspotType !== 'image') return;
     const isVideo = this.getImageMediaKind() === 'video';
@@ -1283,21 +1457,7 @@ class HotspotEditor {
   }
 
   resumeHotspotVideosForScene(sceneId) {
-    const scene = this.scenes && this.scenes[sceneId];
-    if (!scene || !Array.isArray(scene.hotspots)) return;
-    scene.hotspots.forEach((h) => {
-      if (!h || !this.isVideoImageHotspot(h)) return;
-      const el = document.getElementById(`hotspot-${h.id}`);
-      if (el && el._flatVideoUserPaused) return;
-      const vidEl = el && el.querySelector('.static-video-hotspot');
-      const videos = resolveFlatVideoHotspotVideos(
-        `#asset-video-hotspot-${h.id}`,
-        vidEl
-      );
-      if (videos.length) {
-        setFlatVideoHotspotPlayback(el, vidEl, videos, true, false, h.videoMuted !== false);
-      }
-    });
+    // Flat video hotspots start paused; user presses play.
   }
 
   createVideoSphereElement() {
@@ -1532,6 +1692,7 @@ class HotspotEditor {
 
   _handleScenePlacementClick(evt) {
     if (this.repositioningHotspotId) {
+      if (this._repositionArmTime && Date.now() - this._repositionArmTime < 300) return;
       this.applyReposition(evt);
       return;
     }
@@ -1640,6 +1801,37 @@ class HotspotEditor {
     ]);
   }
 
+  suspendVideoSkyboxForFlatHotspot() {
+    if (this._skyboxSuspendedForFlatHotspot || !this.isVideoSkyboxScene()) return;
+    const sceneVideo = document.getElementById('scene-video-dynamic');
+    if (!sceneVideo) return;
+
+    this._skyboxSuspendedForFlatHotspot = true;
+    this._skyboxWasPlayingBeforeFlat =
+      sceneVideo._wasPlayingBeforeFlatHotspot != null
+        ? !!sceneVideo._wasPlayingBeforeFlatHotspot
+        : !sceneVideo.paused;
+    if (!sceneVideo.paused) {
+      try {
+        sceneVideo.pause();
+      } catch (_) {}
+    }
+  }
+
+  resumeVideoSkyboxAfterFlatHotspot() {
+    if (!this._skyboxSuspendedForFlatHotspot) return;
+    this._skyboxSuspendedForFlatHotspot = false;
+    const sceneVideo = document.getElementById('scene-video-dynamic');
+    const wasPlaying =
+      this._skyboxWasPlayingBeforeFlat ||
+      !!(sceneVideo && sceneVideo._wasPlayingBeforeFlatHotspot);
+    this._skyboxWasPlayingBeforeFlat = false;
+    if (!sceneVideo || !wasPlaying) return;
+
+    try {
+      sceneVideo.play().catch(() => {});
+    } catch (_) {}
+  }
 
   openVideoDB() {
     if (this._videoDBPromise) return this._videoDBPromise;
@@ -4039,7 +4231,13 @@ class HotspotEditor {
         }
       } else {
         if (imgUrlEl?.value.trim()) hotspotData.image = imgUrlEl.value.trim();
-        else if (imgFileEl?.files?.[0]) hotspotData.image = imgFileEl.files[0];
+        else if (imgFileEl?.files?.[0]) {
+          const fileRef = imgFileEl.files[0];
+          hotspotData.imageStorageKey = `image_hotspot_${hotspotData.id}`;
+          hotspotData.imageFileName = fileRef.name || null;
+          hotspotData.image = URL.createObjectURL(fileRef);
+          hotspotData._imageFileForIDB = fileRef;
+        }
         if (typeof hotspotData.image === 'string') {
           this.applyCommonAssetFromDataset(hotspotData, imgUrlEl);
         }
@@ -4092,10 +4290,24 @@ class HotspotEditor {
         ? hotspotData.video
         : null;
 
+    // Capture the image File BEFORE saveScenesData() runs, because saveScenesData
+    // strips `_imageFileForIDB` and replaces `image` with a blob URL string, which
+    // would otherwise leave the async IDB-save block below with nothing to persist.
+    const pendingImageFile =
+      hotspotData.type === 'image' && hotspotData.mediaKind !== 'video'
+        ? hotspotData._imageFileForIDB instanceof File
+          ? hotspotData._imageFileForIDB
+          : hotspotData.image instanceof File
+          ? hotspotData.image
+          : null
+        : null;
+
     this.createHotspotElement(hotspotData);
     this.hotspots.push(hotspotData);
     this.scenes[this.currentScene].hotspots.push(hotspotData);
     this.updateHotspotList();
+    this.refreshAllHotspotStyles();
+    setTimeout(() => this.refreshAllHotspotStyles(), 400);
     this.saveScenesData(); // Save after adding hotspot
 
     // If the audio is a File, persist it into IndexedDB similar to images
@@ -4131,17 +4343,21 @@ class HotspotEditor {
     }
 
     // If the image is a File, persist it into IndexedDB to avoid localStorage bloat
-    if (hotspotData.type === 'image' && hotspotData.mediaKind !== 'video' && hotspotData.image instanceof File) {
+    if (pendingImageFile) {
       (async () => {
         try {
-          const fileRef = hotspotData.image;
+          const fileRef = pendingImageFile;
           const storageKey = hotspotData.imageStorageKey || `image_hotspot_${hotspotData.id}`;
           const saved = await this.saveImageToIDB(storageKey, fileRef);
           if (saved) {
             hotspotData.imageStorageKey = storageKey;
-            hotspotData.imageFileName = fileRef.name || null;
-            // Create blob URL for immediate display
-            const blobURL = URL.createObjectURL(fileRef);
+            hotspotData.imageFileName = fileRef.name || hotspotData.imageFileName || null;
+            delete hotspotData._imageFileForIDB;
+            // Ensure blob URL for immediate display
+            const blobURL =
+              typeof hotspotData.image === 'string' && hotspotData.image.startsWith('blob:')
+                ? hotspotData.image
+                : URL.createObjectURL(fileRef);
             hotspotData.image = blobURL;
             // Update scene hotspot reference too
             const sceneHs = this.scenes[this.currentScene].hotspots.find(
@@ -4155,7 +4371,7 @@ class HotspotEditor {
             // Update existing entity's image src
             const el = document.getElementById(`hotspot-${hotspotData.id}`);
             const imgEnt = el?.querySelector('.static-image-hotspot');
-            if (imgEnt) imgEnt.setAttribute('src', blobURL);
+            if (imgEnt) setAImageHotspotSrc(imgEnt, blobURL);
             // Persist again with stripped blobs (saveScenesData will strip blob URLs when storageKey exists)
             this.saveScenesData();
           }
@@ -4676,10 +4892,11 @@ class HotspotEditor {
       // Prefer explicit key, but fall back to legacy pattern image_hotspot_<id>
       _imageLoadKey =
         data.imageStorageKey || (typeof data.id === 'number' ? `image_hotspot_${data.id}` : null);
-      _imageHasStorageKey =
-        !!_imageLoadKey &&
-        (!data.image || typeof data.image !== 'string' || data.image.startsWith('blob:'));
-      if (data.image instanceof File) {
+      if (data.commonAssetUrl) {
+        const proxy = this.buildCommonAssetProxyPath(data);
+        imgSrc = proxy ? this.toAbsoluteMediaUrl(proxy) : data.commonAssetUrl;
+        if (!data.image) data.image = imgSrc;
+      } else if (data.image instanceof File) {
         try {
           imgSrc = URL.createObjectURL(data.image);
           console.log('[ImageHotspot] Created object URL for file', data.image.name, imgSrc);
@@ -4741,14 +4958,13 @@ class HotspotEditor {
             console.error('[ImageHotspot] Fallback FileReader failed', frErr);
           }
         }
-      } else if (typeof data.image === 'string') imgSrc = data.image;
-      // If we have a stored image key but the src is a stale blob URL from a previous session,
-      // start with a tiny transparent pixel so the element initializes cleanly, and we'll
-      // swap in the fresh blob from IndexedDB right after append.
-      if (
-        _imageHasStorageKey &&
-        (!imgSrc || (typeof imgSrc === 'string' && imgSrc.startsWith('blob:')))
-      ) {
+      } else if (typeof data.image === 'string' && data.image.trim()) {
+        imgSrc = data.image;
+      }
+      // Defer to IDB only when there is no usable image source yet (reload / stripped blob)
+      _imageHasStorageKey =
+        !!_imageLoadKey && !(data.image instanceof File) && !data.commonAssetUrl && !imgSrc;
+      if (_imageHasStorageKey) {
         imgSrc =
           'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
       }
@@ -4775,7 +4991,13 @@ class HotspotEditor {
         );
       } catch (_) {}
       // Schedule integrity check & fallback to data URL if texture fails to materialize
-      if (data.image instanceof File) {
+      const fileForFallback =
+        data._imageFileForIDB instanceof File
+          ? data._imageFileForIDB
+          : data.image instanceof File
+          ? data.image
+          : null;
+      if (fileForFallback) {
         const scheduleFallback = (delay) => {
           setTimeout(() => {
             const el = document.getElementById(`hotspot-${data.id}`);
@@ -4793,7 +5015,7 @@ class HotspotEditor {
             if (needsFallback) {
               console.log(
                 '[ImageHotspot] Fallback triggered; converting file to data URL for',
-                data.image.name
+                fileForFallback.name
               );
               const fr2 = new FileReader();
               fr2.onload = () => {
@@ -4803,7 +5025,7 @@ class HotspotEditor {
                 if (imgEnt2) imgEnt2.setAttribute('src', fr2.result);
               };
               try {
-                fr2.readAsDataURL(data.image);
+                fr2.readAsDataURL(fileForFallback);
               } catch (_) {}
             } else {
               // Texture fine
@@ -4877,15 +5099,7 @@ class HotspotEditor {
 
     hotspotEl.setAttribute('editor-spot', spotConfig);
 
-    // Add in-scene edit and move buttons for easier access (visible only in edit mode)
-    // For model hotspots, defer setup until the component has created the model element
-    if (data.type === 'model') {
-      setTimeout(() => {
-        this.addInSceneEditButton(hotspotEl, data);
-      }, 150);
-    } else {
-      this.addInSceneEditButton(hotspotEl, data);
-    }
+    // In-scene edit/move buttons are attached after the entity enters the scene (see below).
 
     // Add navigation click handler if not in edit mode
     if (data.type === 'navigation' || data.type === 'weblink') {
@@ -5092,6 +5306,16 @@ class HotspotEditor {
     }
 
     container.appendChild(hotspotEl);
+
+    if (data.type === 'model') {
+      setTimeout(() => this.ensureInSceneEditButtons(hotspotEl, data), 150);
+    } else if (data.type !== 'navigation' && data.type !== 'weblink') {
+      this.ensureInSceneEditButtons(hotspotEl, data);
+      if (data.type === 'image' && data.mediaKind === 'video') {
+        setTimeout(() => this.ensureInSceneEditButtons(hotspotEl, data), 600);
+      }
+    }
+
     if (data.type === 'image' && data.mediaKind === 'video') {
       if (_videoHasStorageKey) {
         (async () => {
@@ -5123,6 +5347,7 @@ class HotspotEditor {
                     }),
                     true
                   );
+                  this.ensureInSceneEditButtons(hotspotEl, data);
                 }
               }
               if (!data.videoStorageKey) {
@@ -5148,7 +5373,7 @@ class HotspotEditor {
               const url = URL.createObjectURL(rec.blob);
               const imgEnt = hotspotEl.querySelector('.static-image-hotspot');
               if (imgEnt) {
-                imgEnt.setAttribute('src', url);
+                setAImageHotspotSrc(imgEnt, url);
                 // mark into data so subsequent saves can strip the blob (storageKey persisted separately)
                 data.image = url;
                 // If rounded corners are enabled, re-apply mask now that real image is in place
@@ -5187,8 +5412,10 @@ class HotspotEditor {
                       }
                       // Persist to model
                       try {
-                        if (window.hotspotEditor)
+                        if (window.hotspotEditor) {
                           window.hotspotEditor._persistImageAspectRatio(data.id, ratio);
+                          window.hotspotEditor.ensureInSceneEditButtons(hotspotEl, data);
+                        }
                       } catch (_) {}
                       return true;
                     }
@@ -5255,29 +5482,271 @@ class HotspotEditor {
           );
         } catch (_) {}
       }, 100);
-      const istyle = this.customStyles?.image;
-      if (istyle && istyle.borderRadius && istyle.borderRadius > 0) {
-        console.log('[ImageRound] Scheduling post-append mask for hotspot', data.id);
-        // Wait for component init + image entity creation
-        setTimeout(() => {
-          const imgEnt = hotspotEl.querySelector('.static-image-hotspot');
-          if (imgEnt) {
-            console.log('[ImageRound] Post-append mask attempt (query success)', data.id);
-            applyRoundedMaskToAImage(imgEnt, istyle, true);
-          } else {
-            console.log('[ImageRound] Post-append mask deferred (no img yet)', data.id);
-          }
-        }, 250);
-        // Second attempt fallback
-        setTimeout(() => {
-          const imgEnt = hotspotEl.querySelector('.static-image-hotspot');
-          if (imgEnt && !imgEnt.dataset.roundedAppliedRadius) {
-            console.log('[ImageRound] Second mask attempt', data.id);
-            applyRoundedMaskToAImage(imgEnt, istyle, true);
-          }
-        }, 800);
+    }
+  }
+
+  ensureInSceneEditButtons(hotspotEl, data) {
+    if (!hotspotEl) return;
+    const idStr = hotspotEl.id || '';
+    const parsedId = idStr.startsWith('hotspot-') ? parseInt(idStr.slice(8), 10) : NaN;
+    let hotspotData = Number.isFinite(parsedId)
+      ? this.hotspots.find((h) => h.id === parsedId)
+      : null;
+    if (!hotspotData && data) {
+      hotspotData = { ...data, id: data.id ?? parsedId };
+    }
+    if (!hotspotData && Number.isFinite(parsedId)) {
+      hotspotData = { id: parsedId, type: data?.type || 'image', mediaKind: data?.mediaKind || 'photo' };
+    }
+    if (!hotspotData) return;
+    if (!hotspotEl.inSceneButtonContainer) {
+      this.addInSceneEditButton(hotspotEl, hotspotData);
+    }
+    this._bindInSceneRevealOnMedia(hotspotEl);
+    this._refreshInSceneEditButtonMaterials(hotspotEl);
+    this._bringInSceneEditButtonsToFront(hotspotEl);
+    if (hotspotEl._repositionEditButtons) hotspotEl._repositionEditButtons();
+    if (hotspotEl.updateEditButtonVisibility) hotspotEl.updateEditButtonVisibility();
+    if (hotspotData.type === 'image') {
+      setTimeout(() => {
+        // The media element is created asynchronously by the editor-spot component,
+        // so re-attempt binding the reveal click here once it exists.
+        this._bindInSceneRevealOnMedia(hotspotEl);
+        if (hotspotEl._repositionEditButtons) hotspotEl._repositionEditButtons();
+        this._bringInSceneEditButtonsToFront(hotspotEl);
+        this._refreshInSceneEditButtonMaterials(hotspotEl);
+      }, 120);
+      setTimeout(() => {
+        this._bindInSceneRevealOnMedia(hotspotEl);
+        if (hotspotEl._repositionEditButtons) hotspotEl._repositionEditButtons();
+        this._bringInSceneEditButtonsToFront(hotspotEl);
+      }, 600);
+    }
+  }
+
+  _refreshInSceneEditButtonMaterials(hotspotEl) {
+    const container = hotspotEl?.inSceneButtonContainer;
+    if (!container) return;
+    // Adjust material properties directly on the mesh so we don't wipe the manually
+    // bound icon texture (setAttribute('material', ...) would reset material.map).
+    container.querySelectorAll('.in-scene-edit-btn, .in-scene-move-btn').forEach((btn) => {
+      const mesh = btn.getObject3D('mesh');
+      if (mesh && mesh.material) {
+        const mat = mesh.material;
+        mat.transparent = true;
+        mat.depthTest = false;
+        mat.depthWrite = false;
+        mat.side = THREE.DoubleSide;
+        mat.needsUpdate = true;
+        mesh.renderOrder = 10;
+        mesh.frustumCulled = false;
+        if (!mat.map) {
+          const uri = btn.classList.contains('in-scene-edit-btn')
+            ? this._getEditButtonDataURI()
+            : this._getMoveButtonDataURI();
+          this._bindButtonIcon(btn, uri);
+        }
+      }
+    });
+  }
+
+  finalizeImageHotspotUI(hotspotEl, data) {
+    this.ensureInSceneEditButtons(hotspotEl, data);
+  }
+
+  _bringInSceneEditButtonsToFront(hotspotEl) {
+    const container = hotspotEl?.inSceneButtonContainer;
+    if (container && container.parentNode === hotspotEl) {
+      hotspotEl.appendChild(container);
+    }
+  }
+
+  _computeImageHotspotEditButtonY(hotspotEl, data) {
+    const media =
+      hotspotEl.querySelector('.static-image-hotspot') ||
+      hotspotEl.querySelector('.static-video-hotspot');
+    let scl = typeof data?.imageScale === 'number' ? data.imageScale : 1;
+    let bottomY = -0.25 * scl;
+    if (media) {
+      const pos = media.getAttribute('position');
+      const posStr =
+        typeof pos === 'string' ? pos : pos && typeof pos === 'object' ? `${pos.x} ${pos.y} ${pos.z}` : '0 0 0';
+      const mediaH = parseFloat(media.getAttribute('height') || '1');
+      const posParts = posStr.trim().split(/\s+/);
+      const centerY = parseFloat(posParts[1] || '0');
+      const scaleAttr = media.getAttribute('scale');
+      if (scaleAttr) {
+        const scaleParts =
+          typeof scaleAttr === 'object'
+            ? [scaleAttr.x, scaleAttr.y, scaleAttr.z]
+            : String(scaleAttr).trim().split(/\s+/);
+        const sx = parseFloat(scaleParts[0] || '1');
+        if (Number.isFinite(sx) && sx > 0) scl = sx;
+      }
+      if (Number.isFinite(mediaH) && Number.isFinite(centerY)) {
+        bottomY = centerY - (mediaH * scl) / 2;
       }
     }
+    const hasPlayControl = !!hotspotEl.querySelector('.video-play-control');
+    if (hasPlayControl) {
+      const playControlY = -0.35;
+      return Math.min(bottomY - 0.12, playControlY - 0.28);
+    }
+    const y = bottomY - 0.15;
+    return Number.isFinite(y) ? y : -0.45;
+  }
+
+  // Build a self-contained icon button mesh (own PlaneGeometry + MeshBasicMaterial).
+  // We intentionally avoid <a-image> here: A-Frame caches/refcounts plane geometries
+  // by size, and the shared 0.28x0.28 plane used by every edit/move button was being
+  // disposed during load churn, leaving ALL buttons with an empty geometry (nothing to
+  // draw). Owning the geometry/material outright makes the buttons render reliably.
+  _createIconButtonMesh(size, dataURI) {
+    const geo = new THREE.PlaneGeometry(size, size);
+    const mat = new THREE.MeshBasicMaterial({
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      alphaTest: 0.01,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 10;
+    const img = new Image();
+    img.onload = () => {
+      const tex = new THREE.Texture(img);
+      if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+      tex.needsUpdate = true;
+      mat.map = tex;
+      mat.needsUpdate = true;
+    };
+    img.src = dataURI;
+    return mesh;
+  }
+
+  _attachIconButtonMesh(entity, mesh) {
+    if (!entity || !mesh) return;
+    const set = () => entity.setObject3D('mesh', mesh);
+    if (entity.hasLoaded) set();
+    else entity.addEventListener('loaded', set, { once: true });
+  }
+
+  // Dark, self-owned backdrop plane that keeps the hint text legible over any image.
+  _createHintBackgroundMesh(width, height) {
+    const geo = new THREE.PlaneGeometry(width, height);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.55,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 9;
+    return mesh;
+  }
+
+  // The hint is the inverse of the buttons: it shows (in edit mode) while the buttons
+  // are hidden, and disappears once the user reveals the Edit/Move buttons.
+  _syncInSceneHint(hotspotEl) {
+    const hint = hotspotEl && hotspotEl.inSceneHintEl;
+    if (!hint) return;
+    const show = !this.navigationMode && this._activeInSceneHotspotEl !== hotspotEl;
+    hint.setAttribute('visible', show ? 'true' : 'false');
+    if (hint.object3D) hint.object3D.visible = show;
+  }
+
+  // Legacy helper kept as a fallback for any a-image based buttons.
+  _bindButtonIcon(el, dataURI) {
+    if (!el || !dataURI) return;
+    const img = new Image();
+    img.onload = () => {
+      const apply = () => {
+        const mesh = el.getObject3D('mesh');
+        if (!mesh || !mesh.material) return false;
+        const tex = new THREE.Texture(img);
+        if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true;
+        const mat = mesh.material;
+        mat.map = tex;
+        mat.transparent = true;
+        mat.alphaTest = 0.01;
+        mat.depthTest = false;
+        mat.depthWrite = false;
+        mat.side = THREE.DoubleSide;
+        if (mat.color) mat.color.set('#ffffff');
+        mat.needsUpdate = true;
+        mesh.renderOrder = 10;
+        mesh.frustumCulled = false;
+        return true;
+      };
+      if (!apply()) {
+        el.addEventListener('object3dset', apply, { once: true });
+      }
+      // Rebind if A-Frame later recreates the mesh (e.g. geometry/material refresh).
+      el.addEventListener('object3dset', apply);
+    };
+    img.src = dataURI;
+  }
+
+  _setInSceneButtonsVisible(hotspotEl, show) {
+    const container = hotspotEl && hotspotEl.inSceneButtonContainer;
+    if (!container) return;
+    container.setAttribute('visible', show ? 'true' : 'false');
+    if (container.object3D) container.object3D.visible = !!show;
+  }
+
+  // Click-to-reveal: only one hotspot shows its edit/move buttons at a time.
+  revealInSceneButtons(hotspotEl) {
+    if (!hotspotEl || this.navigationMode) return;
+    const prev = this._activeInSceneHotspotEl;
+    if (prev && prev !== hotspotEl) {
+      this._setInSceneButtonsVisible(prev, false);
+    }
+    this._activeInSceneHotspotEl = hotspotEl;
+    this._setInSceneButtonsVisible(hotspotEl, true);
+    if (prev && prev !== hotspotEl) this._syncInSceneHint(prev);
+    this._syncInSceneHint(hotspotEl);
+    if (hotspotEl._repositionEditButtons) hotspotEl._repositionEditButtons();
+    this._bringInSceneEditButtonsToFront(hotspotEl);
+    this._refreshInSceneEditButtonMaterials(hotspotEl);
+  }
+
+  hideInSceneButtons(hotspotEl) {
+    if (!hotspotEl) return;
+    this._setInSceneButtonsVisible(hotspotEl, false);
+    if (this._activeInSceneHotspotEl === hotspotEl) this._activeInSceneHotspotEl = null;
+    this._syncInSceneHint(hotspotEl);
+  }
+
+  toggleInSceneButtons(hotspotEl) {
+    if (!hotspotEl) return;
+    if (this._activeInSceneHotspotEl === hotspotEl) {
+      this.hideInSceneButtons(hotspotEl);
+    } else {
+      this.revealInSceneButtons(hotspotEl);
+    }
+  }
+
+  // Bind a click handler on the hotspot's media so clicking the photo/video toggles
+  // its edit/move buttons. Idempotent and safe to call repeatedly (e.g. after the
+  // flat-video billboard is remounted, which replaces the media element).
+  _bindInSceneRevealOnMedia(hotspotEl) {
+    if (!hotspotEl) return;
+    const media =
+      hotspotEl.querySelector('.static-image-hotspot') ||
+      hotspotEl.querySelector('.static-video-hotspot');
+    if (!media || media._inSceneRevealBound) return;
+    media._inSceneRevealBound = true;
+    media.classList.add('clickable');
+    media.addEventListener('click', (e) => {
+      if (this.navigationMode) return;
+      if (e) e.stopPropagation();
+      this.toggleInSceneButtons(hotspotEl);
+    });
   }
 
   addInSceneEditButton(hotspotEl, data) {
@@ -5285,56 +5754,45 @@ class HotspotEditor {
       this._setupModelHotspotActions(hotspotEl, data);
       return;
     }
+    if (hotspotEl.inSceneButtonContainer) {
+      this._bringInSceneEditButtonsToFront(hotspotEl);
+      if (hotspotEl._repositionEditButtons) hotspotEl._repositionEditButtons();
+      this._refreshInSceneEditButtonMaterials(hotspotEl);
+      return;
+    }
 
-    // Create container for both buttons
+    // Create container for both buttons (parent hotspot already uses face-camera)
     const buttonContainer = document.createElement('a-entity');
-    buttonContainer.setAttribute('face-camera', '');
-    buttonContainer.setAttribute('position', '0.8 0.6 0.05'); // default; will adjust for image hotspots
+    buttonContainer.setAttribute('class', 'in-scene-edit-controls');
+    buttonContainer.setAttribute('position', '0 -0.45 0.45');
+    const buttonPlaneMaterial =
+      'shader: flat; transparent: true; depthTest: false; depthWrite: false; side: double';
 
-    // EDIT BUTTON (Gear icon)
+    // EDIT BUTTON — a-entity with a self-owned mesh (see _createIconButtonMesh).
     const editButton = document.createElement('a-entity');
     editButton.setAttribute('class', 'in-scene-edit-btn clickable');
-    editButton.setAttribute('position', '-0.15 0 0'); // Left position
+    editButton.setAttribute('position', '-0.15 0 0.01');
     editButton.setAttribute('visible', 'true');
 
-    // Edit button background
-    editButton.setAttribute('geometry', 'primitive: circle; radius: 0.12');
-    editButton.setAttribute('material', 'color: #4CAF50; opacity: 1.0');
-
-    // Edit icon using inline SVG image (reliable vs text/emoji)
-    const editIcon = document.createElement('a-image');
-    editIcon.setAttribute('src', this._getEditIconDataURI());
-    editIcon.setAttribute('position', '0 0 0.01');
-    editIcon.setAttribute('width', '0.16');
-    editIcon.setAttribute('height', '0.16');
-    editIcon.setAttribute('material', 'shader: flat; transparent: true');
-    editButton.appendChild(editIcon);
-
-    // MOVE BUTTON (Location pin)
+    // MOVE BUTTON
     const moveButton = document.createElement('a-entity');
     moveButton.setAttribute('class', 'in-scene-move-btn clickable');
-    moveButton.setAttribute('position', '0.15 0 0'); // Right position
+    moveButton.setAttribute('position', '0.15 0 0.01');
     moveButton.setAttribute('visible', 'true');
-
-    // Move button background
-    moveButton.setAttribute('geometry', 'primitive: circle; radius: 0.12');
-    moveButton.setAttribute('material', 'color: #2196F3; opacity: 1.0'); // Blue color
-
-    // Move icon using inline SVG image (reliable vs text/emoji)
-    const moveIcon = document.createElement('a-image');
-    moveIcon.setAttribute('src', this._getMoveIconDataURI());
-    moveIcon.setAttribute('position', '0 0 0.01');
-    moveIcon.setAttribute('width', '0.16');
-    moveIcon.setAttribute('height', '0.16');
-    moveIcon.setAttribute('material', 'shader: flat; transparent: true');
-    moveButton.appendChild(moveIcon);
 
     // Add buttons to container
     buttonContainer.appendChild(editButton);
     buttonContainer.appendChild(moveButton);
     hotspotEl.appendChild(buttonContainer);
 
+    // Give each button its own geometry+material+texture so it always renders.
+    this._attachIconButtonMesh(editButton, this._createIconButtonMesh(0.28, this._getEditButtonDataURI()));
+    this._attachIconButtonMesh(moveButton, this._createIconButtonMesh(0.28, this._getMoveButtonDataURI()));
+
     // EDIT BUTTON EVENTS
+    editButton.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+    }, true);
     editButton.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -5363,11 +5821,14 @@ class HotspotEditor {
     });
 
     // MOVE BUTTON EVENTS
+    moveButton.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
     moveButton.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      console.log('� Move button clicked for hotspot:', data.id);
-      this.startReposition(data.id);
+      setTimeout(() => this.startReposition(data.id), 0);
     });
 
     moveButton.addEventListener('mouseenter', (e) => {
@@ -5393,73 +5854,70 @@ class HotspotEditor {
     // Store reference for easy access
     hotspotEl.inSceneButtonContainer = buttonContainer;
 
-    // Show/hide buttons based on edit mode
-    const showButtons = () => {
-      console.log(
-        '🔧 Showing buttons, editMode:',
-        this.editMode,
-        'navigationMode:',
-        this.navigationMode
-      );
-      if (!this.navigationMode) {
-        buttonContainer.setAttribute('visible', 'true');
-      }
-    };
-
-    const hideButtons = () => {
-      console.log('🔧 Hiding buttons');
-      if (this.navigationMode) {
-        buttonContainer.setAttribute('visible', 'false');
-      }
-    };
-
-    // Add hover listeners to main hotspot element
-    const mainElement = hotspotEl.querySelector('.clickable') || hotspotEl;
-    mainElement.addEventListener('mouseenter', (e) => {
-      console.log('🖱️ Hotspot hover enter, calling showButtons');
-      showButtons();
-    });
-
-    hotspotEl.addEventListener('mouseleave', (e) => {
-      console.log('🖱️ Hotspot hover leave');
-      // Don't hide immediately, let user move to buttons
-      setTimeout(() => {
-        if (!buttonContainer.matches(':hover')) {
-          hideButtons();
+    // Hint label shown under the media prompting the click-to-reveal interaction.
+    const hint = document.createElement('a-entity');
+    hint.setAttribute('class', 'in-scene-edit-hint');
+    hint.setAttribute('position', '0 -0.45 0.44');
+    hint.setAttribute(
+      'text',
+      'value: Click to edit or move; align: center; color: #FFFFFF; width: 0.6; baseline: center; wrapCount: 22'
+    );
+    hint.setAttribute('visible', 'false');
+    hotspotEl.appendChild(hint);
+    this._attachIconButtonMesh(hint, this._createHintBackgroundMesh(0.62, 0.1));
+    const styleHintText = () => {
+      const t = hint.getObject3D('text');
+      if (t) {
+        t.renderOrder = 11;
+        t.frustumCulled = false;
+        if (t.material) {
+          t.material.depthTest = false;
+          t.material.depthWrite = false;
         }
-      }, 200);
+      }
+    };
+    hint.addEventListener('object3dset', (e) => {
+      if (!e.detail || e.detail.type === 'text') styleHintText();
     });
+    styleHintText();
+    hotspotEl.inSceneHintEl = hint;
+
+    // Click-to-reveal model: buttons stay hidden until the user clicks the photo/video,
+    // then they appear so the user can pick Edit or Move. They never auto-show, which
+    // also sidesteps the lifecycle/visibility races that made them flash and vanish.
+    const syncButtonVisibility = () => {
+      const show = !this.navigationMode && this._activeInSceneHotspotEl === hotspotEl;
+      buttonContainer.setAttribute('visible', show ? 'true' : 'false');
+      if (buttonContainer.object3D) buttonContainer.object3D.visible = show;
+      this._syncInSceneHint(hotspotEl);
+    };
 
     // Update visibility when edit mode changes
     hotspotEl.updateEditButtonVisibility = () => {
-      console.log(
-        '🔧 Updating button visibility, editMode:',
-        this.editMode,
-        'navigationMode:',
-        this.navigationMode
-      );
-      if (!this.navigationMode) {
-        buttonContainer.setAttribute('visible', 'true');
-      } else {
-        buttonContainer.setAttribute('visible', 'false');
+      // Leaving edit mode should also clear any open button set.
+      if (this.navigationMode && this._activeInSceneHotspotEl === hotspotEl) {
+        this._activeInSceneHotspotEl = null;
       }
+      syncButtonVisibility();
     };
 
-    // Initial visibility setup
-    showButtons();
+    syncButtonVisibility();
 
-    // If this is an image or video hotspot, adjust buttons to sit slightly BELOW the media, centered
+    // Reveal/toggle this hotspot's buttons when its media (photo or video) is clicked.
+    this._bindInSceneRevealOnMedia(hotspotEl);
+
+    // Hide these buttons once an action is chosen.
+    editButton.addEventListener('click', () => this.hideInSceneButtons(hotspotEl));
+    moveButton.addEventListener('click', () => this.hideInSceneButtons(hotspotEl));
+
+    // If this is an image or video hotspot, place buttons below the media (in front of the plane)
     if (data.type === 'image') {
       const adjustButtons = () => {
         try {
-          const media =
-            hotspotEl.querySelector('.static-image-hotspot') ||
-            hotspotEl.querySelector('.static-video-hotspot');
-          const scl = typeof data.imageScale === 'number' ? data.imageScale : 1;
-          if (media) {
-            const x = 0;
-            const y = -0.25;
-            buttonContainer.setAttribute('position', `${x} ${y} 0.05`);
+          const buttonY = this._computeImageHotspotEditButtonY(hotspotEl, data);
+          buttonContainer.setAttribute('position', `0 ${buttonY} 0.45`);
+          if (hotspotEl.inSceneHintEl) {
+            hotspotEl.inSceneHintEl.setAttribute('position', `0 ${buttonY} 0.44`);
           }
         } catch (e) {
           /* silent */
@@ -5474,6 +5932,8 @@ class HotspotEditor {
         media.addEventListener('loadeddata', () => setTimeout(adjustButtons, 20), { once: true });
       }
       hotspotEl._repositionEditButtons = adjustButtons;
+      this._bringInSceneEditButtonsToFront(hotspotEl);
+      requestAnimationFrame(() => this._refreshInSceneEditButtonMaterials(hotspotEl));
     }
   }
 
@@ -5816,7 +6276,7 @@ class HotspotEditor {
       const moveBtn = item.querySelector('.move-hotspot-btn');
       moveBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.startReposition(hotspot.id);
+        setTimeout(() => this.startReposition(hotspot.id), 0);
       });
 
       // Hover effect for delete button
@@ -6756,7 +7216,7 @@ class HotspotEditor {
                 // Update existing entity's texture if present
                 const el = document.getElementById(`hotspot-${hotspot.id}`);
                 const imgEnt = el?.querySelector('.static-image-hotspot');
-                if (imgEnt) imgEnt.setAttribute('src', blobUrl);
+                if (imgEnt) setAImageHotspotSrc(imgEnt, blobUrl);
 
                 // Persist (saveScenesData will strip blob: when storageKey exists)
                 this._refreshHotspotEntity(hotspot);
@@ -7118,6 +7578,29 @@ class HotspotEditor {
   }
 
   // ===== Inline SVG icon helpers (reliable in A-Frame) =====
+  _getEditButtonDataURI() {
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <circle cx="64" cy="64" r="58" fill="#4CAF50"/>
+  <g fill="none" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 110l18-4 60-60c4-4 4-10 0-14l-0.5-0.5c-4-4-10-4-14 0l-60 60-3.5 19.5z" fill="white" stroke="none"/>
+    <path d="M82 22l24 24" stroke="white"/>
+  </g>
+</svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }
+
+  _getMoveButtonDataURI() {
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <circle cx="64" cy="64" r="58" fill="#2196F3"/>
+  <g fill="white">
+    <path d="M64 18c-20 0-36 16-36 36 0 26 36 72 36 72s36-46 36-72c0-20-16-36-36-36zm0 52a16 16 0 1 1 0-32 16 16 0 0 1 0 32z"/>
+  </g>
+</svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }
+
   _getEditIconDataURI() {
     // White pencil icon sized to fit inside 0.12 radius circle
     const svg = `<?xml version="1.0" encoding="UTF-8"?>
@@ -7152,6 +7635,7 @@ class HotspotEditor {
   startReposition(id) {
     this.hideModelHotspotActionMenu();
     this.repositioningHotspotId = id;
+    this._repositionArmTime = Date.now();
     this.showRepositionNotice();
     this._setHotspotTranslucent(id, true);
   }
@@ -9273,14 +9757,13 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
         try {
           const parent = imgEl.parentElement;
           const opacity = typeof istyle.opacity === 'number' ? istyle.opacity : 1.0;
-          // Apply opacity material
-          const existingMat = imgEl.getAttribute('material') || '';
-          imgEl.setAttribute(
-            'material',
-            `opacity:${opacity}; transparent:${
-              opacity < 1 ? 'true' : 'false'
-            }; side:double; ${existingMat}`
-          );
+          mergeAImageMaterial(imgEl, {
+            opacity,
+            transparent: opacity < 1,
+            side: 'double',
+            shader: 'flat',
+          });
+          disableImageHotspotCulling(imgEl);
 
           // Enforce original aspect ratio geometry so styles don't square the image
           const sclAttr = imgEl.getAttribute('scale') || '1 1 1';
@@ -9351,33 +9834,19 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
             }
           }
 
-          // Re-mask if rounded corners requested and not yet applied OR radius changed
+          // Re-mask if rounded corners requested and style changed
           if (istyle.borderRadius && istyle.borderRadius > 0) {
-            // Delay lightly to allow any texture reload
-            setTimeout(() => {
-              applyRoundedMaskToAImage(imgEl, istyle, true)
-                .then(() => {
-                  imgEl.dataset.roundedAppliedRadius = radiusKey;
-                })
-                .catch(() => {});
-            }, 60);
+            const radiusKey = imageMaskStyleKey(istyle);
             const appliedKey = imgEl.dataset.roundedAppliedRadius || '';
-            const radiusKey =
-              String(istyle.borderRadius) +
-              '|' +
-              String(istyle.borderWidth) +
-              '|' +
-              (istyle.borderColor || '');
+            const currentSrc = imgEl.getAttribute('src') || '';
+            if (!imgEl.dataset.originalSrc && currentSrc && !currentSrc.startsWith('data:image')) {
+              imgEl.dataset.originalSrc = currentSrc;
+            }
             if (appliedKey !== radiusKey) {
-              // Reset source if previously masked to avoid compounding; store original in dataset
-              if (!imgEl.dataset.originalSrc) imgEl.dataset.originalSrc = imgEl.getAttribute('src');
-              if (imgEl.dataset.originalSrc) imgEl.setAttribute('src', imgEl.dataset.originalSrc);
-              try {
-                console.log(
-                  `[ImageHotspot][Style-Mask] id=${parent?.id} radius=${istyle.borderRadius} bw=${istyle.borderWidth} color=${istyle.borderColor}`
-                );
-              } catch (_) {}
-              applyRoundedMaskToAImage(imgEl, istyle)
+              if (imgEl.dataset.originalSrc) {
+                imgEl.setAttribute('src', imgEl.dataset.originalSrc);
+              }
+              applyRoundedMaskToAImage(imgEl, istyle, true)
                 .then(() => {
                   imgEl.dataset.roundedAppliedRadius = radiusKey;
                 })
@@ -9387,6 +9856,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
             // If rounding disabled, restore original if stored
             if (imgEl.dataset.originalSrc) {
               imgEl.setAttribute('src', imgEl.dataset.originalSrc);
+              restoreUnmaskedImageMaterial(imgEl);
             }
             delete imgEl.dataset.roundedAppliedRadius;
           }
@@ -9464,13 +9934,6 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
     });
 
     console.log('✅ Refreshed all hotspot styles');
-    // Force remask pass if rounding enabled
-    const istyle = this.customStyles?.image;
-    if (istyle && istyle.borderRadius && istyle.borderRadius > 0) {
-      document.querySelectorAll('.static-image-hotspot').forEach((imgEl) => {
-        setTimeout(() => applyRoundedMaskToAImage(imgEl, istyle, true), 120);
-      });
-    }
   }
 
   saveCSSToLocalStorage() {
@@ -9496,7 +9959,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
                 removedCount++;
                 return false;
               }
-            } else if (!h.image || (typeof h.image === 'string' && h.image.trim() === '')) {
+            } else if (!hasImageHotspotReference(h)) {
               removedCount++;
               return false; // drop invalid image hotspot
             }
@@ -9598,6 +10061,10 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
         if (Array.isArray(sc.hotspots)) {
           sc.hotspots.forEach((h) => {
             if (h && h.type === 'image') {
+              if (h._imageFileForIDB) delete h._imageFileForIDB;
+              if (h.image && typeof h.image === 'object' && !(h.image instanceof File)) {
+                h.image = null;
+              }
               if (isVideoHotspot(h)) {
                 if (h.video instanceof File) {
                   h.video = null;
@@ -9619,8 +10086,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
                 if (h.imageStorageKey && typeof h.image === 'string' && h.image.startsWith('blob:')) {
                   h.image = null;
                 }
-                // Drop any image hotspot that somehow still has no image (safety net)
-                if (!h.image || (typeof h.image === 'string' && h.image.trim() === '')) {
+                if (!hasImageHotspotReference(h)) {
                   h.__drop = true;
                 }
               }
@@ -9690,6 +10156,56 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
     } catch (_) {
       /* ignore */
     }
+  }
+
+  async rehydrateImageHotspotsFromIDB() {
+    try {
+      const entries = Object.entries(this.scenes || {});
+      if (!entries.length) return;
+      let changed = false;
+      for (const [, scene] of entries) {
+        if (!scene || !Array.isArray(scene.hotspots)) continue;
+        for (const h of scene.hotspots) {
+          if (!h || h.type !== 'image' || isVideoHotspot(h)) continue;
+          if (
+            h.commonAssetUrl &&
+            (!h.image || (typeof h.image === 'string' && h.image.trim() === ''))
+          ) {
+            h.image = h.commonAssetUrl;
+            changed = true;
+          }
+          const hasRemote =
+            typeof h.image === 'string' &&
+            (h.image.startsWith('http://') ||
+              h.image.startsWith('https://') ||
+              h.image.startsWith('data:'));
+          if (!h.imageStorageKey || hasRemote) continue;
+          const key = h.imageStorageKey || `image_hotspot_${h.id}`;
+          const rec = await this.getImageFromIDB(key);
+          if (rec && rec.blob) {
+            try {
+              h.image = URL.createObjectURL(rec.blob);
+              if (!h.imageFileName) h.imageFileName = rec.name || '';
+              changed = true;
+            } catch (_) {}
+          }
+        }
+      }
+      if (Array.isArray(this.hotspots)) {
+        for (const h of this.hotspots) {
+          if (!h || h.type !== 'image' || isVideoHotspot(h)) continue;
+          const sceneHs = (
+            (this.scenes[this.currentScene] && this.scenes[this.currentScene].hotspots) ||
+            []
+          ).find((sh) => sh && sh.id === h.id);
+          if (sceneHs && sceneHs.image && !h.image) {
+            h.image = sceneHs.image;
+            changed = true;
+          }
+        }
+      }
+      if (changed) this.saveScenesData();
+    } catch (_) {}
   }
 
   async rehydrateVideoHotspotsFromIDB() {
@@ -9928,7 +10444,13 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
         shs.imageAspectRatio = r;
         changed = true;
       }
-      if (changed) this.saveScenesData();
+      if (changed) {
+        if (this._persistARSaveTimer) clearTimeout(this._persistARSaveTimer);
+        this._persistARSaveTimer = setTimeout(() => {
+          this._persistARSaveTimer = null;
+          this.saveScenesData();
+        }, 400);
+      }
     } catch (_) {
       /* ignore */
     }
@@ -10764,25 +11286,68 @@ const CUSTOM_STYLES = ${customStylesJson};
 // Helper (export build): reuse caching via local map to prevent reprocessing
 const EXPORTED_IMAGE_MASK_CACHE = new Map();
 const EXPORTED_VIDEO_THUMB_CACHE = new Map();
+const EXPORTED_IMAGE_MASK_MAX_DIMENSION = 1024;
+const EXPORTED_IMAGE_MASK_MAX_DATA_URL_LENGTH = 6000000;
+function exportedImageMaskStyleKey(styleCfg) {
+  if (!styleCfg) return '0|0|';
+  return (styleCfg.borderRadius||0) + '|' + (styleCfg.borderWidth||0) + '|' + (styleCfg.borderColor||'');
+}
+function mergeAImageMaterial(aImgEl, patch) {
+  if (!aImgEl || !patch) return;
+  const current = aImgEl.getAttribute('material');
+  if (current && typeof current === 'object') {
+    aImgEl.setAttribute('material', Object.assign({}, current, patch));
+    return;
+  }
+  aImgEl.setAttribute('material', Object.assign({ shader: 'flat', side: 'double', transparent: false, opacity: 1 }, patch));
+}
+function applyMaskedImageMaterial(aImgEl) {
+  mergeAImageMaterial(aImgEl, { transparent: true, shader: 'flat', alphaTest: 0.01, side: 'double' });
+}
+// Prevent stale-bounding-sphere frustum culling on billboard meshes whose geometry/position change after creation.
+function disableImageHotspotCulling(aImgEl) {
+  if (!aImgEl) return;
+  const apply = function(){ try { const mesh=aImgEl.getObject3D('mesh'); if(mesh){ mesh.frustumCulled=false; if(mesh.geometry&&mesh.geometry.computeBoundingSphere) mesh.geometry.computeBoundingSphere(); } } catch(_){} };
+  apply();
+  aImgEl.addEventListener('object3dset', apply);
+}
+// A-Frame's <a-image> texture system cannot bind blob: URLs reliably; convert to a data URL first.
+function setAImageHotspotSrc(imgEl, src) {
+  if (!imgEl || !src || typeof src !== 'string') return;
+  if (src.indexOf('blob:') !== 0) { imgEl.setAttribute('src', src); return; }
+  fetch(src).then(function(r){ return r.blob(); }).then(function(blob){
+    return new Promise(function(resolve, reject){ var fr=new FileReader(); fr.onload=function(){ resolve(fr.result); }; fr.onerror=reject; fr.readAsDataURL(blob); });
+  }).then(function(dataUrl){ if (document.body.contains(imgEl)) imgEl.setAttribute('src', dataUrl); }).catch(function(){ imgEl.setAttribute('src', src); });
+}
 function applyRoundedMaskToAImage(aImgEl, styleCfg) {
   return new Promise(resolve => {
     try {
       const src = aImgEl.getAttribute('src');
-      if (!src) return resolve();
-      const key = src + '|' + (styleCfg.borderRadius||0) + '|' + (styleCfg.borderWidth||0) + '|' + (styleCfg.borderColor||'');
-      if (aImgEl.dataset.roundedApplied === key) return resolve();
-      if (EXPORTED_IMAGE_MASK_CACHE.has(key)) {
-        aImgEl.setAttribute('src', EXPORTED_IMAGE_MASK_CACHE.get(key));
-        aImgEl.dataset.roundedApplied = key;
-        aImgEl.setAttribute('material', (aImgEl.getAttribute('material')||'') + '; transparent:true; shader:flat; alphaTest:0.01; side:double');
+      if (!src || src.indexOf('data:image/gif') === 0) return resolve();
+      const styleKey = exportedImageMaskStyleKey(styleCfg);
+      const cacheKey = src + '|' + styleKey;
+      if (aImgEl.dataset.roundedApplied === styleKey) return resolve();
+      if (EXPORTED_IMAGE_MASK_CACHE.has(cacheKey)) {
+        if (!aImgEl.dataset.originalSrc && src.indexOf('data:image') !== 0) {
+          aImgEl.dataset.originalSrc = src;
+        }
+        aImgEl.setAttribute('src', EXPORTED_IMAGE_MASK_CACHE.get(cacheKey));
+        aImgEl.dataset.roundedApplied = styleKey;
+        applyMaskedImageMaterial(aImgEl);
         return resolve();
       }
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         try {
-          const w = img.naturalWidth, h = img.naturalHeight;
+          let w = img.naturalWidth, h = img.naturalHeight;
           if (!w || !h) return resolve();
+          const maxDim = Math.max(w, h);
+          if (maxDim > EXPORTED_IMAGE_MASK_MAX_DIMENSION) {
+            const scale = EXPORTED_IMAGE_MASK_MAX_DIMENSION / maxDim;
+            w = Math.max(1, Math.round(w * scale));
+            h = Math.max(1, Math.round(h * scale));
+          }
           const canvas = document.createElement('canvas');
           canvas.width = w; canvas.height = h;
           const ctx = canvas.getContext('2d');
@@ -10796,16 +11361,21 @@ function applyRoundedMaskToAImage(aImgEl, styleCfg) {
           ctx.clip();
           ctx.drawImage(img,0,0,w,h);
           if (bw>0){ ctx.lineWidth = bw*2; ctx.strokeStyle = styleCfg.borderColor||'#FFFFFF'; ctx.stroke(); }
-          const newURL = canvas.toDataURL('image/png');
-          EXPORTED_IMAGE_MASK_CACHE.set(key, newURL);
+          let newURL = '';
+          try { newURL = canvas.toDataURL('image/png'); } catch(_) { return resolve(); }
+          if (!newURL || newURL.length > EXPORTED_IMAGE_MASK_MAX_DATA_URL_LENGTH) return resolve();
+          EXPORTED_IMAGE_MASK_CACHE.set(cacheKey, newURL);
+          if (!aImgEl.dataset.originalSrc && src.indexOf('data:image') !== 0) {
+            aImgEl.dataset.originalSrc = src;
+          }
           aImgEl.setAttribute('src', newURL);
-          aImgEl.dataset.roundedApplied = key;
-          aImgEl.setAttribute('material', (aImgEl.getAttribute('material')||'') + '; transparent:true; shader:flat; alphaTest:0.01; side:double');
+          aImgEl.dataset.roundedApplied = styleKey;
+          applyMaskedImageMaterial(aImgEl);
         } catch(_) { /* ignore */ }
         resolve();
       };
       img.onerror = () => resolve();
-      img.src = src;
+      img.src = aImgEl.dataset.originalSrc || src;
     } catch(_) { resolve(); }
   });
 }
@@ -10834,6 +11404,15 @@ function pauseScene360VideoForFlatHotspot() {
     if (sceneVideo._wasPlayingBeforeFlatHotspot) {
       try { sceneVideo.pause(); } catch(e) {}
     }
+    try {
+      var ed = window.hotspotEditor;
+      var hp = window.hotspotProject;
+      if (ed && typeof ed.suspendVideoSkyboxForFlatHotspot === 'function') {
+        ed.suspendVideoSkyboxForFlatHotspot();
+      } else if (hp && typeof hp.suspendVideoSkyboxForFlatHotspot === 'function') {
+        hp.suspendVideoSkyboxForFlatHotspot();
+      }
+    } catch(e) {}
   }
   _flatVideoScene360PauseCount++;
 }
@@ -10841,10 +11420,29 @@ function pauseScene360VideoForFlatHotspot() {
 function resumeScene360VideoAfterFlatHotspot() {
   _flatVideoScene360PauseCount = Math.max(0, _flatVideoScene360PauseCount - 1);
   if (_flatVideoScene360PauseCount > 0) return;
+  try {
+    var ed = window.hotspotEditor;
+    var hp = window.hotspotProject;
+    if (ed && typeof ed.resumeVideoSkyboxAfterFlatHotspot === 'function') {
+      ed.resumeVideoSkyboxAfterFlatHotspot();
+      return;
+    }
+    if (hp && typeof hp.resumeVideoSkyboxAfterFlatHotspot === 'function') {
+      hp.resumeVideoSkyboxAfterFlatHotspot();
+      return;
+    }
+  } catch(e) {}
   var sceneVideo = document.getElementById('scene-video-dynamic');
   if (sceneVideo && sceneVideo._wasPlayingBeforeFlatHotspot) {
     try { sceneVideo.play().catch(function(){}); } catch(e) {}
   }
+}
+
+function isExportVideoSkyboxScene() {
+  try {
+    var hp = window.hotspotProject;
+    return !!(hp && hp._sceneMediaType === 'video');
+  } catch(e) { return false; }
 }
 
 function resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl) {
@@ -10881,34 +11479,44 @@ function resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl) {
 function playFlatVideoHotspotVideos(videos, aVideoEl, muted) {
   if (!videos || !videos.length) return Promise.resolve(false);
   pauseScene360VideoForFlatHotspot();
-  videos.forEach(function(video) { prepareFlatVideoHotspotElement(video, muted); });
-  var playOne = function(video) {
-    try {
-      if (video.readyState < 1) {
-        return new Promise(function(resolve) {
-          var onReady = function() {
-            video.removeEventListener('loadeddata', onReady);
-            video.removeEventListener('canplay', onReady);
-            resolve(video.play().catch(function(){ return false; }));
-          };
-          video.addEventListener('loadeddata', onReady, { once: true });
-          video.addEventListener('canplay', onReady, { once: true });
-          try { video.load(); } catch(e) {}
-        });
-      }
-      return video.play().catch(function(){ return false; });
-    } catch(e) { return Promise.resolve(false); }
+
+  var runPlayback = function() {
+    videos.forEach(function(video) { prepareFlatVideoHotspotElement(video, muted); });
+    var playOne = function(video) {
+      try {
+        if (video.readyState < 1) {
+          return new Promise(function(resolve) {
+            var onReady = function() {
+              video.removeEventListener('loadeddata', onReady);
+              video.removeEventListener('canplay', onReady);
+              resolve(video.play().catch(function(){ return false; }));
+            };
+            video.addEventListener('loadeddata', onReady, { once: true });
+            video.addEventListener('canplay', onReady, { once: true });
+            try { video.load(); } catch(e) {}
+          });
+        }
+        return video.play().catch(function(){ return false; });
+      } catch(e) { return Promise.resolve(false); }
+    };
+    return Promise.all(videos.map(playOne)).then(function() {
+      try {
+        if (aVideoEl) {
+          var mesh = aVideoEl.getObject3D && aVideoEl.getObject3D('mesh');
+          var map = mesh && mesh.material && mesh.material.map;
+          if (map) map.needsUpdate = true;
+        }
+      } catch(e) {}
+      return true;
+    });
   };
-  return Promise.all(videos.map(playOne)).then(function() {
-    try {
-      if (aVideoEl) {
-        var mesh = aVideoEl.getObject3D && aVideoEl.getObject3D('mesh');
-        var map = mesh && mesh.material && mesh.material.map;
-        if (map) map.needsUpdate = true;
-      }
-    } catch(e) {}
-    return true;
-  });
+
+  if (isExportVideoSkyboxScene()) {
+    return new Promise(function(resolve) {
+      setTimeout(function() { resolve(runPlayback()); }, 100);
+    });
+  }
+  return runPlayback();
 }
 
 function pauseFlatVideoHotspotVideos(videos, aVideoEl) {
@@ -10925,14 +11533,16 @@ function pauseFlatVideoHotspotVideos(videos, aVideoEl) {
 }
 
 function setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, playing, userAction, muted) {
-  if (!videos || !videos.length) return;
+  if (!videos || !videos.length) return Promise.resolve();
   if (userAction && parentEl) parentEl._flatVideoUserPaused = !playing;
   var useMuted = muted !== false;
-  if (playing) playFlatVideoHotspotVideos(videos, aVideoEl, useMuted);
-  else pauseFlatVideoHotspotVideos(videos, aVideoEl);
+  var playbackPromise = playing
+    ? playFlatVideoHotspotVideos(videos, aVideoEl, useMuted)
+    : (pauseFlatVideoHotspotVideos(videos, aVideoEl), Promise.resolve());
   if (aVideoEl) {
     try { aVideoEl.setAttribute('autoplay', playing ? 'true' : 'false'); } catch(e) {}
   }
+  return playbackPromise;
 }
 
 function setFlatVideoHotspotMuted(videos, muted) {
@@ -10953,7 +11563,6 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
   var buttonOpacity = String((styles && styles.audio && styles.audio.buttonOpacity) != null ? styles.audio.buttonOpacity : 1.0);
   var btnY = options.controlY != null ? options.controlY : -0.35;
   var btnZ = options.controlZ != null ? options.controlZ : 0.12;
-  var btnSpacing = 0.32;
   var getVideos = function() { return resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl); };
 
   var playBtn = document.createElement('a-image');
@@ -10963,24 +11572,8 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
   playBtn.setAttribute('height', '0.5');
   playBtn.setAttribute('material', 'color: ' + buttonColor);
   playBtn.setAttribute('opacity', buttonOpacity);
-  playBtn.setAttribute('position', (-btnSpacing) + ' ' + btnY + ' ' + btnZ);
+  playBtn.setAttribute('position', '0 ' + btnY + ' ' + btnZ);
   parentEl.appendChild(playBtn);
-
-  var audioBtn = document.createElement('a-plane');
-  audioBtn.setAttribute('class', 'clickable video-control video-audio-control');
-  audioBtn.setAttribute('width', '0.5');
-  audioBtn.setAttribute('height', '0.5');
-  audioBtn.setAttribute('position', btnSpacing + ' ' + btnY + ' ' + btnZ);
-  audioBtn.setAttribute('material', 'color: ' + buttonColor + '; opacity: ' + buttonOpacity + '; transparent: true');
-  parentEl.appendChild(audioBtn);
-  var audioLabel = document.createElement('a-text');
-  audioLabel.setAttribute('class', 'video-audio-label');
-  audioLabel.setAttribute('value', startMuted ? 'OFF' : 'ON');
-  audioLabel.setAttribute('align', 'center');
-  audioLabel.setAttribute('position', btnSpacing + ' ' + btnY + ' ' + (btnZ + 0.01));
-  audioLabel.setAttribute('color', '#222222');
-  audioLabel.setAttribute('scale', '1.2 1.2 1');
-  parentEl.appendChild(audioLabel);
 
   var isPlaying = false;
   var isMuted = startMuted;
@@ -10992,7 +11585,6 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
     isPlaying = !video.paused;
     isMuted = !!video.muted;
     playBtn.setAttribute('src', isPlaying ? pauseImage : playImage);
-    audioLabel.setAttribute('value', isMuted ? 'OFF' : 'ON');
   };
   var bindVideoListeners = function() {
     var videos = getVideos();
@@ -11016,20 +11608,12 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
     }
     if (!videos.length) return;
     var nextPlaying = !isPlaying;
-    setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, nextPlaying, true, isMuted);
-    isPlaying = nextPlaying;
-    playBtn.setAttribute('src', isPlaying ? pauseImage : playImage);
-  };
-  var toggleMute = function(e) {
-    if (e) { e.stopPropagation(); if (e.preventDefault) e.preventDefault(); }
-    var videos = getVideos();
-    if (!videos.length) return;
-    isMuted = !isMuted;
-    setFlatVideoHotspotMuted(videos, isMuted);
-    audioLabel.setAttribute('value', isMuted ? 'OFF' : 'ON');
-    if (!isMuted) setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, true, true, false);
+    setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, nextPlaying, true, isMuted).then(function() {
+      syncFromVideo();
+    });
   };
   var bindControl = function(el, handler) {
+    el.addEventListener('click', function(e) { handler(e); });
     el.addEventListener('mousedown', function(e) {
       if (e.button !== 0) return;
       handler(e);
@@ -11037,18 +11621,15 @@ function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
     el.addEventListener('triggerdown', handler);
   };
   bindControl(playBtn, togglePlay);
-  bindControl(audioBtn, toggleMute);
-  [playBtn, audioBtn].forEach(function(btn) {
-    btn.setAttribute('animation__hover_in', { property: 'scale', to: '1.2 1.2 1', dur: 200, easing: 'easeOutQuad', startEvents: 'mouseenter' });
-    btn.setAttribute('animation__hover_out', { property: 'scale', to: '1 1 1', dur: 200, easing: 'easeOutQuad', startEvents: 'mouseleave' });
-  });
+  playBtn.setAttribute('animation__hover_in', { property: 'scale', to: '1.2 1.2 1', dur: 200, easing: 'easeOutQuad', startEvents: 'mouseenter' });
+  playBtn.setAttribute('animation__hover_out', { property: 'scale', to: '1 1 1', dur: 200, easing: 'easeOutQuad', startEvents: 'mouseleave' });
   if (!bindVideoListeners() && aVideoEl) {
     aVideoEl.addEventListener('materialvideoloadeddata', bindVideoListeners, { once: true });
     aVideoEl.addEventListener('loadeddata', bindVideoListeners, { once: true });
     var poll = setInterval(function() { if (bindVideoListeners()) clearInterval(poll); }, 200);
     setTimeout(function() { clearInterval(poll); }, 8000);
   }
-  parentEl._flatVideoControls = { playBtn: playBtn, audioBtn: audioBtn, audioLabel: audioLabel, syncFromVideo: syncFromVideo };
+  parentEl._flatVideoControls = { playBtn: playBtn, syncFromVideo: syncFromVideo };
   return parentEl._flatVideoControls;
 }
 
@@ -11111,7 +11692,7 @@ AFRAME.registerComponent("hotspot", {
       let _vsrc = data.videoSrc;
       if (_vsrc && _vsrc.includes('%')) { try { _vsrc = decodeURIComponent(_vsrc); } catch(e){} }
       vid.setAttribute('src', _vsrc);
-      vid.setAttribute('autoplay', true);
+      vid.setAttribute('autoplay', false);
       vid.setAttribute('loop', data.videoLoop !== false);
       vid.setAttribute('muted', data.videoMuted !== false);
       vid.setAttribute('playsinline', true);
@@ -11125,6 +11706,7 @@ AFRAME.registerComponent("hotspot", {
       if (knownAR !== 1) vid.dataset.aspectRatio = String(knownAR);
       vid.classList.add('static-video-hotspot');
       vid.classList.add('clickable');
+      disableImageHotspotCulling(vid);
       var assetIdForVid = _vsrc.startsWith('#') ? _vsrc.slice(1) : '';
       if (assetIdForVid) {
         vid.dataset.videoAssetId = assetIdForVid;
@@ -11179,10 +11761,11 @@ AFRAME.registerComponent("hotspot", {
           videoEl.loop = data.videoLoop !== false;
           videoEl.muted = data.videoMuted !== false;
           videoEl.addEventListener('loadedmetadata', applyVideoAR, { once: true });
-          videoEl.play().catch(function(){});
+          try { videoEl.load(); } catch(e) {}
         }
       } catch(e) {}
       setTimeout(applyVideoAR, 250);
+      el._flatVideoUserPaused = true;
       this.el.appendChild(vid);
       attachFlatVideoHotspotControls(this.el, _vsrc, {
         aVideoEl: vid,
@@ -11193,7 +11776,8 @@ AFRAME.registerComponent("hotspot", {
       const img = document.createElement('a-image');
       let _src = data.imageSrc;
       if (_src && _src.includes('%')) { try { _src = decodeURIComponent(_src); } catch(e){} }
-      img.setAttribute('src', _src);
+      setAImageHotspotSrc(img, _src);
+      disableImageHotspotCulling(img);
   const scl = data.imageScale || 1;
   // Base unit geometry then scale for consistent aspect handling
   const knownAR = (typeof data.imageAspectRatio === 'number' && isFinite(data.imageAspectRatio) && data.imageAspectRatio>0) ? data.imageAspectRatio : 1;
@@ -11555,6 +12139,9 @@ class HotspotProject {
   this.wasInVRBeforeWeblink = false;
     this._activeVideoTexture = null;
     this._videoTextureRenderHandler = null;
+    this._sceneMediaType = 'image';
+    this._skyboxSuspendedForFlatHotspot = false;
+    this._skyboxWasPlayingBeforeFlat = false;
     this.loadProject();
   }
 
@@ -11663,17 +12250,7 @@ class HotspotProject {
   }
 
   resumeSceneHotspotVideos(scene) {
-    if (!scene || !Array.isArray(scene.hotspots)) return;
-    scene.hotspots.forEach(function(h) {
-      if (!h || h.type !== 'image' || h.mediaKind !== 'video') return;
-      try {
-        var el = document.getElementById('hotspot-' + h.id);
-        if (el && el._flatVideoUserPaused) return;
-        var vidEl = el && el.querySelector('.static-video-hotspot');
-        var videos = resolveFlatVideoHotspotVideos('#asset-video-hotspot-' + h.id, vidEl);
-        if (videos.length) setFlatVideoHotspotPlayback(el, vidEl, videos, true, false, h.videoMuted !== false);
-      } catch(e) {}
-    });
+    // Flat video hotspots start paused; user presses play.
   }
 
   loadScene(sceneId) {
@@ -11682,6 +12259,9 @@ class HotspotProject {
       return;
     }
     try {
+      _flatVideoScene360PauseCount = 0;
+      var sceneVideoReset = document.getElementById('scene-video-dynamic');
+      if (sceneVideoReset) delete sceneVideoReset._wasPlayingBeforeFlatHotspot;
       document.querySelectorAll('video[id^="asset-video-hotspot-"]').forEach(function(v) {
         try { v.pause(); } catch(e) {}
       });
@@ -11702,6 +12282,7 @@ class HotspotProject {
     }
 
     // Ensure any existing videosphere is removed when switching to an image scene
+    this._sceneMediaType = 'image';
     this.detachVideoTextureRenderer();
     const existingVideosphere = document.getElementById('current-videosphere');
     if (existingVideosphere && existingVideosphere.parentNode) {
@@ -11938,6 +12519,34 @@ class HotspotProject {
     return true;
   }
 
+  suspendVideoSkyboxForFlatHotspot() {
+    if (this._skyboxSuspendedForFlatHotspot || this._sceneMediaType !== 'video') return;
+    var sceneVideo = document.getElementById('scene-video-dynamic');
+    if (!sceneVideo) return;
+
+    this._skyboxSuspendedForFlatHotspot = true;
+    this._skyboxWasPlayingBeforeFlat =
+      sceneVideo._wasPlayingBeforeFlatHotspot != null
+        ? !!sceneVideo._wasPlayingBeforeFlatHotspot
+        : !sceneVideo.paused;
+    if (!sceneVideo.paused) {
+      try { sceneVideo.pause(); } catch(e) {}
+    }
+  }
+
+  resumeVideoSkyboxAfterFlatHotspot() {
+    if (!this._skyboxSuspendedForFlatHotspot) return;
+    this._skyboxSuspendedForFlatHotspot = false;
+    var sceneVideo = document.getElementById('scene-video-dynamic');
+    var wasPlaying =
+      this._skyboxWasPlayingBeforeFlat ||
+      !!(sceneVideo && sceneVideo._wasPlayingBeforeFlatHotspot);
+    this._skyboxWasPlayingBeforeFlat = false;
+    if (!sceneVideo || !wasPlaying) return;
+
+    try { sceneVideo.play().catch(function(){}); } catch(e) {}
+  }
+
   waitForExportSceneReady(timeoutMs = 8000) {
     return new Promise((resolve) => {
       const sceneEl = document.querySelector('a-scene');
@@ -12014,6 +12623,7 @@ class HotspotProject {
   async loadVideoScene(sceneId, scene, skybox) {
     console.log('Loading video scene:', sceneId, scene.videoSrc);
 
+    this._sceneMediaType = 'video';
     this.hideTapToPlayBanner();
     skybox.setAttribute('visible', 'false');
 
@@ -13630,7 +14240,7 @@ function setupDeviceOrientationPermissionWorkflow() {
 document.addEventListener('DOMContentLoaded', () => {
   setupDeviceOrientationPermissionWorkflow();
   setTimeout(() => {
-    new HotspotProject();
+    window.hotspotProject = new HotspotProject();
   }, 1000);
 });`;
   }
@@ -14937,6 +15547,9 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log(`Loading scene: ${this.currentScene}`, scene); // Debug log
 
     try {
+    _flatVideoScene360PauseCount = 0;
+    const sceneVideoReset = document.getElementById('scene-video-dynamic');
+    if (sceneVideoReset) delete sceneVideoReset._wasPlayingBeforeFlatHotspot;
     this.pauseAllHotspotVideos();
     // Clear any existing videosphere and stop any playing scene video
     const existingVideosphere = document.getElementById('videosphere');
@@ -15144,10 +15757,15 @@ document.addEventListener('DOMContentLoaded', () => {
     scene.hotspots.forEach((hotspot) => {
       this.createHotspotElement(hotspot);
     });
+    scene.hotspots.forEach((hotspot) => {
+      const el = document.getElementById(`hotspot-${hotspot.id}`);
+      if (el) this.ensureInSceneEditButtons(el, hotspot);
+    });
     this.resumeHotspotVideosForScene(this.currentScene);
 
     // Apply custom styles to ensure portal colors and other customizations are maintained
     this.refreshAllHotspotStyles();
+    setTimeout(() => this.refreshAllHotspotStyles(), 400);
 
     this.updateHotspotList();
     this.updateStartingPointInfo();
@@ -16748,7 +17366,8 @@ AFRAME.registerComponent('editor-spot', {
           _src = decodeURIComponent(_src);
         } catch (e) {}
       }
-      img.setAttribute('src', _src);
+      setAImageHotspotSrc(img, _src);
+      disableImageHotspotCulling(img);
       img.setAttribute('crossorigin', 'anonymous');
       if (!img.getAttribute('material'))
         img.setAttribute('material', 'transparent:true; side:double');
@@ -16896,6 +17515,12 @@ AFRAME.registerComponent('editor-spot', {
             frame.setAttribute('height', ratio * scl + bw * 2);
             frame.setAttribute('position', `0 ${(ratio / 2) * scl} 0.0`);
           }
+          if (el._repositionEditButtons) el._repositionEditButtons();
+          if (window.hotspotEditor) {
+            window.hotspotEditor._bindInSceneRevealOnMedia(el);
+            window.hotspotEditor._bringInSceneEditButtonsToFront(el);
+            window.hotspotEditor._refreshInSceneEditButtonMaterials(el);
+          }
         } catch (e) {}
       });
       // Also wait for A-Frame texture to be ready (some drivers fill later)
@@ -16921,6 +17546,11 @@ AFRAME.registerComponent('editor-spot', {
               if (!isNaN(id) && window.hotspotEditor)
                 window.hotspotEditor._persistImageAspectRatio(id, ratio);
             } catch (_) {}
+            if (el._repositionEditButtons) el._repositionEditButtons();
+            if (window.hotspotEditor) {
+              window.hotspotEditor._bindInSceneRevealOnMedia(el);
+              window.hotspotEditor._bringInSceneEditButtonsToFront(el);
+            }
           }
         } catch (_) {}
       };
@@ -16937,6 +17567,10 @@ AFRAME.registerComponent('editor-spot', {
         } catch (_) {}
       }, 800);
       el.appendChild(img);
+      try {
+        const ed = window.hotspotEditor;
+        if (ed && el._repositionEditButtons) el._repositionEditButtons();
+      } catch (_) {}
     }
 
     /******************  STATIC 3D MODEL  ******************/

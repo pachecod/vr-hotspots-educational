@@ -6,6 +6,7 @@ function renderAdminNav(activeTab) {
     { id: 'submissions', label: 'Submissions', href: 'admin-submissions.html' },
     { id: 'assets', label: 'Assets', href: 'admin-common-assets.html' },
     { id: 'users', label: 'Users', href: 'admin-users.html' },
+    { id: 'billing', label: 'Billing', href: 'admin-billing.html' },
   ];
 
   nav.className = 'admin-nav';

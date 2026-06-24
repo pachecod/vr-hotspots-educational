@@ -345,8 +345,8 @@ async function uploadFiles(fileList) {
 
     const ext = (file.name.split('.').pop() || '').toLowerCase();
     const isVideo = ['mp4', 'webm', 'mov'].includes(ext);
-    if (isVideo && activeCategory !== '360-videos') {
-      status.textContent = `Select the 360 Videos tab before uploading ${file.name}.`;
+    if (isVideo && activeCategory !== '360-videos' && activeCategory !== 'videos') {
+      status.textContent = `Select the Flat Videos or 360 Videos tab before uploading ${file.name}.`;
       hadFailure = true;
       continue;
     }

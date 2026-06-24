@@ -138,7 +138,7 @@ Select a type under **Hotspot Type**, fill in the fields that appear, then **Add
 | **Text + Audio** | Popup text and audio together |
 | **Navigation** | Portal to **another scene** in your project (you need at least two scenes) |
 | **Weblink Portal** | Opens an external website (optional preview image inside the ring) |
-| **Image** | Shows a flat image in the scene (scale with the size slider) |
+| **Image / Video** | Shows a flat photo or video billboard in the scene (scale with the size slider) |
 | **3D Model** | Places a GLB/GLTF model (adjust scale, rotation, and height) |
 
 ### Tips for all hotspots

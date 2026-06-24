@@ -1106,7 +1106,7 @@
         </div>
         <div class="hotspot-type" data-type="image">
           <input type="radio" name="hotspot-type" value="image" />
-          <span>🖼️ Image</span>
+          <span>🖼️ Image / Video</span>
         </div>
         <div class="hotspot-type" data-type="model">
           <input type="radio" name="hotspot-type" value="model" />
@@ -1179,7 +1179,35 @@
               <option value="">Select target scene...</option>
             </select>
           </div>
-          <!-- Image hotspot specific fields -->
+          <!-- Image / Video hotspot specific fields -->
+          <div class="form-group" id="image-media-kind-group" style="display: none">
+            <label style="font-size: 12px; color: #ccc; margin-bottom: 6px; display: block"
+              >Media type</label
+            >
+            <div style="display: flex; gap: 16px">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer">
+                <input
+                  type="radio"
+                  name="hotspot-image-media-kind"
+                  id="hotspot-media-kind-photo"
+                  value="photo"
+                  checked
+                  style="width: 16px; height: 16px; cursor: pointer"
+                />
+                <span>Photo</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer">
+                <input
+                  type="radio"
+                  name="hotspot-image-media-kind"
+                  id="hotspot-media-kind-video"
+                  value="video"
+                  style="width: 16px; height: 16px; cursor: pointer"
+                />
+                <span>Video</span>
+              </label>
+            </div>
+          </div>
           <div class="form-group" id="image-file-group" style="display: none">
             <label for="hotspot-image-file">Image File:</label>
             <input type="file" id="hotspot-image-file" accept="image/*" />
@@ -1211,6 +1239,59 @@
             >
               Browse Online Assets
             </button>
+          </div>
+          <div class="form-group" id="video-file-group" style="display: none">
+            <label for="hotspot-video-file">Video File:</label>
+            <input type="file" id="hotspot-video-file" accept="video/mp4,video/webm" />
+          </div>
+          <div class="form-group" id="video-url-group" style="display: none">
+            <label for="hotspot-video-url">Or Video URL:</label>
+            <input
+              type="url"
+              id="hotspot-video-url"
+              placeholder="https://example.com/video.mp4"
+              style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #555;
+                border-radius: 4px;
+                background: #333;
+                color: white;
+                box-sizing: border-box;
+              "
+            />
+            <small style="color: #888; font-size: 11px"
+              >Provide a video file or URL (mp4, webm). One is required.</small
+            >
+            <button
+              type="button"
+              class="btn btn-secondary btn-ca-browse"
+              data-ca-target="hotspot-video-url"
+              data-ca-category="videos"
+            >
+              Browse Online Assets
+            </button>
+          </div>
+          <div class="form-group" id="video-options-group" style="display: none">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+              <input
+                type="checkbox"
+                id="hotspot-video-loop"
+                checked
+                style="width: 16px; height: 16px; cursor: pointer"
+              />
+              <span>Loop video continuously</span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px"
+            >
+              <input
+                type="checkbox"
+                id="hotspot-video-enable-audio"
+                style="width: 16px; height: 16px; cursor: pointer"
+              />
+              <span>Enable audio (requires click to unmute in browser)</span>
+            </label>
           </div>
 
           <!-- Model hotspot specific fields -->
@@ -1337,7 +1418,7 @@
               />
             </label>
             <small style="color: #888; font-size: 11px"
-              >Scales the image uniformly. Aspect ratio preserved from original image.</small
+              >Scales the image or video uniformly. Aspect ratio preserved from original media.</small
             >
           </div>
 
@@ -1981,6 +2062,7 @@
           <div id="common-assets-tag-filter" class="asset-tag-filter-mount"></div>
           <div class="ca-tabs" id="common-assets-tabs">
             <button class="ca-tab active" data-category="images">Flat Images</button>
+            <button class="ca-tab" data-category="videos">Flat Videos</button>
             <button class="ca-tab" data-category="360-images">360 Photos</button>
             <button class="ca-tab" data-category="360-videos">360 Videos</button>
             <button class="ca-tab" data-category="audio">Audio</button>
@@ -2013,11 +2095,11 @@
       <!-- VR Controllers -->
       <a-entity
         laser-controls="hand: right"
-        raycaster="objects: .clickable, .audio-control"
+        raycaster="objects: .clickable, .audio-control, .video-control"
       ></a-entity>
       <a-entity
         laser-controls="hand: left"
-        raycaster="objects: .clickable, .audio-control"
+        raycaster="objects: .clickable, .audio-control, .video-control"
       ></a-entity>
 
       <a-assets>
@@ -2030,16 +2112,6 @@
         <!-- Audio controls -->
         <img id="play" src="./images/play.png" />
         <img id="pause" src="./images/pause.png" />
-        <!-- Video assets for 360° video scenes -->
-        <video
-          id="scene-video-dynamic"
-          crossorigin="anonymous"
-          loop
-          muted
-          playsinline
-          webkit-playsinline
-          style="display: none"
-        ></video>
       </a-assets>
 
       <!-- Container for hotspots -->
@@ -2058,7 +2130,7 @@
         <!-- Mouse-based cursor for non-VR mode -->
         <a-entity
           cursor="rayOrigin: mouse; fuse: false"
-          raycaster="objects: .clickable, .audio-control, .scene-media-surface"
+          raycaster="objects: .clickable, .audio-control, .video-control, .scene-media-surface"
           id="mouse-cursor"
           visible="true"
         >
@@ -2067,7 +2139,7 @@
         <!-- Gaze-based cursor for VR mode -->
         <a-entity
           cursor="fuse: true; fuseTimeout: 2000"
-          raycaster="objects: .clickable, .audio-control, .scene-media-surface"
+          raycaster="objects: .clickable, .audio-control, .video-control, .scene-media-surface"
           position="0 0 -1"
           geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
           material="color: white; shader: flat; opacity: 0.8"

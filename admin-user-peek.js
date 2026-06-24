@@ -8,6 +8,7 @@ const StudentPeek = {
 
   CATEGORIES: [
     { id: 'images', label: 'Flat Images' },
+    { id: 'videos', label: 'Flat Videos' },
     { id: '360-images', label: '360 Photos' },
     { id: '360-videos', label: '360 Videos' },
     { id: 'audio', label: 'Audio' },

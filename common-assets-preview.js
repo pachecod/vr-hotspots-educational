@@ -17,7 +17,13 @@ const CommonAssetsPreview = {
   },
 
   isPreviewable(category, name) {
-    if (category === 'images' || category === '360-images' || category === '360-videos' || category === 'audio') {
+    if (
+      category === 'images' ||
+      category === 'videos' ||
+      category === '360-images' ||
+      category === '360-videos' ||
+      category === 'audio'
+    ) {
       return true;
     }
     if (category === '3d') return this.is3dModelPreviewable(name);
@@ -41,6 +47,7 @@ const CommonAssetsPreview = {
 
   getListThumbIcon(category, name) {
     if (category === '360-videos') return '🎥';
+    if (category === 'videos') return '🎬';
     if (category === 'audio') return '🔊';
     if (category === '3d') return '🎨';
     if (category === 'other') return '📄';
@@ -73,9 +80,9 @@ const CommonAssetsPreview = {
 
     if (category === 'images' || category === '360-images') {
       inner = `<img class="${thumbClass}" src="${this.escapeAttr(url)}" alt="" loading="lazy" crossorigin="anonymous" />`;
-    } else if (category === '360-videos') {
+    } else if (category === '360-videos' || category === 'videos') {
       const label =
-        context === 'grid'
+        category === '360-videos' && context === 'grid'
           ? '<span class="asset-thumb-label">360°</span>'
           : '';
       inner = `<div class="${thumbClass} ${thumbClass}-video">
@@ -129,7 +136,7 @@ const CommonAssetsPreview = {
       )}" crossorigin="anonymous" />`;
     }
 
-    if (category === '360-videos') {
+    if (category === '360-videos' || category === 'videos') {
       return `<div class="preview-video">
         <video controls autoplay muted playsinline preload="auto" crossorigin="anonymous" src="${this.escapeAttr(url)}"></video>
         <p class="preview-filename">${this.escapeAttr(name)}</p>

@@ -16,6 +16,496 @@ AFRAME.registerComponent('face-camera', {
   },
 });
 
+let _flatVideoScene360PauseCount = 0;
+
+function prepareFlatVideoHotspotElement(video, muted) {
+  if (!video || video.tagName !== 'VIDEO') return;
+  try {
+    video.muted = muted !== false;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    if (!video.crossOrigin) {
+      video.crossOrigin = 'anonymous';
+      video.setAttribute('crossorigin', 'anonymous');
+    }
+  } catch (_) {}
+}
+
+function pauseScene360VideoForFlatHotspot() {
+  const sceneVideo = document.getElementById('scene-video-dynamic');
+  if (!sceneVideo) return;
+  if (_flatVideoScene360PauseCount === 0) {
+    sceneVideo._wasPlayingBeforeFlatHotspot = !sceneVideo.paused;
+    if (sceneVideo._wasPlayingBeforeFlatHotspot) {
+      try {
+        sceneVideo.pause();
+      } catch (_) {}
+    }
+  }
+  _flatVideoScene360PauseCount++;
+}
+
+function resumeScene360VideoAfterFlatHotspot() {
+  _flatVideoScene360PauseCount = Math.max(0, _flatVideoScene360PauseCount - 1);
+  if (_flatVideoScene360PauseCount > 0) return;
+  const sceneVideo = document.getElementById('scene-video-dynamic');
+  if (sceneVideo && sceneVideo._wasPlayingBeforeFlatHotspot) {
+    try {
+      sceneVideo.play().catch(function () {});
+    } catch (_) {}
+  }
+}
+
+function isVideoHotspot(h) {
+  if (!h || h.type !== 'image') return false;
+  if (h.mediaKind === 'video') return true;
+  return !!(
+    h.videoStorageKey ||
+    h.commonAssetUrl ||
+    h.videoFileName ||
+    h.video instanceof File ||
+    (typeof h.video === 'string' && h.video.trim() !== '')
+  );
+}
+
+function hasVideoHotspotReference(h) {
+  if (!h) return false;
+  if (h.video instanceof File) return true;
+  if (typeof h.video === 'string' && h.video.trim() !== '') return true;
+  if (h.videoStorageKey) return true;
+  if (h.commonAssetUrl) return true;
+  return false;
+}
+
+function resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl) {
+  const videos = [];
+  const seen = new Set();
+  const add = (video) => {
+    if (video && video.tagName === 'VIDEO' && typeof video.play === 'function' && !seen.has(video)) {
+      seen.add(video);
+      videos.push(video);
+    }
+  };
+  try {
+    if (aVideoEl) {
+      const mesh = aVideoEl.getObject3D && aVideoEl.getObject3D('mesh');
+      const map = mesh && mesh.material && mesh.material.map;
+      add(map && map.image);
+      const srcAttr = aVideoEl.getAttribute && aVideoEl.getAttribute('src');
+      if (srcAttr && srcAttr.startsWith('#')) {
+        add(document.getElementById(srcAttr.slice(1)));
+      }
+      const assetFromData = aVideoEl.dataset && aVideoEl.dataset.videoAssetId;
+      if (assetFromData) add(document.getElementById(assetFromData));
+    }
+    if (parentEl && parentEl.dataset && parentEl.dataset.flatVideoAssetId) {
+      add(document.getElementById(parentEl.dataset.flatVideoAssetId));
+    }
+    if (typeof videoSrcRef === 'string' && videoSrcRef.startsWith('#')) {
+      add(document.getElementById(videoSrcRef.slice(1)));
+    }
+  } catch (_) {}
+  return videos;
+}
+
+function playFlatVideoHotspotVideos(videos, aVideoEl, muted) {
+  if (!videos || !videos.length) return Promise.resolve(false);
+  pauseScene360VideoForFlatHotspot();
+  videos.forEach((video) => prepareFlatVideoHotspotElement(video, muted));
+  const playOne = (video) => {
+    try {
+      if (video.readyState < 1) {
+        return new Promise((resolve) => {
+          const onReady = () => {
+            video.removeEventListener('loadeddata', onReady);
+            video.removeEventListener('canplay', onReady);
+            resolve(video.play().catch(function () { return false; }));
+          };
+          video.addEventListener('loadeddata', onReady, { once: true });
+          video.addEventListener('canplay', onReady, { once: true });
+          try {
+            video.load();
+          } catch (_) {}
+        });
+      }
+      return video.play().catch(function () { return false; });
+    } catch (_) {
+      return Promise.resolve(false);
+    }
+  };
+  return Promise.all(videos.map(playOne)).then(function () {
+    try {
+      if (aVideoEl) {
+        const mesh = aVideoEl.getObject3D && aVideoEl.getObject3D('mesh');
+        const map = mesh && mesh.material && mesh.material.map;
+        if (map) map.needsUpdate = true;
+      }
+    } catch (_) {}
+    return true;
+  });
+}
+
+function pauseFlatVideoHotspotVideos(videos, aVideoEl) {
+  if (!videos || !videos.length) return;
+  videos.forEach((video) => {
+    try {
+      video.pause();
+    } catch (_) {}
+  });
+  try {
+    if (aVideoEl) {
+      const mesh = aVideoEl.getObject3D && aVideoEl.getObject3D('mesh');
+      const map = mesh && mesh.material && mesh.material.map;
+      if (map) map.needsUpdate = true;
+    }
+  } catch (_) {}
+  resumeScene360VideoAfterFlatHotspot();
+}
+
+function setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, playing, userAction, muted) {
+  if (!videos || !videos.length) return;
+  if (userAction && parentEl) parentEl._flatVideoUserPaused = !playing;
+  const useMuted = muted !== false;
+  if (playing) {
+    playFlatVideoHotspotVideos(videos, aVideoEl, useMuted);
+  } else {
+    pauseFlatVideoHotspotVideos(videos, aVideoEl);
+  }
+  if (aVideoEl) {
+    try {
+      aVideoEl.setAttribute('autoplay', playing ? 'true' : 'false');
+    } catch (_) {}
+  }
+}
+
+function setFlatVideoHotspotMuted(videos, muted) {
+  if (!videos || !videos.length) return;
+  videos.forEach((video) => {
+    try {
+      video.muted = muted;
+    } catch (_) {}
+  });
+}
+
+function clearFlatVideoHotspotOverlay(parentEl) {
+  if (!parentEl) return;
+  parentEl
+    .querySelectorAll(
+      '.static-video-hotspot, .video-play-control, .video-audio-control, .video-audio-label'
+    )
+    .forEach((node) => {
+      try {
+        node.remove();
+      } catch (_) {}
+    });
+  delete parentEl._flatVideoControls;
+}
+
+function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
+  options = options || {};
+  const styles = options.styles || null;
+  const aVideoEl = options.aVideoEl || null;
+  const startMuted = options.startMuted !== false;
+  const playImage = styles?.buttonImages?.play || '#play';
+  const pauseImage = styles?.buttonImages?.pause || '#pause';
+  const buttonColor = styles?.audio?.buttonColor || '#FFFFFF';
+  const buttonOpacity = String(styles?.audio?.buttonOpacity ?? 1.0);
+  const btnY = options.controlY != null ? options.controlY : -0.35;
+  const btnZ = options.controlZ != null ? options.controlZ : 0.12;
+  const btnSpacing = 0.32;
+
+  const getVideos = () => resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl);
+
+  const playBtn = document.createElement('a-image');
+  playBtn.setAttribute('class', 'clickable video-control video-play-control');
+  playBtn.setAttribute('src', playImage);
+  playBtn.setAttribute('width', '0.5');
+  playBtn.setAttribute('height', '0.5');
+  playBtn.setAttribute('material', 'color: ' + buttonColor);
+  playBtn.setAttribute('opacity', buttonOpacity);
+  playBtn.setAttribute('position', -btnSpacing + ' ' + btnY + ' ' + btnZ);
+  parentEl.appendChild(playBtn);
+
+  const audioBtn = document.createElement('a-plane');
+  audioBtn.setAttribute('class', 'clickable video-control video-audio-control');
+  audioBtn.setAttribute('width', '0.5');
+  audioBtn.setAttribute('height', '0.5');
+  audioBtn.setAttribute('position', btnSpacing + ' ' + btnY + ' ' + btnZ);
+  audioBtn.setAttribute(
+    'material',
+    'color: ' + buttonColor + '; opacity: ' + buttonOpacity + '; transparent: true'
+  );
+  parentEl.appendChild(audioBtn);
+  const audioLabel = document.createElement('a-text');
+  audioLabel.setAttribute('class', 'video-audio-label');
+  audioLabel.setAttribute('value', startMuted ? 'OFF' : 'ON');
+  audioLabel.setAttribute('align', 'center');
+  audioLabel.setAttribute('position', btnSpacing + ' ' + btnY + ' ' + (btnZ + 0.01));
+  audioLabel.setAttribute('color', '#222222');
+  audioLabel.setAttribute('scale', '1.2 1.2 1');
+  parentEl.appendChild(audioLabel);
+
+  let isPlaying = false;
+  let isMuted = startMuted;
+  let boundVideos = new Set();
+
+  const syncFromVideo = () => {
+    const videos = getVideos();
+    const video = videos[0];
+    if (!video) return;
+    isPlaying = !video.paused;
+    isMuted = !!video.muted;
+    playBtn.setAttribute('src', isPlaying ? pauseImage : playImage);
+    audioLabel.setAttribute('value', isMuted ? 'OFF' : 'ON');
+  };
+
+  const bindVideoListeners = () => {
+    const videos = getVideos();
+    if (!videos.length) return false;
+    videos.forEach((video) => {
+      if (boundVideos.has(video)) return;
+      boundVideos.add(video);
+      video.addEventListener('play', syncFromVideo);
+      video.addEventListener('pause', syncFromVideo);
+      video.addEventListener('volumechange', syncFromVideo);
+    });
+    syncFromVideo();
+    return true;
+  };
+
+  const togglePlay = (e) => {
+    if (e) {
+      e.stopPropagation();
+      if (e.preventDefault) e.preventDefault();
+    }
+    let videos = getVideos();
+    if (!videos.length) {
+      bindVideoListeners();
+      videos = getVideos();
+    }
+    if (!videos.length) return;
+    const nextPlaying = !isPlaying;
+    setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, nextPlaying, true, isMuted);
+    isPlaying = nextPlaying;
+    playBtn.setAttribute('src', isPlaying ? pauseImage : playImage);
+  };
+
+  const toggleMute = (e) => {
+    if (e) {
+      e.stopPropagation();
+      if (e.preventDefault) e.preventDefault();
+    }
+    const videos = getVideos();
+    if (!videos.length) return;
+    isMuted = !isMuted;
+    setFlatVideoHotspotMuted(videos, isMuted);
+    audioLabel.setAttribute('value', isMuted ? 'OFF' : 'ON');
+    if (!isMuted) setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, true, true, false);
+  };
+
+  const bindControl = (el, handler) => {
+    el.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      handler(e);
+    });
+    el.addEventListener('triggerdown', handler);
+  };
+
+  bindControl(playBtn, togglePlay);
+  bindControl(audioBtn, toggleMute);
+
+  [playBtn, audioBtn].forEach((btn) => {
+    btn.setAttribute('animation__hover_in', {
+      property: 'scale',
+      to: '1.2 1.2 1',
+      dur: 200,
+      easing: 'easeOutQuad',
+      startEvents: 'mouseenter',
+    });
+    btn.setAttribute('animation__hover_out', {
+      property: 'scale',
+      to: '1 1 1',
+      dur: 200,
+      easing: 'easeOutQuad',
+      startEvents: 'mouseleave',
+    });
+  });
+
+  if (!bindVideoListeners() && aVideoEl) {
+    aVideoEl.addEventListener('materialvideoloadeddata', bindVideoListeners, { once: true });
+    aVideoEl.addEventListener('loadeddata', bindVideoListeners, { once: true });
+    const poll = setInterval(() => {
+      if (bindVideoListeners()) clearInterval(poll);
+    }, 200);
+    setTimeout(() => clearInterval(poll), 8000);
+  }
+
+  parentEl._flatVideoControls = { playBtn, audioBtn, audioLabel, syncFromVideo };
+  return parentEl._flatVideoControls;
+}
+
+function mountEditorFlatVideoBillboard(component, data, forceRemount) {
+  const el = component.el;
+  if (!data || data.mediaKind !== 'video' || !data.videoSrc) return;
+
+  let _src = data.videoSrc;
+  if (_src && _src.includes('%')) {
+    try {
+      _src = decodeURIComponent(_src);
+    } catch (_) {}
+  }
+
+  if (
+    !forceRemount &&
+    component._mountedFlatVideoSrc === _src &&
+    el.querySelector('.static-video-hotspot')
+  ) {
+    return;
+  }
+
+  const assetId = _src.startsWith('#') ? _src.slice(1) : '';
+  const assetEl = assetId ? document.getElementById(assetId) : null;
+  if (assetId) el.dataset.flatVideoAssetId = assetId;
+  if (assetEl && !assetEl.src && !assetEl.currentSrc) {
+    return;
+  }
+
+  const doMount = () => {
+    clearFlatVideoHotspotOverlay(el);
+
+    const vid = document.createElement('a-video');
+    vid.setAttribute('src', _src);
+    vid.setAttribute('autoplay', true);
+    vid.setAttribute('loop', data.videoLoop !== false);
+    vid.setAttribute('muted', data.videoMuted !== false);
+    vid.setAttribute('playsinline', true);
+    vid.setAttribute('crossorigin', 'anonymous');
+    if (!vid.getAttribute('material')) vid.setAttribute('material', 'transparent:true; side:double');
+    const scl = data.imageScale || 1;
+    const knownAR =
+      typeof data.imageAspectRatio === 'number' &&
+      isFinite(data.imageAspectRatio) &&
+      data.imageAspectRatio > 0
+        ? data.imageAspectRatio
+        : 1;
+    if (knownAR !== 1) vid.dataset.aspectRatio = String(knownAR);
+    vid.setAttribute('width', 1);
+    vid.setAttribute('height', knownAR);
+    vid.setAttribute('scale', `${scl} ${scl} 1`);
+    vid.setAttribute('position', `0 ${(knownAR / 2) * scl} 0.05`);
+    vid.classList.add('static-video-hotspot');
+    vid.classList.add('clickable');
+    if (assetId) vid.dataset.videoAssetId = assetId;
+
+    let fusingTimer = null;
+    let isExpanded = false;
+    const editorRef = window.hotspotEditor;
+    const gazeDuration =
+      editorRef &&
+      editorRef.customStyles &&
+      editorRef.customStyles.gaze &&
+      editorRef.customStyles.gaze.duration
+        ? Math.round(editorRef.customStyles.gaze.duration * 1000)
+        : 2000;
+    vid.addEventListener('raycaster-intersected', (evt) => {
+      const cursorEl = evt.detail.el;
+      if (cursorEl && cursorEl.id === 'gaze-cursor') {
+        if (fusingTimer) clearTimeout(fusingTimer);
+        fusingTimer = setTimeout(() => {
+          isExpanded = true;
+          vid.setAttribute('scale', `${scl * 2} ${scl * 2} 1`);
+        }, gazeDuration);
+      }
+    });
+    vid.addEventListener('raycaster-intersected-cleared', (evt) => {
+      const cursorEl = evt.detail.el;
+      if (cursorEl && cursorEl.id === 'gaze-cursor') {
+        if (fusingTimer) {
+          clearTimeout(fusingTimer);
+          fusingTimer = null;
+        }
+        isExpanded = false;
+        vid.setAttribute('scale', `${scl} ${scl} 1`);
+      }
+    });
+
+    const editor = window.hotspotEditor;
+    if (editor && editor.customStyles && editor.customStyles.image) {
+      const istyle = editor.customStyles.image;
+      const opacity = typeof istyle.opacity === 'number' ? istyle.opacity : 1.0;
+      vid.setAttribute(
+        'material',
+        `opacity: ${opacity}; transparent: ${opacity < 1 ? 'true' : 'false'}; side: double`
+      );
+    }
+
+    const applyVideoAR = () => {
+      try {
+        const videoEl = assetId ? document.getElementById(assetId) : null;
+        const nW = videoEl?.videoWidth || 0;
+        const nH = videoEl?.videoHeight || 0;
+        const ratio =
+          nW > 0 && nH > 0 ? nH / nW : parseFloat(vid.dataset.aspectRatio || '') || 1;
+        if (ratio && isFinite(ratio) && ratio > 0) {
+          vid.dataset.aspectRatio = String(ratio);
+          vid.setAttribute('width', 1);
+          vid.setAttribute('height', ratio);
+          vid.setAttribute('scale', `${scl} ${scl} 1`);
+          vid.setAttribute('position', `0 ${(ratio / 2) * scl} 0.05`);
+          try {
+            const idStr = el.id || '';
+            const id = idStr.startsWith('hotspot-') ? parseInt(idStr.slice(8), 10) : NaN;
+            if (!isNaN(id) && window.hotspotEditor)
+              window.hotspotEditor._persistImageAspectRatio(id, ratio);
+          } catch (_) {}
+        }
+      } catch (_) {}
+    };
+
+    try {
+      const videoEl = assetId ? document.getElementById(assetId) : null;
+      if (videoEl) {
+        prepareFlatVideoHotspotElement(videoEl, data.videoMuted !== false);
+        videoEl.loop = data.videoLoop !== false;
+        videoEl.addEventListener('loadedmetadata', applyVideoAR, { once: true });
+        videoEl.play().catch(() => {});
+      }
+    } catch (_) {}
+
+    setTimeout(applyVideoAR, 250);
+    setTimeout(applyVideoAR, 800);
+    el.appendChild(vid);
+    attachFlatVideoHotspotControls(el, _src, {
+      aVideoEl: vid,
+      startMuted: data.videoMuted !== false,
+      styles: editor && editor.customStyles ? editor.customStyles : null,
+    });
+    component._mountedFlatVideoSrc = _src;
+  };
+
+  if (assetEl && assetEl.readyState < 1) {
+    const onReady = () => {
+      assetEl.removeEventListener('loadeddata', onReady);
+      assetEl.removeEventListener('canplay', onReady);
+      assetEl.removeEventListener('error', onError);
+      doMount();
+    };
+    const onError = () => {
+      assetEl.removeEventListener('loadeddata', onReady);
+      assetEl.removeEventListener('canplay', onReady);
+      assetEl.removeEventListener('error', onError);
+      console.warn('[VideoHotspot] Asset failed to load:', assetEl.src || _src);
+    };
+    assetEl.addEventListener('loadeddata', onReady, { once: true });
+    assetEl.addEventListener('canplay', onReady, { once: true });
+    assetEl.addEventListener('error', onError, { once: true });
+    return;
+  }
+
+  doMount();
+}
+
 // Optimized global helper with caching + debouncing for rounded image masking (transparent corners)
 const IMAGE_MASK_CACHE = new Map(); // key: src|radius|bw|color -> dataURL
 function applyRoundedMaskToAImage(aImgEl, styleCfg, force = false) {
@@ -352,6 +842,8 @@ class HotspotEditor {
       .catch(() => {})
       .then(() => this.rehydrateVideoSourcesFromIDB())
       .catch(() => {})
+      .then(() => this.rehydrateVideoHotspotsFromIDB())
+      .catch(() => {})
       .then(() => this.rehydrateAudioSourcesFromIDB())
       .catch(() => {})
       .then(() => this.rehydrateGroundTexturesFromIDB())
@@ -636,8 +1128,7 @@ class HotspotEditor {
     videoEl.preload = 'auto';
     videoEl.style.display = 'none';
     this.configureSceneVideoCrossOrigin(videoEl);
-    const assets = document.querySelector('a-assets');
-    (assets || document.body).appendChild(videoEl);
+    document.body.appendChild(videoEl);
     return videoEl;
   }
 
@@ -716,6 +1207,97 @@ class HotspotEditor {
     // Required for WebGL video textures — without this, audio plays but the sphere stays black
     videoEl.crossOrigin = 'anonymous';
     videoEl.setAttribute('crossorigin', 'anonymous');
+  }
+
+  getImageMediaKind() {
+    const videoRadio = document.getElementById('hotspot-media-kind-video');
+    if (videoRadio && videoRadio.checked) return 'video';
+    return 'photo';
+  }
+
+  isVideoImageHotspot(data) {
+    return !!(data && data.type === 'image' && data.mediaKind === 'video');
+  }
+
+  syncImageMediaFieldsVisibility() {
+    if (this.selectedHotspotType !== 'image') return;
+    const isVideo = this.getImageMediaKind() === 'video';
+    const imgFile = document.getElementById('image-file-group');
+    const imgUrl = document.getElementById('image-url-group');
+    const vidFile = document.getElementById('video-file-group');
+    const vidUrl = document.getElementById('video-url-group');
+    const vidOpts = document.getElementById('video-options-group');
+    if (imgFile) imgFile.style.display = isVideo ? 'none' : 'block';
+    if (imgUrl) imgUrl.style.display = isVideo ? 'none' : 'block';
+    if (vidFile) vidFile.style.display = isVideo ? 'block' : 'none';
+    if (vidUrl) vidUrl.style.display = isVideo ? 'block' : 'none';
+    if (vidOpts) vidOpts.style.display = isVideo ? 'block' : 'none';
+  }
+
+  registerHotspotVideoAsset(assetId, videoSrc, options) {
+    options = options || {};
+    let assetEl = document.getElementById(assetId);
+    if (!assetEl) {
+      assetEl = document.createElement('video');
+      assetEl.id = assetId;
+      assetEl.style.display = 'none';
+      this.configureSceneVideoCrossOrigin(assetEl);
+      assetEl.playsInline = true;
+      assetEl.setAttribute('playsinline', '');
+      assetEl.setAttribute('webkit-playsinline', '');
+      assetEl.preload = 'auto';
+      document.body.appendChild(assetEl);
+    }
+    const muted = options.muted !== false;
+    const loop = options.loop !== false;
+    assetEl.muted = muted;
+    assetEl.loop = loop;
+    if (muted) assetEl.setAttribute('muted', '');
+    else assetEl.removeAttribute('muted');
+    if (loop) assetEl.setAttribute('loop', '');
+    else assetEl.removeAttribute('loop');
+    const absoluteSrc = this.toAbsoluteMediaUrl(videoSrc);
+    if (assetEl.src !== absoluteSrc) {
+      assetEl.src = absoluteSrc;
+      try {
+        assetEl.load();
+      } catch (_) {}
+    }
+    return assetEl;
+  }
+
+  pauseAllHotspotVideos() {
+    document.querySelectorAll('.static-video-hotspot').forEach((vidEl) => {
+      try {
+        const host = vidEl.parentElement;
+        const idStr = host && host.id ? host.id : '';
+        const assetRef = idStr.startsWith('hotspot-')
+          ? `#asset-video-hotspot-${idStr.slice(8)}`
+          : '';
+        const videos = resolveFlatVideoHotspotVideos(assetRef, vidEl);
+        if (videos.length) {
+          setFlatVideoHotspotPlayback(host || vidEl, vidEl, videos, false, false);
+        }
+      } catch (_) {}
+    });
+  }
+
+  resumeHotspotVideosForScene(sceneId) {
+    const scene = this.scenes && this.scenes[sceneId];
+    if (!scene || !Array.isArray(scene.hotspots)) return;
+    scene.hotspots.forEach((h) => {
+      if (!h || !this.isVideoImageHotspot(h)) return;
+      const el = document.getElementById(`hotspot-${h.id}`);
+      if (el && el._flatVideoUserPaused) return;
+      const vidEl = el && el.querySelector('.static-video-hotspot');
+      const videos = resolveFlatVideoHotspotVideos(
+        `#asset-video-hotspot-${h.id}`,
+        vidEl
+      );
+      if (videos.length) {
+        setFlatVideoHotspotPlayback(el, vidEl, videos, true, false, h.videoMuted !== false);
+      }
+    });
   }
 
   createVideoSphereElement() {
@@ -3229,6 +3811,10 @@ class HotspotEditor {
 
     // Initialize field requirements for default selection
     this.updateFieldRequirements();
+
+    document.querySelectorAll('input[name="hotspot-image-media-kind"]').forEach((radio) => {
+      radio.addEventListener('change', () => this.syncImageMediaFieldsVisibility());
+    });
   }
 
   updateFieldRequirements() {
@@ -3265,6 +3851,14 @@ class HotspotEditor {
     if (imgFileGrpReset) imgFileGrpReset.style.display = 'none';
     if (imgUrlGrpReset) imgUrlGrpReset.style.display = 'none';
     if (imgSizeGrpReset) imgSizeGrpReset.style.display = 'none';
+    const imgMediaKindReset = document.getElementById('image-media-kind-group');
+    const vidFileGrpReset = document.getElementById('video-file-group');
+    const vidUrlGrpReset = document.getElementById('video-url-group');
+    const vidOptsGrpReset = document.getElementById('video-options-group');
+    if (imgMediaKindReset) imgMediaKindReset.style.display = 'none';
+    if (vidFileGrpReset) vidFileGrpReset.style.display = 'none';
+    if (vidUrlGrpReset) vidUrlGrpReset.style.display = 'none';
+    if (vidOptsGrpReset) vidOptsGrpReset.style.display = 'none';
     const modelFileGrpReset = document.getElementById('model-file-group');
     const modelUrlGrpReset = document.getElementById('model-url-group');
     const modelSizeGrpReset = document.getElementById('model-size-group');
@@ -3319,12 +3913,11 @@ class HotspotEditor {
         audioGroup.style.display = 'none';
         audioUrlGroup.style.display = 'none';
         navigationGroup.style.display = 'none';
-        const imgFileGrp = document.getElementById('image-file-group');
-        const imgUrlGrp = document.getElementById('image-url-group');
+        const imgMediaKindGrp = document.getElementById('image-media-kind-group');
         const imgSizeGrp = document.getElementById('image-size-group');
-        if (imgFileGrp) imgFileGrp.style.display = 'block';
-        if (imgUrlGrp) imgUrlGrp.style.display = 'block';
+        if (imgMediaKindGrp) imgMediaKindGrp.style.display = 'block';
         if (imgSizeGrp) imgSizeGrp.style.display = 'block';
+        this.syncImageMediaFieldsVisibility();
         break;
       case 'model':
         textGroup.style.display = 'none';
@@ -3423,15 +4016,33 @@ class HotspotEditor {
     }
 
     if (this.selectedHotspotType === 'image') {
+      const mediaKind = this.getImageMediaKind();
+      hotspotData.mediaKind = mediaKind;
       const imgFileEl = document.getElementById('hotspot-image-file');
       const imgUrlEl = document.getElementById('hotspot-image-url');
+      const vidFileEl = document.getElementById('hotspot-video-file');
+      const vidUrlEl = document.getElementById('hotspot-video-url');
       const scaleEl = document.getElementById('hotspot-image-scale');
       const s = parseFloat(scaleEl?.value || '5') || 5;
       hotspotData.imageScale = Math.max(0.1, Math.min(10, s));
-      if (imgUrlEl?.value.trim()) hotspotData.image = imgUrlEl.value.trim();
-      else if (imgFileEl?.files?.[0]) hotspotData.image = imgFileEl.files[0];
-      if (typeof hotspotData.image === 'string') {
-        this.applyCommonAssetFromDataset(hotspotData, imgUrlEl);
+      if (mediaKind === 'video') {
+        hotspotData.videoLoop = document.getElementById('hotspot-video-loop')?.checked !== false;
+        hotspotData.videoMuted = document.getElementById('hotspot-video-enable-audio')?.checked !== true;
+        if (vidUrlEl?.value.trim()) hotspotData.video = vidUrlEl.value.trim();
+        else if (vidFileEl?.files?.[0]) hotspotData.video = vidFileEl.files[0];
+        if (typeof hotspotData.video === 'string') {
+          this.applyCommonAssetFromDataset(hotspotData, vidUrlEl);
+        }
+        if (hotspotData.video instanceof File) {
+          hotspotData.videoStorageKey = `video_hotspot_${hotspotData.id}`;
+          hotspotData.videoFileName = hotspotData.video.name || null;
+        }
+      } else {
+        if (imgUrlEl?.value.trim()) hotspotData.image = imgUrlEl.value.trim();
+        else if (imgFileEl?.files?.[0]) hotspotData.image = imgFileEl.files[0];
+        if (typeof hotspotData.image === 'string') {
+          this.applyCommonAssetFromDataset(hotspotData, imgUrlEl);
+        }
       }
     }
     if (this.selectedHotspotType === 'model') {
@@ -3474,6 +4085,13 @@ class HotspotEditor {
       this.applyCommonAssetFromDataset(hotspotData, document.getElementById('hotspot-audio-url'));
     }
 
+    const pendingVideoFile =
+      hotspotData.type === 'image' &&
+      hotspotData.mediaKind === 'video' &&
+      hotspotData.video instanceof File
+        ? hotspotData.video
+        : null;
+
     this.createHotspotElement(hotspotData);
     this.hotspots.push(hotspotData);
     this.scenes[this.currentScene].hotspots.push(hotspotData);
@@ -3513,7 +4131,7 @@ class HotspotEditor {
     }
 
     // If the image is a File, persist it into IndexedDB to avoid localStorage bloat
-    if (hotspotData.type === 'image' && hotspotData.image instanceof File) {
+    if (hotspotData.type === 'image' && hotspotData.mediaKind !== 'video' && hotspotData.image instanceof File) {
       (async () => {
         try {
           const fileRef = hotspotData.image;
@@ -3543,6 +4161,35 @@ class HotspotEditor {
           }
         } catch (err) {
           console.warn('[ImageHotspot] Failed to save image to IndexedDB', err);
+        }
+      })();
+    }
+
+    // If the video is a File, persist it into IndexedDB
+    if (pendingVideoFile) {
+      (async () => {
+        try {
+          const fileRef = pendingVideoFile;
+          const storageKey = hotspotData.videoStorageKey || `video_hotspot_${hotspotData.id}`;
+          const saved = await this.saveVideoToIDB(storageKey, fileRef);
+          if (saved) {
+            hotspotData.videoStorageKey = storageKey;
+            hotspotData.videoFileName = fileRef.name || null;
+            hotspotData.mediaKind = 'video';
+            const sceneHs = this.scenes[this.currentScene].hotspots.find(
+              (h) => h.id === hotspotData.id
+            );
+            if (sceneHs) {
+              sceneHs.videoStorageKey = storageKey;
+              sceneHs.videoFileName = fileRef.name || null;
+              sceneHs.mediaKind = 'video';
+              sceneHs.videoLoop = hotspotData.videoLoop;
+              sceneHs.videoMuted = hotspotData.videoMuted;
+            }
+            this.saveScenesData();
+          }
+        } catch (err) {
+          console.warn('[VideoHotspot] Failed to save video to IndexedDB', err);
         }
       })();
     }
@@ -3601,6 +4248,16 @@ class HotspotEditor {
     if (imageFileEl) imageFileEl.value = '';
     const imageUrlEl = document.getElementById('hotspot-image-url');
     if (imageUrlEl) imageUrlEl.value = '';
+    const videoFileEl = document.getElementById('hotspot-video-file');
+    if (videoFileEl) videoFileEl.value = '';
+    const videoUrlEl = document.getElementById('hotspot-video-url');
+    if (videoUrlEl) videoUrlEl.value = '';
+    const photoRadio = document.getElementById('hotspot-media-kind-photo');
+    if (photoRadio) photoRadio.checked = true;
+    const videoLoopEl = document.getElementById('hotspot-video-loop');
+    if (videoLoopEl) videoLoopEl.checked = true;
+    const videoAudioEl = document.getElementById('hotspot-video-enable-audio');
+    if (videoAudioEl) videoAudioEl.checked = false;
     const imageScaleEl = document.getElementById('hotspot-image-scale');
     if (imageScaleEl) imageScaleEl.value = '5';
     const modelFileEl = document.getElementById('hotspot-model-file');
@@ -3629,6 +4286,10 @@ class HotspotEditor {
     const imageUrlInput = document.getElementById('hotspot-image-url');
     const imageFile = imageFileInput ? imageFileInput.files[0] : null;
     const imageUrl = imageUrlInput ? imageUrlInput.value.trim() : '';
+    const videoFileInput = document.getElementById('hotspot-video-file');
+    const videoUrlInput = document.getElementById('hotspot-video-url');
+    const videoFile = videoFileInput ? videoFileInput.files[0] : null;
+    const videoUrl = videoUrlInput ? videoUrlInput.value.trim() : '';
 
     switch (type) {
       case 'text':
@@ -3679,7 +4340,14 @@ class HotspotEditor {
         }
         break;
       case 'image':
-        if (!imageFile && !imageUrl) {
+        if (this.getImageMediaKind() === 'video') {
+          if (!videoFile && !videoUrl) {
+            return {
+              valid: false,
+              message: 'Video hotspot requires a video file or video URL.',
+            };
+          }
+        } else if (!imageFile && !imageUrl) {
           return {
             valid: false,
             message: 'Image hotspot requires an image file or image URL.',
@@ -3718,6 +4386,8 @@ class HotspotEditor {
     let _imageHasStorageKey = false;
     // Candidate key to use when loading image blobs from IndexedDB (supports legacy key naming)
     let _imageLoadKey = null;
+    let _videoHasStorageKey = false;
+    let _videoLoadKey = null;
     let hotspotEl;
     if (data.type === 'navigation' || data.type === 'weblink') {
       // Parent container
@@ -3935,7 +4605,72 @@ class HotspotEditor {
       }
     }
 
-    if (data.type === 'image') {
+    if (
+      data.type === 'image' &&
+      !data.mediaKind &&
+      (data.video || data.videoStorageKey || data.commonAssetUrl)
+    ) {
+      data.mediaKind = 'video';
+    }
+
+    if (data.type === 'image' && data.mediaKind === 'video') {
+      let videoSrc = '';
+      _videoLoadKey =
+        data.videoStorageKey || (typeof data.id === 'number' ? `video_hotspot_${data.id}` : null);
+      if (data.commonAssetUrl) {
+        videoSrc = data.commonAssetUrl;
+        if (!data.video) data.video = data.commonAssetUrl;
+      } else if (data.video instanceof File) {
+        try {
+          videoSrc = URL.createObjectURL(data.video);
+          data.videoStorageKey =
+            data.videoStorageKey || (typeof data.id === 'number' ? `video_hotspot_${data.id}` : null);
+          data.videoFileName = data.videoFileName || data.video.name || null;
+          data.video = videoSrc;
+          const preload = document.createElement('video');
+          preload.muted = true;
+          preload.playsInline = true;
+          preload.onloadedmetadata = () => {
+            const nW = preload.videoWidth || 0;
+            const nH = preload.videoHeight || 0;
+            const ar = nW > 0 && nH > 0 ? nH / nW : 0;
+            if (ar && isFinite(ar) && ar > 0) {
+              data.imageAspectRatio = ar;
+              this._persistImageAspectRatio(data.id, ar);
+            }
+          };
+          preload.src = videoSrc;
+        } catch (e) {
+          console.warn('[VideoHotspot] Failed to create object URL', e);
+        }
+      } else if (typeof data.video === 'string' && data.video && !data.video.startsWith('FILE:')) {
+        videoSrc = data.video;
+      }
+      _videoHasStorageKey = !!_videoLoadKey && !videoSrc;
+      const scale = typeof data.imageScale === 'number' ? data.imageScale : 1;
+      const ar =
+        typeof data.imageAspectRatio === 'number' &&
+        isFinite(data.imageAspectRatio) &&
+        data.imageAspectRatio > 0
+          ? data.imageAspectRatio
+          : 0;
+      const videoLoop = data.videoLoop !== false;
+      const videoMuted = data.videoMuted !== false;
+      const assetId = `asset-video-hotspot-${data.id}`;
+      if (videoSrc) {
+        this.registerHotspotVideoAsset(assetId, videoSrc, {
+          muted: videoMuted,
+          loop: videoLoop,
+        });
+        spotConfig +=
+          `;mediaKind:video;videoSrc:#${assetId};imageScale:${scale};videoLoop:${videoLoop};videoMuted:${videoMuted}` +
+          (ar ? `;imageAspectRatio:${ar}` : '');
+      } else {
+        spotConfig +=
+          `;mediaKind:video;imageScale:${scale};videoLoop:${videoLoop};videoMuted:${videoMuted}` +
+          (ar ? `;imageAspectRatio:${ar}` : '');
+      }
+    } else if (data.type === 'image') {
       let imgSrc = '';
       // If we have an image stored in IDB (from a previous session), resolve it lazily
       // Prefer explicit key, but fall back to legacy pattern image_hotspot_<id>
@@ -4357,7 +5092,53 @@ class HotspotEditor {
     }
 
     container.appendChild(hotspotEl);
-    if (data.type === 'image') {
+    if (data.type === 'image' && data.mediaKind === 'video') {
+      if (_videoHasStorageKey) {
+        (async () => {
+          try {
+            const rec = await this.getVideoFromIDB(_videoLoadKey);
+            if (rec && rec.blob) {
+              const url = URL.createObjectURL(rec.blob);
+              const assetId = `asset-video-hotspot-${data.id}`;
+              this.registerHotspotVideoAsset(assetId, url, {
+                muted: data.videoMuted !== false,
+                loop: data.videoLoop !== false,
+              });
+              data.video = url;
+              const hotspotEl = document.getElementById(`hotspot-${data.id}`);
+              if (hotspotEl) {
+                const videoSrcAttr = `#${assetId}`;
+                hotspotEl.setAttribute('editor-spot', 'videoSrc', videoSrcAttr);
+                const comp = hotspotEl.components && hotspotEl.components['editor-spot'];
+                if (comp) {
+                  mountEditorFlatVideoBillboard(
+                    comp,
+                    Object.assign({}, comp.data, {
+                      mediaKind: 'video',
+                      videoSrc: videoSrcAttr,
+                      videoLoop: data.videoLoop !== false,
+                      videoMuted: data.videoMuted !== false,
+                      imageScale: data.imageScale,
+                      imageAspectRatio: data.imageAspectRatio,
+                    }),
+                    true
+                  );
+                }
+              }
+              if (!data.videoStorageKey) {
+                data.videoStorageKey = _videoLoadKey;
+                const scHs = (
+                  (this.scenes[this.currentScene] && this.scenes[this.currentScene].hotspots) ||
+                  []
+                ).find((h) => h && h.id === data.id);
+                if (scHs && !scHs.videoStorageKey) scHs.videoStorageKey = _videoLoadKey;
+                this.saveScenesData();
+              }
+            }
+          } catch (_) {}
+        })();
+      }
+    } else if (data.type === 'image') {
       // If we need to resolve an image from IDB, do it after entity creation
       if (_imageHasStorageKey) {
         (async () => {
@@ -4667,17 +5448,17 @@ class HotspotEditor {
     // Initial visibility setup
     showButtons();
 
-    // If this is an image hotspot, adjust buttons to sit slightly BELOW the image, centered
+    // If this is an image or video hotspot, adjust buttons to sit slightly BELOW the media, centered
     if (data.type === 'image') {
       const adjustButtons = () => {
         try {
-          const img = hotspotEl.querySelector('a-image');
+          const media =
+            hotspotEl.querySelector('.static-image-hotspot') ||
+            hotspotEl.querySelector('.static-video-hotspot');
           const scl = typeof data.imageScale === 'number' ? data.imageScale : 1;
-          if (img) {
-            const w = parseFloat(img.getAttribute('width')) || scl;
-            const h = parseFloat(img.getAttribute('height')) || scl;
-            const x = 0; // centered horizontally
-            const y = -0.25; // below the bottom edge (slightly)
+          if (media) {
+            const x = 0;
+            const y = -0.25;
             buttonContainer.setAttribute('position', `${x} ${y} 0.05`);
           }
         } catch (e) {
@@ -4685,8 +5466,13 @@ class HotspotEditor {
         }
       };
       adjustButtons();
-      const img = hotspotEl.querySelector('a-image');
-      if (img) img.addEventListener('load', () => setTimeout(adjustButtons, 20));
+      const media =
+        hotspotEl.querySelector('.static-image-hotspot') ||
+        hotspotEl.querySelector('.static-video-hotspot');
+      if (media) {
+        media.addEventListener('loaded', () => setTimeout(adjustButtons, 20));
+        media.addEventListener('loadeddata', () => setTimeout(adjustButtons, 20), { once: true });
+      }
       hotspotEl._repositionEditButtons = adjustButtons;
     }
   }
@@ -4899,7 +5685,9 @@ class HotspotEditor {
         : hotspotData.type === 'audio'
         ? '🔊 Audio hotspot'
         : hotspotData.type === 'image'
-        ? '🖼️ Image hotspot'
+        ? hotspotData.mediaKind === 'video'
+          ? '🎥 Video hotspot'
+          : '🖼️ Image hotspot'
         : hotspotData.type === 'model'
         ? '📦 3D model hotspot'
         : '📝 Hotspot';
@@ -4940,7 +5728,9 @@ class HotspotEditor {
           : hotspot.type === 'weblink'
           ? '🔗'
           : hotspot.type === 'image'
-          ? '🖼️'
+          ? hotspot.mediaKind === 'video'
+            ? '🎥'
+            : '🖼️'
           : '❓';
 
       let displayName = '';
@@ -4967,7 +5757,7 @@ class HotspotEditor {
           ? hotspot.weblinkUrl
           : 'Weblink Portal';
       } else if (hotspot.type === 'image') {
-        displayName = 'Image';
+        displayName = hotspot.mediaKind === 'video' ? 'Video' : 'Image';
       } else {
         displayName = 'Hotspot';
       }
@@ -5155,7 +5945,22 @@ class HotspotEditor {
         ${
           isImageType
             ? `
-          <div style="display:flex; gap:10px;">s
+          <div style="margin-bottom:10px;">
+            <div style="font-size:12px; color:#ccc; margin-bottom:6px;">Media type</div>
+            <label style="display:inline-flex; align-items:center; gap:6px; margin-right:16px; cursor:pointer;">
+              <input type="radio" name="edit-image-media-kind" id="edit-media-kind-photo" value="photo" ${
+                hotspot.mediaKind !== 'video' ? 'checked' : ''
+              } style="width:16px;height:16px;cursor:pointer;" />
+              <span>Photo</span>
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="radio" name="edit-image-media-kind" id="edit-media-kind-video" value="video" ${
+                hotspot.mediaKind === 'video' ? 'checked' : ''
+              } style="width:16px;height:16px;cursor:pointer;" />
+              <span>Video</span>
+            </label>
+          </div>
+          <div style="display:flex; gap:10px;">
             <label style="flex:1; font-size:12px; color:#ccc;">Scale
               <input id="edit-image-scale" type="number" min="0.1" max="10" step="0.05" value="${
                 typeof hotspot.imageScale === 'number' ? hotspot.imageScale : 1
@@ -5172,29 +5977,69 @@ class HotspotEditor {
               </div>
             </label>
           </div>
-          <div id="edit-image-current" style="margin:8px 0 14px; padding:8px; background:#1d1d1d; border:1px solid #444; border-radius:6px;">
-            <div style="font-size:11px; color:#999; margin-bottom:6px;">Current Image</div>
-            <div style="display:flex; align-items:center; gap:10px;">
-              <div style="width:72px; height:48px; background:#222; border:1px solid #333; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:4px;">
-                <img id="edit-image-thumb" src="${
-                  typeof hotspot.image === 'string' ? this._escapeAttr(hotspot.image) : ''
-                }" style="max-width:100%; max-height:100%; object-fit:contain;" />
-              </div>
-              <div style="flex:1; min-width:0;">
-                <div id="edit-image-label" style="font-size:12px; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">&nbsp;</div>
-                <div style="font-size:10px; color:#777;">Selecting a new file or URL will replace this image.</div>
+          <div id="edit-photo-section" style="display:${hotspot.mediaKind === 'video' ? 'none' : 'block'};">
+            <div id="edit-image-current" style="margin:8px 0 14px; padding:8px; background:#1d1d1d; border:1px solid #444; border-radius:6px;">
+              <div style="font-size:11px; color:#999; margin-bottom:6px;">Current Image</div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div style="width:72px; height:48px; background:#222; border:1px solid #333; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:4px;">
+                  <img id="edit-image-thumb" src="${
+                    typeof hotspot.image === 'string' ? this._escapeAttr(hotspot.image) : ''
+                  }" style="max-width:100%; max-height:100%; object-fit:contain;" />
+                </div>
+                <div style="flex:1; min-width:0;">
+                  <div id="edit-image-label" style="font-size:12px; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">&nbsp;</div>
+                  <div style="font-size:10px; color:#777;">Selecting a new file or URL will replace this image.</div>
+                </div>
               </div>
             </div>
+            <div>
+              <div style="font-size:12px; color:#ccc; margin-bottom:6px;">Replace Image</div>
+              <input id="edit-image-file" type="file" accept="image/*" style="display:block; margin-bottom:6px; color:#ddd;" />
+              <input id="edit-image-url" type="url" placeholder="https://example.com/image.png" value="${
+                typeof hotspot.image === 'string' && !hotspot.image.startsWith('data:')
+                  ? this._escapeAttr(hotspot.image)
+                  : ''
+              }" style="width:100%; padding:8px; border-radius:6px; border:1px solid #555; background:#1f1f1f; color:#fff;" />
+              <div style="font-size:11px; color:#999; margin-top:4px;">Provide a file or URL to change the image. Leave blank to keep original.</div>
+            </div>
           </div>
-          <div>
-            <div style="font-size:12px; color:#ccc; margin-bottom:6px;">Replace Image</div>
-            <input id="edit-image-file" type="file" accept="image/*" style="display:block; margin-bottom:6px; color:#ddd;" />
-            <input id="edit-image-url" type="url" placeholder="https://example.com/image.png" value="${
-              typeof hotspot.image === 'string' && !hotspot.image.startsWith('data:')
-                ? this._escapeAttr(hotspot.image)
-                : ''
-            }" style="width:100%; padding:8px; border-radius:6px; border:1px solid #555; background:#1f1f1f; color:#fff;" />
-            <div style="font-size:11px; color:#999; margin-top:4px;">Provide a file or URL to change the image. Leave blank to keep original.</div>
+          <div id="edit-video-section" style="display:${hotspot.mediaKind === 'video' ? 'block' : 'none'};">
+            <div id="edit-video-current" style="margin:8px 0 14px; padding:8px; background:#1d1d1d; border:1px solid #444; border-radius:6px;">
+              <div style="font-size:11px; color:#999; margin-bottom:6px;">Current Video</div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div style="width:96px; height:54px; background:#222; border:1px solid #333; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:4px;">
+                  <video id="edit-video-thumb" ${
+                    typeof hotspot.video === 'string' ? `src="${this._escapeAttr(hotspot.video)}"` : ''
+                  } muted playsinline style="max-width:100%; max-height:100%; object-fit:contain;"></video>
+                </div>
+                <div style="flex:1; min-width:0;">
+                  <div id="edit-video-label" style="font-size:12px; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">&nbsp;</div>
+                  <div style="font-size:10px; color:#777;">Selecting a new file or URL will replace this video.</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:12px; color:#ccc; margin-bottom:6px;">Replace Video</div>
+              <input id="edit-video-file" type="file" accept="video/mp4,video/webm" style="display:block; margin-bottom:6px; color:#ddd;" />
+              <input id="edit-video-url" type="url" placeholder="https://example.com/video.mp4" value="${
+                typeof hotspot.video === 'string' && !hotspot.video.startsWith('blob:')
+                  ? this._escapeAttr(hotspot.video)
+                  : ''
+              }" style="width:100%; padding:8px; border-radius:6px; border:1px solid #555; background:#1f1f1f; color:#fff;" />
+              <div style="font-size:11px; color:#999; margin-top:4px;">Provide a file or URL to change the video. Leave blank to keep original.</div>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12px; color:#ccc; cursor:pointer;">
+              <input id="edit-video-loop" type="checkbox" ${
+                hotspot.videoLoop !== false ? 'checked' : ''
+              } style="width:16px; height:16px; cursor:pointer;" />
+              <span>Loop video continuously</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; color:#ccc; cursor:pointer;">
+              <input id="edit-video-enable-audio" type="checkbox" ${
+                hotspot.videoMuted === false ? 'checked' : ''
+              } style="width:16px; height:16px; cursor:pointer;" />
+              <span>Enable audio (requires click to unmute in browser)</span>
+            </label>
           </div>
         `
             : ''
@@ -5443,6 +6288,18 @@ class HotspotEditor {
 
     // Live preview for image scale while editing
     if (isImageType) {
+      const photoRadio = dialog.querySelector('#edit-media-kind-photo');
+      const videoRadio = dialog.querySelector('#edit-media-kind-video');
+      const photoSection = dialog.querySelector('#edit-photo-section');
+      const videoSection = dialog.querySelector('#edit-video-section');
+      const syncEditMedia = () => {
+        const isVid = videoRadio && videoRadio.checked;
+        if (photoSection) photoSection.style.display = isVid ? 'none' : 'block';
+        if (videoSection) videoSection.style.display = isVid ? 'block' : 'none';
+      };
+      if (photoRadio) photoRadio.addEventListener('change', syncEditMedia);
+      if (videoRadio) videoRadio.addEventListener('change', syncEditMedia);
+
       const scaleInput = dialog.querySelector('#edit-image-scale');
       const scaleRange = dialog.querySelector('#edit-image-scale-range');
       const scaleLive = dialog.querySelector('#edit-image-scale-live');
@@ -5472,34 +6329,53 @@ class HotspotEditor {
           }
           lbl.textContent = labelText;
         }
+        const vlbl = dialog.querySelector('#edit-video-label');
+        if (vlbl) {
+          let vLabelText = '—';
+          if (hotspot.videoFileName) {
+            vLabelText = hotspot.videoFileName;
+          } else if (typeof hotspot.video === 'string') {
+            try {
+              const u = new URL(hotspot.video);
+              vLabelText = u.hostname + u.pathname;
+            } catch (_) {
+              vLabelText = hotspot.video;
+            }
+          }
+          vlbl.textContent = vLabelText;
+        }
       } catch (e) {}
 
       // Capture aspect ratio once
       const hotspotEl = document.getElementById(`hotspot-${hotspot.id}`);
       const imgEnt = hotspotEl?.querySelector('.static-image-hotspot');
-      if (imgEnt && typeof hotspot._aspectRatio !== 'number') {
-        const w = parseFloat(imgEnt.getAttribute('width')) || 1;
-        const h = parseFloat(imgEnt.getAttribute('height')) || 1;
+      const vidEnt = hotspotEl?.querySelector('.static-video-hotspot');
+      const mediaEnt = imgEnt || vidEnt;
+      if (mediaEnt && typeof hotspot._aspectRatio !== 'number') {
+        const w = parseFloat(mediaEnt.getAttribute('width')) || 1;
+        const h = parseFloat(mediaEnt.getAttribute('height')) || 1;
         if (w > 0 && h > 0) hotspot._aspectRatio = h / w;
-        imgEnt.addEventListener(
-          'load',
-          () => {
-            if (imgEnt.naturalWidth && imgEnt.naturalHeight)
-              hotspot._aspectRatio = imgEnt.naturalHeight / imgEnt.naturalWidth;
-          },
-          { once: true }
-        );
+        if (imgEnt) {
+          imgEnt.addEventListener(
+            'load',
+            () => {
+              if (imgEnt.naturalWidth && imgEnt.naturalHeight)
+                hotspot._aspectRatio = imgEnt.naturalHeight / imgEnt.naturalWidth;
+            },
+            { once: true }
+          );
+        }
       }
 
       const clampScale = (v) => Math.min(10, Math.max(0.1, v));
       const applyScale = (s) => {
         const el = document.getElementById(`hotspot-${hotspot.id}`);
         if (!el) return;
-        const img = el.querySelector('.static-image-hotspot');
-        if (!img) return;
-        const ratio = hotspot._aspectRatio || parseFloat(img.getAttribute('height')) || 1;
-        img.setAttribute('scale', `${s} ${s} 1`);
-        img.setAttribute('position', `0 ${(ratio / 2) * s} 0.05`);
+        const media = el.querySelector('.static-image-hotspot') || el.querySelector('.static-video-hotspot');
+        if (!media) return;
+        const ratio = hotspot._aspectRatio || parseFloat(media.getAttribute('height')) || 1;
+        media.setAttribute('scale', `${s} ${s} 1`);
+        media.setAttribute('position', `0 ${(ratio / 2) * s} 0.05`);
         const frame = el.querySelector('.static-image-border');
         if (frame) {
           const bw = this.customStyles?.image?.borderWidth || 0;
@@ -5628,6 +6504,8 @@ class HotspotEditor {
     dialog.querySelector('#edit-save').onclick = () => {
       const isImageEdit = hotspot.type === 'image';
       const prevImageRef = isImageEdit ? hotspot.image : null;
+      const prevVideoRef = isImageEdit ? hotspot.video : null;
+      const prevMediaKind = isImageEdit ? hotspot.mediaKind || 'photo' : 'photo';
       const prevScale = isImageEdit ? hotspot.imageScale : null;
       // Collect values
       const newText = isTextType
@@ -5669,16 +6547,33 @@ class HotspotEditor {
         else newWeblinkPreview = null;
       }
       let newImage = hotspot.image;
+      let newVideo = hotspot.video;
       let newImageScale = hotspot.imageScale || 1;
+      let newMediaKind = hotspot.mediaKind || 'photo';
+      let newVideoLoop = hotspot.videoLoop !== false;
+      let newVideoMuted = hotspot.videoMuted !== false;
       if (isImageType) {
         const sVal = parseFloat(dialog.querySelector('#edit-image-scale')?.value || '');
         newImageScale = isNaN(sVal) ? hotspot.imageScale || 1 : Math.min(10, Math.max(0.1, sVal));
-        const f = dialog.querySelector('#edit-image-file');
-        const u = dialog.querySelector('#edit-image-url');
-        const file = f && f.files ? f.files[0] : null;
-        const url = u ? u.value.trim() : '';
-        if (url) newImage = url;
-        else if (file) newImage = file;
+        const isEditVideo = dialog.querySelector('#edit-media-kind-video')?.checked;
+        newMediaKind = isEditVideo ? 'video' : 'photo';
+        if (isEditVideo) {
+          newVideoLoop = dialog.querySelector('#edit-video-loop')?.checked !== false;
+          newVideoMuted = dialog.querySelector('#edit-video-enable-audio')?.checked !== true;
+          const vf = dialog.querySelector('#edit-video-file');
+          const vu = dialog.querySelector('#edit-video-url');
+          const vfile = vf && vf.files ? vf.files[0] : null;
+          const vurl = vu ? vu.value.trim() : '';
+          if (vurl) newVideo = vurl;
+          else if (vfile) newVideo = vfile;
+        } else {
+          const f = dialog.querySelector('#edit-image-file');
+          const u = dialog.querySelector('#edit-image-url');
+          const file = f && f.files ? f.files[0] : null;
+          const url = u ? u.value.trim() : '';
+          if (url) newImage = url;
+          else if (file) newImage = file;
+        }
       }
 
       // Model hotspot changes
@@ -5731,6 +6626,8 @@ class HotspotEditor {
         audio: newAudio,
         navigationTarget: newNavTarget,
         image: newImage,
+        video: newVideo,
+        mediaKind: newMediaKind,
         weblinkUrl: newWeblinkUrl,
       });
       if (!v.valid) {
@@ -5771,8 +6668,65 @@ class HotspotEditor {
         }
       }
       if (isImageType) {
-        // If replacing with a File, store into IndexedDB and use a blob URL at runtime
-        if (newImage instanceof File) {
+        hotspot.mediaKind = newMediaKind;
+        hotspot.imageScale = newImageScale;
+        hotspot.videoLoop = newVideoLoop;
+        hotspot.videoMuted = newVideoMuted;
+        delete hotspot.imageWidth;
+        delete hotspot.imageHeight;
+
+        if (newMediaKind === 'video') {
+          hotspot.image = null;
+          hotspot.imageStorageKey = null;
+          if (newVideo instanceof File) {
+            (async () => {
+              try {
+                const pendingFile = newVideo;
+                const storageKey = hotspot.videoStorageKey || `video_hotspot_${hotspot.id}`;
+                const saved = await this.saveVideoToIDB(storageKey, pendingFile);
+                if (saved) {
+                  const blobUrl = URL.createObjectURL(pendingFile);
+                  hotspot.video = blobUrl;
+                  hotspot.videoFileName = pendingFile.name || null;
+                  hotspot.videoStorageKey = storageKey;
+                  const sceneHs = this.scenes[this.currentScene].hotspots.find(
+                    (h) => h.id === hotspot.id
+                  );
+                  if (sceneHs) {
+                    sceneHs.mediaKind = 'video';
+                    sceneHs.video = blobUrl;
+                    sceneHs.videoFileName = pendingFile.name || null;
+                    sceneHs.videoStorageKey = storageKey;
+                    sceneHs.image = null;
+                    sceneHs.imageStorageKey = null;
+                    sceneHs.imageScale = newImageScale;
+                    sceneHs.videoLoop = newVideoLoop;
+                    sceneHs.videoMuted = newVideoMuted;
+                  }
+                  this._refreshHotspotEntity(hotspot);
+                  this.saveScenesData();
+                }
+              } catch (err) {
+                console.warn('[VideoHotspot] Edit save to IDB failed', err);
+              }
+            })();
+          } else {
+            hotspot.video = newVideo;
+            if (typeof newVideo === 'string' && !newVideo.startsWith('blob:')) {
+              try {
+                const urlObj = new URL(newVideo);
+                hotspot.videoFileName = urlObj.pathname.split('/').pop() || null;
+                hotspot.videoStorageKey = null;
+              } catch (_) {}
+            }
+            this._refreshHotspotEntity(hotspot);
+          }
+        } else {
+          hotspot.video = null;
+          hotspot.videoStorageKey = null;
+          hotspot.videoFileName = null;
+          // If replacing with a File, store into IndexedDB and use a blob URL at runtime
+          if (newImage instanceof File) {
           (async () => {
             try {
               const pendingFile = newImage;
@@ -5831,6 +6785,7 @@ class HotspotEditor {
           delete hotspot.imageWidth;
           delete hotspot.imageHeight;
         }
+        }
       }
 
       // Model hotspot changes
@@ -5864,10 +6819,21 @@ class HotspotEditor {
           }
         }
         if (isImageType) {
-          if (!(newImage instanceof File)) {
-            // For File path, we update after conversion above
+          sceneHotspot.mediaKind = hotspot.mediaKind || 'photo';
+          sceneHotspot.videoLoop = hotspot.videoLoop;
+          sceneHotspot.videoMuted = hotspot.videoMuted;
+          sceneHotspot.imageScale = hotspot.imageScale;
+          if (hotspot.mediaKind === 'video') {
+            if (!(newVideo instanceof File)) {
+              sceneHotspot.video = hotspot.video;
+              sceneHotspot.image = null;
+              sceneHotspot.imageStorageKey = null;
+              if (hotspot.videoFileName) sceneHotspot.videoFileName = hotspot.videoFileName;
+            }
+          } else if (!(newImage instanceof File)) {
             sceneHotspot.image = hotspot.image;
-            sceneHotspot.imageScale = hotspot.imageScale;
+            sceneHotspot.video = null;
+            sceneHotspot.videoStorageKey = null;
             if (hotspot.imageFileName) sceneHotspot.imageFileName = hotspot.imageFileName;
             delete sceneHotspot.imageWidth;
             delete sceneHotspot.imageHeight;
@@ -5890,14 +6856,15 @@ class HotspotEditor {
       // Decide whether we need a full rebuild (only needed if image source changed or non-image types)
       let needsRebuild = true;
       if (isImageType) {
-        const imageChanged = hotspot.image !== prevImageRef; // data URL or URL actually changed
+        const mediaKindChanged = (hotspot.mediaKind || 'photo') !== prevMediaKind;
+        const imageChanged = hotspot.image !== prevImageRef;
+        const videoChanged = hotspot.video !== prevVideoRef;
         const scaleChanged = hotspot.imageScale !== prevScale;
-        if (!imageChanged && scaleChanged) {
-          // Apply scale in place to avoid white flicker from tearing down entity
+        const mediaChanged = mediaKindChanged || imageChanged || videoChanged;
+        if (!mediaChanged && scaleChanged) {
           this._applyImageScaleInPlace(hotspot);
           needsRebuild = false;
-        } else if (!imageChanged && !scaleChanged) {
-          // Nothing materially changed for image visual; skip rebuild
+        } else if (!mediaChanged && !scaleChanged) {
           needsRebuild = false;
         }
       }
@@ -5920,7 +6887,7 @@ class HotspotEditor {
     };
   }
 
-  _validateHotspotValues(type, { text, audio, navigationTarget, image, weblinkUrl }) {
+  _validateHotspotValues(type, { text, audio, navigationTarget, image, video, mediaKind, weblinkUrl }) {
     switch (type) {
       case 'text':
         if (!text)
@@ -5958,11 +6925,19 @@ class HotspotEditor {
           };
         return { valid: true };
       case 'image':
-        if (!image)
+        if (mediaKind === 'video') {
+          if (!video) {
+            return {
+              valid: false,
+              message: 'Video hotspot requires a video file or URL.',
+            };
+          }
+        } else if (!image) {
           return {
             valid: false,
             message: 'Image hotspot requires an image file or URL.',
           };
+        }
         return { valid: true };
       default:
         return { valid: true };
@@ -5981,7 +6956,7 @@ class HotspotEditor {
     try {
       const el = document.getElementById(`hotspot-${hotspot.id}`);
       if (!el) return;
-      const img = el.querySelector('.static-image-hotspot');
+      const img = el.querySelector('.static-image-hotspot') || el.querySelector('.static-video-hotspot');
       if (!img) return;
       // Determine aspect ratio from existing geometry
       let ratio =
@@ -6793,6 +7768,21 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
       );
     };
 
+    const bundleRemoteVideo = async (remoteUrl, fallbackName) => {
+      if (preserveUrls || !remoteUrl || !this._isRemoteMediaUrl(remoteUrl) || !videosFolder) {
+        return remoteUrl;
+      }
+      const ext = /\.webm(\?|$)/i.test(remoteUrl) ? '.webm' : '.mp4';
+      const baseName = sanitizeExportFileName(
+        this._baseNameFromRemoteUrl(remoteUrl, `${fallbackName}${ext}`),
+        ext
+      );
+      return (
+        (await this._bundleRemoteAssetToFolder(remoteUrl, videosFolder, baseName, 'videos')) ||
+        remoteUrl
+      );
+    };
+
     const bundleRemoteModel = async (remoteUrl, fallbackName) => {
       if (preserveUrls || !remoteUrl || !this._isRemoteMediaUrl(remoteUrl) || !modelsFolder) {
         return remoteUrl;
@@ -7204,8 +8194,11 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
             }
           }
 
-          // Image hotspot export with actual file copying / embedding
+          // Image / video hotspot export with actual file copying / embedding
           if (origHotspot.type === 'image') {
+            newHotspot.mediaKind = origHotspot.mediaKind || 'photo';
+            newHotspot.videoLoop = origHotspot.videoLoop !== false;
+            newHotspot.videoMuted = origHotspot.videoMuted !== false;
             if (typeof origHotspot.imageScale === 'number') {
               newHotspot.imageScale = Math.min(10, Math.max(0.1, origHotspot.imageScale));
             } else if (typeof origHotspot.imageWidth === 'number') {
@@ -7218,15 +8211,75 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
               origHotspot.imageAspectRatio > 0
             ) {
               newHotspot.imageAspectRatio = origHotspot.imageAspectRatio;
-            } 
-            else if (
+            } else if (
               typeof origHotspot._aspectRatio === 'number' &&
               isFinite(origHotspot._aspectRatio) &&
               origHotspot._aspectRatio > 0
             ) {
               newHotspot.imageAspectRatio = origHotspot._aspectRatio;
             }
-            if (origHotspot.commonAssetUrl) {
+
+            if (origHotspot.mediaKind === 'video') {
+              if (origHotspot.commonAssetUrl) {
+                newHotspot.video = origHotspot.commonAssetUrl;
+              } else {
+                const effVideoKey =
+                  origHotspot.videoStorageKey ||
+                  (typeof origHotspot.id === 'number' ? `video_hotspot_${origHotspot.id}` : null);
+                if (effVideoKey) {
+                  try {
+                    const rec = await this.getVideoFromIDB(effVideoKey);
+                    if (rec && rec.blob && videosFolder) {
+                      const baseName = rec.name || `${sceneId}_${origHotspot.id}.mp4`;
+                      const ext =
+                        baseName && /\.[a-zA-Z0-9]{2,5}$/.test(baseName)
+                          ? baseName.match(/\.[a-zA-Z0-9]{2,5}$/)[0]
+                          : '.mp4';
+                      const cleanName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
+                      videosFolder.file(cleanName, rec.blob);
+                      newHotspot.video = `./videos/${cleanName}`;
+                    }
+                  } catch (_) {}
+                }
+                if (!newHotspot.video && origHotspot.video instanceof File) {
+                  const cleanName = origHotspot.video.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                  const videoFileName = `${sceneId}_${origHotspot.id}_${cleanName}`;
+                  if (videosFolder) {
+                    videosFolder.file(videoFileName, origHotspot.video);
+                    newHotspot.video = `./videos/${videoFileName}`;
+                  }
+                } else if (!newHotspot.video && typeof origHotspot.video === 'string') {
+                  if (origHotspot.video.startsWith('blob:')) {
+                    try {
+                      const resp = await fetch(origHotspot.video);
+                      if (resp.ok) {
+                        const blob = await resp.blob();
+                        if (videosFolder) {
+                          const baseName =
+                            (origHotspot.videoFileName &&
+                              origHotspot.videoFileName.replace(/[^a-zA-Z0-9._-]/g, '_')) ||
+                            `${sceneId}_${origHotspot.id}.mp4`;
+                          videosFolder.file(baseName, blob);
+                          newHotspot.video = `./videos/${baseName}`;
+                        }
+                      }
+                    } catch (_) {}
+                  } else if (/^https?:\/\//i.test(origHotspot.video)) {
+                    newHotspot.video = origHotspot.video;
+                  } else if (origHotspot.video.startsWith('./videos/')) {
+                    newHotspot.video = origHotspot.video;
+                  } else if (origHotspot.video) {
+                    newHotspot.video = './videos/' + origHotspot.video;
+                  }
+                }
+              }
+              if (newHotspot.video) {
+                newHotspot.video = await bundleRemoteVideo(
+                  newHotspot.video,
+                  `${sceneId}_${origHotspot.id}`
+                );
+              }
+            } else if (origHotspot.commonAssetUrl) {
               newHotspot.image = origHotspot.commonAssetUrl;
             } else {
             // Prefer IndexedDB record when available (supports legacy fallback key)
@@ -7411,14 +8464,20 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
             }
           }
 
-          // Harden export: skip invalid image hotspots lacking an image reference
-          if (
+          // Harden export: skip invalid image hotspots lacking media reference
+          const missingPhotoMedia =
             newHotspot.type === 'image' &&
+            newHotspot.mediaKind !== 'video' &&
             (!newHotspot.image ||
-              (typeof newHotspot.image === 'string' && newHotspot.image.trim() === ''))
-          ) {
+              (typeof newHotspot.image === 'string' && newHotspot.image.trim() === ''));
+          const missingVideoMedia =
+            newHotspot.type === 'image' &&
+            newHotspot.mediaKind === 'video' &&
+            (!newHotspot.video ||
+              (typeof newHotspot.video === 'string' && newHotspot.video.trim() === ''));
+          if (missingPhotoMedia || missingVideoMedia) {
             console.warn(
-              `[Export] Skipped image hotspot id=${newHotspot.id} in scene=${sceneId} due to missing image.`
+              `[Export] Skipped image hotspot id=${newHotspot.id} in scene=${sceneId} due to missing media.`
             );
           } else {
             newScene.hotspots.push(newHotspot);
@@ -7664,7 +8723,33 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
       for (const scene of Object.values(this.scenes)) {
         if (scene.hotspots) {
           for (const hotspot of scene.hotspots) {
-            if (hotspot.type === 'image' && hotspot.image) {
+            if (hotspot.type === 'image' && hotspot.mediaKind === 'video' && hotspot.video) {
+              if (
+                typeof hotspot.video === 'string' &&
+                hotspot.video.startsWith('./videos/')
+              ) {
+                const videoPath = hotspot.video.replace('./videos/', '');
+                const videoFile = zip.file(`videos/${videoPath}`);
+                if (videoFile) {
+                  videoPromises.push(
+                    videoFile.async('blob').then(async (blob) => {
+                      try {
+                        const file = new File([blob], videoPath, {
+                          type: blob.type || 'video/mp4',
+                        });
+                        const storageKey =
+                          hotspot.videoStorageKey || `video_hotspot_${hotspot.id}`;
+                        await this.saveVideoToIDB(storageKey, file);
+                        const blobUrl = URL.createObjectURL(blob);
+                        hotspot.video = blobUrl;
+                        hotspot.videoStorageKey = storageKey;
+                        hotspot.videoFileName = videoPath;
+                      } catch (_) {}
+                    })
+                  );
+                }
+              }
+            } else if (hotspot.type === 'image' && hotspot.image) {
               if (typeof hotspot.image === 'string' && hotspot.image.startsWith('data:')) {
                 imagePromises.push(
                   (async () => {
@@ -8173,16 +9258,18 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
         });
     }
 
-    // Update audio control buttons
-    document.querySelectorAll('.audio-control').forEach((audioBtn) => {
-      audioBtn.setAttribute('material', `color: ${styles.audio.buttonColor}`);
-      audioBtn.setAttribute('opacity', styles.audio.buttonOpacity);
+    // Update audio and video control buttons
+    document.querySelectorAll('.audio-control, .video-control').forEach((controlBtn) => {
+      if (controlBtn.tagName === 'A-IMAGE' || controlBtn.tagName === 'A-PLANE') {
+        controlBtn.setAttribute('material', `color: ${styles.audio.buttonColor}`);
+        controlBtn.setAttribute('opacity', styles.audio.buttonOpacity);
+      }
     });
 
-    // Update image hotspots (static images)
+    // Update image and video hotspots (static billboards)
     if (styles.image) {
       const istyle = styles.image;
-      document.querySelectorAll('.static-image-hotspot').forEach((imgEl) => {
+      document.querySelectorAll('.static-image-hotspot, .static-video-hotspot').forEach((imgEl) => {
         try {
           const parent = imgEl.parentElement;
           const opacity = typeof istyle.opacity === 'number' ? istyle.opacity : 1.0;
@@ -8404,8 +9491,12 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
         const filtered = arr.filter((h) => {
           if (!h) return false;
           if (h.type === 'image') {
-            // Treat empty string, null, undefined as invalid
-            if (!h.image || (typeof h.image === 'string' && h.image.trim() === '')) {
+            if (isVideoHotspot(h)) {
+              if (!hasVideoHotspotReference(h)) {
+                removedCount++;
+                return false;
+              }
+            } else if (!h.image || (typeof h.image === 'string' && h.image.trim() === '')) {
               removedCount++;
               return false; // drop invalid image hotspot
             }
@@ -8507,12 +9598,31 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
         if (Array.isArray(sc.hotspots)) {
           sc.hotspots.forEach((h) => {
             if (h && h.type === 'image') {
-              if (h.imageStorageKey && typeof h.image === 'string' && h.image.startsWith('blob:')) {
-                h.image = null;
-              }
-              // Drop any image hotspot that somehow still has no image (safety net)
-              if (!h.image || (typeof h.image === 'string' && h.image.trim() === '')) {
-                h.__drop = true;
+              if (isVideoHotspot(h)) {
+                if (h.video instanceof File) {
+                  h.video = null;
+                } else if (h.video && typeof h.video !== 'string') {
+                  h.video = null;
+                }
+                if (
+                  h.videoStorageKey &&
+                  typeof h.video === 'string' &&
+                  h.video.startsWith('blob:')
+                ) {
+                  h.video = null;
+                }
+                if (!h.mediaKind) h.mediaKind = 'video';
+                if (!hasVideoHotspotReference(h)) {
+                  h.__drop = true;
+                }
+              } else {
+                if (h.imageStorageKey && typeof h.image === 'string' && h.image.startsWith('blob:')) {
+                  h.image = null;
+                }
+                // Drop any image hotspot that somehow still has no image (safety net)
+                if (!h.image || (typeof h.image === 'string' && h.image.trim() === '')) {
+                  h.__drop = true;
+                }
               }
             } else if (h && (h.type === 'audio' || h.type === 'text-audio')) {
               if (h.audioStorageKey && typeof h.audio === 'string' && h.audio.startsWith('blob:')) {
@@ -8580,6 +9690,49 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
     } catch (_) {
       /* ignore */
     }
+  }
+
+  async rehydrateVideoHotspotsFromIDB() {
+    try {
+      const entries = Object.entries(this.scenes || {});
+      if (!entries.length) return;
+      let changed = false;
+      for (const [, scene] of entries) {
+        if (!scene || !Array.isArray(scene.hotspots)) continue;
+        for (const h of scene.hotspots) {
+          if (!h || h.type !== 'image') continue;
+          if (!h.mediaKind && isVideoHotspot(h)) {
+            h.mediaKind = 'video';
+            changed = true;
+          }
+          if (h.mediaKind !== 'video') continue;
+          if (
+            h.commonAssetUrl &&
+            (!h.video || (typeof h.video === 'string' && h.video.trim() === ''))
+          ) {
+            h.video = h.commonAssetUrl;
+            changed = true;
+          }
+          const hasRemote =
+            typeof h.video === 'string' &&
+            (h.video.startsWith('http://') ||
+              h.video.startsWith('https://') ||
+              h.commonAssetUrl);
+          if (!h.videoStorageKey || hasRemote) continue;
+          const key = h.videoStorageKey || `video_hotspot_${h.id}`;
+          const rec = await this.getVideoFromIDB(key);
+          if (rec && rec.blob) {
+            try {
+              h.video = URL.createObjectURL(rec.blob);
+              h.mediaKind = 'video';
+              if (!h.videoFileName) h.videoFileName = rec.name || '';
+              changed = true;
+            } catch (_) {}
+          }
+        }
+      }
+      if (changed) this.saveScenesData();
+    } catch (_) {}
   }
 
   async rehydrateAudioSourcesFromIDB() {
@@ -8848,6 +10001,9 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
             if (!Array.isArray(arr)) return;
             arr.forEach((h) => {
               if (h && h.type === 'image') {
+                if (!h.mediaKind && isVideoHotspot(h)) {
+                  h.mediaKind = 'video';
+                }
                 if (typeof h.imageAspectRatio !== 'number' && typeof h._aspectRatio === 'number')
                   h.imageAspectRatio = h._aspectRatio;
               }
@@ -9193,11 +10349,11 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
     >
       <a-entity
         laser-controls="hand: right"
-        raycaster="objects: .clickable, .audio-control"
+        raycaster="objects: .clickable, .audio-control, .video-control"
       ></a-entity>
       <a-entity
         laser-controls="hand: left"
-        raycaster="objects: .clickable, .audio-control"
+        raycaster="objects: .clickable, .audio-control, .video-control"
       ></a-entity>
 
       <a-assets>
@@ -9206,8 +10362,6 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
         <img id="close" src="./images/close.png" />
         <img id="play" src="./images/play.png" />
         <img id="pause" src="./images/pause.png" />
-        <!-- Video asset for 360° video scenes -->
-        <video id="scene-video-dynamic" crossorigin="anonymous" loop muted playsinline webkit-playsinline style="display:none"></video>
         ${this.generateGroundAssets()}
       </a-assets>
 
@@ -9273,7 +10427,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
         <!-- Mouse-based cursor for non-VR mode -->
         <a-entity 
           cursor="rayOrigin: mouse; fuse: false"
-          raycaster="objects: .clickable, .audio-control"
+          raycaster="objects: .clickable, .audio-control, .video-control"
           id="mouse-cursor"
           visible="true">
         </a-entity>
@@ -9281,7 +10435,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
         <!-- Gaze-based cursor for VR mode -->
         <a-entity
           cursor="fuse: true; fuseTimeout: ${gazeDuration}"
-          raycaster="objects: .clickable:not(.no-gaze-grow), .audio-control"
+          raycaster="objects: .clickable:not(.no-gaze-grow), .audio-control, .video-control"
           position="0 0 -1"
           geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
           material="color: white; shader: flat; opacity: 0.8"
@@ -9656,6 +10810,248 @@ function applyRoundedMaskToAImage(aImgEl, styleCfg) {
   });
 }
 
+var _flatVideoScene360PauseCount = 0;
+
+function prepareFlatVideoHotspotElement(video, muted) {
+  if (!video || video.tagName !== 'VIDEO') return;
+  try {
+    video.muted = muted !== false;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    if (!video.crossOrigin) {
+      video.crossOrigin = 'anonymous';
+      video.setAttribute('crossorigin', 'anonymous');
+    }
+  } catch(e) {}
+}
+
+function pauseScene360VideoForFlatHotspot() {
+  var sceneVideo = document.getElementById('scene-video-dynamic');
+  if (!sceneVideo) return;
+  if (_flatVideoScene360PauseCount === 0) {
+    sceneVideo._wasPlayingBeforeFlatHotspot = !sceneVideo.paused;
+    if (sceneVideo._wasPlayingBeforeFlatHotspot) {
+      try { sceneVideo.pause(); } catch(e) {}
+    }
+  }
+  _flatVideoScene360PauseCount++;
+}
+
+function resumeScene360VideoAfterFlatHotspot() {
+  _flatVideoScene360PauseCount = Math.max(0, _flatVideoScene360PauseCount - 1);
+  if (_flatVideoScene360PauseCount > 0) return;
+  var sceneVideo = document.getElementById('scene-video-dynamic');
+  if (sceneVideo && sceneVideo._wasPlayingBeforeFlatHotspot) {
+    try { sceneVideo.play().catch(function(){}); } catch(e) {}
+  }
+}
+
+function resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl) {
+  var videos = [];
+  var seen = new Set();
+  function add(video) {
+    if (video && video.tagName === 'VIDEO' && typeof video.play === 'function' && !seen.has(video)) {
+      seen.add(video);
+      videos.push(video);
+    }
+  }
+  try {
+    if (aVideoEl) {
+      var mesh = aVideoEl.getObject3D && aVideoEl.getObject3D('mesh');
+      var map = mesh && mesh.material && mesh.material.map;
+      add(map && map.image);
+      var srcAttr = aVideoEl.getAttribute && aVideoEl.getAttribute('src');
+      if (srcAttr && srcAttr.startsWith('#')) {
+        add(document.getElementById(srcAttr.slice(1)));
+      }
+      var assetFromData = aVideoEl.dataset && aVideoEl.dataset.videoAssetId;
+      if (assetFromData) add(document.getElementById(assetFromData));
+    }
+    if (parentEl && parentEl.dataset && parentEl.dataset.flatVideoAssetId) {
+      add(document.getElementById(parentEl.dataset.flatVideoAssetId));
+    }
+    if (typeof videoSrcRef === 'string' && videoSrcRef.startsWith('#')) {
+      add(document.getElementById(videoSrcRef.slice(1)));
+    }
+  } catch(_) {}
+  return videos;
+}
+
+function playFlatVideoHotspotVideos(videos, aVideoEl, muted) {
+  if (!videos || !videos.length) return Promise.resolve(false);
+  pauseScene360VideoForFlatHotspot();
+  videos.forEach(function(video) { prepareFlatVideoHotspotElement(video, muted); });
+  var playOne = function(video) {
+    try {
+      if (video.readyState < 1) {
+        return new Promise(function(resolve) {
+          var onReady = function() {
+            video.removeEventListener('loadeddata', onReady);
+            video.removeEventListener('canplay', onReady);
+            resolve(video.play().catch(function(){ return false; }));
+          };
+          video.addEventListener('loadeddata', onReady, { once: true });
+          video.addEventListener('canplay', onReady, { once: true });
+          try { video.load(); } catch(e) {}
+        });
+      }
+      return video.play().catch(function(){ return false; });
+    } catch(e) { return Promise.resolve(false); }
+  };
+  return Promise.all(videos.map(playOne)).then(function() {
+    try {
+      if (aVideoEl) {
+        var mesh = aVideoEl.getObject3D && aVideoEl.getObject3D('mesh');
+        var map = mesh && mesh.material && mesh.material.map;
+        if (map) map.needsUpdate = true;
+      }
+    } catch(e) {}
+    return true;
+  });
+}
+
+function pauseFlatVideoHotspotVideos(videos, aVideoEl) {
+  if (!videos || !videos.length) return;
+  videos.forEach(function(video) { try { video.pause(); } catch(e) {} });
+  try {
+    if (aVideoEl) {
+      var mesh = aVideoEl.getObject3D && aVideoEl.getObject3D('mesh');
+      var map = mesh && mesh.material && mesh.material.map;
+      if (map) map.needsUpdate = true;
+    }
+  } catch(e) {}
+  resumeScene360VideoAfterFlatHotspot();
+}
+
+function setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, playing, userAction, muted) {
+  if (!videos || !videos.length) return;
+  if (userAction && parentEl) parentEl._flatVideoUserPaused = !playing;
+  var useMuted = muted !== false;
+  if (playing) playFlatVideoHotspotVideos(videos, aVideoEl, useMuted);
+  else pauseFlatVideoHotspotVideos(videos, aVideoEl);
+  if (aVideoEl) {
+    try { aVideoEl.setAttribute('autoplay', playing ? 'true' : 'false'); } catch(e) {}
+  }
+}
+
+function setFlatVideoHotspotMuted(videos, muted) {
+  if (!videos || !videos.length) return;
+  videos.forEach(function(video) {
+    try { video.muted = muted; } catch(e) {}
+  });
+}
+
+function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
+  options = options || {};
+  var styles = options.styles || null;
+  var aVideoEl = options.aVideoEl || null;
+  var startMuted = options.startMuted !== false;
+  var playImage = (styles && styles.buttonImages && styles.buttonImages.play) || '#play';
+  var pauseImage = (styles && styles.buttonImages && styles.buttonImages.pause) || '#pause';
+  var buttonColor = (styles && styles.audio && styles.audio.buttonColor) || '#FFFFFF';
+  var buttonOpacity = String((styles && styles.audio && styles.audio.buttonOpacity) != null ? styles.audio.buttonOpacity : 1.0);
+  var btnY = options.controlY != null ? options.controlY : -0.35;
+  var btnZ = options.controlZ != null ? options.controlZ : 0.12;
+  var btnSpacing = 0.32;
+  var getVideos = function() { return resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl); };
+
+  var playBtn = document.createElement('a-image');
+  playBtn.setAttribute('class', 'clickable video-control video-play-control');
+  playBtn.setAttribute('src', playImage);
+  playBtn.setAttribute('width', '0.5');
+  playBtn.setAttribute('height', '0.5');
+  playBtn.setAttribute('material', 'color: ' + buttonColor);
+  playBtn.setAttribute('opacity', buttonOpacity);
+  playBtn.setAttribute('position', (-btnSpacing) + ' ' + btnY + ' ' + btnZ);
+  parentEl.appendChild(playBtn);
+
+  var audioBtn = document.createElement('a-plane');
+  audioBtn.setAttribute('class', 'clickable video-control video-audio-control');
+  audioBtn.setAttribute('width', '0.5');
+  audioBtn.setAttribute('height', '0.5');
+  audioBtn.setAttribute('position', btnSpacing + ' ' + btnY + ' ' + btnZ);
+  audioBtn.setAttribute('material', 'color: ' + buttonColor + '; opacity: ' + buttonOpacity + '; transparent: true');
+  parentEl.appendChild(audioBtn);
+  var audioLabel = document.createElement('a-text');
+  audioLabel.setAttribute('class', 'video-audio-label');
+  audioLabel.setAttribute('value', startMuted ? 'OFF' : 'ON');
+  audioLabel.setAttribute('align', 'center');
+  audioLabel.setAttribute('position', btnSpacing + ' ' + btnY + ' ' + (btnZ + 0.01));
+  audioLabel.setAttribute('color', '#222222');
+  audioLabel.setAttribute('scale', '1.2 1.2 1');
+  parentEl.appendChild(audioLabel);
+
+  var isPlaying = false;
+  var isMuted = startMuted;
+  var boundVideos = new Set();
+  var syncFromVideo = function() {
+    var videos = getVideos();
+    var video = videos[0];
+    if (!video) return;
+    isPlaying = !video.paused;
+    isMuted = !!video.muted;
+    playBtn.setAttribute('src', isPlaying ? pauseImage : playImage);
+    audioLabel.setAttribute('value', isMuted ? 'OFF' : 'ON');
+  };
+  var bindVideoListeners = function() {
+    var videos = getVideos();
+    if (!videos.length) return false;
+    videos.forEach(function(video) {
+      if (boundVideos.has(video)) return;
+      boundVideos.add(video);
+      video.addEventListener('play', syncFromVideo);
+      video.addEventListener('pause', syncFromVideo);
+      video.addEventListener('volumechange', syncFromVideo);
+    });
+    syncFromVideo();
+    return true;
+  };
+  var togglePlay = function(e) {
+    if (e) { e.stopPropagation(); if (e.preventDefault) e.preventDefault(); }
+    var videos = getVideos();
+    if (!videos.length) {
+      bindVideoListeners();
+      videos = getVideos();
+    }
+    if (!videos.length) return;
+    var nextPlaying = !isPlaying;
+    setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, nextPlaying, true, isMuted);
+    isPlaying = nextPlaying;
+    playBtn.setAttribute('src', isPlaying ? pauseImage : playImage);
+  };
+  var toggleMute = function(e) {
+    if (e) { e.stopPropagation(); if (e.preventDefault) e.preventDefault(); }
+    var videos = getVideos();
+    if (!videos.length) return;
+    isMuted = !isMuted;
+    setFlatVideoHotspotMuted(videos, isMuted);
+    audioLabel.setAttribute('value', isMuted ? 'OFF' : 'ON');
+    if (!isMuted) setFlatVideoHotspotPlayback(parentEl, aVideoEl, videos, true, true, false);
+  };
+  var bindControl = function(el, handler) {
+    el.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;
+      handler(e);
+    });
+    el.addEventListener('triggerdown', handler);
+  };
+  bindControl(playBtn, togglePlay);
+  bindControl(audioBtn, toggleMute);
+  [playBtn, audioBtn].forEach(function(btn) {
+    btn.setAttribute('animation__hover_in', { property: 'scale', to: '1.2 1.2 1', dur: 200, easing: 'easeOutQuad', startEvents: 'mouseenter' });
+    btn.setAttribute('animation__hover_out', { property: 'scale', to: '1 1 1', dur: 200, easing: 'easeOutQuad', startEvents: 'mouseleave' });
+  });
+  if (!bindVideoListeners() && aVideoEl) {
+    aVideoEl.addEventListener('materialvideoloadeddata', bindVideoListeners, { once: true });
+    aVideoEl.addEventListener('loadeddata', bindVideoListeners, { once: true });
+    var poll = setInterval(function() { if (bindVideoListeners()) clearInterval(poll); }, 200);
+    setTimeout(function() { clearInterval(poll); }, 8000);
+  }
+  parentEl._flatVideoControls = { playBtn: playBtn, audioBtn: audioBtn, audioLabel: audioLabel, syncFromVideo: syncFromVideo };
+  return parentEl._flatVideoControls;
+}
+
 // Face camera component
 AFRAME.registerComponent("face-camera", {
   init: function () {
@@ -9681,6 +11077,10 @@ AFRAME.registerComponent("hotspot", {
     imageSrc: { type: "string", default: "" },
     imageScale: { type: "number", default: 5 },
     imageAspectRatio: { type: "number", default: 0 },
+    mediaKind: { type: "string", default: "photo" },
+    videoSrc: { type: "string", default: "" },
+    videoLoop: { type: "boolean", default: true },
+    videoMuted: { type: "boolean", default: true },
     modelSrc: { type: "string", default: "" },
     modelScale: { type: "number", default: 1 },
     modelRotationX: { type: "number", default: 0 },
@@ -9705,8 +11105,91 @@ AFRAME.registerComponent("hotspot", {
       this.createAudio(data);
     }
 
-    // Static image (non-interactive except face-camera)
-    if (data.imageSrc) {
+    // Static video billboard
+    if (data.mediaKind === 'video' && data.videoSrc) {
+      const vid = document.createElement('a-video');
+      let _vsrc = data.videoSrc;
+      if (_vsrc && _vsrc.includes('%')) { try { _vsrc = decodeURIComponent(_vsrc); } catch(e){} }
+      vid.setAttribute('src', _vsrc);
+      vid.setAttribute('autoplay', true);
+      vid.setAttribute('loop', data.videoLoop !== false);
+      vid.setAttribute('muted', data.videoMuted !== false);
+      vid.setAttribute('playsinline', true);
+      vid.setAttribute('crossorigin', 'anonymous');
+      const scl = data.imageScale || 1;
+      const knownAR = (typeof data.imageAspectRatio === 'number' && isFinite(data.imageAspectRatio) && data.imageAspectRatio>0) ? data.imageAspectRatio : 1;
+      vid.setAttribute('width', 1);
+      vid.setAttribute('height', knownAR);
+      vid.setAttribute('scale', scl + ' ' + scl + ' 1');
+      vid.setAttribute('position', '0 ' + ((knownAR/2) * scl) + ' 0.05');
+      if (knownAR !== 1) vid.dataset.aspectRatio = String(knownAR);
+      vid.classList.add('static-video-hotspot');
+      vid.classList.add('clickable');
+      var assetIdForVid = _vsrc.startsWith('#') ? _vsrc.slice(1) : '';
+      if (assetIdForVid) {
+        vid.dataset.videoAssetId = assetIdForVid;
+        el.dataset.flatVideoAssetId = assetIdForVid;
+      }
+      let fusingTimer = null;
+      let isExpanded = false;
+      const gazeDuration = (CUSTOM_STYLES.gaze && CUSTOM_STYLES.gaze.duration) ? Math.round(CUSTOM_STYLES.gaze.duration * 1000) : 2000;
+      vid.addEventListener('raycaster-intersected', (evt) => {
+        const cursorEl = evt.detail.el;
+        if (cursorEl && cursorEl.id === 'gaze-cursor') {
+          if (fusingTimer) clearTimeout(fusingTimer);
+          fusingTimer = setTimeout(() => {
+            isExpanded = true;
+            vid.setAttribute('scale', (scl * 2) + ' ' + (scl * 2) + ' 1');
+          }, gazeDuration);
+        }
+      });
+      vid.addEventListener('raycaster-intersected-cleared', (evt) => {
+        const cursorEl = evt.detail.el;
+        if (cursorEl && cursorEl.id === 'gaze-cursor') {
+          if (fusingTimer) { clearTimeout(fusingTimer); fusingTimer = null; }
+          isExpanded = false;
+          vid.setAttribute('scale', scl + ' ' + scl + ' 1');
+        }
+      });
+      if (CUSTOM_STYLES && CUSTOM_STYLES.image) {
+        const istyle = CUSTOM_STYLES.image;
+        const opacity = (typeof istyle.opacity === 'number') ? istyle.opacity : 1.0;
+        vid.setAttribute('material', 'opacity:' + opacity + '; transparent:' + (opacity<1?'true':'false') + '; side:double');
+      }
+      const applyVideoAR = () => {
+        try {
+          const assetId = _vsrc.startsWith('#') ? _vsrc.slice(1) : '';
+          const videoEl = assetId ? document.getElementById(assetId) : null;
+          const nW = videoEl && videoEl.videoWidth || 0;
+          const nH = videoEl && videoEl.videoHeight || 0;
+          const ratio = nW > 0 && nH > 0 ? nH / nW : parseFloat(vid.dataset.aspectRatio || '') || 1;
+          if (ratio && isFinite(ratio) && ratio > 0) {
+            vid.dataset.aspectRatio = String(ratio);
+            vid.setAttribute('width', 1);
+            vid.setAttribute('height', ratio);
+            vid.setAttribute('scale', scl + ' ' + scl + ' 1');
+            vid.setAttribute('position', '0 ' + ((ratio/2)*scl) + ' 0.05');
+          }
+        } catch(e) {}
+      };
+      try {
+        const assetId = _vsrc.startsWith('#') ? _vsrc.slice(1) : '';
+        const videoEl = assetId ? document.getElementById(assetId) : null;
+        if (videoEl) {
+          videoEl.loop = data.videoLoop !== false;
+          videoEl.muted = data.videoMuted !== false;
+          videoEl.addEventListener('loadedmetadata', applyVideoAR, { once: true });
+          videoEl.play().catch(function(){});
+        }
+      } catch(e) {}
+      setTimeout(applyVideoAR, 250);
+      this.el.appendChild(vid);
+      attachFlatVideoHotspotControls(this.el, _vsrc, {
+        aVideoEl: vid,
+        startMuted: data.videoMuted !== false,
+        styles: CUSTOM_STYLES
+      });
+    } else if (data.imageSrc) {
       const img = document.createElement('a-image');
       let _src = data.imageSrc;
       if (_src && _src.includes('%')) { try { _src = decodeURIComponent(_src); } catch(e){} }
@@ -10179,11 +11662,30 @@ class HotspotProject {
       });
   }
 
+  resumeSceneHotspotVideos(scene) {
+    if (!scene || !Array.isArray(scene.hotspots)) return;
+    scene.hotspots.forEach(function(h) {
+      if (!h || h.type !== 'image' || h.mediaKind !== 'video') return;
+      try {
+        var el = document.getElementById('hotspot-' + h.id);
+        if (el && el._flatVideoUserPaused) return;
+        var vidEl = el && el.querySelector('.static-video-hotspot');
+        var videos = resolveFlatVideoHotspotVideos('#asset-video-hotspot-' + h.id, vidEl);
+        if (videos.length) setFlatVideoHotspotPlayback(el, vidEl, videos, true, false, h.videoMuted !== false);
+      } catch(e) {}
+    });
+  }
+
   loadScene(sceneId) {
     if (!this.scenes[sceneId]) {
       console.warn(\`Scene \${sceneId} not found\`);
       return;
     }
+    try {
+      document.querySelectorAll('video[id^="asset-video-hotspot-"]').forEach(function(v) {
+        try { v.pause(); } catch(e) {}
+      });
+    } catch(e) {}
     const scene = this.scenes[sceneId];
     const skybox = document.getElementById('skybox');
     
@@ -10237,6 +11739,7 @@ class HotspotProject {
         const container = document.getElementById('hotspot-container');
         container.innerHTML = '';
         this.createHotspots(scene.hotspots);
+        this.resumeSceneHotspotVideos(scene);
         console.log('Hotspots created');
         
         // Load ground for this scene
@@ -10315,6 +11818,7 @@ class HotspotProject {
         const container = document.getElementById('hotspot-container');
         container.innerHTML = '';
         this.createHotspots(scene.hotspots);
+        this.resumeSceneHotspotVideos(scene);
         console.log('Hotspots created');
         
         // Load ground for this scene
@@ -10543,6 +12047,7 @@ class HotspotProject {
       const container = document.getElementById('hotspot-container');
       container.innerHTML = '';
       this.createHotspots(scene.hotspots);
+      this.resumeSceneHotspotVideos(scene);
       this.loadGround(sceneId);
 
       setTimeout(() => {
@@ -11112,10 +12617,39 @@ class HotspotProject {
       }
       if (hotspot.type === 'image') {
         const scale = (typeof hotspot.imageScale === 'number') ? hotspot.imageScale : (typeof hotspot.imageWidth === 'number' ? hotspot.imageWidth : 1);
-        let src = (typeof hotspot.image === 'string' && !hotspot.image.startsWith('FILE:')) ? hotspot.image : '';
-        if (src && src.includes(';')) src = encodeURIComponent(src);
-        config += ';imageSrc:' + src + ';imageScale:' + scale;
         const ar = (typeof hotspot.imageAspectRatio === 'number' && isFinite(hotspot.imageAspectRatio) && hotspot.imageAspectRatio>0) ? hotspot.imageAspectRatio : ((typeof hotspot._aspectRatio === 'number' && isFinite(hotspot._aspectRatio) && hotspot._aspectRatio>0) ? hotspot._aspectRatio : 0);
+        if (hotspot.mediaKind === 'video') {
+          let vsrc = (typeof hotspot.video === 'string' && !hotspot.video.startsWith('FILE:')) ? hotspot.video : '';
+          if (!vsrc && hotspot.commonAssetUrl) vsrc = hotspot.commonAssetUrl;
+          const assetId = 'asset-video-hotspot-' + hotspot.id;
+          if (vsrc) {
+            try {
+              let assetEl = document.getElementById(assetId);
+              if (!assetEl) {
+                assetEl = document.createElement('video');
+                assetEl.id = assetId;
+                assetEl.setAttribute('crossorigin', 'anonymous');
+                assetEl.setAttribute('playsinline', '');
+                assetEl.setAttribute('webkit-playsinline', '');
+                assetEl.muted = hotspot.videoMuted !== false;
+                assetEl.loop = hotspot.videoLoop !== false;
+                if (assetEl.muted) assetEl.setAttribute('muted', '');
+                if (assetEl.loop) assetEl.setAttribute('loop', '');
+                assetEl.style.display = 'none';
+                assetEl.preload = 'auto';
+                document.body.appendChild(assetEl);
+              }
+              assetEl.setAttribute('src', vsrc);
+            } catch(e) {}
+            config += ';mediaKind:video;videoSrc:#' + assetId + ';imageScale:' + scale;
+            config += ';videoLoop:' + (hotspot.videoLoop !== false);
+            config += ';videoMuted:' + (hotspot.videoMuted !== false);
+          }
+        } else {
+          let src = (typeof hotspot.image === 'string' && !hotspot.image.startsWith('FILE:')) ? hotspot.image : '';
+          if (src && src.includes(';')) src = encodeURIComponent(src);
+          config += ';imageSrc:' + src + ';imageScale:' + scale;
+        }
         if (ar && ar > 0) config += ';imageAspectRatio:' + ar;
       }
       
@@ -13403,6 +14937,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log(`Loading scene: ${this.currentScene}`, scene); // Debug log
 
     try {
+    this.pauseAllHotspotVideos();
     // Clear any existing videosphere and stop any playing scene video
     const existingVideosphere = document.getElementById('videosphere');
     if (existingVideosphere) {
@@ -13609,6 +15144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scene.hotspots.forEach((hotspot) => {
       this.createHotspotElement(hotspot);
     });
+    this.resumeHotspotVideosForScene(this.currentScene);
 
     // Apply custom styles to ensure portal colors and other customizations are maintained
     this.refreshAllHotspotStyles();
@@ -15150,6 +16686,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Modified spot component for editor
 AFRAME.registerComponent('editor-spot', {
   schema: {
+    type: { type: 'string', default: '' },
     label: { type: 'string', default: '' },
     audio: { type: 'string', default: '' },
     audioLoop: { type: 'boolean', default: true },
@@ -15160,9 +16697,16 @@ AFRAME.registerComponent('editor-spot', {
     popupHeight: { type: 'number', default: 2 },
     popupColor: { type: 'color', default: '#333333' },
     navigation: { type: 'string', default: '' },
+    weblink: { type: 'string', default: '' },
+    weblinkTitle: { type: 'string', default: '' },
+    weblinkPreview: { type: 'string', default: '' },
     imageSrc: { type: 'string', default: '' },
     imageScale: { type: 'number', default: 5 },
     imageAspectRatio: { type: 'number', default: 0 },
+    mediaKind: { type: 'string', default: 'photo' },
+    videoSrc: { type: 'string', default: '' },
+    videoLoop: { type: 'boolean', default: true },
+    videoMuted: { type: 'boolean', default: true },
     modelSrc: { type: 'string', default: '' },
     modelScale: { type: 'number', default: 1 },
     modelRotationX: { type: 'number', default: 0 },
@@ -15193,8 +16737,10 @@ AFRAME.registerComponent('editor-spot', {
 
     // REMOVED: Main element hover animations to prevent inheritance by popup children
 
-    /******************  STATIC IMAGE  ******************/
-    if (data.imageSrc) {
+    /******************  STATIC VIDEO (flat billboard)  ******************/
+    if (data.mediaKind === 'video') {
+      mountEditorFlatVideoBillboard(this, data);
+    } else if (data.imageSrc) {
       const img = document.createElement('a-image');
       let _src = data.imageSrc;
       if (_src && _src.includes('%')) {
@@ -15757,6 +17303,16 @@ AFRAME.registerComponent('editor-spot', {
         el.removeAttribute('animation__portal_rotate');
         el.removeAttribute('animation__portal_pulse');
       } catch (_) {}
+    }
+  },
+
+  update: function (oldData) {
+    if (
+      this.data.mediaKind === 'video' &&
+      this.data.videoSrc &&
+      (this.data.videoSrc !== oldData.videoSrc || this.data.mediaKind !== oldData.mediaKind)
+    ) {
+      mountEditorFlatVideoBillboard(this, this.data, true);
     }
   },
 });
@@ -16748,7 +18304,7 @@ const CommonAssetsPicker = {
   getVisibleCategories() {
     if (this.filterCategories && this.filterCategories.length) return this.filterCategories;
     if (this.filterCategory) return [this.filterCategory];
-    return ['images', '360-images', '360-videos', 'audio', '3d', 'other'];
+    return ['images', 'videos', '360-images', '360-videos', 'audio', '3d', 'other'];
   },
 
   renderTabs() {
@@ -16781,7 +18337,13 @@ const CommonAssetsPicker = {
       const editor = window.hotspotEditor;
       const type = editor ? editor.selectedHotspotType : 'text';
       if (type === 'audio' || type === 'text-audio') this.activeCategory = 'audio';
-      else if (type === 'image') this.activeCategory = 'images';
+      else if (type === 'image') {
+        const editor = window.hotspotEditor;
+        this.activeCategory =
+          editor && typeof editor.getImageMediaKind === 'function' && editor.getImageMediaKind() === 'video'
+            ? 'videos'
+            : 'images';
+      }
       else if (type === 'model') this.activeCategory = '3d';
     }
     this.renderTabs();

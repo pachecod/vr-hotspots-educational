@@ -1101,6 +1101,10 @@ class HotspotEditor {
     return Boolean(this._videoPipelineConfig?.videoSceneServerUpload);
   }
 
+  _shouldUseEditorLocalVideoCompression() {
+    return Boolean(this._videoPipelineConfig?.editorLocalVideoCompression);
+  }
+
   get _videoExportUrlModeEnabled() {
     return Boolean(this._videoPipelineConfig?.videoExportUrlMode);
   }
@@ -1142,8 +1146,211 @@ class HotspotEditor {
     });
   }
 
+  _formatVideoBytes(bytes) {
+    const size = Number(bytes) || 0;
+    if (size >= 1024 * 1024 * 1024) return `${(size / 1024 / 1024 / 1024).toFixed(1)}GB`;
+    if (size >= 1024 * 1024) return `${Math.round(size / 1024 / 1024)}MB`;
+    if (size >= 1024) return `${Math.round(size / 1024)}KB`;
+    return `${size}B`;
+  }
+
+  _showEditorVideoProcessingProgress(file) {
+    let overlay = document.getElementById('editor-video-processing-progress');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'editor-video-processing-progress';
+      overlay.style.cssText = `
+        position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+        z-index: ${EDITOR_LAYER.progress}; display: flex; align-items: center; justify-content: center;
+        font-family: Arial; color: #fff;
+      `;
+      overlay.innerHTML = `
+        <div style="width: min(520px, calc(100vw - 40px)); background:#202124; border-radius:12px; padding:22px; box-shadow:0 18px 60px rgba(0,0,0,0.45);">
+          <h3 style="margin:0 0 8px; color:#4CAF50; font-size:18px;">Preparing Video</h3>
+          <div id="editor-video-progress-file" style="font-size:12px; color:#ccc; margin-bottom:16px; word-break:break-word;"></div>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:#ddd; margin-bottom:6px;">
+              <span id="editor-video-upload-label">Uploading file...</span>
+              <span id="editor-video-upload-pct">0%</span>
+            </div>
+            <div style="height:10px; background:#444; border-radius:999px; overflow:hidden;">
+              <div id="editor-video-upload-fill" style="height:100%; width:0%; background:#4CAF50; transition:width 160ms ease;"></div>
+            </div>
+          </div>
+          <div id="editor-video-transcode-step" style="display:none;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:#ddd; margin-bottom:6px;">
+              <span id="editor-video-transcode-label">Compressing video...</span>
+              <span id="editor-video-transcode-pct">0%</span>
+            </div>
+            <div style="height:10px; background:#444; border-radius:999px; overflow:hidden;">
+              <div id="editor-video-transcode-fill" style="height:100%; width:0%; background:#9C27B0; transition:width 160ms ease;"></div>
+            </div>
+          </div>
+          <div style="font-size:11px; color:#aaa; margin-top:14px;">Keep this tab open while the video is uploaded and compressed.</div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    overlay.style.display = 'flex';
+    overlay.style.pointerEvents = 'auto';
+    const fileEl = document.getElementById('editor-video-progress-file');
+    if (fileEl) fileEl.textContent = `${file.name} (${this._formatVideoBytes(file.size)})`;
+    this._updateEditorVideoUploadProgress(file, 0, file.size || 0);
+    this._updateEditorVideoCompressionProgress({ phase: 'queued', transcodePercent: 0, message: 'Waiting to compress video...' });
+    const transcodeStep = document.getElementById('editor-video-transcode-step');
+    if (transcodeStep) transcodeStep.style.display = 'none';
+  }
+
+  _hideEditorVideoProcessingProgress() {
+    const overlay = document.getElementById('editor-video-processing-progress');
+    if (overlay) {
+      overlay.style.display = 'none';
+      overlay.style.pointerEvents = 'none';
+    }
+  }
+
+  _updateEditorVideoUploadProgress(file, loaded, total) {
+    const safeTotal = total || file.size || 0;
+    const pct = safeTotal > 0 ? Math.min(100, Math.round((loaded / safeTotal) * 100)) : 0;
+    const fill = document.getElementById('editor-video-upload-fill');
+    const pctEl = document.getElementById('editor-video-upload-pct');
+    const label = document.getElementById('editor-video-upload-label');
+    if (fill) fill.style.width = `${pct}%`;
+    if (pctEl) pctEl.textContent = `${pct}%`;
+    if (label) {
+      label.textContent =
+        pct >= 100
+          ? 'Upload complete'
+          : `Uploading ${this._formatVideoBytes(loaded)} / ${this._formatVideoBytes(safeTotal)}`;
+    }
+  }
+
+  _updateEditorVideoCompressionProgress(job) {
+    const step = document.getElementById('editor-video-transcode-step');
+    const fill = document.getElementById('editor-video-transcode-fill');
+    const pctEl = document.getElementById('editor-video-transcode-pct');
+    const label = document.getElementById('editor-video-transcode-label');
+    if (step) step.style.display = 'block';
+
+    const phase = job?.phase || 'transcoding';
+    const pct = typeof job?.transcodePercent === 'number' ? Math.max(0, job.transcodePercent) : 0;
+    const displayPct = phase === 'done' ? 100 : Math.min(100, pct);
+    if (fill) fill.style.width = `${displayPct}%`;
+    if (pctEl) pctEl.textContent = phase === 'transcoding' && displayPct <= 0 ? '...' : `${displayPct}%`;
+    if (label) label.textContent = job?.message || (phase === 'done' ? 'Compression complete' : 'Compressing video...');
+  }
+
+  _uploadEditorLocalVideoForCompression(file) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append('file', file);
+      xhr.upload.addEventListener('progress', (evt) => {
+        const total = evt.lengthComputable ? evt.total : file.size || 0;
+        this._updateEditorVideoUploadProgress(file, evt.loaded || 0, total);
+      });
+      xhr.addEventListener('load', () => {
+        let data = null;
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch (_) {}
+        if (xhr.status >= 200 && xhr.status < 300 && data?.success) {
+          this._updateEditorVideoUploadProgress(file, file.size || 1, file.size || 1);
+          resolve(data);
+          return;
+        }
+        reject(new Error((data && data.message) || 'Video compression upload failed'));
+      });
+      xhr.addEventListener('error', () => reject(new Error('Video compression upload failed')));
+      xhr.open('POST', '/api/editor-video/compress');
+      xhr.withCredentials = true;
+      xhr.send(formData);
+    });
+  }
+
+  async _pollEditorLocalVideoCompressionJob(jobId) {
+    for (let i = 0; i < 1200; i++) {
+      const res = await fetch(`/api/editor-video/compression-jobs/${encodeURIComponent(jobId)}`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Could not check video compression status');
+      this._updateEditorVideoCompressionProgress(data);
+      if (data.phase === 'done') return data.asset;
+      if (data.phase === 'error') throw new Error(data.error || data.message || 'Video compression failed');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    throw new Error('Video compression timed out');
+  }
+
+  async processLocalVideoFileForEditor({ file, storageKey }) {
+    const storageKeyFinal = storageKey || `video_${Date.now()}`;
+    if (!this._videoPipelineConfig) {
+      await this.loadVideoPipelineConfig();
+    }
+
+    if (this._shouldUseEditorLocalVideoCompression()) {
+      try {
+        this._showEditorVideoProcessingProgress(file);
+        const upload = await this._uploadEditorLocalVideoForCompression(file);
+        if (upload.async && upload.jobId) {
+          const asset = await this._pollEditorLocalVideoCompressionJob(upload.jobId);
+          if (asset?.downloadUrl) {
+            this._updateEditorVideoCompressionProgress({
+              phase: 'done',
+              transcodePercent: 100,
+              message: 'Downloading compressed video...',
+            });
+            const resp = await fetch(asset.downloadUrl, { credentials: 'include' });
+            if (!resp.ok) throw new Error('Could not download compressed video');
+            const blob = await resp.blob();
+            const storedName = asset.filename || file.name.replace(/\.[^.]+$/, '.mp4');
+            const storedFile = new File([blob], storedName, {
+              type: blob.type || asset.contentType || 'video/mp4',
+            });
+            const saved = await this.saveVideoToIDB(storageKeyFinal, storedFile);
+            if (!saved) throw new Error('Could not save compressed video locally');
+            return {
+              file: storedFile,
+              videoSrc: URL.createObjectURL(storedFile),
+              videoStorageKey: storageKeyFinal,
+              videoFileName: storedName,
+              hostedVideoUrl: null,
+              hostedVideoProxyUrl: null,
+              transcoded: Boolean(asset.transcoded),
+              originalSize: asset.originalSize || file.size,
+              compressedSize: asset.size || storedFile.size,
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Editor video compression failed; storing original video', err);
+      } finally {
+        this._hideEditorVideoProcessingProgress();
+      }
+    }
+
+    const saved = await this.saveVideoToIDB(storageKeyFinal, file);
+    return {
+      file,
+      videoSrc: URL.createObjectURL(file),
+      videoStorageKey: saved ? storageKeyFinal : null,
+      videoFileName: file.name,
+      hostedVideoUrl: null,
+      hostedVideoProxyUrl: null,
+    };
+  }
+
   async processLocalVideoFileForScene({ file, storageKey }) {
     const storageKeyFinal = storageKey || `video_scene_${Date.now()}`;
+    if (!this._videoPipelineConfig) {
+      await this.loadVideoPipelineConfig();
+    }
+
+    if (this._shouldUseEditorLocalVideoCompression()) {
+      return this.processLocalVideoFileForEditor({ file, storageKey: storageKeyFinal });
+    }
 
     if (this._shouldUseSceneVideoServerUpload() && (await this._isStudentAuthenticated())) {
       try {
@@ -4393,21 +4600,24 @@ class HotspotEditor {
         try {
           const fileRef = pendingVideoFile;
           const storageKey = hotspotData.videoStorageKey || `video_hotspot_${hotspotData.id}`;
-          const saved = await this.saveVideoToIDB(storageKey, fileRef);
-          if (saved) {
-            hotspotData.videoStorageKey = storageKey;
-            hotspotData.videoFileName = fileRef.name || null;
+          const processed = await this.processLocalVideoFileForEditor({ file: fileRef, storageKey });
+          if (processed.videoStorageKey) {
+            hotspotData.videoStorageKey = processed.videoStorageKey;
+            hotspotData.videoFileName = processed.videoFileName || fileRef.name || null;
             hotspotData.mediaKind = 'video';
+            hotspotData.video = processed.videoSrc;
             const sceneHs = this.scenes[this.currentScene].hotspots.find(
               (h) => h.id === hotspotData.id
             );
             if (sceneHs) {
-              sceneHs.videoStorageKey = storageKey;
-              sceneHs.videoFileName = fileRef.name || null;
+              sceneHs.videoStorageKey = processed.videoStorageKey;
+              sceneHs.videoFileName = processed.videoFileName || fileRef.name || null;
+              sceneHs.video = processed.videoSrc;
               sceneHs.mediaKind = 'video';
               sceneHs.videoLoop = hotspotData.videoLoop;
               sceneHs.videoMuted = hotspotData.videoMuted;
             }
+            this._refreshHotspotEntity(hotspotData);
             this.saveScenesData();
           }
         } catch (err) {
@@ -7644,20 +7854,22 @@ class HotspotEditor {
               try {
                 const pendingFile = newVideo;
                 const storageKey = hotspot.videoStorageKey || `video_hotspot_${hotspot.id}`;
-                const saved = await this.saveVideoToIDB(storageKey, pendingFile);
-                if (saved) {
-                  const blobUrl = URL.createObjectURL(pendingFile);
-                  hotspot.video = blobUrl;
-                  hotspot.videoFileName = pendingFile.name || null;
-                  hotspot.videoStorageKey = storageKey;
+                const processed = await this.processLocalVideoFileForEditor({
+                  file: pendingFile,
+                  storageKey,
+                });
+                if (processed.videoStorageKey) {
+                  hotspot.video = processed.videoSrc;
+                  hotspot.videoFileName = processed.videoFileName || pendingFile.name || null;
+                  hotspot.videoStorageKey = processed.videoStorageKey;
                   const sceneHs = this.scenes[this.currentScene].hotspots.find(
                     (h) => h.id === hotspot.id
                   );
                   if (sceneHs) {
                     sceneHs.mediaKind = 'video';
-                    sceneHs.video = blobUrl;
-                    sceneHs.videoFileName = pendingFile.name || null;
-                    sceneHs.videoStorageKey = storageKey;
+                    sceneHs.video = processed.videoSrc;
+                    sceneHs.videoFileName = processed.videoFileName || pendingFile.name || null;
+                    sceneHs.videoStorageKey = processed.videoStorageKey;
                     sceneHs.image = null;
                     sceneHs.imageStorageKey = null;
                     sceneHs.imageScale = newImageScale;

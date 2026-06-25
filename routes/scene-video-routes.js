@@ -13,6 +13,16 @@ const { assertCanUploadAsset } = require('../services/usage-quota');
 const { getVideoPipelineConfig } = require('../lib/video-config');
 const { prepareVideoForStorage, cleanupTempFiles, VIDEO_CATEGORY } = require('../lib/video-pipeline');
 const { buildStudentAssetPath } = require('./student-assets-routes');
+const { isTranscodeEnabledFor } = require('../lib/video-config');
+const { isFfmpegAvailable } = require('../lib/video-transcode');
+const {
+  createUploadJob,
+  updateUploadJob,
+  getUploadJob,
+  completeUploadJob,
+  failUploadJob,
+  deleteUploadJob,
+} = require('../lib/video-upload-jobs');
 
 async function getStudentContext(studentId) {
   const { rows } = await query(
@@ -37,6 +47,55 @@ function buildSceneVideoFilename(originalName) {
   return `scene-${Date.now()}.${ext}`;
 }
 
+function canCompressEditorLocalVideo() {
+  return isTranscodeEnabledFor('editor-local') && isFfmpegAvailable();
+}
+
+async function runEditorLocalVideoCompressionJob(jobId, { tempPath, originalName, originalSize }) {
+  const cleanupPaths = [tempPath];
+  try {
+    updateUploadJob(jobId, {
+      phase: 'transcoding',
+      transcodePercent: 0,
+      message: 'Compressing video…',
+    });
+
+    const prepared = await prepareVideoForStorage({
+      tempPath,
+      originalName,
+      category: VIDEO_CATEGORY,
+      context: 'editor-local',
+      onProgress: (pct) => {
+        updateUploadJob(jobId, {
+          phase: 'transcoding',
+          transcodePercent: pct,
+          message: pct > 0 ? `Compressing video… ${pct}%` : 'Compressing video…',
+        });
+      },
+    });
+
+    if (prepared.path !== tempPath) {
+      cleanupPaths.length = 0;
+    }
+
+    const filename = prepared.storedFilename || buildSceneVideoFilename(originalName);
+    completeUploadJob(jobId, {
+      filename,
+      size: prepared.size,
+      originalSize: prepared.originalSize || originalSize,
+      transcoded: Boolean(prepared.transcoded),
+      transcodeError: prepared.transcodeError || null,
+      contentType: prepared.contentType || getContentType(filename),
+      downloadUrl: `/api/editor-video/compression-jobs/${encodeURIComponent(jobId)}/file`,
+      tempPath: prepared.path,
+    });
+  } catch (err) {
+    console.error('Editor local video compression job error:', err);
+    failUploadJob(jobId, err.message || 'Video compression failed');
+    cleanupTempFiles(cleanupPaths);
+  }
+}
+
 function registerSceneVideoRoutes(app, upload) {
   app.get('/api/app-config', (req, res) => {
     const videoPipeline = getVideoPipelineConfig();
@@ -46,12 +105,115 @@ function registerSceneVideoRoutes(app, upload) {
         videoSceneServerUpload: videoPipeline.sceneServerUpload,
         videoExportUrlMode: videoPipeline.exportUrlMode,
         transcodeEnabled: videoPipeline.transcodeEnabled,
+        editorLocalVideoCompression: canCompressEditorLocalVideo(),
       },
     });
   });
 
   app.get('/api/video-pipeline/status', (req, res) => {
     res.json({ success: true, ...getVideoPipelineConfig() });
+  });
+
+  app.get('/api/editor-video/compression-jobs/:jobId', (req, res) => {
+    const job = getUploadJob(req.params.jobId);
+    if (!job) {
+      return res.status(404).json({ success: false, message: 'Video compression job not found' });
+    }
+    const asset = job.asset
+      ? {
+          filename: job.asset.filename,
+          size: job.asset.size,
+          originalSize: job.asset.originalSize,
+          transcoded: Boolean(job.asset.transcoded),
+          transcodeError: job.asset.transcodeError || null,
+          contentType: job.asset.contentType,
+          downloadUrl: job.asset.downloadUrl,
+        }
+      : null;
+    return res.json({
+      success: true,
+      jobId: job.id,
+      phase: job.phase,
+      transcodePercent: job.transcodePercent,
+      message: job.message,
+      fileName: job.fileName,
+      category: job.category,
+      asset,
+      error: job.error,
+      startedAt: job.startedAt,
+      updatedAt: job.updatedAt,
+    });
+  });
+
+  app.get('/api/editor-video/compression-jobs/:jobId/file', (req, res) => {
+    const job = getUploadJob(req.params.jobId);
+    const asset = job && job.asset;
+    if (!asset || !asset.tempPath) {
+      return res.status(404).send('Compressed video not found');
+    }
+
+    const filePath = asset.tempPath;
+    res.setHeader('Content-Type', asset.contentType || 'video/mp4');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${path.basename(asset.filename || 'video.mp4').replace(/"/g, '')}"`
+    );
+    res.sendFile(path.resolve(filePath), () => {
+      cleanupTempFiles([filePath]);
+      deleteUploadJob(req.params.jobId);
+    });
+  });
+
+  app.post('/api/editor-video/compress', upload.single('file'), async (req, res) => {
+    const tempPath = req.file && req.file.path;
+    const cleanupPaths = tempPath ? [tempPath] : [];
+    try {
+      if (!canCompressEditorLocalVideo()) {
+        return res.status(409).json({
+          success: false,
+          message: 'Editor video compression is not enabled on this server.',
+        });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+
+      const ext = getExtension(req.file.originalname);
+      if (!isExtensionAllowedForCategory(ext, VIDEO_CATEGORY)) {
+        return res.status(400).json({ success: false, message: 'File type not allowed for video' });
+      }
+
+      const limit = FILE_SIZE_LIMITS[VIDEO_CATEGORY];
+      if (req.file.size > limit) {
+        return res.status(400).json({ success: false, message: 'File too large for video compression' });
+      }
+
+      const job = createUploadJob({
+        fileName: req.file.originalname,
+        category: VIDEO_CATEGORY,
+      });
+      const ownedTempPath = tempPath;
+      cleanupPaths.length = 0;
+      setImmediate(() => {
+        runEditorLocalVideoCompressionJob(job.id, {
+          tempPath: ownedTempPath,
+          originalName: req.file.originalname,
+          originalSize: req.file.size,
+        });
+      });
+
+      return res.json({
+        success: true,
+        async: true,
+        jobId: job.id,
+        fileName: req.file.originalname,
+      });
+    } catch (err) {
+      console.error('Editor local video compression upload error:', err);
+      res.status(500).json({ success: false, message: err.message || 'Video compression upload failed' });
+    } finally {
+      cleanupTempFiles(cleanupPaths);
+    }
   });
 
   app.post(

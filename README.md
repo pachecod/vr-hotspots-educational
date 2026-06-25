@@ -1,6 +1,6 @@
 # VR Hotspots Educational Edition
 
-A comprehensive VR Hotspot Editor with built-in student submission system for educational environments. New to the tool? Start with the **[User Guide](USER_GUIDE.md)** for step-by-step instructions — and browse **[live examples of finished tours](USER_GUIDE.md#live-examples)** built by students. Teachers: see **[Documentation Plan](DOCS_PLAN.md)** for upcoming classroom guides.
+A comprehensive VR Hotspot Editor with built-in student submission system for educational environments. New to the tool? Start with the **[User Guide](USER_GUIDE.md)** for step-by-step instructions, watch this **[editing tool walkthrough](https://www.youtube.com/watch?v=Uo-bHKdDRKg)**, browse **[live examples of finished tours](USER_GUIDE.md#live-examples)** built by students, or watch this **[video example of a finished 360 tour](https://www.youtube.com/watch?v=23lqPjQc_IE)**. Teachers: see **[Documentation Plan](DOCS_PLAN.md)** for upcoming classroom guides.
 
 ## 🎓 Educational Features
 

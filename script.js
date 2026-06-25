@@ -846,6 +846,10 @@ class HotspotEditor {
     this.editorProgressInterval = null; // For editor progress tracking
     this._modelActionOverlay = null;
     this._modelActionEscHandler = null;
+    this._modelTransformGizmo = null;
+    this._modelTransformHotspotId = null;
+    this._modelTransformMode = 'position';
+    this._modelTransformEscHandler = null;
 
     // CSS Customization Settings
     this.customStyles = {
@@ -4253,7 +4257,9 @@ class HotspotEditor {
       const r = parseFloat(rotationEl?.value || '0') || 0;
       const y = parseFloat(posYEl?.value || '0') || 0;
       hotspotData.modelScale = Math.max(0.1, Math.min(200, s));
-      hotspotData.modelRotation = r % 360;
+      hotspotData.modelRotationX = 0;
+      hotspotData.modelRotationY = ((r % 360) + 360) % 360;
+      hotspotData.modelRotationZ = 0;
       hotspotData.modelPositionY = Math.max(-5, Math.min(5, y));
       const modelUrl = modelUrlEl?.value.trim();
       if (modelUrl) hotspotData.model = modelUrl;
@@ -6165,7 +6171,9 @@ class HotspotEditor {
     console.log('[ModelHotspot] Opening action menu', {
       id,
       scale: hotspot.modelScale,
-      rotation: hotspot.modelRotation,
+      rotation: `${hotspot.modelRotationX || 0} ${hotspot.modelRotationY || 0} ${
+        hotspot.modelRotationZ || 0
+      }`,
       positionY: hotspot.modelPositionY,
     });
 
@@ -6184,6 +6192,7 @@ class HotspotEditor {
       <h3 style="margin:0; font-size:18px; color:#4CAF50;">3D Model Hotspot</h3>
       <p style="margin:0; font-size:13px; line-height:1.4; color:#ccc;">Choose what you would like to do with this model hotspot.</p>
       <button id="model-action-edit" style="background:#6a1b9a; color:#fff; border:none; padding:10px 12px; border-radius:8px; font-size:14px; cursor:pointer;">Edit model settings</button>
+      <button id="model-action-transform" style="background:#00897b; color:#fff; border:none; padding:10px 12px; border-radius:8px; font-size:14px; cursor:pointer;">Transform with arrows</button>
       <button id="model-action-move" style="background:#1e88e5; color:#fff; border:none; padding:10px 12px; border-radius:8px; font-size:14px; cursor:pointer;">Move model hotspot</button>
       <button id="model-action-cancel" style="background:#424242; color:#eee; border:none; padding:9px 12px; border-radius:8px; font-size:13px; cursor:pointer;">Close</button>
     `;
@@ -6201,6 +6210,7 @@ class HotspotEditor {
     });
 
     const editBtn = dialog.querySelector('#model-action-edit');
+    const transformBtn = dialog.querySelector('#model-action-transform');
     const moveBtn = dialog.querySelector('#model-action-move');
     const cancelBtn = dialog.querySelector('#model-action-cancel');
 
@@ -6209,6 +6219,13 @@ class HotspotEditor {
         console.log('[ModelHotspot] Edit option selected', { id });
         closeOverlay();
         setTimeout(() => this.showEditHotspotDialog(id), 0);
+      });
+
+    if (transformBtn)
+      transformBtn.addEventListener('click', () => {
+        console.log('[ModelHotspot] Transform option selected', { id });
+        closeOverlay();
+        setTimeout(() => this._showModelTransformGizmo(id), 0);
       });
 
     if (moveBtn)
@@ -6244,6 +6261,335 @@ class HotspotEditor {
     }
     // Reset overlay reference whether removed via UI toggle or direct close
     this._modelActionOverlay = null;
+  }
+
+  _getModelTransformGizmoPosition(hotspot, hotspotEl) {
+    const rawPosition = hotspot?.position || hotspotEl?.getAttribute('position') || '0 0 0';
+    const base =
+      typeof rawPosition === 'object' && rawPosition !== null
+        ? {
+            x: parseFloat(rawPosition.x),
+            y: parseFloat(rawPosition.y),
+            z: parseFloat(rawPosition.z),
+          }
+        : (() => {
+            const [x = 0, y = 0, z = 0] = String(rawPosition)
+              .trim()
+              .split(/\s+/)
+              .map((value) => parseFloat(value));
+            return { x, y, z };
+          })();
+
+    const modelPos = new THREE.Vector3(
+      isFinite(base.x) ? base.x : 0,
+      isFinite(base.y) ? base.y : 0,
+      isFinite(base.z) ? base.z : 0
+    );
+
+    try {
+      const scene = document.querySelector('a-scene');
+      const cameraEl = document.querySelector('#cam') || document.querySelector('[camera]');
+      const cameraObj = cameraEl?.object3D || scene?.camera;
+      if (!cameraObj) {
+        return `${modelPos.x} ${modelPos.y} ${modelPos.z}`;
+      }
+
+      const cameraPos = new THREE.Vector3();
+      if (cameraObj.getWorldPosition) cameraObj.getWorldPosition(cameraPos);
+      else if (cameraObj.position) cameraPos.copy(cameraObj.position);
+
+      const towardCamera = cameraPos.sub(modelPos);
+      if (!isFinite(towardCamera.lengthSq()) || towardCamera.lengthSq() < 0.0001) {
+        return `${modelPos.x} ${modelPos.y} ${modelPos.z}`;
+      }
+
+      // Draw the controls just in front of the model so dense meshes do not hide them.
+      modelPos.add(towardCamera.normalize().multiplyScalar(0.45));
+    } catch (_) {
+      /* fall back to the exact model position */
+    }
+
+    return `${modelPos.x.toFixed(3)} ${modelPos.y.toFixed(3)} ${modelPos.z.toFixed(3)}`;
+  }
+
+  _showModelTransformGizmo(id) {
+    const hotspot = this.hotspots.find((h) => h.id === id && h.type === 'model');
+    const hotspotEl = document.getElementById(`hotspot-${id}`);
+    const scene = document.querySelector('a-scene');
+    if (!hotspot || !hotspotEl || !scene) return;
+
+    this._hideModelTransformGizmo();
+    this.cancelReposition();
+
+    const gizmo = document.createElement('a-entity');
+    gizmo.setAttribute('id', `model-transform-gizmo-${id}`);
+    gizmo.setAttribute('class', 'model-transform-gizmo');
+    gizmo.setAttribute('position', this._getModelTransformGizmoPosition(hotspot, hotspotEl));
+    gizmo.setAttribute('data-hotspot-id', id);
+    gizmo.setAttribute('data-gizmo-mode', 'position');
+
+    const modeLabel = document.createElement('a-text');
+    modeLabel.setAttribute('value', 'MOVE');
+    modeLabel.setAttribute('align', 'center');
+    modeLabel.setAttribute('color', '#ffffff');
+    modeLabel.setAttribute('width', '4');
+    modeLabel.setAttribute('position', '0 1.65 0');
+    modeLabel.setAttribute('face-camera', '');
+    modeLabel.classList.add('model-transform-mode-label');
+    gizmo.appendChild(modeLabel);
+
+    const hint = document.createElement('a-text');
+    hint.setAttribute('value', 'Arrows move • rings rotate • Esc closes');
+    hint.setAttribute('align', 'center');
+    hint.setAttribute('color', '#dddddd');
+    hint.setAttribute('width', '5');
+    hint.setAttribute('position', '0 -1.55 0');
+    hint.setAttribute('face-camera', '');
+    hint.classList.add('model-transform-hint');
+    gizmo.appendChild(hint);
+
+    this._createModelGizmoModeButton(gizmo, id, 'position', 'MOVE', '-0.55 1.25 0');
+    this._createModelGizmoModeButton(gizmo, id, 'rotation', 'ROTATE', '0.55 1.25 0');
+    this._createModelPositionGizmo(gizmo, id);
+    this._createModelRotationGizmo(gizmo, id);
+
+    scene.appendChild(gizmo);
+
+    this._modelTransformGizmo = gizmo;
+    this._modelTransformHotspotId = id;
+    this._modelTransformMode = 'position';
+    this._switchModelGizmoMode('position');
+    this._modelTransformEscHandler = (evt) => {
+      if (evt.key === 'Escape') this._hideModelTransformGizmo();
+    };
+    window.addEventListener('keydown', this._modelTransformEscHandler);
+    this.refreshSceneMediaRaycasters();
+    this.showTemporaryMessage('Transform mode: click arrows to move, rings to rotate');
+  }
+
+  _hideModelTransformGizmo() {
+    if (this._modelTransformGizmo && this._modelTransformGizmo.parentNode) {
+      this._modelTransformGizmo.parentNode.removeChild(this._modelTransformGizmo);
+    }
+    if (this._modelTransformEscHandler) {
+      window.removeEventListener('keydown', this._modelTransformEscHandler);
+      this._modelTransformEscHandler = null;
+    }
+    this._modelTransformGizmo = null;
+    this._modelTransformHotspotId = null;
+    this._modelTransformMode = 'position';
+    this.refreshSceneMediaRaycasters();
+  }
+
+  _createModelGizmoModeButton(gizmo, id, mode, label, position) {
+    const button = document.createElement('a-entity');
+    button.setAttribute('position', position);
+    button.setAttribute('geometry', 'primitive: plane; width: 0.9; height: 0.32');
+    button.setAttribute('material', 'shader: flat; color: #263238; opacity: 0.92; side: double');
+    button.setAttribute('data-gizmo-mode-button', mode);
+    button.setAttribute('data-hotspot-id', id);
+    button.classList.add('clickable', 'model-transform-mode-button');
+
+    const text = document.createElement('a-text');
+    text.setAttribute('value', label);
+    text.setAttribute('align', 'center');
+    text.setAttribute('color', '#ffffff');
+    text.setAttribute('width', '3.5');
+    text.setAttribute('position', '0 0 0.02');
+    button.appendChild(text);
+
+    button.addEventListener('click', (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      this._switchModelGizmoMode(mode);
+    });
+    gizmo.appendChild(button);
+  }
+
+  _createModelPositionGizmo(gizmo, id) {
+    const arrows = [
+      { axis: 'x+', pos: '1 0 0', rot: '0 0 -90', color: '#ff3b30' },
+      { axis: 'x-', pos: '-1 0 0', rot: '0 0 90', color: '#b71c1c' },
+      { axis: 'y+', pos: '0 1 0', rot: '0 0 0', color: '#34c759' },
+      { axis: 'y-', pos: '0 -1 0', rot: '0 0 180', color: '#1b5e20' },
+      { axis: 'z+', pos: '0 0 1', rot: '90 0 0', color: '#0a84ff' },
+      { axis: 'z-', pos: '0 0 -1', rot: '-90 0 0', color: '#0d47a1' },
+    ];
+
+    arrows.forEach(({ axis, pos, rot, color }) => {
+      const arrow = document.createElement('a-cone');
+      arrow.setAttribute('position', pos);
+      arrow.setAttribute('rotation', rot);
+      arrow.setAttribute('radius-bottom', '0.12');
+      arrow.setAttribute('height', '0.55');
+      arrow.setAttribute('material', `color: ${color}; opacity: 0.95`);
+      arrow.setAttribute('data-axis', axis);
+      arrow.setAttribute('data-hotspot-id', id);
+      arrow.setAttribute('data-gizmo-mode', 'position');
+      arrow.classList.add('clickable', 'model-transform-handle', 'model-transform-position');
+      arrow.addEventListener('click', (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
+        this._handleModelGizmoClick(id, axis, 'position');
+      });
+      gizmo.appendChild(arrow);
+    });
+  }
+
+  _createModelRotationGizmo(gizmo, id) {
+    const rings = [
+      { axis: 'x', rot: '0 0 90', color: '#ff3b30' },
+      { axis: 'y', rot: '0 0 0', color: '#34c759' },
+      { axis: 'z', rot: '90 0 0', color: '#0a84ff' },
+    ];
+
+    rings.forEach(({ axis, rot, color }) => {
+      const ring = document.createElement('a-torus');
+      ring.setAttribute('position', '0 0 0');
+      ring.setAttribute('rotation', rot);
+      ring.setAttribute('radius', '1.15');
+      ring.setAttribute('radius-tubular', '0.045');
+      ring.setAttribute('material', `color: ${color}; opacity: 0.7`);
+      ring.setAttribute('visible', 'false');
+      ring.setAttribute('data-axis', axis);
+      ring.setAttribute('data-hotspot-id', id);
+      ring.setAttribute('data-gizmo-mode', 'rotation');
+      ring.classList.add('clickable', 'model-transform-handle', 'model-transform-rotation');
+      ring.addEventListener('click', (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
+        this._handleModelGizmoClick(id, axis, 'rotation');
+      });
+      gizmo.appendChild(ring);
+    });
+  }
+
+  _switchModelGizmoMode(mode) {
+    const gizmo = this._modelTransformGizmo;
+    if (!gizmo) return;
+    const nextMode = mode === 'rotation' ? 'rotation' : 'position';
+    this._modelTransformMode = nextMode;
+    gizmo.setAttribute('data-gizmo-mode', nextMode);
+
+    gizmo.querySelectorAll('.model-transform-position').forEach((el) => {
+      el.setAttribute('visible', nextMode === 'position' ? 'true' : 'false');
+    });
+    gizmo.querySelectorAll('.model-transform-rotation').forEach((el) => {
+      el.setAttribute('visible', nextMode === 'rotation' ? 'true' : 'false');
+    });
+    gizmo.querySelectorAll('.model-transform-mode-button').forEach((el) => {
+      const isActive = el.getAttribute('data-gizmo-mode-button') === nextMode;
+      el.setAttribute(
+        'material',
+        `shader: flat; color: ${isActive ? '#00897b' : '#263238'}; opacity: 0.92; side: double`
+      );
+    });
+
+    const label = gizmo.querySelector('.model-transform-mode-label');
+    if (label) label.setAttribute('value', nextMode === 'rotation' ? 'ROTATE' : 'MOVE');
+  }
+
+  _handleModelGizmoClick(id, axis, mode) {
+    const hotspot = this.hotspots.find((h) => h.id === id && h.type === 'model');
+    if (!hotspot) {
+      this._hideModelTransformGizmo();
+      return;
+    }
+
+    if (mode === 'rotation') {
+      this._rotateModelHotspotByAxis(hotspot, axis);
+    } else {
+      this._moveModelHotspotByAxis(hotspot, axis);
+    }
+
+    this._syncModelTransformGizmo(id);
+    this._syncOpenModelEditDialog(hotspot);
+    this.saveScenesData();
+    this.updateHotspotList();
+  }
+
+  _moveModelHotspotByAxis(hotspot, axis) {
+    const step = 0.5;
+    const [x = 0, y = 0, z = 0] = String(hotspot.position || '0 0 0')
+      .split(/\s+/)
+      .map((value) => parseFloat(value));
+    const next = {
+      x: isFinite(x) ? x : 0,
+      y: isFinite(y) ? y : 0,
+      z: isFinite(z) ? z : 0,
+    };
+
+    if (axis === 'x+') next.x += step;
+    if (axis === 'x-') next.x -= step;
+    if (axis === 'y+') next.y += step;
+    if (axis === 'y-') next.y -= step;
+    if (axis === 'z+') next.z += step;
+    if (axis === 'z-') next.z -= step;
+
+    const nextPosition = `${next.x.toFixed(2)} ${next.y.toFixed(2)} ${next.z.toFixed(2)}`;
+    hotspot.position = nextPosition;
+    const sceneHotspot = (this.scenes[this.currentScene].hotspots || []).find(
+      (h) => h.id === hotspot.id
+    );
+    if (sceneHotspot) sceneHotspot.position = nextPosition;
+
+    const el = document.getElementById(`hotspot-${hotspot.id}`);
+    if (el) el.setAttribute('position', nextPosition);
+  }
+
+  _rotateModelHotspotByAxis(hotspot, axis) {
+    const step = 15;
+    const normalize = (value) => ((value % 360) + 360) % 360;
+
+    hotspot.modelRotationX = normalize(
+      (typeof hotspot.modelRotationX === 'number' ? hotspot.modelRotationX : 0) +
+        (axis === 'x' ? step : 0)
+    );
+    hotspot.modelRotationY = normalize(
+      (typeof hotspot.modelRotationY === 'number' ? hotspot.modelRotationY : 0) +
+        (axis === 'y' ? step : 0)
+    );
+    hotspot.modelRotationZ = normalize(
+      (typeof hotspot.modelRotationZ === 'number' ? hotspot.modelRotationZ : 0) +
+        (axis === 'z' ? step : 0)
+    );
+
+    const sceneHotspot = (this.scenes[this.currentScene].hotspots || []).find(
+      (h) => h.id === hotspot.id
+    );
+    if (sceneHotspot) {
+      sceneHotspot.modelRotationX = hotspot.modelRotationX;
+      sceneHotspot.modelRotationY = hotspot.modelRotationY;
+      sceneHotspot.modelRotationZ = hotspot.modelRotationZ;
+    }
+
+    this._applyModelTransformInPlace(hotspot);
+  }
+
+  _syncModelTransformGizmo(id) {
+    const gizmo = this._modelTransformGizmo;
+    if (!gizmo || this._modelTransformHotspotId !== id) return;
+    const hotspot = this.hotspots.find((h) => h.id === id);
+    const hotspotEl = document.getElementById(`hotspot-${id}`);
+    if (hotspot || hotspotEl) {
+      gizmo.setAttribute('position', this._getModelTransformGizmoPosition(hotspot, hotspotEl));
+    }
+  }
+
+  _syncOpenModelEditDialog(hotspot) {
+    const position = String(hotspot.position || '0 0 0').split(/\s+/).map((value) => parseFloat(value));
+    const fields = [
+      ['edit-position-x', position[0]],
+      ['edit-position-y', position[1]],
+      ['edit-position-z', position[2]],
+      ['edit-model-rotation-x', hotspot.modelRotationX],
+      ['edit-model-rotation-y', hotspot.modelRotationY],
+      ['edit-model-rotation-z', hotspot.modelRotationZ],
+    ];
+    fields.forEach(([id, value]) => {
+      const input = document.getElementById(id);
+      if (input && typeof value === 'number' && isFinite(value)) input.value = String(value);
+    });
   }
 
   showTemporaryMessage(message, duration = 2000) {
@@ -6448,6 +6794,7 @@ class HotspotEditor {
 
   showEditHotspotDialog(id) {
     this.hideModelHotspotActionMenu();
+    this._hideModelTransformGizmo();
     const hotspot = this.hotspots.find((h) => h.id === id);
     if (!hotspot) return;
 
@@ -7791,6 +8138,7 @@ class HotspotEditor {
 
   startReposition(id) {
     this.hideModelHotspotActionMenu();
+    this._hideModelTransformGizmo();
     this.repositioningHotspotId = id;
     this._repositionArmTime = Date.now();
     this.showRepositionNotice();
@@ -7970,6 +8318,8 @@ class HotspotEditor {
 
     if (!confirm('Delete this hotspot?')) return false;
 
+    if (this._modelTransformHotspotId === id) this._hideModelTransformGizmo();
+
     this.hotspots = this.hotspots.filter((h) => h.id !== id);
 
     if (this.scenes[this.currentScene]?.hotspots) {
@@ -7996,6 +8346,7 @@ class HotspotEditor {
     if (this.hotspots.length === 0) return;
 
     if (confirm('Clear all hotspots?')) {
+      this._hideModelTransformGizmo();
       this.hotspots.forEach((hotspot) => {
         const hotspotEl = document.getElementById(`hotspot-${hotspot.id}`);
         if (hotspotEl) {
@@ -12415,6 +12766,7 @@ class HotspotProject {
       console.warn(\`Scene \${sceneId} not found\`);
       return;
     }
+    if (typeof this._hideModelTransformGizmo === 'function') this._hideModelTransformGizmo();
     try {
       _flatVideoScene360PauseCount = 0;
       var sceneVideoReset = document.getElementById('scene-video-dynamic');
@@ -15652,6 +16004,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (this.navigationMode) {
       this.hideModelHotspotActionMenu();
+      this._hideModelTransformGizmo();
       editModeIndicator.style.display = 'none';
       if (instructionsContent) {
         instructionsContent.innerHTML =

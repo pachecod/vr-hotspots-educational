@@ -5309,7 +5309,7 @@ class HotspotEditor {
 
     if (data.type === 'model') {
       setTimeout(() => this.ensureInSceneEditButtons(hotspotEl, data), 150);
-    } else if (data.type !== 'navigation' && data.type !== 'weblink') {
+    } else {
       this.ensureInSceneEditButtons(hotspotEl, data);
       if (data.type === 'image' && data.mediaKind === 'video') {
         setTimeout(() => this.ensureInSceneEditButtons(hotspotEl, data), 600);
@@ -5502,7 +5502,9 @@ class HotspotEditor {
     if (!hotspotEl.inSceneButtonContainer) {
       this.addInSceneEditButton(hotspotEl, hotspotData);
     }
-    this._bindInSceneRevealOnMedia(hotspotEl);
+    if (hotspotData.type === 'image') {
+      this._bindInSceneRevealOnMedia(hotspotEl);
+    }
     this._refreshInSceneEditButtonMaterials(hotspotEl);
     this._bringInSceneEditButtonsToFront(hotspotEl);
     if (hotspotEl._repositionEditButtons) hotspotEl._repositionEditButtons();
@@ -5555,45 +5557,71 @@ class HotspotEditor {
   }
 
   _bringInSceneEditButtonsToFront(hotspotEl) {
+    const hint = hotspotEl?.inSceneHintEl;
     const container = hotspotEl?.inSceneButtonContainer;
-    if (container && container.parentNode === hotspotEl) {
-      hotspotEl.appendChild(container);
-    }
+    if (hint && hint.parentNode === hotspotEl) hotspotEl.appendChild(hint);
+    if (container && container.parentNode === hotspotEl) hotspotEl.appendChild(container);
   }
 
-  _computeImageHotspotEditButtonY(hotspotEl, data) {
+  _getMediaTopY(hotspotEl, data) {
     const media =
-      hotspotEl.querySelector('.static-image-hotspot') ||
-      hotspotEl.querySelector('.static-video-hotspot');
-    let scl = typeof data?.imageScale === 'number' ? data.imageScale : 1;
-    let bottomY = -0.25 * scl;
+      hotspotEl?.querySelector('.static-image-hotspot') ||
+      hotspotEl?.querySelector('.static-video-hotspot');
+    let scl =
+      typeof data?.imageScale === 'number' && data.imageScale > 0 ? data.imageScale : 1;
+    let ratio =
+      typeof data?.imageAspectRatio === 'number' && data.imageAspectRatio > 0
+        ? data.imageAspectRatio
+        : 1;
+
     if (media) {
+      const mediaH = parseFloat(media.getAttribute('height') || '');
+      if (Number.isFinite(mediaH) && mediaH > 0) ratio = mediaH;
+      const ar = parseFloat(media.dataset?.aspectRatio || '');
+      if ((!Number.isFinite(mediaH) || mediaH <= 0) && Number.isFinite(ar) && ar > 0) {
+        ratio = ar;
+      }
+
       const pos = media.getAttribute('position');
-      const posStr =
-        typeof pos === 'string' ? pos : pos && typeof pos === 'object' ? `${pos.x} ${pos.y} ${pos.z}` : '0 0 0';
-      const mediaH = parseFloat(media.getAttribute('height') || '1');
-      const posParts = posStr.trim().split(/\s+/);
-      const centerY = parseFloat(posParts[1] || '0');
+      let centerY = null;
+      if (typeof pos === 'string') {
+        centerY = parseFloat(pos.trim().split(/\s+/)[1]);
+      } else if (pos && typeof pos === 'object') {
+        centerY = pos.y;
+      }
+
       const scaleAttr = media.getAttribute('scale');
       if (scaleAttr) {
         const scaleParts =
           typeof scaleAttr === 'object'
             ? [scaleAttr.x, scaleAttr.y, scaleAttr.z]
             : String(scaleAttr).trim().split(/\s+/);
-        const sx = parseFloat(scaleParts[0] || '1');
-        if (Number.isFinite(sx) && sx > 0) scl = sx;
+        const sy = parseFloat(scaleParts[1] || scaleParts[0] || '1');
+        if (Number.isFinite(sy) && sy > 0) scl = sy;
       }
-      if (Number.isFinite(mediaH) && Number.isFinite(centerY)) {
-        bottomY = centerY - (mediaH * scl) / 2;
+
+      if (Number.isFinite(centerY)) {
+        return centerY + (ratio * scl) / 2;
       }
     }
-    const hasPlayControl = !!hotspotEl.querySelector('.video-play-control');
-    if (hasPlayControl) {
-      const playControlY = -0.35;
-      return Math.min(bottomY - 0.12, playControlY - 0.28);
-    }
-    const y = bottomY - 0.15;
-    return Number.isFinite(y) ? y : -0.45;
+
+    // Fallback before async media mount (video billboards mount after hotspot creation).
+    return ratio * scl;
+  }
+
+  _computeImageHotspotControlsLayout(hotspotEl, data) {
+    const topY = this._getMediaTopY(hotspotEl, data);
+    const gap = 0.14;
+    const buttonHalf = 0.14;
+    const hintHalf = 0.16;
+    const rowGap = 0.1;
+    const buttonsY = topY + gap + buttonHalf;
+    const hintY = buttonsY + buttonHalf + rowGap + hintHalf;
+    return { topY, buttonsY, hintY };
+  }
+
+  _computeImageHotspotEditButtonY(hotspotEl, data) {
+    return this._computeImageHotspotControlsLayout(hotspotEl, data).buttonsY;
   }
 
   // Build a self-contained icon button mesh (own PlaneGeometry + MeshBasicMaterial).
@@ -5646,6 +5674,35 @@ class HotspotEditor {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.frustumCulled = false;
     mesh.renderOrder = 9;
+    return mesh;
+  }
+
+  _createHintTextMesh(text, width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 192;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 128px Arial, Helvetica, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - 48);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 11;
     return mesh;
   }
 
@@ -5770,8 +5827,14 @@ class HotspotEditor {
       hotspotEl._inSceneRevealMediaEl = media;
     }
 
-    if (hint && !hint._inSceneRevealHandler) {
-      this._bindInSceneRevealClick(hint, hotspotEl);
+    if (hint) {
+      const hintTargets = [
+        hint.querySelector('.in-scene-edit-hint-bg'),
+        hint.querySelector('.in-scene-edit-hint-label'),
+      ].filter(Boolean);
+      (hintTargets.length ? hintTargets : [hint]).forEach((el) => {
+        if (!el._inSceneRevealHandler) this._bindInSceneRevealClick(el, hotspotEl);
+      });
     }
   }
 
@@ -5784,27 +5847,43 @@ class HotspotEditor {
       this._bringInSceneEditButtonsToFront(hotspotEl);
       if (hotspotEl._repositionEditButtons) hotspotEl._repositionEditButtons();
       this._refreshInSceneEditButtonMaterials(hotspotEl);
-      this._bindInSceneRevealOnMedia(hotspotEl);
+      // Click-to-reveal binding only applies to image/video hotspots.
+      if (data && data.type === 'image') this._bindInSceneRevealOnMedia(hotspotEl);
       return;
     }
 
+    const isImageHotspot = data && data.type === 'image';
+    const isAudioHotspot =
+      data && (data.type === 'audio' || data.type === 'text-audio');
+
     // Create container for both buttons (parent hotspot already uses face-camera)
+    // Image/video hotspots reposition the row above the media; audio hotspots sit
+    // just above the play button; all other types keep the standard below-marker row.
     const buttonContainer = document.createElement('a-entity');
     buttonContainer.setAttribute('class', 'in-scene-edit-controls');
-    buttonContainer.setAttribute('position', '0 -0.45 0.45');
+    if (isImageHotspot) {
+      buttonContainer.setAttribute('position', '0 0.45 0.45');
+    } else if (isAudioHotspot) {
+      buttonContainer.setAttribute('position', '0 -0.12 0.45');
+    } else {
+      buttonContainer.setAttribute('position', '0 -0.45 0.45');
+    }
     const buttonPlaneMaterial =
       'shader: flat; transparent: true; depthTest: false; depthWrite: false; side: double';
+
+    const editBtnX = isAudioHotspot ? -0.17 : -0.15;
+    const moveBtnX = isAudioHotspot ? 0.17 : 0.15;
 
     // EDIT BUTTON — a-entity with a self-owned mesh (see _createIconButtonMesh).
     const editButton = document.createElement('a-entity');
     editButton.setAttribute('class', 'in-scene-edit-btn clickable');
-    editButton.setAttribute('position', '-0.15 0 0.01');
+    editButton.setAttribute('position', `${editBtnX} 0 0.01`);
     editButton.setAttribute('visible', 'true');
 
     // MOVE BUTTON
     const moveButton = document.createElement('a-entity');
     moveButton.setAttribute('class', 'in-scene-move-btn clickable');
-    moveButton.setAttribute('position', '0.15 0 0.01');
+    moveButton.setAttribute('position', `${moveBtnX} 0 0.01`);
     moveButton.setAttribute('visible', 'true');
 
     // Add buttons to container
@@ -5881,84 +5960,132 @@ class HotspotEditor {
     // Store reference for easy access
     hotspotEl.inSceneButtonContainer = buttonContainer;
 
-    // Hint label shown under the media prompting the click-to-reveal interaction.
-    const hint = document.createElement('a-entity');
-    hint.setAttribute('class', 'in-scene-edit-hint');
-    hint.setAttribute('position', '0 -0.45 0.44');
-    hint.setAttribute(
-      'text',
-      'value: Click to edit or move; align: center; color: #FFFFFF; width: 1.8; baseline: center; wrapCount: 22'
-    );
-    hint.setAttribute('visible', 'false');
-    hotspotEl.appendChild(hint);
-    this._attachIconButtonMesh(hint, this._createHintBackgroundMesh(1.86, 0.3));
-    const styleHintText = () => {
-      const t = hint.getObject3D('text');
-      if (t) {
-        t.renderOrder = 11;
-        t.frustumCulled = false;
-        if (t.material) {
-          t.material.depthTest = false;
-          t.material.depthWrite = false;
+    if (isImageHotspot) {
+      // Click-to-reveal model (image/video only): a "Click to edit or move" hint shows
+      // in edit mode, and the Edit/Move buttons stay hidden until the user clicks the
+      // media or hint. This avoids the controls covering the image content.
+      const hint = document.createElement('a-entity');
+      hint.setAttribute('class', 'in-scene-edit-hint');
+      hint.setAttribute('position', '0 0.45 0.44');
+      hint.setAttribute('visible', 'false');
+      hotspotEl.appendChild(hint);
+
+      const hintBg = document.createElement('a-entity');
+      hintBg.setAttribute('class', 'in-scene-edit-hint-bg');
+      this._attachIconButtonMesh(hintBg, this._createHintBackgroundMesh(1.86, 0.3));
+      hint.appendChild(hintBg);
+
+      const hintLabel = document.createElement('a-entity');
+      hintLabel.setAttribute('class', 'in-scene-edit-hint-label');
+      hintLabel.setAttribute('position', '0 0 0.005');
+      this._attachIconButtonMesh(
+        hintLabel,
+        this._createHintTextMesh('Click to edit or move', 1.62, 0.22)
+      );
+      hint.appendChild(hintLabel);
+
+      const styleHintText = () => {
+        const t = hintLabel.getObject3D('mesh');
+        if (t) {
+          t.renderOrder = 11;
+          t.frustumCulled = false;
+          if (t.material) {
+            t.material.depthTest = false;
+            t.material.depthWrite = false;
+            t.material.needsUpdate = true;
+          }
         }
-      }
-    };
-    hint.addEventListener('object3dset', (e) => {
-      if (!e.detail || e.detail.type === 'text') styleHintText();
-    });
-    styleHintText();
-    hotspotEl.inSceneHintEl = hint;
+        const bgMesh = hintBg.getObject3D('mesh');
+        if (bgMesh) {
+          bgMesh.renderOrder = 9;
+          bgMesh.frustumCulled = false;
+        }
+      };
+      hintLabel.addEventListener('object3dset', (e) => {
+        if (!e.detail || e.detail.type === 'mesh') styleHintText();
+      });
+      hintBg.addEventListener('object3dset', styleHintText);
+      hintLabel.addEventListener('loaded', styleHintText, { once: true });
+      styleHintText();
+      hotspotEl.inSceneHintEl = hint;
 
-    // Click-to-reveal model: buttons stay hidden until the user clicks the photo/video,
-    // then they appear so the user can pick Edit or Move. They never auto-show, which
-    // also sidesteps the lifecycle/visibility races that made them flash and vanish.
-    const syncButtonVisibility = () => {
-      const show = !this.navigationMode && this._activeInSceneHotspotEl === hotspotEl;
-      buttonContainer.setAttribute('visible', show ? 'true' : 'false');
-      if (buttonContainer.object3D) buttonContainer.object3D.visible = show;
-      this._syncInSceneHint(hotspotEl);
-    };
+      const syncButtonVisibility = () => {
+        const show = !this.navigationMode && this._activeInSceneHotspotEl === hotspotEl;
+        buttonContainer.setAttribute('visible', show ? 'true' : 'false');
+        if (buttonContainer.object3D) buttonContainer.object3D.visible = show;
+        this._syncInSceneHint(hotspotEl);
+      };
 
-    // Update visibility when edit mode changes
-    hotspotEl.updateEditButtonVisibility = () => {
-      // Leaving edit mode should also clear any open button set.
-      if (this.navigationMode && this._activeInSceneHotspotEl === hotspotEl) {
-        this._activeInSceneHotspotEl = null;
-      }
+      hotspotEl.updateEditButtonVisibility = () => {
+        // Leaving edit mode should also clear any open button set.
+        if (this.navigationMode && this._activeInSceneHotspotEl === hotspotEl) {
+          this._activeInSceneHotspotEl = null;
+        }
+        syncButtonVisibility();
+      };
+
       syncButtonVisibility();
-    };
 
-    syncButtonVisibility();
+      // Reveal this hotspot's buttons when its media or hint label is clicked.
+      this._bindInSceneRevealOnMedia(hotspotEl);
 
-    // Reveal this hotspot's buttons when its media or hint label is clicked.
-    this._bindInSceneRevealOnMedia(hotspotEl);
+      // Hide these buttons once an action is chosen.
+      editButton.addEventListener('click', () => this.hideInSceneButtons(hotspotEl));
+      moveButton.addEventListener('click', () => this.hideInSceneButtons(hotspotEl));
+    } else {
+      // Original behavior for text/audio/portal hotspots: edit/move buttons are simply
+      // shown whenever in edit mode (no hint, no click-to-reveal).
+      const syncButtonVisibility = () => {
+        const show = !this.navigationMode;
+        buttonContainer.setAttribute('visible', show ? 'true' : 'false');
+        if (buttonContainer.object3D) buttonContainer.object3D.visible = show;
+      };
+      hotspotEl.updateEditButtonVisibility = () => syncButtonVisibility();
+      syncButtonVisibility();
+    }
 
-    // Hide these buttons once an action is chosen.
-    editButton.addEventListener('click', () => this.hideInSceneButtons(hotspotEl));
-    moveButton.addEventListener('click', () => this.hideInSceneButtons(hotspotEl));
-
-    // If this is an image or video hotspot, place buttons below the media (in front of the plane)
+    // If this is an image or video hotspot, place hint + buttons above the media
     if (data.type === 'image') {
       const adjustButtons = () => {
         try {
-          const buttonY = this._computeImageHotspotEditButtonY(hotspotEl, data);
-          buttonContainer.setAttribute('position', `0 ${buttonY} 0.45`);
+          const idStr = hotspotEl.id || '';
+          const id = idStr.startsWith('hotspot-') ? parseInt(idStr.slice(8), 10) : NaN;
+          const liveData = Number.isFinite(id)
+            ? this.hotspots.find((h) => h && h.id === id)
+            : null;
+          const { buttonsY, hintY } = this._computeImageHotspotControlsLayout(
+            hotspotEl,
+            liveData || data
+          );
+          buttonContainer.setAttribute('position', `0 ${buttonsY} 0.5`);
           if (hotspotEl.inSceneHintEl) {
-            hotspotEl.inSceneHintEl.setAttribute('position', `0 ${buttonY} 0.44`);
+            hotspotEl.inSceneHintEl.setAttribute('position', `0 ${hintY} 0.5`);
           }
         } catch (e) {
           /* silent */
         }
       };
       adjustButtons();
-      const media =
-        hotspotEl.querySelector('.static-image-hotspot') ||
-        hotspotEl.querySelector('.static-video-hotspot');
-      if (media) {
+      const bindMediaReposition = () => {
+        const media =
+          hotspotEl.querySelector('.static-image-hotspot') ||
+          hotspotEl.querySelector('.static-video-hotspot');
+        if (!media || hotspotEl._editControlsRepositionMediaEl === media) return;
+        hotspotEl._editControlsRepositionMediaEl = media;
         media.addEventListener('loaded', () => setTimeout(adjustButtons, 20));
         media.addEventListener('loadeddata', () => setTimeout(adjustButtons, 20), { once: true });
-      }
-      hotspotEl._repositionEditButtons = adjustButtons;
+        media.addEventListener('materialtextureloaded', () => setTimeout(adjustButtons, 20), {
+          once: true,
+        });
+        media.addEventListener('materialvideoloadeddata', () => setTimeout(adjustButtons, 20), {
+          once: true,
+        });
+      };
+      bindMediaReposition();
+      hotspotEl._repositionEditButtons = () => {
+        adjustButtons();
+        bindMediaReposition();
+      };
       this._bringInSceneEditButtonsToFront(hotspotEl);
       requestAnimationFrame(() => this._refreshInSceneEditButtonMaterials(hotspotEl));
     }

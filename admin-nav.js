@@ -6,7 +6,7 @@ function renderAdminNav(activeTab) {
     { id: 'home', label: 'Overview', href: '/admin' },
     { id: 'submissions', label: 'Submissions', href: 'admin-submissions.html' },
     { id: 'assets', label: 'Assets', href: 'admin-common-assets.html' },
-    { id: 'snippets', label: 'Editor', href: 'admin-snippets.html' },
+    { id: 'snippets', label: 'Editor Settings', href: 'admin-snippets.html' },
     { id: 'templates', label: 'Templates', href: 'admin-templates.html' },
     { id: 'users', label: 'Users', href: 'admin-users.html' },
     { id: 'billing', label: 'Billing & Limits', href: 'admin-billing.html' },

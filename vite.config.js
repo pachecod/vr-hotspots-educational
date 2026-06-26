@@ -35,6 +35,8 @@ export default defineConfig({
         adminBilling: resolve(__dirname, 'admin-billing.html'),
         adminSubmissions: resolve(__dirname, 'admin-submissions.html'),
         adminReview: resolve(__dirname, 'admin-review.html'),
+        adminSnippets: resolve(__dirname, 'admin-snippets.html'),
+        adminTemplates: resolve(__dirname, 'admin-templates.html'),
         styleEditor: resolve(__dirname, 'style-editor.html'),
       },
     },

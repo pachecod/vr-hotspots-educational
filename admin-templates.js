@@ -116,4 +116,14 @@ document.getElementById('template-list').addEventListener('click', async (e) => 
   }
 });
 
-requireAdminSession('login-root', loadTemplates);
+function initMainApp() {
+  document.getElementById('login-root').innerHTML = '';
+  document.getElementById('main-content').style.display = 'block';
+  renderAdminNav('templates');
+  loadTemplates().catch((err) => {
+    if (err.code === 'AUTH_REQUIRED') location.reload();
+    else alert(err.message || 'Failed to load templates');
+  });
+}
+
+requireAdminSession('login-root', initMainApp);

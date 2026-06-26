@@ -5,6 +5,7 @@
 const path = require('path');
 const fs = require('fs');
 const { slugify } = require('../services/db-service');
+const { writeTourQrPng, tourUrlToQrUrl } = require('../services/qr-service');
 const { requireStudentStrict } = require('../student-auth');
 
 const HOSTED_DIR = path.join(process.cwd(), 'hosted-projects');
@@ -50,7 +51,9 @@ function registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDir
       }
 
       const url = `${getServerBaseUrl(req)}/hosted/${hostedPath}/index.html`;
-      res.json({ success: true, url, hostedPath, hostedUrl: url });
+      await writeTourQrPng(targetDir, url);
+      const qrUrl = tourUrlToQrUrl(url);
+      res.json({ success: true, url, hostedPath, hostedUrl: url, qrUrl });
     } catch (err) {
       console.error('VR tour publish error:', err);
       res.status(500).json({ success: false, message: err.message || 'Publish failed' });

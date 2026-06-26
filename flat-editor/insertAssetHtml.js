@@ -117,7 +117,7 @@ export function buildInsertHtml(category, asset) {
       }
 
     case 'project-vr':
-      return buildProjectVrInsertHtml(asset?.name, asset?.embedUrl || asset?.url);
+      return buildProjectVrInsertHtml(asset?.name, asset?.embedUrl || asset?.url, asset?.qrUrl);
 
     default:
       return `<a href="${urlAttr}" target="_blank" rel="noopener noreferrer">${name}</a>`;

@@ -13323,164 +13323,10 @@ class HotspotProject {
     this.hideVideoControls();
 
     // (runtime) no editor hotspot list or id counter to manage
-    
-    // Prefer preloaded asset if available for instant swap
-    const preloadedId = 'asset-panorama-' + sceneId;
-    const preImg = document.getElementById(preloadedId);
-    
-    // Update scene image (fallback path)
-    const imagePath = this.getSceneImagePath(scene.image, sceneId);
-  console.log('Setting panorama src to: ' + (preImg ? ('#' + preloadedId) : imagePath));
-    
-    if (preImg) {
-      // Use the preloaded asset without network load
-      skybox.setAttribute('visible', 'false');
-      setTimeout(() => {
-        skybox.setAttribute('src', '#' + preloadedId);
-        const loadingEnvironment = document.getElementById('loading-environment');
-        if (loadingEnvironment) {
-          loadingEnvironment.setAttribute('visible', 'false');
-        }
-        skybox.setAttribute('visible', 'true');
-        
-  // (runtime) do not persist scenes to localStorage
 
-        console.log('Skybox texture updated from preloaded asset:', preloadedId);
-        
-        // Create hotspots after skybox is updated
-        const container = document.getElementById('hotspot-container');
-        container.innerHTML = '';
-        this.createHotspots(scene.hotspots);
-        this.resumeSceneHotspotVideos(scene);
-        console.log('Hotspots created');
-        
-        // Load ground for this scene
-        this.loadGround(sceneId);
-        
-        // Apply starting point if available, then signal scene loaded
-        setTimeout(() => {
-          this.applyStartingPoint(scene);
-
-          setTimeout(() => {
-            this.playCurrentGlobalSound();
-          }, 500);
-
-          try {
-            const ev = new CustomEvent('vrhotspots:scene-loaded');
-            window.dispatchEvent(ev);
-          } catch (e) {}
-        }, 100);
-
-        // Hide the loading indicator
-        this.hideLoadingIndicator();
-        
-        // Hide video controls for image scenes
-        this.hideVideoControls();
-      }, 100);
-      
-      this.currentScene = sceneId;
-      return;
-    }
-    
-    // Use a timestamp as a cache buster
-    const cacheBuster = Date.now();
-    const imagePathWithCache = imagePath + '?t=' + cacheBuster;
-    
-    // Create a new unique ID for this panorama
-    const uniqueId = 'panorama-' + cacheBuster;
-    
-    // Create a completely new method that's more reliable across browsers
-    // First, create a new image element that's not attached to the DOM yet
-    const preloadImage = new Image();
-    
-    // Set up loading handlers before setting src
-    preloadImage.onload = () => {
-      console.log('New panorama loaded successfully');
-      
-      // Now we know the image is loaded, create the actual element for A-Frame
-      const newPanorama = document.createElement('img');
-      newPanorama.id = uniqueId;
-      newPanorama.src = imagePathWithCache;
-      newPanorama.crossOrigin = 'anonymous'; // Important for some browsers
-      
-      // Get the assets container
-      const assets = document.querySelector('a-assets');
-      
-      // Add new panorama element to assets
-      assets.appendChild(newPanorama);
-      
-      // Temporarily hide the skybox while changing its texture
-      skybox.setAttribute('visible', 'false');
-      
-      // Force A-Frame to recognize the asset change
-      setTimeout(() => {
-        // Update to new texture
-        skybox.setAttribute('src', '#' + uniqueId);
-        
-        // Hide loading environment and show the actual scene
-        const loadingEnvironment = document.getElementById('loading-environment');
-        if (loadingEnvironment) {
-          loadingEnvironment.setAttribute('visible', 'false');
-        }
-        skybox.setAttribute('visible', 'true');
-        
-        console.log('Skybox texture updated with ID:', uniqueId);
-        
-        // Create hotspots after skybox is updated
-        const container = document.getElementById('hotspot-container');
-        container.innerHTML = '';
-        this.createHotspots(scene.hotspots);
-        this.resumeSceneHotspotVideos(scene);
-        console.log('Hotspots created');
-        
-        // Load ground for this scene
-        this.loadGround(sceneId);
-        
-        // Apply starting point if available, then signal scene loaded
-        setTimeout(() => {
-          this.applyStartingPoint(scene);
-
-          setTimeout(() => {
-            this.playCurrentGlobalSound();
-          }, 500);
-
-          try {
-            const ev = new CustomEvent('vrhotspots:scene-loaded');
-            window.dispatchEvent(ev);
-          } catch (e) {}
-        }, 100);
-
-        // Hide the loading indicator
-        this.hideLoadingIndicator();
-        
-        // Hide video controls for image scenes
-        this.hideVideoControls();
-      }, 100);
-    };
-    
-    // Handle load errors
-    preloadImage.onerror = () => {
-      console.error(\`Failed to load panorama: \${imagePath}\`);
-      this.showErrorMessage(\`Failed to load scene image for "\${scene.name}". Please check if the image exists at \${imagePath}\`);
-      
-      // Hide loading environment and show fallback
-      const loadingEnvironment = document.getElementById('loading-environment');
-      if (loadingEnvironment) {
-        loadingEnvironment.setAttribute('visible', 'false');
-      }
-      
-      // Fallback to default image
-      skybox.setAttribute('src', '#main-panorama');
-      skybox.setAttribute('visible', 'true');
-      this.hideLoadingIndicator();
-    };
-    
-    // Start loading the image
-    preloadImage.src = imagePathWithCache;
-    
-    // We've replaced this with the preloadImage.onerror handler above
-    
-    this.currentScene = sceneId;
+    const panoramaUrl = this._resolvePanoramaUrl(scene, sceneId);
+    console.log('Setting panorama src to: ' + panoramaUrl);
+    this._setSkyboxPanoramaUrl(skybox, panoramaUrl, scene, sceneId);
   }
 
   configureSceneVideoCrossOrigin(videoEl) {
@@ -13893,9 +13739,16 @@ class HotspotProject {
   }
 
   getSceneImagePath(imagePath, sceneId) {
+    if (!imagePath || typeof imagePath !== 'string') {
+      return \`./images/\${sceneId}.jpg\`;
+    }
     // If it's a URL (http:// or https://), use it directly
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
       return imagePath;
+    }
+    // Runtime/editor URLs should not be used in the exported viewer — use bundled file
+    if (imagePath.startsWith('blob:') || imagePath.startsWith('#')) {
+      return \`./images/\${sceneId}.jpg\`;
     }
     // If it's already a proper path starting with ./images/, use it directly
     else if (imagePath.startsWith('./images/')) {
@@ -13909,6 +13762,93 @@ class HotspotProject {
     else {
       return \`./images/\${imagePath}\`;
     }
+  }
+
+  _resolvePanoramaUrl(scene, sceneId) {
+    const imagePath = this.getSceneImagePath(scene.image, sceneId);
+    const preloadedId = 'asset-panorama-' + sceneId;
+    const preImg = document.getElementById(preloadedId);
+    if (preImg && preImg.complete && preImg.naturalWidth > 0) {
+      return preImg.currentSrc || preImg.src || imagePath;
+    }
+    return imagePath;
+  }
+
+  _finishImageSceneLoad(skybox, scene, sceneId) {
+    const loadingEnvironment = document.getElementById('loading-environment');
+    if (loadingEnvironment) {
+      loadingEnvironment.setAttribute('visible', 'false');
+    }
+    skybox.setAttribute('visible', 'true');
+    const container = document.getElementById('hotspot-container');
+    container.innerHTML = '';
+    this.createHotspots(scene.hotspots);
+    this.resumeSceneHotspotVideos(scene);
+    this.loadGround(sceneId);
+    setTimeout(() => {
+      this.applyStartingPoint(scene);
+      setTimeout(() => {
+        this.playCurrentGlobalSound();
+      }, 500);
+      try {
+        window.dispatchEvent(new CustomEvent('vrhotspots:scene-loaded'));
+      } catch (e) {}
+    }, 100);
+    this.hideLoadingIndicator();
+    this.hideVideoControls();
+    this.currentScene = sceneId;
+  }
+
+  _setSkyboxPanoramaUrl(skybox, url, scene, sceneId) {
+    const finish = (resolvedUrl) => {
+      if (!resolvedUrl) {
+        this.showErrorMessage('Failed to resolve panorama for "' + (scene.name || sceneId) + '"');
+        const mainImg = document.getElementById('main-panorama');
+        resolvedUrl =
+          mainImg && (mainImg.currentSrc || mainImg.src)
+            ? mainImg.currentSrc || mainImg.src
+            : './images/scene1.jpg';
+      }
+      skybox.setAttribute('visible', 'false');
+      try {
+        const mesh = skybox.getObject3D && skybox.getObject3D('mesh');
+        if (mesh && mesh.material && mesh.material.map) {
+          mesh.material.map.dispose();
+          mesh.material.map = null;
+          mesh.material.needsUpdate = true;
+        }
+      } catch (_) {}
+      skybox.removeAttribute('src');
+      setTimeout(() => {
+        skybox.setAttribute('src', resolvedUrl);
+        let finished = false;
+        const done = () => {
+          if (finished) return;
+          finished = true;
+          skybox.removeEventListener('materialtextureloaded', done);
+          this._finishImageSceneLoad(skybox, scene, sceneId);
+        };
+        skybox.addEventListener('materialtextureloaded', done);
+        setTimeout(done, 8000);
+      }, 50);
+    };
+
+    const tester = new Image();
+    tester.crossOrigin = 'anonymous';
+    tester.onload = () => finish(tester.src);
+    tester.onerror = () => {
+      console.error('Failed to load panorama:', url);
+      this.showErrorMessage(
+        'Failed to load scene image for "' + (scene.name || sceneId) + '". Please check: ' + url
+      );
+      const mainImg = document.getElementById('main-panorama');
+      const fallback =
+        mainImg && (mainImg.currentSrc || mainImg.src)
+          ? mainImg.currentSrc || mainImg.src
+          : './images/scene1.jpg';
+      finish(fallback);
+    };
+    tester.src = url;
   }
 
   loadGround(sceneId) {

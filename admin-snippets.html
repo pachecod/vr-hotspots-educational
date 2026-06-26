@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Editor Settings — VR Hotspots Admin</title>
+    <link rel="stylesheet" href="admin-nav.css" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        color: #333;
+        max-width: 960px;
+      }
+      h1 { margin-bottom: 4px; }
+      .section {
+        margin: 28px 0;
+        padding: 20px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background: #f8f9fa;
+      }
+      .section h2 { margin-top: 0; font-size: 1.15rem; }
+      .hint { color: #666; font-size: 14px; margin-bottom: 16px; }
+      .form-row { margin-bottom: 12px; }
+      .form-row label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 13px; }
+      .form-row input,
+      .form-row select,
+      .form-row textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-family: inherit;
+      }
+      .form-row textarea { min-height: 100px; font-family: monospace; font-size: 13px; }
+      .btn {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .btn-primary { background: #28a745; color: #fff; }
+      .btn-secondary { background: #6c757d; color: #fff; }
+      .btn-danger { background: #dc3545; color: #fff; }
+      .btn-small { padding: 4px 8px; font-size: 12px; }
+      .snippet-list { display: flex; flex-direction: column; gap: 12px; }
+      .snippet-card {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 12px;
+      }
+      .snippet-card-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      .snippet-lang {
+        font-size: 11px;
+        background: #e9ecef;
+        padding: 2px 8px;
+        border-radius: 10px;
+        color: #495057;
+      }
+      .snippet-code {
+        font-family: monospace;
+        font-size: 12px;
+        background: #f1f3f5;
+        padding: 8px;
+        border-radius: 4px;
+        white-space: pre-wrap;
+        max-height: 120px;
+        overflow: auto;
+      }
+      .snippet-actions { display: flex; gap: 6px; margin-left: auto; }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .toggle-row input[type='checkbox'] { width: 18px; height: 18px; }
+      .warn { color: #856404; background: #fff3cd; padding: 10px; border-radius: 4px; font-size: 13px; }
+      .ext-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+      .ext-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 16px;
+        padding: 4px 10px;
+        font-size: 13px;
+      }
+      .status { font-size: 13px; margin-top: 8px; }
+      .status.ok { color: #28a745; }
+      .status.err { color: #dc3545; }
+      #toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #28a745;
+        color: #fff;
+        padding: 12px 18px;
+        border-radius: 6px;
+        display: none;
+        z-index: 10001;
+      }
+    </style>
+    <script src="admin-auth-ui.js"></script>
+    <script src="admin-nav.js"></script>
+  </head>
+  <body>
+    <div id="app-root">
+      <div id="login-root"></div>
+      <div id="main-content" style="display: none">
+        <nav id="admin-nav" data-active="snippets"></nav>
+
+        <h1>Editor Settings</h1>
+        <p class="hint">
+          Manage code snippets, Ridey AI, and blocked file extensions for the flat web page editor.
+        </p>
+
+        <div class="section" id="ridey-section">
+          <h2>Ridey AI Assistant</h2>
+          <p class="hint">
+            When enabled, students see an <strong>Ask Ridey</strong> button in the flat page editor.
+            Set <code>OPENAI_API_KEY</code> in the server environment.
+          </p>
+          <div id="ridey-warn" class="warn" style="display: none">
+            OPENAI_API_KEY is not set on the server. Ridey will not work until it is configured.
+          </div>
+          <div class="toggle-row">
+            <input type="checkbox" id="ridey-enabled" />
+            <label for="ridey-enabled">Enable Ridey for students</label>
+          </div>
+          <div id="ridey-status" class="status"></div>
+        </div>
+
+        <div class="section" id="blocked-section">
+          <h2>Blocked File Extensions</h2>
+          <p class="hint">Uploads and custom flat-page files with these extensions are rejected.</p>
+          <div class="form-row" style="display: flex; gap: 8px; align-items: flex-end">
+            <div style="flex: 1">
+              <label for="new-ext">Add extension</label>
+              <input type="text" id="new-ext" placeholder="e.g. exe" />
+            </div>
+            <button type="button" class="btn btn-secondary" id="add-ext-btn">Add</button>
+          </div>
+          <div id="ext-chips" class="ext-chips"></div>
+          <button type="button" class="btn btn-primary" id="save-ext-btn">Save Blocked Extensions</button>
+          <div id="ext-status" class="status"></div>
+        </div>
+
+        <div class="section" id="snippets-section">
+          <h2>Code Snippets</h2>
+          <p class="hint">Global snippets students can insert from the flat page editor toolbar.</p>
+
+          <div class="form-row">
+            <label for="snippet-title">Title</label>
+            <input type="text" id="snippet-title" placeholder="e.g. Button" />
+          </div>
+          <div class="form-row">
+            <label for="snippet-language">Language</label>
+            <select id="snippet-language">
+              <option value="html">html</option>
+              <option value="css">css</option>
+              <option value="javascript">javascript</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="snippet-code">Code</label>
+            <textarea id="snippet-code" placeholder="<button>Click me</button>"></textarea>
+          </div>
+          <button type="button" class="btn btn-primary" id="add-snippet-btn">Add Snippet</button>
+          <div id="snippet-status" class="status"></div>
+
+          <h3 style="margin-top: 24px">Existing Snippets</h3>
+          <div id="snippet-list" class="snippet-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast">Saved!</div>
+    <script src="admin-snippets.js"></script>
+  </body>
+</html>

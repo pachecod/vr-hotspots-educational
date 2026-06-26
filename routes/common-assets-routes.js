@@ -330,6 +330,12 @@ function registerCommonAssetRoutes(app, upload) {
         return res.status(400).json({ success: false, message: validation.message });
       }
 
+      const { isExtensionBlocked } = require('../lib/blocked-extensions');
+      if (await isExtensionBlocked(req.file.originalname)) {
+        const ext = require('../lib/flat-page-files').getExtension(req.file.originalname);
+        return res.status(400).json({ success: false, message: `File type ".${ext}" is not allowed.` });
+      }
+
       const diskSize = fs.statSync(tempPath).size;
       if (diskSize <= 0) {
         return res.status(400).json({

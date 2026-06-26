@@ -8,12 +8,7 @@ const fs = require('fs');
 const b2Service = require('../services/b2-service');
 const { query, isDbEnabled, slugify } = require('../services/db-service');
 const { requireStudentStrict } = require('../student-auth');
-
-const ALLOWED_FILES = {
-  'index.html': 'text/html; charset=utf-8',
-  'style.css': 'text/css; charset=utf-8',
-  'script.js': 'application/javascript; charset=utf-8',
-};
+const { assertAllowedFlatFilename, contentTypeForFilename } = require('../lib/flat-page-files');
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB per file is plenty for source code
 const HOSTED_DIR = path.join(process.cwd(), 'hosted-projects');
@@ -39,7 +34,7 @@ function buildPrefix(classSlug, studentId, slug) {
 }
 
 // Validate + normalize an incoming { name, files } payload.
-function normalizePayload(body) {
+async function normalizePayload(body) {
   if (!body || typeof body !== 'object') {
     return { error: 'Invalid request body' };
   }
@@ -50,9 +45,8 @@ function normalizePayload(body) {
   for (const f of inFiles) {
     if (!f || typeof f.name !== 'string') continue;
     const fname = f.name.trim();
-    if (!Object.prototype.hasOwnProperty.call(ALLOWED_FILES, fname)) {
-      return { error: `Unsupported file: ${fname}` };
-    }
+    const allowed = await assertAllowedFlatFilename(fname);
+    if (!allowed.ok) return { error: allowed.error || `Unsupported file: ${fname}` };
     const content = typeof f.content === 'string' ? f.content : '';
     if (Buffer.byteLength(content, 'utf8') > MAX_FILE_BYTES) {
       return { error: `File ${fname} is too large (max 2MB)` };
@@ -122,7 +116,9 @@ function registerFlatPageRoutes(app) {
       const files = [];
       for (const entry of manifest) {
         const fname = entry && entry.name;
-        if (!fname || !ALLOWED_FILES[fname]) continue;
+        if (!fname) continue;
+        const allowed = await assertAllowedFlatFilename(fname);
+        if (!allowed.ok) continue;
         try {
           const { stream } = await b2Service.downloadStream(`${row.b2_prefix}${fname}`);
           files.push({ name: fname, content: await streamToString(stream) });
@@ -143,7 +139,7 @@ function registerFlatPageRoutes(app) {
       if (!isDbEnabled()) {
         return res.status(503).json({ success: false, message: 'Database not configured' });
       }
-      const payload = normalizePayload(req.body);
+      const payload = await normalizePayload(req.body);
       if (payload.error) return res.status(400).json({ success: false, message: payload.error });
 
       const studentId = req.studentSession.studentId;
@@ -155,7 +151,7 @@ function registerFlatPageRoutes(app) {
         await b2Service.uploadBuffer(
           Buffer.from(file.content, 'utf8'),
           `${prefix}${file.name}`,
-          ALLOWED_FILES[file.name]
+          contentTypeForFilename(file.name)
         );
       }
 
@@ -182,7 +178,7 @@ function registerFlatPageRoutes(app) {
       if (!isDbEnabled()) {
         return res.status(503).json({ success: false, message: 'Database not configured' });
       }
-      const payload = normalizePayload(req.body);
+      const payload = await normalizePayload(req.body);
       if (payload.error) return res.status(400).json({ success: false, message: payload.error });
 
       const slug = slugify(req.params.slug);
@@ -195,7 +191,7 @@ function registerFlatPageRoutes(app) {
         await b2Service.uploadBuffer(
           Buffer.from(file.content, 'utf8'),
           `${prefix}${file.name}`,
-          ALLOWED_FILES[file.name]
+          contentTypeForFilename(file.name)
         );
       }
 
@@ -217,7 +213,7 @@ function registerFlatPageRoutes(app) {
   });
 
   async function handlePublish(req, res, slugOverride) {
-    const payload = normalizePayload(req.body);
+    const payload = await normalizePayload(req.body);
     if (payload.error) return res.status(400).json({ success: false, message: payload.error });
     if (slugOverride) payload.slug = slugOverride;
 
@@ -244,7 +240,7 @@ function registerFlatPageRoutes(app) {
           await b2Service.uploadBuffer(
             Buffer.from(file.content, 'utf8'),
             `${prefix}${file.name}`,
-            ALLOWED_FILES[file.name]
+            contentTypeForFilename(file.name)
           );
         } catch (err) {
           console.warn('Flat page B2 backup failed:', err.message);

@@ -7,18 +7,18 @@ import { css } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { FileType } from './types.js';
+import { inferFileType } from './file-utils.js';
 
-function getLanguage(language) {
-  switch (language) {
-    case FileType.HTML:
-      return html();
-    case FileType.CSS:
-      return css();
-    case FileType.JS:
-      return javascript();
-    default:
-      return html();
-  }
+function getLanguage(language, fileName) {
+  if (language === FileType.HTML) return html();
+  if (language === FileType.CSS) return css();
+  if (language === FileType.JS) return javascript();
+
+  const ext = String(fileName || '').split('.').pop()?.toLowerCase();
+  if (ext === 'css') return css();
+  if (ext === 'js' || ext === 'mjs' || ext === 'json') return javascript();
+  if (ext === 'html' || ext === 'htm' || ext === 'xml') return html();
+  return javascript();
 }
 
 export default function Editor({ value, onChange, language, bridge, activeFileId }) {
@@ -47,7 +47,7 @@ export default function Editor({ value, onChange, language, bridge, activeFileId
       extensions: [
         lineNumbers(),
         highlightActiveLine(),
-        getLanguage(language),
+        getLanguage(language, activeFileId),
         history(),
         keymap.of([...defaultKeymap, indentWithTab]),
         oneDark,
@@ -67,7 +67,7 @@ export default function Editor({ value, onChange, language, bridge, activeFileId
       view.destroy();
       viewRef.current = null;
     };
-  }, [language]);
+  }, [language, activeFileId]);
 
   useEffect(() => {
     const view = viewRef.current;

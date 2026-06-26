@@ -106,6 +106,10 @@ function registerStudentAssetRoutes(app, upload) {
         if (!isExtensionAllowedForCategory(ext, category)) {
           return res.status(400).json({ success: false, message: 'File type not allowed for category' });
         }
+        const { isExtensionBlocked } = require('../lib/blocked-extensions');
+        if (await isExtensionBlocked(req.file.originalname)) {
+          return res.status(400).json({ success: false, message: `File type ".${ext}" is not allowed.` });
+        }
         const limit = FILE_SIZE_LIMITS[category] || 25 * 1024 * 1024;
         if (req.file.size > limit) {
           return res.status(400).json({ success: false, message: 'File too large for category' });

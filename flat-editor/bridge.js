@@ -12,6 +12,13 @@ import { buildPreviewDocument } from './buildPreview.js';
 import { saveFlatPage, publishFlatPage } from './flat-page-api.js';
 import { buildInsertHtml, defaultHtmlInsertPos } from './insertAssetHtml.js';
 import {
+  CORE_FILE_IDS,
+  MAX_FILES_PER_PAGE,
+  inferFileType,
+  sanitizeFilename,
+  getExtension,
+} from './file-utils.js';
+import {
   buildProjectVrInsertHtml,
   deriveQrUrlFromTourUrl,
   hasVrTourEmbed,
@@ -29,7 +36,55 @@ export class FlatPageEditorBridge {
     this._cloudStatus = '';
     this._cloudStatusError = false;
     this._editorSelections = {};
+    this._blockedExtensions = [];
+    this._rideyStatus = { enabled: false, hasApiKey: false };
     this._loadFromStorage();
+    this._loadEditorSettings();
+  }
+
+  async _loadEditorSettings() {
+    try {
+      const [rideyRes, extRes] = await Promise.all([
+        fetch('/api/ridey/status').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/blocked-extensions').then((r) => r.json()).catch(() => ({})),
+      ]);
+      if (rideyRes.success) {
+        this._rideyStatus = { enabled: !!rideyRes.enabled, hasApiKey: !!rideyRes.hasApiKey };
+      }
+      if (extRes.success && Array.isArray(extRes.extensions)) {
+        this._blockedExtensions = extRes.extensions;
+      }
+      this._notify();
+    } catch (_) {}
+  }
+
+  _buildFileEntry(id, content) {
+    return {
+      id,
+      name: id,
+      type: inferFileType(id),
+      content: typeof content === 'string' ? content : '',
+    };
+  }
+
+  _mergePageFiles(byId) {
+    const defaults = defaultFilesContent();
+    const files = [];
+    const seen = new Set();
+
+    CORE_FILE_IDS.forEach((id) => {
+      files.push(this._buildFileEntry(id, byId[id] != null ? byId[id] : defaults[id] || ''));
+      seen.add(id);
+    });
+
+    Object.keys(byId).forEach((id) => {
+      if (seen.has(id)) return;
+      if (!sanitizeFilename(id)) return;
+      files.push(this._buildFileEntry(id, byId[id]));
+      seen.add(id);
+    });
+
+    return files;
   }
 
   subscribe(fn) {
@@ -92,22 +147,17 @@ export class FlatPageEditorBridge {
     const cleanPages = {};
     Object.keys(pages).forEach((pageId) => {
       const page = pages[pageId] || {};
+      const defaults = defaultFilesContent();
       const byId = {};
       (Array.isArray(page.files) ? page.files : []).forEach((f) => {
         if (f && f.id) byId[f.id] = typeof f.content === 'string' ? f.content : '';
         else if (f && f.name) byId[f.name] = typeof f.content === 'string' ? f.content : '';
       });
-      const defaults = defaultFilesContent();
       cleanPages[pageId] = {
         id: pageId,
         name: page.name || 'Flat Web Page',
         framework: page.framework || 'html',
-        files: FILE_DEFS.map((def) => ({
-          id: def.id,
-          name: def.name,
-          type: def.type,
-          content: byId[def.id] != null ? byId[def.id] : defaults[def.id] || '',
-        })),
+        files: this._mergePageFiles(byId),
       };
     });
 
@@ -120,6 +170,7 @@ export class FlatPageEditorBridge {
   }
 
   getState() {
+    const page = this.getActivePage();
     return {
       project: this.project,
       activeFileId: this.activeFileId,
@@ -127,7 +178,14 @@ export class FlatPageEditorBridge {
       cloudStatus: this._cloudStatus,
       cloudStatusError: this._cloudStatusError,
       showCloudActions: !!window.currentStudent,
+      files: page.files || [],
+      rideyEnabled: this._rideyStatus.enabled && this._rideyStatus.hasApiKey,
+      blockedExtensions: this._blockedExtensions,
     };
+  }
+
+  getPageFiles() {
+    return this.getActivePage().files || [];
   }
 
   getActivePage() {
@@ -239,6 +297,78 @@ export class FlatPageEditorBridge {
     } else {
       this._notify();
     }
+    return true;
+  }
+
+  insertSnippet(code) {
+    if (!this._visible || !code) return false;
+    return this._insertAtCursor(this.activeFileId, code);
+  }
+
+  _insertAtCursor(fileId, snippet) {
+    let content = this.getFileContent(fileId);
+    const sel = this._editorSelections[fileId];
+    const insertAt =
+      sel && typeof sel.head === 'number'
+        ? Math.max(0, Math.min(sel.head, content.length))
+        : fileId === 'index.html'
+          ? defaultHtmlInsertPos(content)
+          : content.length;
+
+    const padded = `\n${snippet}\n`;
+    const nextContent = content.slice(0, insertAt) + padded + content.slice(insertAt);
+    this.setFileContent(fileId, nextContent);
+
+    const nextPos = insertAt + padded.length;
+    this._editorSelections[fileId] = { anchor: nextPos, head: nextPos };
+    this._pendingSelection = { fileId, anchor: nextPos, head: nextPos };
+    this._notify();
+    return true;
+  }
+
+  addFile(name) {
+    const safe = sanitizeFilename(name);
+    if (!safe) return { ok: false, error: 'Invalid file name' };
+    const ext = getExtension(safe);
+    if (ext && this._blockedExtensions.includes(ext)) {
+      return { ok: false, error: `File type ".${ext}" is not allowed.` };
+    }
+    const page = this.getActivePage();
+    if ((page.files || []).some((f) => f.id === safe)) {
+      return { ok: false, error: 'File already exists' };
+    }
+    if ((page.files || []).length >= MAX_FILES_PER_PAGE) {
+      return { ok: false, error: `Maximum ${MAX_FILES_PER_PAGE} files per page` };
+    }
+    page.files.push(this._buildFileEntry(safe, ''));
+    this.activeFileId = safe;
+    this.save();
+    return { ok: true };
+  }
+
+  removeFile(fileId) {
+    if (CORE_FILE_IDS.includes(fileId)) return { ok: false, error: 'Cannot remove core files' };
+    const page = this.getActivePage();
+    const next = (page.files || []).filter((f) => f.id !== fileId);
+    if (next.length === page.files.length) return { ok: false, error: 'File not found' };
+    page.files = next;
+    if (this.activeFileId === fileId) this.activeFileId = 'index.html';
+    this.save();
+    return { ok: true };
+  }
+
+  loadTemplate(template) {
+    if (!template || !Array.isArray(template.files_manifest)) return false;
+    const byId = {};
+    template.files_manifest.forEach((f) => {
+      if (f && f.name) byId[f.name] = f.content || '';
+    });
+    const page = this.getActivePage();
+    page.name = template.title || page.name;
+    page.files = this._mergePageFiles(byId);
+    this.activeFileId = 'index.html';
+    this.save();
+    this._syncScenesData();
     return true;
   }
 
@@ -362,11 +492,33 @@ export class FlatPageEditorBridge {
           pageName = baseProject.pages[pid].name;
         }
         const defaults = defaultFilesContent();
+        const byId = { ...defaults };
+        const allNames = new Set();
+        zip.forEach((relativePath) => {
+          const prefix = `${EXPORT_FOLDER}/${pid}/`;
+          if (!relativePath.startsWith(prefix)) return;
+          const name = relativePath.slice(prefix.length);
+          if (!name || name.includes('/') || name === 'manifest.json') return;
+          allNames.add(name);
+        });
         const files = [];
-        for (const def of FILE_DEFS) {
-          const entry = zip.file(`${EXPORT_FOLDER}/${pid}/${def.name}`);
-          const content = entry ? await entry.async('text') : defaults[def.id] || '';
-          files.push({ id: def.id, name: def.name, type: def.type, content });
+        for (const name of allNames) {
+          const entry = zip.file(`${EXPORT_FOLDER}/${pid}/${name}`);
+          const content = entry ? await entry.async('text') : defaults[name] || '';
+          files.push({
+            id: name,
+            name,
+            type: inferFileType(name),
+            content,
+          });
+        }
+        if (!files.some((f) => f.name === 'index.html')) {
+          files.unshift({
+            id: 'index.html',
+            name: 'index.html',
+            type: 'html',
+            content: defaults['index.html'] || '',
+          });
         }
         pages[pid] = { id: pid, name: pageName, framework: 'html', files };
       }

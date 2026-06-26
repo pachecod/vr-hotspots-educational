@@ -2,9 +2,10 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { FlatPageEditorBridge } from './bridge.js';
 import FlatPageEditorUI from './FlatPageEditorUI.jsx';
+import { fetchDefaultTemplate } from './templates-api.js';
 import './flat-editor.css';
 
-function bootstrap() {
+async function bootstrap() {
   const mountEl = document.createElement('div');
   mountEl.id = 'flat-page-editor-mount';
   document.body.appendChild(mountEl);
@@ -18,6 +19,13 @@ function bootstrap() {
       if (data.flatPages) bridge.importProject(data.flatPages);
     }
   } catch (_) {}
+
+  if (!bridge.hasContent()) {
+    try {
+      const defaultTpl = await fetchDefaultTemplate();
+      if (defaultTpl) bridge.loadTemplate(defaultTpl);
+    } catch (_) {}
+  }
 
   window.FlatPageEditor = FlatPageEditorBridge;
   window.flatPageEditor = bridge;

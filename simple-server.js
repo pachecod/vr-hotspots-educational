@@ -25,6 +25,9 @@ const { registerSubmissionVersionRoutes } = require('./routes/submission-version
 const { registerAdminStudentPeekRoutes } = require('./routes/admin-student-peek-routes');
 const { registerFlatPageRoutes } = require('./routes/flat-page-routes');
 const { registerVrTourRoutes } = require('./routes/vr-tour-routes');
+const { registerSnippetRoutes } = require('./routes/snippet-routes');
+const { registerRideyRoutes } = require('./routes/ridey-routes');
+const { registerTemplateRoutes } = require('./routes/template-routes');
 const { runMigrations, importSubmissionsFromJson } = require('./db/migrate');
 const { isDbEnabled } = require('./services/db-service');
 const {
@@ -303,6 +306,9 @@ registerSubmissionVersionRoutes(app, {
 registerAdminStudentPeekRoutes(app, { requireAdmin });
 registerFlatPageRoutes(app);
 registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe });
+registerSnippetRoutes(app);
+registerRideyRoutes(app);
+registerTemplateRoutes(app);
 
 if (process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_BUCKET_NAME) {
   b2Service
@@ -2269,6 +2275,11 @@ async function startServer() {
     await runMigrations();
     if (isDbEnabled()) {
       await importSubmissionsFromJson(loadSubmissionsLog, writeSubmissionsLog);
+      try {
+        await require('./lib/snippets').seedSnippetsIfEmpty();
+      } catch (seedErr) {
+        console.warn('⚠️ Snippet seed skipped:', seedErr.message);
+      }
     }
   } catch (err) {
     console.error('⚠️ Database startup error:', err.message);

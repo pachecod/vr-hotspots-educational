@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Templates — VR Hotspots Admin</title>
+    <link rel="stylesheet" href="admin-nav.css" />
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; color: #333; max-width: 960px; }
+      .section { margin: 20px 0; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px; background: #f8f9fa; }
+      .form-row { margin-bottom: 12px; }
+      .form-row label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 13px; }
+      .form-row input, .form-row textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+      .form-row textarea { min-height: 200px; font-family: monospace; font-size: 12px; }
+      .btn { padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+      .btn-primary { background: #28a745; color: #fff; }
+      .btn-danger { background: #dc3545; color: #fff; }
+      .btn-secondary { background: #6c757d; color: #fff; }
+      .template-card { background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+      .template-meta { font-size: 12px; color: #666; margin-top: 4px; }
+      .flags label { margin-right: 16px; font-size: 13px; }
+      #toast { position: fixed; bottom: 20px; right: 20px; background: #28a745; color: #fff; padding: 12px 18px; border-radius: 6px; display: none; z-index: 10001; }
+    </style>
+    <script src="admin-auth-ui.js"></script>
+    <script src="admin-nav.js"></script>
+  </head>
+  <body>
+    <div id="login-root"></div>
+    <div id="main-content" style="display: none">
+      <nav id="admin-nav" data-active="templates"></nav>
+      <h1>Project Templates</h1>
+      <p style="color: #666">Curate public starter templates students can load in the flat page editor.</p>
+
+      <div class="section">
+        <h2>Create Template</h2>
+        <div class="form-row"><label>Title<input type="text" id="tpl-title" /></label></div>
+        <div class="form-row"><label>Description<textarea id="tpl-desc" rows="2" style="min-height:60px"></textarea></label></div>
+        <div class="form-row flags">
+          <label><input type="checkbox" id="tpl-public" checked /> Public</label>
+          <label><input type="checkbox" id="tpl-default" /> Default starter</label>
+        </div>
+        <div class="form-row">
+          <label>Files JSON — array of { name, content } objects
+            <textarea id="tpl-files" placeholder='[{"name":"index.html","content":"<!DOCTYPE html>..."},{"name":"style.css","content":""},{"name":"script.js","content":""}]'></textarea>
+          </label>
+        </div>
+        <button type="button" class="btn btn-primary" id="create-tpl-btn">Save Template</button>
+        <p id="create-status" style="font-size:13px"></p>
+      </div>
+
+      <div class="section">
+        <h2>Existing Templates</h2>
+        <div id="template-list"></div>
+      </div>
+    </div>
+    <div id="toast">Saved!</div>
+    <script src="admin-templates.js"></script>
+  </body>
+</html>

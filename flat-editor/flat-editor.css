@@ -93,16 +93,16 @@
 
 .flat-body {
   flex: 1;
-  display: flex;
+  display: grid;
   min-height: 0;
 }
 
 .flat-editor-pane,
 .flat-preview-pane {
-  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 .flat-editor-pane {
@@ -146,4 +146,381 @@
   width: 100%;
   border: none;
   background: #fff;
+}
+
+.flat-pane-tools {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.flat-split-btns {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.flat-tool-btn {
+  padding: 4px 10px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #3a3a3a;
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.flat-tool-btn:hover {
+  background: #4a4a4a;
+}
+
+.flat-tool-btn.active {
+  border-color: #4caf50;
+  background: rgba(76, 175, 80, 0.25);
+}
+
+.flat-tool-btn-accent {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.flat-tool-btn-ridey {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #fff;
+}
+
+.flat-file-tab-wrap {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+.flat-file-tab-remove {
+  margin-left: -6px;
+  margin-right: 2px;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.flat-file-tab-add {
+  font-weight: bold;
+  min-width: 28px;
+}
+
+.flat-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.flat-preview-overlay {
+  z-index: 10060;
+}
+
+.flat-modal {
+  background: #2a2a2a;
+  color: #e0e0e0;
+  border-radius: 8px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  width: min(480px, 96vw);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.flat-modal-wide {
+  width: min(900px, 96vw);
+}
+
+.flat-modal-ridey {
+  width: min(1100px, 98vw);
+  height: min(85vh, 900px);
+  display: flex;
+  flex-direction: column;
+}
+
+.flat-modal-ridey .flat-ridey-panels {
+  flex: 1;
+  min-height: 0;
+}
+
+.flat-modal-ridey-preview {
+  width: min(1000px, 96vw);
+  height: min(80vh, 800px);
+}
+
+.flat-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #444;
+}
+
+.flat-modal-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.flat-modal-close {
+  border: none;
+  background: transparent;
+  color: #aaa;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.flat-modal-body {
+  padding: 16px;
+  overflow: auto;
+  flex: 1;
+}
+
+.flat-modal-tip {
+  margin: 0 16px 8px;
+  font-size: 12px;
+  color: #9ad29a;
+}
+
+.flat-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.flat-muted {
+  color: #999;
+  font-size: 13px;
+}
+
+.flat-error {
+  color: #ff8a80;
+  font-size: 13px;
+}
+
+.flat-form-label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.flat-form-input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #1e1e1e;
+  color: #fff;
+  box-sizing: border-box;
+}
+
+.flat-snippet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.flat-snippet-card {
+  background: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.flat-snippet-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.flat-snippet-lang {
+  font-size: 10px;
+  background: #333;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.flat-snippet-code {
+  font-size: 11px;
+  background: #111;
+  padding: 8px;
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 100px;
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+
+.flat-snippet-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.flat-template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.flat-template-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 6px;
+}
+
+.flat-badge {
+  margin-left: 8px;
+  font-size: 10px;
+  background: #4caf50;
+  color: #111;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.flat-ridey-temp {
+  padding: 8px 16px;
+  border-bottom: 1px solid #444;
+  font-size: 12px;
+}
+
+.flat-ridey-temp input[type='range'] {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.flat-quick-prompts {
+  display: flex;
+  gap: 6px;
+  padding: 8px 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #444;
+}
+
+.flat-ridey-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.flat-ridey-code-pane,
+.flat-ridey-chat-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid #444;
+}
+
+.flat-ridey-chat-pane {
+  border-right: none;
+  padding: 12px;
+}
+
+.flat-ridey-code-pane h3 {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid #444;
+  background: #252526;
+}
+
+.flat-ridey-pre {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+.flat-ridey-query {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #1e1e1e;
+  color: #fff;
+  resize: vertical;
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+
+.flat-ridey-ask {
+  align-self: flex-end;
+  margin-bottom: 12px;
+}
+
+.flat-ridey-response {
+  overflow: auto;
+  font-size: 13px;
+}
+
+.flat-ridey-intro {
+  margin-top: 16px;
+}
+
+.flat-ridey-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.flat-ridey-diff {
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  font-size: 11px;
+  background: #1e1e1e;
+  border-right: 1px solid #444;
+}
+
+.flat-diff-add {
+  background: rgba(76, 175, 80, 0.25);
+}
+
+.flat-diff-del {
+  background: rgba(244, 67, 54, 0.25);
+  text-decoration: line-through;
+}
+
+.flat-ridey-preview-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
+
+.flat-ridey-preview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 16px;
+  text-align: center;
 }

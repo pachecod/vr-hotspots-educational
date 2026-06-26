@@ -2,7 +2,15 @@ import React, { useMemo } from 'react';
 import { buildPreviewDocument } from './buildPreview.js';
 
 export default function Preview({ page, refreshKey }) {
-  const srcdoc = useMemo(() => buildPreviewDocument(page), [page, refreshKey]);
+  const baseHref =
+    typeof window !== 'undefined' && window.location?.origin
+      ? `${window.location.origin}/`
+      : undefined;
+
+  const srcdoc = useMemo(
+    () => buildPreviewDocument(page, { baseHref }),
+    [page, refreshKey, baseHref]
+  );
 
   return (
     <iframe

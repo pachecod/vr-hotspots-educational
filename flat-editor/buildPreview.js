@@ -1,5 +1,5 @@
 /** Build a self-contained HTML document for iframe preview (WebXRIDE-style). */
-export function buildPreviewDocument(page) {
+export function buildPreviewDocument(page, options = {}) {
   const getContent = (id) => {
     const f = page.files.find((x) => x.id === id);
     return f ? f.content || '' : '';
@@ -7,6 +7,13 @@ export function buildPreviewDocument(page) {
   let html = getContent('index.html') || '<!DOCTYPE html><html><head></head><body></body></html>';
   const css = getContent('style.css');
   const js = getContent('script.js');
+
+  const baseHref = options.baseHref;
+  if (baseHref && /<head[^>]*>/i.test(html)) {
+    if (!/<base\s/i.test(html)) {
+      html = html.replace(/<head([^>]*)>/i, `<head$1>\n  <base href="${baseHref}" />`);
+    }
+  }
 
   if (css) {
     const styleTag = `<style>\n${css}\n</style>`;

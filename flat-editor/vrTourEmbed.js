@@ -27,7 +27,6 @@ const VR_TOUR_EMBED_STYLES = [
   '.vr-tour-embed iframe{width:100%;min-height:480px;height:70vh;border:0;display:block;border-radius:8px;background:#111;}',
   '.vr-tour-mobile-label{margin:1rem 0 0.5rem;font-size:1rem;font-weight:600;color:#333;}',
   '.vr-tour-mobile-qr-img{display:inline-block;border-radius:4px;margin-bottom:1rem;}',
-  '@media (max-width:767px){.vr-tour-mobile-label,.vr-tour-mobile-qr-img{display:none;}}',
 ].join('');
 
 /** Remove any existing VR tour embed blocks (legacy iframe-only or current wrapper format). */

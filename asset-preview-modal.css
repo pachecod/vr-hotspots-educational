@@ -100,6 +100,11 @@
   color: #fff;
 }
 
+#asset-preview-modal .btn-preview-insert {
+  background: #ff9800;
+  color: #1a1a1a;
+}
+
 #asset-preview-modal .btn-preview-tags {
   background: #9c27b0;
   color: #fff;

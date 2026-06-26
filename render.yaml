@@ -10,7 +10,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm install
+    buildCommand: npm install && npm run build:flat-editor
     startCommand: npm start
     healthCheckPath: /
     envVars:

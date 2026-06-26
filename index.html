@@ -10,6 +10,31 @@
     <script src="asset-preview-modal.js"></script>
     <script src="asset-tags-ui.js"></script>
     <script src="student-auth-ui.js"></script>
+    <script>
+      (function () {
+        var isViteDev =
+          location.hostname === 'localhost' &&
+          (location.port === '5173' || location.port === '5174');
+        var s = document.createElement('script');
+        if (isViteDev) {
+          s.type = 'module';
+          s.src = '/flat-editor/main.jsx';
+          document.head.appendChild(s);
+        } else {
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = '/vr-hotspots-educational.css';
+          document.head.appendChild(link);
+          s.src = '/flat-editor.bundle.js';
+          s.onerror = function () {
+            var legacy = document.createElement('script');
+            legacy.src = '/flat-page-editor.js';
+            document.head.appendChild(legacy);
+          };
+          document.head.appendChild(s);
+        }
+      })();
+    </script>
     <script src="script.js"></script>
     <style>
       a-text {
@@ -63,6 +88,48 @@
         --z-editor-dialog: 100050;
         --z-editor-progress: 100055;
         --z-editor-toast: 100060;
+        --hotspot-editor-panel-width: 350px;
+      }
+
+      /* Flat page editor fills space when Editing Tools sidebar is collapsed */
+      body.content-mode-flat.hotspot-editor-collapsed {
+        --hotspot-editor-panel-width: 48px;
+      }
+
+      /* Content Mode toggle (Spherical Content / Flat Web Page) — inside Editing Tools panel */
+      #content-mode-bar {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 14px;
+        width: 100%;
+        font-family: Arial, sans-serif;
+      }
+
+      #content-mode-bar .content-mode-btn {
+        border: 1px solid #555;
+        background: #333;
+        color: #cfcfcf;
+        padding: 10px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: bold;
+        transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        text-align: left;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      #content-mode-bar .content-mode-btn:hover {
+        color: #fff;
+        border-color: #666;
+      }
+
+      #content-mode-bar .content-mode-btn.active {
+        background: rgba(76, 175, 80, 0.2);
+        border-color: #4caf50;
+        color: #fff;
       }
 
       /* Side Panel Styles */
@@ -826,6 +893,10 @@
         font-size: 11px;
         font-weight: bold;
       }
+      #common-assets-modal .btn-insert-flat {
+        background: #ff9800;
+        color: #1a1a1a;
+      }
     </style>
     <link rel="stylesheet" href="asset-preview-modal.css" />
     <link rel="stylesheet" href="asset-tags-ui.css" />
@@ -974,7 +1045,7 @@
         title="Toggle editor tools"
       >
         <span id="hotspot-editor-toggle-icon" aria-hidden="true">›</span>
-        <span id="hotspot-editor-toggle-label">Editor Tools</span>
+        <span id="hotspot-editor-toggle-label">Editing Tools</span>
       </button>
       <div id="hotspot-editor-content">
       <div id="student-editor-session" class="student-editor-session" aria-live="polite">
@@ -998,7 +1069,7 @@
       </div>
       <div class="panel-header">
         <div class="panel-header-row">
-          <h2>Hotspot Editor</h2>
+          <h2>Editing Tools</h2>
           <button
             type="button"
             id="instructions-toggle-btn"
@@ -1010,6 +1081,26 @@
             onclick="toggleInstructions()"
           >
             i
+          </button>
+        </div>
+        <div id="content-mode-bar" role="tablist" aria-label="Content mode">
+          <button
+            type="button"
+            id="content-mode-spherical"
+            class="content-mode-btn active"
+            role="tab"
+            aria-selected="true"
+          >
+            🌐 Spherical Content
+          </button>
+          <button
+            type="button"
+            id="content-mode-flat"
+            class="content-mode-btn"
+            role="tab"
+            aria-selected="false"
+          >
+            📄 Flat Web Page
           </button>
         </div>
       </div>
@@ -1460,6 +1551,18 @@
             />
             <small style="color: #888; font-size: 11px"
               >Provide a full URL starting with http:// or https://</small
+            >
+            <button
+              type="button"
+              class="btn btn-secondary"
+              id="weblink-use-flat-page"
+              style="margin-top: 8px; padding: 8px 12px; font-size: 12px"
+            >
+              📄 Link to my Flat Web Page
+            </button>
+            <small style="color: #888; font-size: 11px; display: block; margin-top: 4px"
+              >Opens the Flat Web Page you authored in this project (works in the exported
+              and published versions).</small
             >
           </div>
           <div class="form-group" id="weblink-title-group" style="display: none">
@@ -2105,6 +2208,7 @@
           <button type="button" id="asset-preview-next-btn" class="btn-preview-nav" style="display:none">Next →</button>
           <button type="button" id="asset-preview-copy-btn" class="btn-preview-copy" style="display:none">Copy URL</button>
           <button type="button" id="asset-preview-tags-btn" class="btn-preview-tags" style="display:none">Edit Tags</button>
+          <button type="button" id="asset-preview-insert-btn" class="btn-preview-insert" style="display:none">Insert Into Page</button>
           <button type="button" id="asset-preview-select-btn" class="btn-preview-select" style="display:none">Select</button>
         </div>
       </div>

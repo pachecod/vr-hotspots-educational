@@ -97,6 +97,28 @@ async function applyIncrementalMigrations(pool) {
         CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag);
       `,
     },
+    {
+      name: 'flat_page_projects_v1',
+      sql: `
+        CREATE TABLE IF NOT EXISTS flat_page_projects (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+          thread_id UUID REFERENCES project_threads(id) ON DELETE SET NULL,
+          name TEXT NOT NULL,
+          slug TEXT NOT NULL,
+          b2_prefix TEXT NOT NULL,
+          files_manifest JSONB NOT NULL DEFAULT '[]'::jsonb,
+          hosted_path TEXT,
+          hosted_url TEXT,
+          hosted_at TIMESTAMPTZ,
+          is_hosted BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (student_id, slug)
+        );
+        CREATE INDEX IF NOT EXISTS idx_flat_page_projects_student_id ON flat_page_projects(student_id);
+      `,
+    },
   ];
 
   for (const migration of migrations) {

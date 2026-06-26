@@ -37,6 +37,10 @@ const AssetPreview = {
       this.close({ restoreHost: false });
     });
 
+    document.getElementById('asset-preview-insert-btn')?.addEventListener('click', () => {
+      if (this.options.onInsertIntoPage) this.options.onInsertIntoPage(this.currentAsset);
+    });
+
     document.getElementById('asset-preview-tags-btn')?.addEventListener('click', () => {
       if (this.options.onEditTags) this.options.onEditTags(this.currentAsset);
     });
@@ -80,16 +84,27 @@ const AssetPreview = {
       index = 0,
       showCopyUrl = false,
       showSelect = false,
+      showInsertIntoPage = false,
       showEditTags = false,
       onSelect,
       onCopy,
+      onInsertIntoPage,
       onEditTags,
       replaceHost = null,
     } = opts || {};
 
     if (!asset) return;
 
-    this.options = { showCopyUrl, showSelect, showEditTags, onSelect, onCopy, onEditTags };
+    this.options = {
+      showCopyUrl,
+      showSelect,
+      showInsertIntoPage,
+      showEditTags,
+      onSelect,
+      onCopy,
+      onInsertIntoPage,
+      onEditTags,
+    };
     this.replacedHostEl = null;
     this._hostDisplay = '';
     if (replaceHost) {
@@ -150,6 +165,9 @@ const AssetPreview = {
 
     const selectBtn = document.getElementById('asset-preview-select-btn');
     if (selectBtn) selectBtn.style.display = this.options.showSelect ? '' : 'none';
+
+    const insertBtn = document.getElementById('asset-preview-insert-btn');
+    if (insertBtn) insertBtn.style.display = this.options.showInsertIntoPage ? '' : 'none';
 
     const tagsBtn = document.getElementById('asset-preview-tags-btn');
     if (tagsBtn) tagsBtn.style.display = this.options.showEditTags ? '' : 'none';
@@ -252,6 +270,8 @@ function getAssetPreviewModalHtml() {
       <button type="button" id="asset-preview-prev-btn" class="btn-preview-nav" style="display:none">← Prev</button>
       <button type="button" id="asset-preview-next-btn" class="btn-preview-nav" style="display:none">Next →</button>
       <button type="button" id="asset-preview-copy-btn" class="btn-preview-copy" style="display:none">Copy URL</button>
+      <button type="button" id="asset-preview-tags-btn" class="btn-preview-tags" style="display:none">Edit Tags</button>
+      <button type="button" id="asset-preview-insert-btn" class="btn-preview-insert" style="display:none">Insert Into Page</button>
       <button type="button" id="asset-preview-select-btn" class="btn-preview-select" style="display:none">Select</button>
     </div>
   </div>

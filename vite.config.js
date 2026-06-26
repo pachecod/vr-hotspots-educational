@@ -1,10 +1,12 @@
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
 const API_TARGET = process.env.API_TARGET || 'http://localhost:3000';
 const VITE_PORT = Number(process.env.VITE_PORT) || 5173;
 
 export default defineConfig({
+  plugins: [react()],
   root: '.',
   publicDir: false,
   server: {

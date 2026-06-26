@@ -1,0 +1,149 @@
+.flat-page-editor-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: var(--hotspot-editor-panel-width, 350px);
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  color: #e0e0e0;
+  font-family: Arial, sans-serif;
+  z-index: 1002;
+}
+
+.flat-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #2a2a2a;
+  border-bottom: 1px solid #444;
+  flex-wrap: wrap;
+}
+
+.flat-toolbar-title {
+  font-weight: bold;
+  color: #4caf50;
+}
+
+.flat-page-name {
+  padding: 6px 8px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #333;
+  color: #fff;
+  font-size: 13px;
+  min-width: 160px;
+}
+
+.flat-cloud-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.flat-btn {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.flat-btn-cloud {
+  background: #3d5a80;
+}
+
+.flat-btn-publish {
+  background: #2196f3;
+}
+
+.flat-cloud-status {
+  font-size: 11px;
+  color: #9ad29a;
+}
+
+.flat-cloud-status.error {
+  color: #ff8a80;
+}
+
+.flat-file-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.flat-file-tab {
+  padding: 6px 12px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #333;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.flat-file-tab.active {
+  border-color: #4caf50;
+  background: rgba(76, 175, 80, 0.2);
+}
+
+.flat-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.flat-editor-pane,
+.flat-preview-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.flat-editor-pane {
+  border-right: 1px solid #444;
+}
+
+.flat-pane-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #252526;
+  border-bottom: 1px solid #3a3a3a;
+  font-size: 12px;
+  color: #aaa;
+}
+
+.flat-btn-refresh {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background: #3a3a3a;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.flat-cm-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.flat-cm-editor .cm-editor {
+  height: 100%;
+}
+
+.flat-preview-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+}

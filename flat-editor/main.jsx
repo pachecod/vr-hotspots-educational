@@ -36,12 +36,18 @@ async function bootstrapAdminTemplateEditor() {
 }
 
 async function bootstrap() {
-  const mountEl = document.createElement('div');
-  mountEl.id = 'flat-page-editor-mount';
-  document.body.appendChild(mountEl);
-
   const boot = window.FLAT_EDITOR_BOOT || {};
   const isAdminTemplate = boot.mode === 'admin-template';
+  const mountParent =
+    document.getElementById('admin-template-editor-slot') || document.body;
+
+  const mountEl = document.createElement('div');
+  mountEl.id = 'flat-page-editor-mount';
+  if (isAdminTemplate) {
+    mountEl.className = 'admin-template-editor-mount';
+  }
+  mountParent.appendChild(mountEl);
+
   const bridge = isAdminTemplate ? await bootstrapAdminTemplateEditor() : await bootstrapStudentEditor();
 
   window.FlatPageEditor = FlatPageEditorBridge;

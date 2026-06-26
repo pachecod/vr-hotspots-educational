@@ -100,7 +100,8 @@ async function saveTemplate() {
 
 function initMainApp() {
   document.getElementById('login-root').innerHTML = '';
-  document.getElementById('main-content').style.display = 'block';
+  const main = document.getElementById('main-content');
+  main.style.display = 'flex';
   renderAdminNav('templates');
 
   document.getElementById('save-tpl-btn').addEventListener('click', saveTemplate);

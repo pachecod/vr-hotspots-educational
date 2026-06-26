@@ -6,20 +6,47 @@
     <link rel="stylesheet" href="admin-nav.css" />
     <link rel="stylesheet" href="vr-hotspots-educational.css" />
     <style>
+      html,
       body.admin-template-editor-page {
+        height: 100%;
         margin: 0;
+      }
+      body.admin-template-editor-page {
         font-family: Arial, sans-serif;
         color: #333;
         --hotspot-editor-panel-width: 0px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      body.admin-template-editor-page #main-content {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+      }
+      .admin-template-header {
+        flex-shrink: 0;
+        padding: 12px 20px 0;
+        background: #fff;
+        border-bottom: 1px solid #dee2e6;
+        z-index: 10;
+      }
+      .admin-template-header .admin-nav {
+        margin-bottom: 12px;
       }
       .admin-template-meta-bar {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding-bottom: 12px;
+      }
+      .admin-template-meta-row {
         display: flex;
         flex-wrap: wrap;
         align-items: flex-end;
         gap: 12px;
-        padding: 12px 20px;
-        background: #f8f9fa;
-        border-bottom: 1px solid #dee2e6;
       }
       .admin-template-meta-bar .field {
         display: flex;
@@ -29,7 +56,7 @@
       }
       .admin-template-meta-bar .field-grow {
         flex: 1;
-        min-width: 220px;
+        min-width: 200px;
       }
       .admin-template-meta-bar label {
         font-size: 12px;
@@ -43,6 +70,8 @@
         border-radius: 4px;
         font-family: inherit;
         font-size: 13px;
+        width: 100%;
+        box-sizing: border-box;
       }
       .admin-template-meta-bar textarea {
         min-height: 36px;
@@ -50,33 +79,46 @@
       }
       .admin-template-flags {
         display: flex;
-        gap: 14px;
+        gap: 16px;
         align-items: center;
         font-size: 13px;
-        padding-bottom: 4px;
+        padding: 8px 0;
       }
       .admin-template-actions {
         display: flex;
         gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
         margin-left: auto;
-        padding-bottom: 4px;
       }
       .btn {
-        padding: 8px 14px;
+        padding: 10px 16px;
         border: none;
         border-radius: 4px;
         cursor: pointer;
-        font-size: 13px;
+        font-size: 14px;
+        font-weight: 600;
         text-decoration: none;
         display: inline-block;
+        white-space: nowrap;
       }
       .btn-primary { background: #28a745; color: #fff; }
       .btn-secondary { background: #6c757d; color: #fff; }
-      #save-status { font-size: 13px; color: #666; align-self: center; }
-      body.admin-template-editor-page .flat-page-editor-root {
-        top: 118px;
-        right: 0;
-        left: 0;
+      #save-status { font-size: 13px; color: #666; }
+      #admin-template-editor-slot {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+        background: #1e1e1e;
+      }
+      #admin-template-editor-slot .admin-template-editor-mount,
+      #admin-template-editor-slot .flat-page-editor-root {
+        position: absolute;
+        inset: 0;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
       }
       #toast {
         position: fixed;
@@ -100,27 +142,35 @@
   <body class="admin-template-editor-page">
     <div id="login-root"></div>
     <div id="main-content" style="display: none">
-      <nav id="admin-nav" data-active="templates"></nav>
+      <div class="admin-template-header">
+        <nav id="admin-nav" data-active="templates"></nav>
 
-      <div class="admin-template-meta-bar">
-        <div class="field field-grow">
-          <label for="tpl-title">Template title</label>
-          <input type="text" id="tpl-title" placeholder="e.g. Photo Gallery Starter" />
-        </div>
-        <div class="field field-grow">
-          <label for="tpl-desc">Description</label>
-          <textarea id="tpl-desc" rows="1" placeholder="Short description for students"></textarea>
-        </div>
-        <div class="admin-template-flags">
-          <label><input type="checkbox" id="tpl-public" checked /> Public</label>
-          <label><input type="checkbox" id="tpl-default" /> Default starter</label>
-        </div>
-        <div class="admin-template-actions">
-          <span id="save-status"></span>
-          <a href="admin-templates.html" class="btn btn-secondary">← Back to list</a>
-          <button type="button" class="btn btn-primary" id="save-tpl-btn">Save Template</button>
+        <div class="admin-template-meta-bar">
+          <div class="admin-template-meta-row">
+            <div class="field field-grow">
+              <label for="tpl-title">Template title</label>
+              <input type="text" id="tpl-title" placeholder="e.g. Photo Gallery Starter" />
+            </div>
+            <div class="field field-grow">
+              <label for="tpl-desc">Description</label>
+              <textarea id="tpl-desc" rows="1" placeholder="Short description for students"></textarea>
+            </div>
+          </div>
+          <div class="admin-template-meta-row">
+            <div class="admin-template-flags">
+              <label><input type="checkbox" id="tpl-public" checked /> Public</label>
+              <label><input type="checkbox" id="tpl-default" /> Default starter</label>
+            </div>
+            <div class="admin-template-actions">
+              <span id="save-status"></span>
+              <a href="admin-templates.html" class="btn btn-secondary">← Back to list</a>
+              <button type="button" class="btn btn-primary" id="save-tpl-btn">Save Template</button>
+            </div>
+          </div>
         </div>
       </div>
+
+      <div id="admin-template-editor-slot" aria-label="Template code editor"></div>
     </div>
     <div id="toast">Saved!</div>
     <script src="admin-template-editor.js"></script>

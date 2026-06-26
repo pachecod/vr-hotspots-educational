@@ -37,6 +37,7 @@ export default defineConfig({
         adminReview: resolve(__dirname, 'admin-review.html'),
         adminSnippets: resolve(__dirname, 'admin-snippets.html'),
         adminTemplates: resolve(__dirname, 'admin-templates.html'),
+        adminTemplateEditor: resolve(__dirname, 'admin-template-editor.html'),
         styleEditor: resolve(__dirname, 'style-editor.html'),
       },
     },

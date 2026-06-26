@@ -28,6 +28,7 @@ function render() {
       <div class="template-meta">${t.is_public ? 'Public' : 'Private'} · ${escapeHtml(t.slug)}</div>
       ${t.description ? `<p style="font-size:13px;margin:8px 0 0">${escapeHtml(t.description)}</p>` : ''}
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <a href="admin-template-editor.html?edit=${t.id}" class="btn btn-primary">Edit in Editor</a>
         <button class="btn btn-secondary btn-toggle-public" data-id="${t.id}">${t.is_public ? 'Make Private' : 'Make Public'}</button>
         <button class="btn btn-secondary btn-toggle-default" data-id="${t.id}">${t.is_default ? 'Unset Default' : 'Set Default'}</button>
         <button class="btn btn-danger btn-delete" data-id="${t.id}">Delete</button>
@@ -39,45 +40,6 @@ function render() {
 function escapeHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
-
-document.getElementById('create-tpl-btn').addEventListener('click', async () => {
-  const title = document.getElementById('tpl-title').value.trim();
-  let files_manifest;
-  try {
-    files_manifest = JSON.parse(document.getElementById('tpl-files').value || '[]');
-  } catch {
-    document.getElementById('create-status').textContent = 'Invalid JSON in files field.';
-    return;
-  }
-  if (!title || !files_manifest.length) {
-    document.getElementById('create-status').textContent = 'Title and at least one file required.';
-    return;
-  }
-  try {
-    const res = await adminFetch('/admin/templates', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title,
-        description: document.getElementById('tpl-desc').value.trim(),
-        files_manifest,
-        is_public: document.getElementById('tpl-public').checked,
-        is_default: document.getElementById('tpl-default').checked,
-        scope: 'flat',
-      }),
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.message);
-    document.getElementById('tpl-title').value = '';
-    document.getElementById('tpl-desc').value = '';
-    document.getElementById('tpl-files').value = '';
-    document.getElementById('create-status').textContent = 'Template saved.';
-    showToast('Template created');
-    await loadTemplates();
-  } catch (err) {
-    document.getElementById('create-status').textContent = err.message;
-  }
-});
 
 document.getElementById('template-list').addEventListener('click', async (e) => {
   const id = e.target.dataset.id;

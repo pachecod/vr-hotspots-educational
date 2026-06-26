@@ -1,0 +1,122 @@
+let editingId = null;
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg || 'Saved!';
+  t.style.display = 'block';
+  setTimeout(() => {
+    t.style.display = 'none';
+  }, 1800);
+}
+
+function getQueryParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function waitForFlatEditor() {
+  return new Promise((resolve) => {
+    if (window.flatPageEditor) {
+      resolve(window.flatPageEditor);
+      return;
+    }
+    window.addEventListener(
+      'flat-editor-ready',
+      (e) => resolve(e.detail.bridge),
+      { once: true }
+    );
+  });
+}
+
+async function loadTemplateForEdit(id) {
+  const res = await adminFetch(`/admin/templates/${id}`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Template not found');
+  const tpl = data.template;
+
+  editingId = tpl.id;
+  document.getElementById('tpl-title').value = tpl.title || '';
+  document.getElementById('tpl-desc').value = tpl.description || '';
+  document.getElementById('tpl-public').checked = !!tpl.is_public;
+  document.getElementById('tpl-default').checked = !!tpl.is_default;
+  document.title = `Edit: ${tpl.title} — VR Hotspots Admin`;
+
+  const bridge = await waitForFlatEditor();
+  bridge.loadTemplate(tpl);
+}
+
+async function saveTemplate() {
+  const title = document.getElementById('tpl-title').value.trim();
+  if (!title) {
+    document.getElementById('save-status').textContent = 'Title is required.';
+    return;
+  }
+
+  const bridge = window.flatPageEditor;
+  if (!bridge) {
+    document.getElementById('save-status').textContent = 'Editor not ready yet.';
+    return;
+  }
+
+  const files_manifest = bridge.getTemplateFilesManifest();
+  if (!files_manifest.some((f) => f.name === 'index.html')) {
+    document.getElementById('save-status').textContent = 'Template must include index.html.';
+    return;
+  }
+
+  const payload = {
+    title,
+    description: document.getElementById('tpl-desc').value.trim(),
+    files_manifest,
+    is_public: document.getElementById('tpl-public').checked,
+    is_default: document.getElementById('tpl-default').checked,
+    scope: 'flat',
+  };
+
+  document.getElementById('save-status').textContent = 'Saving…';
+  try {
+    const url = editingId ? `/admin/templates/${editingId}` : '/admin/templates';
+    const method = editingId ? 'PUT' : 'POST';
+    const res = await adminFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
+
+    if (!editingId && data.template && data.template.id) {
+      editingId = data.template.id;
+      const url = new URL(window.location.href);
+      url.searchParams.set('edit', editingId);
+      window.history.replaceState({}, '', url);
+    }
+
+    document.getElementById('save-status').textContent = 'Saved.';
+    showToast('Template saved');
+  } catch (err) {
+    document.getElementById('save-status').textContent = err.message || 'Save failed';
+  }
+}
+
+function initMainApp() {
+  document.getElementById('login-root').innerHTML = '';
+  document.getElementById('main-content').style.display = 'block';
+  renderAdminNav('templates');
+
+  document.getElementById('save-tpl-btn').addEventListener('click', saveTemplate);
+
+  const editId = getQueryParam('edit');
+  if (editId) {
+    loadTemplateForEdit(editId).catch((err) => {
+      if (err.code === 'AUTH_REQUIRED') location.reload();
+      else alert(err.message || 'Failed to load template');
+    });
+  } else {
+    waitForFlatEditor().then((bridge) => {
+      bridge.reset();
+      bridge.show();
+    });
+  }
+}
+
+requireAdminSession('login-root', initMainApp);

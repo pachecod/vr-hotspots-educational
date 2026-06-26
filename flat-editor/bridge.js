@@ -28,10 +28,12 @@ import {
 } from './vrTourEmbed.js';
 
 export class FlatPageEditorBridge {
-  constructor() {
+  constructor(options = {}) {
+    this._storageKey = options.storageKey || STORAGE_KEY;
+    this._adminTemplateMode = !!options.adminTemplateMode;
     this.project = createDefaultProject();
     this.activeFileId = 'index.html';
-    this._visible = false;
+    this._visible = !!options.startVisible;
     this._listeners = new Set();
     this._cloudStatus = '';
     this._cloudStatusError = false;
@@ -102,7 +104,7 @@ export class FlatPageEditorBridge {
 
   _loadFromStorage() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(this._storageKey);
       if (!raw) return;
       const normalized = this._normalizeProject(JSON.parse(raw));
       if (normalized) this.project = normalized;
@@ -113,7 +115,7 @@ export class FlatPageEditorBridge {
 
   save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.project));
+      localStorage.setItem(this._storageKey, JSON.stringify(this.project));
     } catch (err) {
       console.warn('[FlatPage] Failed to persist flat pages:', err);
     }
@@ -181,7 +183,16 @@ export class FlatPageEditorBridge {
       files: page.files || [],
       rideyEnabled: this._rideyStatus.enabled && this._rideyStatus.hasApiKey,
       blockedExtensions: this._blockedExtensions,
+      adminTemplateMode: this._adminTemplateMode,
     };
+  }
+
+  getTemplateFilesManifest() {
+    const page = this.getActivePage();
+    return (page.files || []).map((f) => ({
+      name: f.name,
+      content: f.content || '',
+    }));
   }
 
   getPageFiles() {

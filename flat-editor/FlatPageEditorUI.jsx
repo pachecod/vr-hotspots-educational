@@ -96,15 +96,19 @@ export default function FlatPageEditorUI({ bridge }) {
   return (
     <div id="flat-page-editor" className="flat-page-editor-root">
       <div className="flat-toolbar">
-        <span className="flat-toolbar-title">Flat Web Page</span>
-        <input
-          type="text"
-          className="flat-page-name"
-          value={page.name}
-          placeholder="Page name"
-          onChange={(e) => bridge.setPageName(e.target.value)}
-        />
-        {state.showCloudActions && (
+        <span className="flat-toolbar-title">
+          {state.adminTemplateMode ? 'Admin Template Editor' : 'Flat Web Page'}
+        </span>
+        {!state.adminTemplateMode && (
+          <input
+            type="text"
+            className="flat-page-name"
+            value={page.name}
+            placeholder="Page name"
+            onChange={(e) => bridge.setPageName(e.target.value)}
+          />
+        )}
+        {!state.adminTemplateMode && state.showCloudActions && (
           <div className="flat-cloud-actions">
             <button type="button" className="flat-btn flat-btn-cloud" onClick={() => bridge.cloudSave()}>
               ☁️ Save to Cloud
@@ -146,9 +150,11 @@ export default function FlatPageEditorUI({ bridge }) {
               <button type="button" className="flat-tool-btn" onClick={handleFormat}>
                 Format
               </button>
-              <button type="button" className="flat-tool-btn" onClick={() => setShowTemplates(true)}>
-                Templates
-              </button>
+              {!state.adminTemplateMode && (
+                <button type="button" className="flat-tool-btn" onClick={() => setShowTemplates(true)}>
+                  Templates
+                </button>
+              )}
               {state.rideyEnabled && (
                 <button
                   type="button"

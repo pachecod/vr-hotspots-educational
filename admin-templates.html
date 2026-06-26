@@ -7,17 +7,13 @@
     <style>
       body { font-family: Arial, sans-serif; margin: 20px; color: #333; max-width: 960px; }
       .section { margin: 20px 0; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px; background: #f8f9fa; }
-      .form-row { margin-bottom: 12px; }
-      .form-row label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 13px; }
-      .form-row input, .form-row textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-      .form-row textarea { min-height: 200px; font-family: monospace; font-size: 12px; }
-      .btn { padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+      .btn { padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; text-decoration: none; display: inline-block; }
       .btn-primary { background: #28a745; color: #fff; }
       .btn-danger { background: #dc3545; color: #fff; }
       .btn-secondary { background: #6c757d; color: #fff; }
       .template-card { background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
       .template-meta { font-size: 12px; color: #666; margin-top: 4px; }
-      .flags label { margin-right: 16px; font-size: 13px; }
+      .create-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
       #toast { position: fixed; bottom: 20px; right: 20px; background: #28a745; color: #fff; padding: 12px 18px; border-radius: 6px; display: none; z-index: 10001; }
     </style>
     <script src="admin-auth-ui.js"></script>
@@ -32,19 +28,12 @@
 
       <div class="section">
         <h2>Create Template</h2>
-        <div class="form-row"><label>Title<input type="text" id="tpl-title" /></label></div>
-        <div class="form-row"><label>Description<textarea id="tpl-desc" rows="2" style="min-height:60px"></textarea></label></div>
-        <div class="form-row flags">
-          <label><input type="checkbox" id="tpl-public" checked /> Public</label>
-          <label><input type="checkbox" id="tpl-default" /> Default starter</label>
+        <p style="color: #666; font-size: 14px; margin-top: 0">
+          Use the flat page editor to build HTML, CSS, and JS — same tools students get (Snippets, Format, multi-file, Ridey when enabled).
+        </p>
+        <div class="create-actions">
+          <a href="admin-template-editor.html" class="btn btn-primary">+ Create with Editor</a>
         </div>
-        <div class="form-row">
-          <label>Files JSON — array of { name, content } objects
-            <textarea id="tpl-files" placeholder='[{"name":"index.html","content":"<!DOCTYPE html>..."},{"name":"style.css","content":""},{"name":"script.js","content":""}]'></textarea>
-          </label>
-        </div>
-        <button type="button" class="btn btn-primary" id="create-tpl-btn">Save Template</button>
-        <p id="create-status" style="font-size:13px"></p>
       </div>
 
       <div class="section">

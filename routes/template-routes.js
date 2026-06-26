@@ -55,6 +55,19 @@ function registerTemplateRoutes(app) {
     }
   });
 
+  app.get('/admin/templates/:id', requireAdmin, async (req, res) => {
+    try {
+      if (!isDbEnabled()) {
+        return res.status(503).json({ success: false, message: 'Database not configured' });
+      }
+      const template = await templatesDb.getTemplateById(req.params.id);
+      if (!template) return res.status(404).json({ success: false, message: 'Template not found' });
+      res.json({ success: true, template });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.post('/admin/templates', requireAdmin, async (req, res) => {
     try {
       if (!isDbEnabled()) {

@@ -1,4 +1,5 @@
 export const STORAGE_KEY = 'vr-flat-pages-data';
+export const ADMIN_TEMPLATE_STORAGE_KEY = 'vr-admin-template-draft';
 export const PROJECT_VERSION = '2.5';
 export const DEFAULT_PAGE_ID = 'main';
 export const EXPORT_FOLDER = 'flat-pages';

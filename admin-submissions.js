@@ -15,6 +15,46 @@ function legacyFileName(versionId, fileName) {
   return fileName || String(versionId).replace(/^legacy:/, '');
 }
 
+function formatHostedLinks(sub) {
+  if (!sub.isHosted && !sub.hostedUrl && !sub.tourUrl) return '';
+  const tourUrl = sub.tourUrl || sub.hostedUrl;
+  const flatUrl = sub.flatPageUrl;
+  let html = '';
+  if (tourUrl) {
+    html += `<br><strong>360° tour:</strong> <a href="${escapeHtml(tourUrl)}" target="_blank" rel="noopener">${escapeHtml(tourUrl)}</a>`;
+  }
+  if (flatUrl) {
+    html += `<br><strong>Flat page:</strong> <a href="${escapeHtml(flatUrl)}" target="_blank" rel="noopener">${escapeHtml(flatUrl)}</a>`;
+  }
+  return html;
+}
+
+function showHostSuccess(result) {
+  let banner = document.getElementById('host-result');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'host-result';
+    banner.className = 'host-result';
+    const main = document.getElementById('main-content');
+    const anchor = main?.querySelector('h1');
+    if (anchor && anchor.nextSibling) {
+      main.insertBefore(banner, anchor.nextSibling);
+    } else if (main) {
+      main.prepend(banner);
+    }
+  }
+  const tourUrl = result.tourUrl || result.hostedUrl;
+  let html = '<strong>Hosted successfully</strong><br>';
+  if (tourUrl) {
+    html += `360° tour: <a href="${escapeHtml(tourUrl)}" target="_blank" rel="noopener">${escapeHtml(tourUrl)}</a><br>`;
+  }
+  if (result.flatPageUrl) {
+    html += `Flat page: <a href="${escapeHtml(result.flatPageUrl)}" target="_blank" rel="noopener">${escapeHtml(result.flatPageUrl)}</a>`;
+  }
+  banner.innerHTML = html;
+  banner.style.display = 'block';
+}
+
 function kindBadge(kind) {
   const labels = {
     submitted: 'Submitted',
@@ -84,9 +124,7 @@ async function loadInbox() {
         const noteBlock = sub.studentNote
           ? `<div class="note-block"><strong>Student note:</strong>${escapeHtml(sub.studentNote)}</div>`
           : '';
-        const hostedLink = sub.hostedUrl
-          ? `<br><strong>Hosted:</strong> <a href="${sub.hostedUrl}" target="_blank">${sub.hostedPath || 'View'}</a>`
-          : '';
+        const hostedLink = formatHostedLinks(sub);
 
         const legacy = isLegacyVersion(versionId);
         const historyBtn = legacy
@@ -169,7 +207,7 @@ async function hostVersion(versionId, studentName) {
     });
     const result = await response.json();
     if (result.success) {
-      alert('Hosted at ' + result.hostedUrl);
+      showHostSuccess(result);
       loadInbox();
     } else {
       alert(result.message || 'Hosting failed');

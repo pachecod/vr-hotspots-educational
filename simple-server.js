@@ -11,6 +11,7 @@ const unzipper = require('unzipper');
 const archiver = require('archiver');
 const AdmZip = require('adm-zip');
 const b2Service = require('./services/b2-service');
+const { resolveHostedProjectUrls } = require('./services/hosted-project-urls');
 const os = require('os');
 const { requireAdmin } = require('./admin-auth');
 const { registerCommonAssetRoutes } = require('./routes/common-assets-routes');
@@ -1993,17 +1994,18 @@ app.post('/admin/host/:filename', async (req, res) => {
     // Update submissions.json with hosting info
     const logs = loadSubmissionsLog();
     const submission = logs.find((sub) => sub.fileName === filename);
+    const urls = resolveHostedProjectUrls(urlPath, hostedDir);
 
     if (submission) {
       submission.hostedPath = urlPath;
-      submission.hostedUrl = `/hosted/${urlPath}/index.html`;
+      submission.hostedUrl = urls.tourUrl;
       submission.hostedAt = new Date().toISOString();
       submission.isHosted = true;
       writeSubmissionsLog(logs);
       if (isDbEnabled()) {
         await submissionsDb.updateSubmissionHosting(filename, {
           hostedPath: urlPath,
-          hostedUrl: `/hosted/${urlPath}/index.html`,
+          hostedUrl: urls.tourUrl,
           isHosted: true,
         });
       }
@@ -2012,7 +2014,9 @@ app.post('/admin/host/:filename', async (req, res) => {
     res.json({
       success: true,
       message: `Project hosted at /${urlPath}`,
-      hostedUrl: `/hosted/${urlPath}/index.html`,
+      hostedUrl: urls.tourUrl,
+      tourUrl: urls.tourUrl,
+      flatPageUrl: urls.flatPageUrl,
     });
   } catch (error) {
     console.error('Host error:', error);

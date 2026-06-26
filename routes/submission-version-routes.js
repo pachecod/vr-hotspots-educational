@@ -10,6 +10,7 @@ const {
 } = require('../student-auth');
 const { assertCanSubmit } = require('../services/usage-quota');
 const { listLegacyInbox, mergeB2OrphansIntoInbox } = require('../lib/legacy-submissions');
+const { resolveHostedProjectUrls, enrichInboxHosting } = require('../services/hosted-project-urls');
 
 function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe }) {
   app.post('/api/student/projects/prepare-upload', async (req, res) => {
@@ -227,7 +228,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
 
       if (!isDbEnabled()) {
         const inbox = await listLegacyInbox(b2Service, { filter: filterVal });
-        return res.json(inbox);
+        return res.json(enrichInboxHosting(inbox));
       }
 
       let inbox = await projectVersionsDb.listAdminInbox({
@@ -241,7 +242,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         inbox = await mergeB2OrphansIntoInbox(inbox, b2Service, { filter: filterVal });
       }
 
-      return res.json(inbox);
+      return res.json(enrichInboxHosting(inbox));
     } catch (err) {
       console.error('submissions-inbox error:', err);
       return res.json([]);
@@ -384,14 +385,17 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       }
       fs.mkdirSync(hostedDir, { recursive: true });
       await extractZipToDirSafe(tempPath, hostedDir);
+      const urls = resolveHostedProjectUrls(urlPath, hostedDir);
       await projectVersionsDb.updateVersionHosting(version.id, {
         hostedPath: urlPath,
-        hostedUrl: `/hosted/${urlPath}/index.html`,
+        hostedUrl: urls.tourUrl,
         isHosted: true,
       });
       return res.json({
         success: true,
-        hostedUrl: `/hosted/${urlPath}/index.html`,
+        hostedUrl: urls.tourUrl,
+        tourUrl: urls.tourUrl,
+        flatPageUrl: urls.flatPageUrl,
       });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });

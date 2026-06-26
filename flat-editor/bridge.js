@@ -332,6 +332,40 @@ export class FlatPageEditorBridge {
     this._notify();
   }
 
+  /** Load a cloud-saved flat page into the editor (from Online Assets → My Saved Pages). */
+  importCloudPage(page, slug) {
+    if (!page) return false;
+    const pageId = slug || page.slug || DEFAULT_PAGE_ID;
+    const typeByName = { 'index.html': 'html', 'style.css': 'css', 'script.js': 'javascript' };
+    const files = (page.files || []).map((f) => ({
+      id: f.name,
+      name: f.name,
+      type: typeByName[f.name] || 'html',
+      content: f.content || '',
+    }));
+    if (!files.some((f) => f.name === 'index.html')) {
+      const defaults = defaultFilesContent();
+      files.unshift({
+        id: 'index.html',
+        name: 'index.html',
+        type: 'html',
+        content: defaults['index.html'] || '',
+      });
+    }
+    this.project.pages[pageId] = {
+      id: pageId,
+      name: page.name || 'Flat Web Page',
+      framework: 'html',
+      files,
+    };
+    this.project.activePageId = pageId;
+    this.activeFileId = 'index.html';
+    this.save();
+    this._visible = true;
+    this._notify();
+    return true;
+  }
+
   _setCloudStatus(msg, isError) {
     this._cloudStatus = msg || '';
     this._cloudStatusError = !!isError;
@@ -354,8 +388,9 @@ export class FlatPageEditorBridge {
   async cloudSave() {
     this._setCloudStatus('Saving…');
     try {
-      await saveFlatPage(this._filesPayload());
-      this._setCloudStatus('Saved to cloud ✓');
+      const data = await saveFlatPage(this._filesPayload());
+      this._setCloudStatus('Saved to cloud ✓ — find it under Online Assets → My Saved Pages');
+      return data;
     } catch (err) {
       this._setCloudStatus(err.message || 'Save failed', true);
       alert('Could not save flat page to the cloud: ' + (err.message || 'unknown error'));

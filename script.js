@@ -19683,6 +19683,7 @@ const CommonAssetsPicker = {
   filterCategories: null,
   onSelect: null,
   armPlacementAfterSelect: false,
+  savedPages: [],
 
   FIELD_FILE_MAP: {
     'hotspot-audio-url': 'hotspot-audio',
@@ -19704,11 +19705,14 @@ const CommonAssetsPicker = {
     const uploadEl = document.getElementById('my-assets-upload');
     const introEl = document.getElementById('shared-assets-intro');
     const signInEl = document.getElementById('my-assets-signin-hint');
+    const tagFilterEl = document.getElementById('common-assets-tag-filter');
     const onMyAssets = this.assetSource === 'my';
-    const canUpload = onMyAssets && this.canManageStudentAssets;
+    const onSavedPages = this.activeCategory === 'saved-pages';
+    const canUpload = onMyAssets && this.canManageStudentAssets && !onSavedPages;
     if (uploadEl) uploadEl.style.display = canUpload ? 'block' : 'none';
     if (introEl) introEl.style.display = this.assetSource === 'shared' ? 'block' : 'none';
     if (signInEl) signInEl.style.display = onMyAssets && !this.canManageStudentAssets ? 'block' : 'none';
+    if (tagFilterEl) tagFilterEl.style.display = onSavedPages ? 'none' : '';
   },
 
   canEditTags() {
@@ -19777,7 +19781,12 @@ const CommonAssetsPicker = {
       if (!visible.includes(cat)) return;
       this.activeCategory = cat;
       this.renderTabs();
-      this.render();
+      this.updateSourceUi();
+      if (cat === 'saved-pages') {
+        this.loadSavedPages();
+      } else {
+        this.render();
+      }
     });
 
     document.getElementById('common-assets-list').addEventListener('click', (e) => {
@@ -19794,6 +19803,20 @@ const CommonAssetsPicker = {
 
       const btn = e.target.closest('button[data-ca-action]');
       if (!btn) return;
+
+      if (this.activeCategory === 'saved-pages') {
+        const slug = btn.dataset.slug;
+        if (!slug) return;
+        const page = this.getSavedPage(slug);
+        if (!page) return;
+        if (btn.dataset.caAction === 'copy-page-url') this.copyUrl(page.hostedUrl);
+        if (btn.dataset.caAction === 'open-page-url' && page.hostedUrl) {
+          window.open(page.hostedUrl, '_blank', 'noopener,noreferrer');
+        }
+        if (btn.dataset.caAction === 'load-page') this.loadSavedPageIntoEditor(slug);
+        return;
+      }
+
       const name = btn.dataset.name;
       const asset = (this.assets[this.activeCategory] || []).find((a) => a.name === name);
       if (!asset) return;
@@ -19817,6 +19840,9 @@ const CommonAssetsPicker = {
     document.querySelectorAll('.ca-source-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
         this.assetSource = tab.dataset.source;
+        if (this.assetSource === 'shared' && this.activeCategory === 'saved-pages') {
+          this.activeCategory = 'images';
+        }
         document.querySelectorAll('.ca-source-tab').forEach((t) => {
           t.classList.toggle('active', t === tab);
           t.style.background = t === tab ? '#4caf50' : '#444';
@@ -19872,7 +19898,11 @@ const CommonAssetsPicker = {
   getVisibleCategories() {
     if (this.filterCategories && this.filterCategories.length) return this.filterCategories;
     if (this.filterCategory) return [this.filterCategory];
-    return ['images', 'videos', '360-images', '360-videos', 'audio', '3d', 'other'];
+    const cats = ['images', 'videos', '360-images', '360-videos', 'audio', '3d', 'other'];
+    if (this.assetSource === 'my' && this.canManageStudentAssets) {
+      cats.push('saved-pages');
+    }
+    return cats;
   },
 
   renderTabs() {
@@ -19914,6 +19944,14 @@ const CommonAssetsPicker = {
       }
       else if (type === 'model') this.activeCategory = '3d';
     }
+    if (
+      !this.filterCategory &&
+      !this.filterCategories &&
+      isFlatPageEditorMode() &&
+      this.assetSource === 'my'
+    ) {
+      this.activeCategory = 'saved-pages';
+    }
     this.renderTabs();
     this.updateSourceUi();
     this.initTagFilterBar();
@@ -19944,6 +19982,7 @@ const CommonAssetsPicker = {
         if (res.status === 401) {
           this.canManageStudentAssets = false;
           this.assetSource = 'shared';
+          if (this.activeCategory === 'saved-pages') this.activeCategory = 'images';
           document.querySelectorAll('.ca-source-tab').forEach((t) => {
             const active = t.dataset.source === 'shared';
             t.classList.toggle('active', active);
@@ -19957,12 +19996,17 @@ const CommonAssetsPicker = {
         if (!data.success) throw new Error(data.message || 'Failed to load');
         this.assets = data.assets || {};
       } else {
+        if (this.activeCategory === 'saved-pages') this.activeCategory = 'images';
         const res = await fetch('/api/common-assets');
         const data = await res.json();
         if (!data.success) throw new Error(data.message || 'Failed to load');
         this.assets = data.assets || {};
       }
       this.updateSourceUi();
+      if (this.activeCategory === 'saved-pages') {
+        await this.loadSavedPages();
+        return;
+      }
       this.initTagFilterBar();
       if (this.tagFilterBar) this.tagFilterBar.refreshTagLists();
       this.render();
@@ -19973,6 +20017,99 @@ const CommonAssetsPicker = {
           ? 'API server not running. Run <strong>npm run dev</strong> (starts Express + Vite) and reload.'
           : err.message) +
         '</p>';
+    }
+  },
+
+  getSavedPage(slug) {
+    return (this.savedPages || []).find((p) => p.slug === slug);
+  },
+
+  async loadSavedPages() {
+    const list = document.getElementById('common-assets-list');
+    if (!this.canManageStudentAssets) {
+      list.innerHTML =
+        '<p style="color:#888;text-align:center;padding:20px;">Sign in to view your saved flat web pages.</p>';
+      return;
+    }
+    try {
+      const res = await fetch('/api/student/flat-pages', { credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load saved pages');
+      this.savedPages = data.pages || [];
+      this.renderSavedPages();
+    } catch (err) {
+      list.innerHTML =
+        '<p style="color:#f44336;text-align:center;padding:16px;">' +
+        (err.message || 'Could not load saved pages') +
+        '</p>';
+    }
+  },
+
+  renderSavedPages() {
+    const list = document.getElementById('common-assets-list');
+    const pages = this.savedPages || [];
+    const esc = (s) =>
+      String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    if (!pages.length) {
+      list.innerHTML =
+        '<p style="color:#888;text-align:center;padding:20px;">No saved flat pages yet. Use <strong>☁️ Save to Cloud</strong> or <strong>🌐 Publish</strong> in the Flat Web Page editor.</p>';
+      return;
+    }
+    list.innerHTML = pages
+      .map((page) => {
+        const updated = page.updatedAt
+          ? new Date(page.updatedAt).toLocaleString(undefined, {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            })
+          : '';
+        const urlBlock = page.hostedUrl
+          ? `<div class="ca-saved-page-url">${esc(page.hostedUrl)}</div>`
+          : '<div class="ca-saved-page-draft">Draft saved to cloud — use <strong>Publish</strong> for a live link</div>';
+        const copyBtn = page.hostedUrl
+          ? `<button type="button" data-ca-action="copy-page-url" data-slug="${esc(page.slug)}" style="background:#6f42c1;color:#fff;">Copy URL</button>`
+          : '';
+        const openBtn = page.hostedUrl
+          ? `<button type="button" data-ca-action="open-page-url" data-slug="${esc(page.slug)}" style="background:#2196f3;color:#fff;">Open</button>`
+          : '';
+        return `<div class="ca-item ca-saved-page">
+          <div class="ca-item-info" style="flex:1;">
+            <div class="ca-item-name">${esc(page.name || page.slug)}</div>
+            <div class="ca-saved-page-meta">${updated ? `Updated ${updated}` : ''}${page.isHosted ? ' · Published' : ' · Cloud draft'}</div>
+            ${urlBlock}
+          </div>
+          <div class="ca-item-actions" style="flex-wrap:wrap;">
+            ${copyBtn}
+            ${openBtn}
+            <button type="button" data-ca-action="load-page" data-slug="${page.slug}" style="background:#4caf50;color:#fff;">Load in Editor</button>
+          </div>
+        </div>`;
+      })
+      .join('');
+  },
+
+  async loadSavedPageIntoEditor(slug) {
+    try {
+      const res = await fetch(`/api/student/flat-pages/${encodeURIComponent(slug)}`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Could not load page');
+      if (!window.flatPageEditor?.importCloudPage) {
+        alert('Flat page editor is not available.');
+        return;
+      }
+      window.flatPageEditor.importCloudPage(data.page, slug);
+      if (window.hotspotEditor?.setContentMode) {
+        window.hotspotEditor.setContentMode('flat');
+      }
+      this.close();
+    } catch (err) {
+      alert(err.message || 'Could not load saved page');
     }
   },
 
@@ -20058,6 +20195,10 @@ const CommonAssetsPicker = {
   },
 
   render() {
+    if (this.activeCategory === 'saved-pages') {
+      this.updateSourceUi();
+      return this.renderSavedPages();
+    }
     const list = document.getElementById('common-assets-list');
     let items = this.getFilteredItems();
     if (!items.length) {

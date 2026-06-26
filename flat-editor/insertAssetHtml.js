@@ -69,6 +69,14 @@ export function defaultHtmlInsertPos(html) {
 
 /** Build HTML snippet to insert for a common-assets library item. */
 export function buildInsertHtml(category, asset) {
+  if (category === 'project-vr') {
+    return buildProjectVrInsertHtml(
+      asset?.name,
+      asset?.embedUrl || asset?.url,
+      asset?.qrUrl
+    );
+  }
+
   const url = getAssetMediaUrl(asset);
   if (!url) return '';
   const name = escapeAttr(asset?.name || 'asset');
@@ -115,9 +123,6 @@ export function buildInsertHtml(category, asset) {
           `<model-viewer src="${modelSrc}" alt="${name}" camera-controls auto-rotate shadow-intensity="1" style="width:100%;height:400px;background:#ececec;"></model-viewer>`,
         ].join('\n');
       }
-
-    case 'project-vr':
-      return buildProjectVrInsertHtml(asset?.name, asset?.embedUrl || asset?.url, asset?.qrUrl);
 
     default:
       return `<a href="${urlAttr}" target="_blank" rel="noopener noreferrer">${name}</a>`;

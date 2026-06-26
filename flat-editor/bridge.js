@@ -11,7 +11,14 @@ import {
 import { buildPreviewDocument } from './buildPreview.js';
 import { saveFlatPage, publishFlatPage } from './flat-page-api.js';
 import { buildInsertHtml, defaultHtmlInsertPos } from './insertAssetHtml.js';
-import { rewriteVrTourEmbedsInHtml } from './vrTourEmbed.js';
+import {
+  buildProjectVrInsertHtml,
+  deriveQrUrlFromTourUrl,
+  hasVrTourEmbed,
+  resolveAbsoluteUrl,
+  rewriteVrTourEmbedsInHtml,
+  stripExistingVrTourEmbeds,
+} from './vrTourEmbed.js';
 
 export class FlatPageEditorBridge {
   constructor() {
@@ -159,6 +166,44 @@ export class FlatPageEditorBridge {
     };
   }
 
+  _syncScenesData() {
+    try {
+      if (window.hotspotEditor && typeof window.hotspotEditor.saveScenesData === 'function') {
+        window.hotspotEditor.saveScenesData();
+      }
+    } catch (_) {}
+  }
+
+  /** Upgrade legacy iframe-only embeds to include the QR block (e.g. after Generate for Embed). */
+  upgradeVrTourEmbeds(vrTourEmbed = {}) {
+    const embedUrl = resolveAbsoluteUrl(vrTourEmbed.hostedUrl || '');
+    if (!embedUrl) return false;
+    const qrUrl =
+      resolveAbsoluteUrl(vrTourEmbed.qrUrl || '') || deriveQrUrlFromTourUrl(embedUrl);
+    let html = this.getFileContent('index.html');
+    if (!hasVrTourEmbed(html)) return false;
+
+    const needsQrBlock = !/vr-tour-mobile-qr-img/i.test(html);
+    if (needsQrBlock) {
+      html = stripExistingVrTourEmbeds(html);
+      const name =
+        (window.hotspotEditor &&
+          typeof window.hotspotEditor.getProjectVrEmbedInfo === 'function' &&
+          window.hotspotEditor.getProjectVrEmbedInfo().name) ||
+        '360° VR Tour';
+      const snippet = buildProjectVrInsertHtml(name, embedUrl, qrUrl);
+      const insertAt = defaultHtmlInsertPos(html);
+      html = `${html.slice(0, insertAt)}\n${snippet}\n${html.slice(insertAt)}`;
+    } else {
+      html = rewriteVrTourEmbedsInHtml(html, { hostedUrl: embedUrl, useOnlineUrl: true });
+    }
+
+    this.setFileContent('index.html', html);
+    this._syncScenesData();
+    this._notify();
+    return true;
+  }
+
   /** Insert HTML from an online asset at the last HTML cursor position (flat page mode). */
   insertAsset(category, asset) {
     if (!this._visible) return false;
@@ -168,6 +213,9 @@ export class FlatPageEditorBridge {
 
     const htmlFileId = 'index.html';
     let content = this.getFileContent(htmlFileId);
+    if (cat === 'project-vr') {
+      content = stripExistingVrTourEmbeds(content);
+    }
     const sel = this._editorSelections[htmlFileId];
     const insertAt =
       sel && typeof sel.head === 'number'
@@ -181,6 +229,10 @@ export class FlatPageEditorBridge {
     const nextPos = insertAt + padded.length;
     this._editorSelections[htmlFileId] = { anchor: nextPos, head: nextPos };
     this._pendingSelection = { fileId: htmlFileId, anchor: nextPos, head: nextPos };
+
+    if (cat === 'project-vr') {
+      this._syncScenesData();
+    }
 
     if (this.activeFileId !== htmlFileId) {
       this.setActiveFile(htmlFileId);
@@ -408,6 +460,10 @@ export class FlatPageEditorBridge {
   async publish() {
     this._setCloudStatus('Publishing…');
     try {
+      const vrTourEmbed = window.hotspotEditor?.vrTourEmbed;
+      if (vrTourEmbed?.hostedUrl && typeof this.upgradeVrTourEmbeds === 'function') {
+        this.upgradeVrTourEmbeds(vrTourEmbed);
+      }
       const page = this.getActivePage();
       const slug = page.name
         .toLowerCase()

@@ -16923,60 +16923,123 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 2000);
   }
 
-  promptForSceneImageChange() {
-    // Check if scene1 (first scene) is using the default image
-    const scene1 = this.scenes.scene1;
-    const defaultImages = ['./images/scene1.jpg', 'images/scene1.jpg', '/images/scene1.jpg'];
+  static WELCOME_SEEN_KEY = 'vr-hotspot-welcome-seen';
 
-    // Skip prompt if scene1 doesn't exist
-    if (!scene1) return;
+  _markWelcomeSeen() {
+    try {
+      localStorage.setItem(HotspotEditor.WELCOME_SEEN_KEY, '1');
+    } catch (_) {}
+  }
 
-    // Skip prompt if scene1 is already a video with a URL or local source
-    if (scene1.type === 'video' && scene1.videoSrc) {
-      console.log('ℹ️ Scene 1 already uses a video source, skipping prompt');
-      return;
-    }
+  _welcomeGithubFooterHtml() {
+    return `<p style="color: rgba(255,255,255,0.75); margin-top: 18px; margin-bottom: 0; font-size: 12px; line-height: 1.5;">
+            Available for free for education use under the MIT License.
+            <a href="https://github.com/pachecod/vr-hotspots-educational" target="_blank" rel="noopener noreferrer" style="color: #fff; text-decoration: underline;">See our Github</a>.
+          </p>`;
+  }
 
-    // Only prompt if scene1 uses the default image
-    if (!defaultImages.includes(scene1.image)) {
-      console.log('ℹ️ Scene 1 has custom image, skipping prompt');
-      return;
-    }
+  _ensureWelcomeAnimationStyle() {
+    if (document.getElementById('prompt-animation-style')) return;
+    const style = document.createElement('style');
+    style.id = 'prompt-animation-style';
+    style.textContent = `
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+        `;
+    document.head.appendChild(style);
+  }
 
-    // Show prompt dialog (with a re-check right before rendering to avoid race conditions)
-    setTimeout(() => {
-      // Re-check current state in case scene1 changed to video or custom image meanwhile
-      const recheck = this.scenes.scene1;
-      if (!recheck) return;
-      if (recheck.type === 'video' && recheck.videoSrc) {
-        console.log('ℹ️ Skipping welcome prompt: scene1 is video now');
-        return;
-      }
-      if (!defaultImages.includes(recheck.image)) {
-        console.log('ℹ️ Skipping welcome prompt: scene1 image customized');
-        return;
-      }
-      const dialog = document.createElement('div');
-      dialog.style.cssText = `
+  _createWelcomeOverlay() {
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(0,0,0,0.85); z-index: ${EDITOR_LAYER.dialog}; display: flex;
         align-items: center; justify-content: center; font-family: Arial;
         animation: fadeIn 0.3s ease-in;
       `;
+    const inner = document.createElement('div');
+    inner.id = 'welcome-dialog-inner';
+    inner.style.cssText =
+      'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; border-radius: 16px; color: white; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center; position: relative;';
+    dialog.appendChild(inner);
+    return { dialog, inner };
+  }
 
-      dialog.innerHTML = `
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; border-radius: 16px; color: white; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center; position: relative;">
+  _closeWelcomeDialog(dialog) {
+    this._markWelcomeSeen();
+    if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
+  }
+
+  _shouldShowWelcome360MediaStep() {
+    const scene1 = this.scenes.scene1;
+    const defaultImages = ['./images/scene1.jpg', 'images/scene1.jpg', '/images/scene1.jpg'];
+    if (!scene1) return false;
+    if (scene1.type === 'video' && scene1.videoSrc) return false;
+    if (!defaultImages.includes(scene1.image)) return false;
+    return true;
+  }
+
+  _renderWelcomeModeStep(dialog, inner) {
+    inner.innerHTML = `
+          <button id="welcome-close-btn" type="button" aria-label="Close" title="Close" style="
+            position: absolute; top: 12px; left: 12px;
+            background: none; border: none; color: rgba(255,255,255,0.85);
+            font-size: 28px; line-height: 1; cursor: pointer; padding: 4px 8px;
+          ">&times;</button>
+          <div style="font-size: 48px; margin-bottom: 20px;">👋</div>
+          <h2 style="margin: 0 0 15px 0; font-size: 28px; font-weight: bold;">Welcome to VR Hotspot Editor!</h2>
+          <p style="color: #f0f0f0; margin-bottom: 25px; font-size: 16px; line-height: 1.6;">
+            Every project has a 360° tour as well as a flat Web page. Which do you want to work on first?
+          </p>
+          <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+            <button id="welcome-choose-360-btn" style="
+              background: white; color: #667eea; border: none; padding: 15px 30px;
+              border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform 0.2s;
+            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+              🌐 360° Tour
+            </button>
+            <button id="welcome-choose-flat-btn" style="
+              background: #4CAF50; color: white; border: none; padding: 15px 30px;
+              border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform 0.2s;
+            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+              📄 Flat Web Page
+            </button>
+          </div>
+          ${this._welcomeGithubFooterHtml()}
+        `;
+
+    document.getElementById('welcome-close-btn').onclick = () => this._closeWelcomeDialog(dialog);
+
+    document.getElementById('welcome-choose-flat-btn').onclick = () => {
+      this._closeWelcomeDialog(dialog);
+      this.setContentMode('flat');
+    };
+
+    document.getElementById('welcome-choose-360-btn').onclick = () => {
+      if (this._shouldShowWelcome360MediaStep()) {
+        this._renderWelcome360MediaStep(dialog, inner);
+      } else {
+        this._closeWelcomeDialog(dialog);
+      }
+    };
+  }
+
+  _renderWelcome360MediaStep(dialog, inner) {
+    inner.innerHTML = `
           <button id="welcome-close-btn" type="button" aria-label="Close" title="Keep default scene" style="
             position: absolute; top: 12px; left: 12px;
             background: none; border: none; color: rgba(255,255,255,0.85);
             font-size: 28px; line-height: 1; cursor: pointer; padding: 4px 8px;
           ">&times;</button>
           <div style="font-size: 48px; margin-bottom: 20px;">🎬</div>
-          <h2 style="margin: 0 0 15px 0; font-size: 28px; font-weight: bold;">Welcome to VR Hotspot Editor!</h2>
+          <h2 style="margin: 0 0 15px 0; font-size: 28px; font-weight: bold;">Set up your 360° tour</h2>
           <p style="color: #f0f0f0; margin-bottom: 25px; font-size: 16px; line-height: 1.6;">
             You're currently using the default scene media. Would you like to change it to your own 360° image or 360° video?
           </p>
-          
           <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
             <button id="change-scene-image-btn" style="
               background: white; color: #667eea; border: none; padding: 15px 30px;
@@ -16999,7 +17062,6 @@ document.addEventListener('DOMContentLoaded', () => {
             " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
               🔗 Use Video URL
             </button>
-            
             <button id="keep-default-btn" style="
               background: rgba(255,255,255,0.2); color: white; border: 2px solid white; padding: 15px 30px;
               border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
@@ -17008,91 +17070,82 @@ document.addEventListener('DOMContentLoaded', () => {
               ✨ Keep Default
             </button>
           </div>
-          
           <p style="color: rgba(255,255,255,0.7); margin-top: 20px; font-size: 13px;">
             💡 You can always change it later from the Scene Manager
           </p>
-
-          <p style="color: rgba(255,255,255,0.75); margin-top: 18px; margin-bottom: 0; font-size: 12px; line-height: 1.5;">
-            Available for free for education use under the MIT License.
-            <a href="https://github.com/pachecod/vr-hotspots-educational" target="_blank" rel="noopener noreferrer" style="color: #fff; text-decoration: underline;">See our Github</a>.
-          </p>
-        </div>
-      `;
-
-      // Add animation keyframes
-      if (!document.getElementById('prompt-animation-style')) {
-        const style = document.createElement('style');
-        style.id = 'prompt-animation-style';
-        style.textContent = `
-          @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
+          ${this._welcomeGithubFooterHtml()}
         `;
-        document.head.appendChild(style);
-      }
 
-      document.body.appendChild(dialog);
+    const closeWelcomeDialog = () => this._closeWelcomeDialog(dialog);
 
-      // Change Image button — full media dialog (image or video)
-      document.getElementById('change-scene-image-btn').onclick = () => {
-        document.body.removeChild(dialog);
-        this.editSceneMedia('scene1', { reopenSceneManager: false, initialMediaType: 'image' });
+    document.getElementById('change-scene-image-btn').onclick = () => {
+      closeWelcomeDialog();
+      this.editSceneMedia('scene1', { reopenSceneManager: false, initialMediaType: 'image' });
+    };
+
+    const videoBtn = document.getElementById('change-scene-video-btn');
+    if (videoBtn) {
+      videoBtn.onclick = () => {
+        closeWelcomeDialog();
+        this.editSceneMedia('scene1', { reopenSceneManager: false, initialMediaType: 'video' });
       };
+    }
 
-      const videoBtn = document.getElementById('change-scene-video-btn');
-      if (videoBtn) {
-        videoBtn.onclick = () => {
-          document.body.removeChild(dialog);
-          this.editSceneMedia('scene1', { reopenSceneManager: false, initialMediaType: 'video' });
-        };
-      }
+    const videoUrlBtn = document.getElementById('change-scene-video-url-btn');
+    if (videoUrlBtn) {
+      videoUrlBtn.onclick = async () => {
+        closeWelcomeDialog();
+        const url = prompt(
+          `Enter the URL of the 360° video for "${
+            (this.scenes.scene1 && this.scenes.scene1.name) || 'Scene 1'
+          }":\n(Direct link to MP4/WebM file)`,
+          this.scenes.scene1 &&
+            this.scenes.scene1.videoSrc &&
+            this.scenes.scene1.videoSrc.startsWith('http')
+            ? this.scenes.scene1.videoSrc
+            : 'https://'
+        );
+        if (!url || url === 'https://') return;
+        try {
+          new URL(url);
+        } catch (_) {
+          alert('Please enter a valid URL');
+          return;
+        }
 
-      const videoUrlBtn = document.getElementById('change-scene-video-url-btn');
-      if (videoUrlBtn) {
-        videoUrlBtn.onclick = async () => {
-          document.body.removeChild(dialog);
-          const url = prompt(
-            `Enter the URL of the 360° video for "${
-              (this.scenes.scene1 && this.scenes.scene1.name) || 'Scene 1'
-            }":\n(Direct link to MP4/WebM file)`,
-            this.scenes.scene1 &&
-              this.scenes.scene1.videoSrc &&
-              this.scenes.scene1.videoSrc.startsWith('http')
-              ? this.scenes.scene1.videoSrc
-              : 'https://'
-          );
-          if (!url || url === 'https://') return;
-          try {
-            new URL(url);
-          } catch (_) {
-            alert('Please enter a valid URL');
-            return;
-          }
+        const sc = this.scenes.scene1 || {};
+        sc.type = 'video';
+        sc.videoSrc = url;
+        sc.videoFileName = url.split('/').pop();
+        sc.videoVolume = sc.videoVolume || 0.5;
+        this.scenes.scene1 = sc;
+        this.saveScenesData();
 
-          const sc = this.scenes.scene1 || {};
-          sc.type = 'video';
-          sc.videoSrc = url;
-          sc.videoFileName = url.split('/').pop();
-          sc.videoVolume = sc.videoVolume || 0.5;
-          this.scenes.scene1 = sc;
-          this.saveScenesData();
-
-          // Auto-download to local with loader and then switch scene
-          await this.autoDownloadRemoteVideo('scene1', url);
-          this.switchToScene('scene1');
-        };
-      }
-
-      // Keep Default button (same as close X)
-      const closeWelcomeDialog = () => {
-        if (dialog.parentNode) document.body.removeChild(dialog);
+        await this.autoDownloadRemoteVideo('scene1', url);
+        this.switchToScene('scene1');
       };
+    }
 
-      document.getElementById('welcome-close-btn').onclick = closeWelcomeDialog;
-      document.getElementById('keep-default-btn').onclick = closeWelcomeDialog;
-    }, 1000); // Delay by 1 second to let the scene load first
+    document.getElementById('welcome-close-btn').onclick = closeWelcomeDialog;
+    document.getElementById('keep-default-btn').onclick = closeWelcomeDialog;
+  }
+
+  _showWelcomeInterstitial() {
+    this._ensureWelcomeAnimationStyle();
+    const { dialog, inner } = this._createWelcomeOverlay();
+    document.body.appendChild(dialog);
+    this._renderWelcomeModeStep(dialog, inner);
+  }
+
+  promptForSceneImageChange() {
+    try {
+      if (localStorage.getItem(HotspotEditor.WELCOME_SEEN_KEY)) return;
+    } catch (_) {}
+    if (new URLSearchParams(window.location.search).get('adminReview') === '1') return;
+
+    setTimeout(() => {
+      this._showWelcomeInterstitial();
+    }, 1000);
   }
 
   addNewScene() {

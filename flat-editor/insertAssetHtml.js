@@ -1,5 +1,6 @@
 const AFRAME_CDN = 'https://aframe.io/releases/1.7.1/aframe.min.js';
 const MODEL_VIEWER_CDN = 'https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js';
+import { buildProjectVrInsertHtml } from './vrTourEmbed.js';
 
 function escapeAttr(value) {
   return String(value || '')
@@ -114,6 +115,9 @@ export function buildInsertHtml(category, asset) {
           `<model-viewer src="${modelSrc}" alt="${name}" camera-controls auto-rotate shadow-intensity="1" style="width:100%;height:400px;background:#ececec;"></model-viewer>`,
         ].join('\n');
       }
+
+    case 'project-vr':
+      return buildProjectVrInsertHtml(asset?.name, asset?.embedUrl || asset?.url);
 
     default:
       return `<a href="${urlAttr}" target="_blank" rel="noopener noreferrer">${name}</a>`;

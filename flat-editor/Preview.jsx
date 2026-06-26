@@ -2,9 +2,10 @@ import React, { useMemo } from 'react';
 import { buildPreviewDocument } from './buildPreview.js';
 
 export default function Preview({ page, refreshKey }) {
+  const pageId = page?.id || 'main';
   const baseHref =
     typeof window !== 'undefined' && window.location?.origin
-      ? `${window.location.origin}/`
+      ? `${window.location.origin}/flat-pages/${pageId}/`
       : undefined;
 
   const srcdoc = useMemo(

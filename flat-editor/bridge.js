@@ -11,6 +11,7 @@ import {
 import { buildPreviewDocument } from './buildPreview.js';
 import { saveFlatPage, publishFlatPage } from './flat-page-api.js';
 import { buildInsertHtml, defaultHtmlInsertPos } from './insertAssetHtml.js';
+import { rewriteVrTourEmbedsInHtml } from './vrTourEmbed.js';
 
 export class FlatPageEditorBridge {
   constructor() {
@@ -234,8 +235,11 @@ export class FlatPageEditorBridge {
     return JSON.parse(JSON.stringify(this.project));
   }
 
-  addToZip(zip) {
+  addToZip(zip, options = {}) {
     if (!zip || typeof zip.folder !== 'function') return null;
+    const exportMode = options.exportMode || 'bundle';
+    const hostedUrl = options.vrTourEmbed?.hostedUrl || '';
+    const useOnlineUrl = exportMode === 'urls';
     const manifest = { version: PROJECT_VERSION, activePageId: this.project.activePageId, pages: {} };
     const root = zip.folder(EXPORT_FOLDER);
     Object.keys(this.project.pages).forEach((pageId) => {
@@ -248,7 +252,11 @@ export class FlatPageEditorBridge {
         files: [],
       };
       (page.files || []).forEach((file) => {
-        pageFolder.file(file.name, file.content || '');
+        let content = file.content || '';
+        if (file.id === 'index.html' && hostedUrl) {
+          content = rewriteVrTourEmbedsInHtml(content, { hostedUrl, useOnlineUrl });
+        }
+        pageFolder.file(file.name, content);
         pageManifest.files.push({ id: file.id, name: file.name, type: file.type });
       });
       pageFolder.file('manifest.json', JSON.stringify(pageManifest, null, 2));

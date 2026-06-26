@@ -812,6 +812,20 @@
         background: #2196f3;
         border-color: #2196f3;
       }
+      #common-assets-modal .ca-tab[data-category='project-vr'] {
+        border-color: #4caf50;
+        font-weight: bold;
+      }
+      #common-assets-modal .ca-tab[data-category='project-vr'].active {
+        background: #4caf50;
+        border-color: #4caf50;
+      }
+      #common-assets-modal .ca-project-vr-desc {
+        color: #aaa;
+        font-size: 12px;
+        margin-top: 4px;
+        line-height: 1.4;
+      }
       #common-assets-modal .ca-search {
         width: 100%;
         padding: 10px;
@@ -2215,6 +2229,7 @@
           </div>
           <div id="common-assets-tag-filter" class="asset-tag-filter-mount"></div>
           <div class="ca-tabs" id="common-assets-tabs">
+            <button class="ca-tab" data-category="project-vr">360 VR Tour</button>
             <button class="ca-tab" data-category="saved-pages">My Saved Pages</button>
             <button class="ca-tab active" data-category="images">Flat Images</button>
             <button class="ca-tab" data-category="videos">Flat Videos</button>

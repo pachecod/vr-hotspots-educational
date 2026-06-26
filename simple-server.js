@@ -23,6 +23,7 @@ const { registerBillingRoutes } = require('./routes/billing-routes');
 const { registerSubmissionVersionRoutes } = require('./routes/submission-version-routes');
 const { registerAdminStudentPeekRoutes } = require('./routes/admin-student-peek-routes');
 const { registerFlatPageRoutes } = require('./routes/flat-page-routes');
+const { registerVrTourRoutes } = require('./routes/vr-tour-routes');
 const { runMigrations, importSubmissionsFromJson } = require('./db/migrate');
 const { isDbEnabled } = require('./services/db-service');
 const {
@@ -300,6 +301,7 @@ registerSubmissionVersionRoutes(app, {
 });
 registerAdminStudentPeekRoutes(app, { requireAdmin });
 registerFlatPageRoutes(app);
+registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe });
 
 if (process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_BUCKET_NAME) {
   b2Service

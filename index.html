@@ -804,6 +804,14 @@
         background: #4caf50;
         border-color: #4caf50;
       }
+      #common-assets-modal .ca-tab[data-category='saved-pages'] {
+        border-color: #2196f3;
+        font-weight: bold;
+      }
+      #common-assets-modal .ca-tab[data-category='saved-pages'].active {
+        background: #2196f3;
+        border-color: #2196f3;
+      }
       #common-assets-modal .ca-search {
         width: 100%;
         padding: 10px;
@@ -2207,6 +2215,7 @@
           </div>
           <div id="common-assets-tag-filter" class="asset-tag-filter-mount"></div>
           <div class="ca-tabs" id="common-assets-tabs">
+            <button class="ca-tab" data-category="saved-pages">My Saved Pages</button>
             <button class="ca-tab active" data-category="images">Flat Images</button>
             <button class="ca-tab" data-category="videos">Flat Videos</button>
             <button class="ca-tab" data-category="360-images">360 Photos</button>
@@ -2214,7 +2223,6 @@
             <button class="ca-tab" data-category="audio">Audio</button>
             <button class="ca-tab" data-category="3d">3D</button>
             <button class="ca-tab" data-category="other">Other</button>
-            <button class="ca-tab" data-category="saved-pages">My Saved Pages</button>
           </div>
           <div id="common-assets-list"></div>
         </div>

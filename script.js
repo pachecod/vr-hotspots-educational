@@ -19900,7 +19900,7 @@ const CommonAssetsPicker = {
     if (this.filterCategory) return [this.filterCategory];
     const cats = ['images', 'videos', '360-images', '360-videos', 'audio', '3d', 'other'];
     if (this.assetSource === 'my' && this.canManageStudentAssets) {
-      cats.push('saved-pages');
+      return ['saved-pages', ...cats];
     }
     return cats;
   },
@@ -20003,6 +20003,7 @@ const CommonAssetsPicker = {
         this.assets = data.assets || {};
       }
       this.updateSourceUi();
+      this.renderTabs();
       if (this.activeCategory === 'saved-pages') {
         await this.loadSavedPages();
         return;

@@ -13395,6 +13395,23 @@ class HotspotProject {
     videoEl.setAttribute('crossorigin', 'anonymous');
   }
 
+  getSceneVideoElement() {
+    let videoEl = document.getElementById('scene-video-dynamic');
+    if (videoEl) return videoEl;
+
+    videoEl = document.createElement('video');
+    videoEl.id = 'scene-video-dynamic';
+    videoEl.loop = true;
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.setAttribute('webkit-playsinline', '');
+    videoEl.preload = 'auto';
+    videoEl.style.display = 'none';
+    this.configureSceneVideoCrossOrigin(videoEl);
+    document.body.appendChild(videoEl);
+    return videoEl;
+  }
+
   createExportVideoSphereElement() {
     const el = document.createElement('a-entity');
     el.id = 'current-videosphere';
@@ -13570,12 +13587,7 @@ class HotspotProject {
     }
     this.detachVideoTextureRenderer();
 
-    const videoEl = document.getElementById('scene-video-dynamic');
-    if (!videoEl) {
-      console.warn('Video element not found in assets');
-      this.hideLoadingIndicator();
-      return;
-    }
+    const videoEl = this.getSceneVideoElement();
 
     videoEl.volume = scene.videoVolume !== undefined ? scene.videoVolume : 0.5;
     videoEl.loop = true;

@@ -219,6 +219,7 @@ export class FlatPageEditorBridge {
     if (file) {
       file.content = content;
       this.save();
+      this._syncScenesData();
     }
   }
 

@@ -20247,7 +20247,7 @@ const CommonAssetsPicker = {
   },
 
   notifyFlatPageSaved(pageMeta) {
-    if (!pageMeta?.slug) return;
+    if (!pageMeta?.slug && !pageMeta?.hostedUrl) return;
     const entry = {
       slug: pageMeta.slug,
       name: pageMeta.name || pageMeta.slug,
@@ -20257,7 +20257,11 @@ const CommonAssetsPicker = {
       updatedAt: pageMeta.updatedAt || new Date().toISOString(),
     };
     const list = this.savedPages || [];
-    const idx = list.findIndex((p) => p.slug === entry.slug);
+    const idx = list.findIndex(
+      (p) =>
+        (entry.slug && p.slug === entry.slug) ||
+        (entry.hostedUrl && p.hostedUrl === entry.hostedUrl)
+    );
     if (idx >= 0) {
       list[idx] = { ...list[idx], ...entry };
       this.savedPages = list;
@@ -20270,9 +20274,9 @@ const CommonAssetsPicker = {
   },
 
   async refreshSavedPages() {
-    if (!this.canManageStudentAssets) return;
     try {
       const res = await fetch('/api/student/flat-pages', { credentials: 'include' });
+      if (res.status === 401) return;
       const data = await res.json();
       if (!res.ok || !data.success) return;
       this.savedPages = data.pages || [];

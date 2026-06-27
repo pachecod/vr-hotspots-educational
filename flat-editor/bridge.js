@@ -596,10 +596,20 @@ export class FlatPageEditorBridge {
     this._notify();
   }
 
+  _resolveCloudPageName() {
+    const page = this.getActivePage();
+    if (typeof document !== 'undefined') {
+      const templateName = document.getElementById('template-name')?.value?.trim();
+      if (templateName) return templateName;
+    }
+    return page.name || 'Flat Web Page';
+  }
+
   _filesPayload() {
     const page = this.getActivePage();
+    const name = this._resolveCloudPageName();
     return {
-      name: page.name,
+      name,
       framework: page.framework,
       files: (page.files || []).map((f) => ({
         name: f.name,
@@ -613,6 +623,9 @@ export class FlatPageEditorBridge {
     this._setCloudStatus('Saving…');
     try {
       const page = this.getActivePage();
+      const cloudName = this._resolveCloudPageName();
+      page.name = cloudName;
+      this.save();
       const data = await saveFlatPage(this._filesPayload());
       await this._syncSavedPagesToAssets(data, page);
       this._setCloudStatus('Saved to cloud ✓ — find it under Online Assets → My Saved Pages');
@@ -631,13 +644,12 @@ export class FlatPageEditorBridge {
         this.upgradeVrTourEmbeds(vrTourEmbed);
       }
       const page = this.getActivePage();
-      const slug = page.name
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'flat-web-page';
-      const data = await publishFlatPage(slug, this._filesPayload());
-      await this._syncSavedPagesToAssets(data, page, slug, { published: true });
+      const cloudName = this._resolveCloudPageName();
+      page.name = cloudName;
+      this.save();
+      const payload = this._filesPayload();
+      const data = await publishFlatPage(null, payload);
+      await this._syncSavedPagesToAssets(data, page, data.slug, { published: true });
       this._setCloudStatus('Published ✓ — find it under Online Assets → My Saved Pages');
       if (data.url && confirm(`Published to:\n${data.url}\n\nCopy this URL to your clipboard?`)) {
         try {
@@ -656,7 +668,7 @@ export class FlatPageEditorBridge {
     const slug =
       data?.slug ||
       slugHint ||
-      (page?.name || '')
+      (data?.name || page?.name || '')
         .toLowerCase()
         .trim()
         .replace(/[^a-z0-9]+/g, '-')

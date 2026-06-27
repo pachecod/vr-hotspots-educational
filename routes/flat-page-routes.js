@@ -63,7 +63,9 @@ async function upsertFlatPageRecord({
   hostedUrl = null,
   isHosted = false,
 }) {
-  if (!isDbEnabled()) return;
+  if (!isDbEnabled()) {
+    throw new Error('Database not configured');
+  }
   const prefix = buildPrefix(classSlug, studentId, slug);
   const manifest = files.map((f) => ({ name: f.name }));
   if (isHosted && hostedPath && hostedUrl) {
@@ -91,6 +93,74 @@ async function upsertFlatPageRecord({
 
 function buildPrefix(classSlug, studentId, slug) {
   return `student-pages/${classSlug}/${studentId}/${slug}/`;
+}
+
+function studentHostedPrefix(studentId) {
+  const shortId = String(studentId).replace(/-/g, '').slice(0, 8);
+  return `flat-${shortId}-`;
+}
+
+function humanizeSlug(slug) {
+  return String(slug || '')
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+/** Hosted flat pages on disk (covers publishes even when DB upsert lagged or failed). */
+function listHostedFlatPagesFromDisk(studentId, baseUrl) {
+  if (!fs.existsSync(HOSTED_DIR)) return [];
+  const dirPrefix = studentHostedPrefix(studentId);
+  const pages = [];
+  for (const entry of fs.readdirSync(HOSTED_DIR)) {
+    if (!entry.startsWith(dirPrefix)) continue;
+    const slug = entry.slice(dirPrefix.length);
+    if (!slug) continue;
+    const indexPath = path.join(HOSTED_DIR, entry, 'index.html');
+    if (!fs.existsSync(indexPath)) continue;
+    let updatedAt = new Date().toISOString();
+    try {
+      updatedAt = fs.statSync(indexPath).mtime.toISOString();
+    } catch (_) {}
+    pages.push({
+      slug,
+      name: humanizeSlug(slug),
+      files: [{ name: 'index.html' }],
+      hostedUrl: `${baseUrl}/hosted/${entry}/index.html`,
+      isHosted: true,
+      updatedAt,
+      hostedPath: entry,
+    });
+  }
+  return pages;
+}
+
+function mergeFlatPageLists(dbPages, diskPages) {
+  const bySlug = new Map();
+  for (const page of dbPages || []) {
+    if (page?.slug) bySlug.set(page.slug, page);
+  }
+  for (const page of diskPages || []) {
+    if (!page?.slug) continue;
+    const existing = bySlug.get(page.slug);
+    if (!existing) {
+      bySlug.set(page.slug, page);
+      continue;
+    }
+    bySlug.set(page.slug, {
+      ...existing,
+      hostedUrl: existing.hostedUrl || page.hostedUrl,
+      isHosted: Boolean(existing.isHosted || page.isHosted),
+      updatedAt:
+        new Date(page.updatedAt || 0) > new Date(existing.updatedAt || 0)
+          ? page.updatedAt
+          : existing.updatedAt,
+    });
+  }
+  return [...bySlug.values()].sort(
+    (a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)
+  );
 }
 
 // Validate + normalize an incoming { name, files } payload.
@@ -132,23 +202,28 @@ function registerFlatPageRoutes(app) {
   // List the signed-in student's flat pages (metadata only)
   app.get('/api/student/flat-pages', requireStudentStrict, async (req, res) => {
     try {
-      if (!isDbEnabled()) return res.json({ success: true, pages: [] });
       const studentId = req.studentSession.studentId;
-      const { rows } = await query(
-        `SELECT slug, name, files_manifest, hosted_url, is_hosted, updated_at
-         FROM flat_page_projects WHERE student_id = $1 ORDER BY updated_at DESC`,
-        [studentId]
-      );
-      res.json({
-        success: true,
-        pages: rows.map((r) => ({
+      const baseUrl = getServerBaseUrl(req);
+      let dbPages = [];
+      if (isDbEnabled()) {
+        const { rows } = await query(
+          `SELECT slug, name, files_manifest, hosted_url, is_hosted, updated_at
+           FROM flat_page_projects WHERE student_id = $1 ORDER BY updated_at DESC`,
+          [studentId]
+        );
+        dbPages = rows.map((r) => ({
           slug: r.slug,
           name: r.name,
           files: r.files_manifest,
           hostedUrl: r.hosted_url,
           isHosted: r.is_hosted,
           updatedAt: r.updated_at,
-        })),
+        }));
+      }
+      const diskPages = listHostedFlatPagesFromDisk(studentId, baseUrl);
+      res.json({
+        success: true,
+        pages: mergeFlatPageLists(dbPages, diskPages),
       });
     } catch (err) {
       console.error('List flat pages error:', err);
@@ -275,8 +350,7 @@ function registerFlatPageRoutes(app) {
     const studentId = req.studentSession.studentId;
     const classSlug = await resolveClassSlug(studentId, req.studentSession);
 
-    const shortId = String(studentId).replace(/-/g, '').slice(0, 8);
-    const hostedPath = `flat-${shortId}-${payload.slug}`;
+    const hostedPath = `${studentHostedPrefix(studentId)}${payload.slug}`;
     const targetDir = path.join(HOSTED_DIR, hostedPath);
     fs.mkdirSync(targetDir, { recursive: true });
 
@@ -289,18 +363,33 @@ function registerFlatPageRoutes(app) {
 
     const url = `${getServerBaseUrl(req)}/hosted/${hostedPath}/index.html`;
 
-    await upsertFlatPageRecord({
-      studentId,
-      classSlug,
-      name: payload.name,
-      slug: payload.slug,
-      files: payload.files,
-      hostedPath,
-      hostedUrl: url,
-      isHosted: true,
-    });
+    let savedToLibrary = false;
+    if (isDbEnabled()) {
+      try {
+        await upsertFlatPageRecord({
+          studentId,
+          classSlug,
+          name: payload.name,
+          slug: payload.slug,
+          files: payload.files,
+          hostedPath,
+          hostedUrl: url,
+          isHosted: true,
+        });
+        savedToLibrary = true;
+      } catch (err) {
+        console.error('Publish flat page DB upsert failed:', err);
+      }
+    }
 
-    res.json({ success: true, url, hostedPath, slug: payload.slug, name: payload.name });
+    res.json({
+      success: true,
+      url,
+      hostedPath,
+      slug: payload.slug,
+      name: payload.name,
+      savedToLibrary,
+    });
   }
 
   // Publish a flat page to a live hosted URL (served from /hosted/<path>/)

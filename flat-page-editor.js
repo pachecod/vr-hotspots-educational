@@ -632,10 +632,18 @@ button:hover { background: #1d4ed8; }`;
       this._els.cloudStatus.style.color = isError ? '#ff8a80' : '#9ad29a';
     }
 
+    _resolveCloudPageName() {
+      const page = this.getActivePage();
+      const templateName = document.getElementById('template-name')?.value?.trim();
+      if (templateName) return templateName;
+      return page.name || 'Flat Web Page';
+    }
+
     _filesPayload() {
       const page = this.getActivePage();
+      const name = this._resolveCloudPageName();
       return {
-        name: page.name,
+        name,
         framework: page.framework,
         files: (page.files || []).map((f) => ({ name: f.name, type: f.type, content: f.content || '' })),
       };
@@ -671,7 +679,7 @@ button:hover { background: #1d4ed8; }`;
       const slug =
         data?.slug ||
         slugHint ||
-        (page?.name || '')
+        (data?.name || page?.name || '')
           .toLowerCase()
           .trim()
           .replace(/[^a-z0-9]+/g, '-')
@@ -696,12 +704,12 @@ button:hover { background: #1d4ed8; }`;
       this._setCloudStatus('Publishing…');
       try {
         const page = this.getActivePage();
-        const slug =
-          (page.name || '')
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '') || 'flat-web-page';
+        const cloudName = this._resolveCloudPageName();
+        page.name = cloudName;
+        this.save();
+        if (this._mounted && this._els.nameInput) {
+          this._els.nameInput.value = cloudName;
+        }
         const resp = await fetch('/api/student/flat-pages/publish', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -712,7 +720,7 @@ button:hover { background: #1d4ed8; }`;
         if (!resp.ok || !data.success) {
           throw new Error(data.message || `Publish failed (${resp.status})`);
         }
-        await this._syncSavedPagesToAssets(data, page, slug, { published: true });
+        await this._syncSavedPagesToAssets(data, page, data.slug, { published: true });
         this._setCloudStatus('Published ✓ — find it under Online Assets → My Saved Pages');
         if (data.url) {
           const useIt =

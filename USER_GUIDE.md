@@ -8,11 +8,11 @@ Teachers looking for classroom setup, grading workflows, and admin how-tos shoul
 
 ## What you can build
 
-The editor lets you create **interactive 360° VR stories** — like a virtual tour with clickable hotspots. You can:
+The editor lets you create **interactive 360° VR stories** and **flat web pages** in the same project — like a virtual tour with clickable hotspots, or a standalone HTML/CSS/JS page with live preview. You can:
 
-- Stand inside a **360° photo or video** scene
-- Add **hotspots** that show text, play audio, display images or 3D models, link to websites, or move the viewer to another scene
-- Combine **multiple scenes** into one project
+- Stand inside a **360° photo or video** scene and add **hotspots** (text, audio, images, 3D models, links, navigation)
+- Switch to **Flat Web Page** mode and code **HTML, CSS, and JavaScript** with a live preview, snippets, templates, and optional AI help
+- Combine **multiple scenes** into one VR project, or **embed your 360° tour** inside a flat page
 - **Export** a standalone project (ZIP) or **submit** it to an admin for grading
 
 ### Live examples
@@ -38,10 +38,12 @@ Your instructor or admin will give you a URL. Common examples:
 | **Student (editor)** | `/` or `/index.html` |
 | **Admin (submissions)** | `/admin-submissions.html` |
 | **Admin (online assets)** | `/admin-common-assets.html` |
+| **Admin (editor settings)** | `/admin-snippets.html` |
+| **Admin (flat page templates)** | `/admin-templates.html` |
 | **Admin (users & classes)** | `/admin-users.html` |
 | **Admin (billing)** | `/admin-billing.html` (when Stripe is enabled) |
 
-All admin pages share a top nav: **Submissions · Assets · Users · Logout**.
+All admin pages share a top nav: **Overview · Submissions · Assets · Editor Settings · Templates · Users · Logout** (Billing appears when Stripe is enabled).
 
 If you are running locally, that is usually `http://localhost:3000` (or `http://localhost:5174` when using the Vite dev server with `npm run dev`).
 
@@ -73,12 +75,25 @@ Ask your teacher to reset your password from **Users & Classes** if you forget i
 
 ## Editor layout
 
-- **Center:** the 360° scene you are editing or previewing
-- **Top left:** **Edit Mode** panel — switch between editing and preview/navigation
-- **Right side:** **Editor Tools** panel — scenes, hotspots, sounds, export, and submit
+- **Center:** the 360° scene (spherical mode) or the flat page code editor with live preview (flat mode)
+- **Top left:** **Edit Mode** panel — switch between editing and preview/navigation (spherical mode only)
+- **Right side:** **Editing Tools** panel — content mode toggle, scenes, hotspots, Online Assets, export, and submit
 - **ℹ️ icon** next to “Hotspot Editor” — collapsible instructions that update based on your current mode
 
+In **Flat Web Page** mode, spherical-only sections hide automatically. The flat editor fills the main area; **Editing Tools** stays open for Online Assets and related actions.
+
 Use the chevron tabs on the left and right panels to collapse them when you need more room on screen.
+
+### Content mode (Spherical vs Flat)
+
+At the top of **Editing Tools**, choose:
+
+| Mode | Use for |
+|------|---------|
+| **🌐 Spherical Content** | 360° scenes, hotspots, navigation portals |
+| **📄 Flat Web Page** | HTML/CSS/JS coding with live preview |
+
+Both modes share the same project. Switching modes does **not** delete your work in the other mode.
 
 ---
 
@@ -166,9 +181,104 @@ This is separate from **Audio** hotspots, which play only when clicked.
 
 ---
 
+## Flat Web Page mode
+
+Switch to **📄 Flat Web Page** in **Editing Tools** to open the code editor. You get a **multi-file project** with a **live preview** pane.
+
+### File tabs
+
+Every flat page includes three core files:
+
+| Tab | Purpose |
+|-----|---------|
+| **index.html** | Page structure and content |
+| **style.css** | Styles (linked from HTML) |
+| **script.js** | JavaScript (linked from HTML) |
+
+Click **+** to add custom files (for example `extra.css` or `utils.js`). Core files cannot be removed. Your instructor may block certain file extensions (such as `.exe`) from uploads and custom files.
+
+### Editor toolbar (per file)
+
+Above the code area:
+
+| Button | What it does |
+|--------|----------------|
+| **Copy** | Copy the active file to the clipboard |
+| **Snippets** | Open the snippet library and insert code at the cursor |
+| **Format** | Auto-format the active HTML, CSS, or JavaScript file |
+| **Templates** | Browse and load admin-published starter templates |
+| **Ask Ridey** | Open the AI assistant (only when enabled by your instructor) |
+
+### Live preview layout
+
+The preview pane shows your page as you edit. Use the layout buttons:
+
+| Preset | Layout |
+|--------|--------|
+| **Editor** | Mostly code, small preview |
+| **50/50** | Balanced split (default) |
+| **Preview** | Mostly preview, small code |
+
+Click **↻ Refresh** if the preview looks out of date.
+
+### Snippets
+
+1. Click **Snippets** in the toolbar
+2. Browse snippets grouped by language (HTML, CSS, JavaScript)
+3. Click a snippet to **insert it at your cursor** in the active file
+
+Snippets are managed by your instructor on **Editor Settings**.
+
+### Templates
+
+1. Click **Templates** in the toolbar
+2. Browse public starter templates (title and description)
+3. Load one to replace your current flat page files with the template contents
+
+Templates are created by admins on the **Templates** admin page.
+
+### Online Assets in flat mode
+
+In **Editing Tools → Online Assets**, click **Browse Online Assets**. In flat mode you also get:
+
+| Tab / action | What it does |
+|--------------|----------------|
+| **360 VR Tour** | Generate a hosted copy of your spherical project and embed it in HTML |
+| **My Saved Pages** | Reload flat pages you saved to the cloud |
+| Category tabs | Images, video, audio, 3D, etc. |
+| **Insert Into Page** | Insert markup for the selected asset at the cursor (flat mode only) |
+
+CSS and JS from Ridey or manual edits should go in **style.css** and **script.js**, not inline in HTML.
+
+### Cloud save and publish
+
+When signed in, the flat toolbar shows:
+
+| Button | What it does |
+|--------|----------------|
+| **☁️ Save to Cloud** | Save a draft flat page to your account (does not notify your teacher) |
+| **🌐 Publish** | Publish a hosted URL for your flat page |
+
+Saved pages appear under **My Assets → My Saved Pages** in the asset library.
+
+### Ask Ridey (AI assistant)
+
+When your instructor enables Ridey and the server is configured:
+
+1. Click **Ask Ridey** in the toolbar
+2. Type a question or use a quick prompt (**Find bugs**, **Optimize**, **Add features**, **Improve quality**)
+3. Review Ridey’s explanation and **Preview Changes**
+4. **Apply Changes** to update your project files
+
+Ridey sees your **full project** (HTML, CSS, and JS). Styling changes go into **style.css**; script changes go into **script.js**; HTML stays structural. You must be **signed in** as a student to use Ridey. Requests are rate-limited per hour.
+
+If **Ask Ridey** does not appear, your instructor has not enabled it or the server API key is not configured.
+
+---
+
 ## Online Assets (Asset Library)
 
-Open the library from **Browse Online Assets** in the editor sidebar, hotspot media fields, or **Scene Manager → Edit Media**.
+Open the library from **Browse Online Assets** in the editor sidebar, hotspot media fields, **Scene Manager → Edit Media**, or while editing a **Flat Web Page**.
 
 ### My Assets vs Shared Assets
 
@@ -179,7 +289,7 @@ Open the library from **Browse Online Assets** in the editor sidebar, hotspot me
 
 ### Finding files
 
-1. Pick a **category tab** (Flat Images, 360 Photos, 360 Videos, Audio, 3D, Other).
+1. Pick a **category tab** (Flat Images, 360 Photos, 360 Videos, Audio, 3D, Other — plus **360 VR Tour** and **My Saved Pages** when signed in during flat page editing).
 2. Use the **filter bar** at the top:
    - Type a **filename** in the input to filter by name
    - Press **Enter** or **comma** to add **tag chips** (tags filter assets — any matching tag counts)
@@ -194,6 +304,7 @@ Open the library from **Browse Online Assets** in the editor sidebar, hotspot me
 | **Preview** | Full-size preview; prev/next through filtered list; 3D models support orbit/pan controls |
 | **Copy** | Copy the asset URL to the clipboard |
 | **Select** | Fill the field you opened the library from; you may be prompted to click the scene to place a hotspot |
+| **Insert Into Page** | *(Flat Web Page mode)* Insert asset markup at the cursor in your HTML |
 | **Edit Tags** | (My Assets only) Change tags on your file |
 | **Delete** | (My Assets only) Remove your upload |
 
@@ -213,19 +324,23 @@ Click **🎨 Customize Styles** to open the style editor. You can change colors,
 
 ## Save and load your work
 
-The editor **auto-saves** progress in your browser. For a portable backup:
+The editor **auto-saves** progress in your browser (both spherical and flat content). For a portable backup:
 
-### Save Template
+### Save Template (360° export ZIP)
 
-1. Enter a **Template Name**
+1. Enter a **Template Name** in **Editing Tools**
 2. Click **Save Template**
 3. Choose an export mode (see below)
 4. Your browser downloads a **ZIP file** containing a complete standalone project
 
-### Load Template
+This ZIP includes both your 360° scenes and flat page files when present.
+
+### Load Template (360° export ZIP)
 
 1. Click **Load Template**
 2. Select a previously saved ZIP to restore the project in the editor
+
+For flat page **starter templates** published by your instructor, use **Templates** in the flat editor toolbar instead.
 
 ---
 
@@ -325,6 +440,47 @@ Use the **Peek Into Student Assets and Submissions** dropdown to open a student�
 
 ---
 
+## Admin: editor settings
+
+Open **Editor Settings** (`/admin-snippets.html`).
+
+### Ridey AI assistant
+
+1. Ensure `OPENAI_API_KEY` is set in your server environment (see [RENDER_DEPLOY.md](RENDER_DEPLOY.md))
+2. Toggle **Enable Ridey for students**
+3. Students see **Ask Ridey** in the flat page toolbar when enabled and the API key is present
+
+Optional environment variables: `OPENAI_MODEL`, `OPENAI_MAX_TOKENS`, `OPENAI_TEMPERATURE`, `RIDEY_RATE_LIMIT_PER_HOUR`, `RIDEY_PERSONA`.
+
+### Blocked file extensions
+
+Add extensions (without the dot) that students cannot upload or add as custom flat-page files — for example `exe`, `bat`, `sh`. Click **Save Blocked Extensions**.
+
+### Code snippets
+
+1. Enter a **Title**, **Language** (html, css, javascript), and **Code**
+2. Click **Add Snippet**
+3. Edit or delete existing snippets from the list below
+
+Snippets appear in the student flat editor **Snippets** modal. Requires PostgreSQL on hosted deployments.
+
+---
+
+## Admin: flat page templates
+
+Open **Templates** (`/admin-templates.html`).
+
+1. Click **+ Create with Editor** or **Edit in Editor** on an existing template
+2. Use the full flat page editor (HTML/CSS/JS tabs, live preview, **Editing Tools → Browse Online Assets**)
+3. Set **title**, **description**, **Public**, and optional **Default starter**
+4. Click **Save Template**
+
+Students load public templates from **Templates** in the flat editor toolbar. Mark one template as **Default starter** for new empty projects when configured.
+
+Requires PostgreSQL (`DATABASE_URL`) on hosted deployments.
+
+---
+
 ## Admin: users & classes
 
 Open **Users** (`/admin-users.html`).
@@ -375,6 +531,9 @@ If media was exported as **online URLs**, stay connected to the internet. If med
 | **Can’t find an asset** | Add tag chips or type part of the filename in the filter bar; try **Show All Tags**. |
 | **Hosted project link dead after redeploy** | Admin must **Host** again — hosted URLs on ephemeral disk do not survive redeploy. |
 | **Lost work** | Use **Save Template** often. Avoid **Clear Data** unless you mean to reset. |
+| **Ask Ridey missing** | Instructor must enable Ridey under **Editor Settings** and set `OPENAI_API_KEY` on the server. |
+| **Ridey put CSS inline** | Update to latest version — Ridey routes CSS to `style.css` and JS to `script.js`. |
+| **Snippets or templates empty** | Admin needs PostgreSQL and `npm run db:migrate` on the server. |
 
 ---
 

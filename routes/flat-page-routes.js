@@ -151,6 +151,7 @@ function mergeFlatPageLists(dbPages, diskPages) {
     bySlug.set(page.slug, {
       ...existing,
       hostedUrl: existing.hostedUrl || page.hostedUrl,
+      hostedPath: existing.hostedPath || page.hostedPath,
       isHosted: Boolean(existing.isHosted || page.isHosted),
       updatedAt:
         new Date(page.updatedAt || 0) > new Date(existing.updatedAt || 0)
@@ -161,6 +162,50 @@ function mergeFlatPageLists(dbPages, diskPages) {
   return [...bySlug.values()].sort(
     (a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)
   );
+}
+
+async function deleteFlatPageB2Files(b2Prefix, manifest) {
+  if (!process.env.B2_KEY_ID || !b2Prefix) return;
+  const manifestNames = Array.isArray(manifest)
+    ? manifest.map((entry) => entry && entry.name).filter(Boolean)
+    : [];
+  for (const name of manifestNames) {
+    try {
+      await b2Service.deleteFile(`${b2Prefix}${name}`);
+    } catch (err) {
+      console.warn(`Flat page B2 delete failed for ${b2Prefix}${name}:`, err.message);
+    }
+  }
+  try {
+    const files = await b2Service.listFiles(b2Prefix);
+    for (const file of files) {
+      const remotePath = file.fileName || file.file_name;
+      if (!remotePath || !remotePath.startsWith(b2Prefix)) continue;
+      try {
+        await b2Service.deleteFile(remotePath);
+      } catch (err) {
+        console.warn(`Flat page B2 delete failed for ${remotePath}:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.warn('Flat page B2 prefix cleanup failed:', err.message);
+  }
+}
+
+function removeHostedFlatPageDir(studentId, slug, hostedPathFromDb) {
+  const candidates = new Set();
+  if (hostedPathFromDb) candidates.add(hostedPathFromDb);
+  candidates.add(`${studentHostedPrefix(studentId)}${slug}`);
+  for (const dirName of candidates) {
+    if (!dirName || dirName.includes('..') || dirName.includes('/')) continue;
+    const targetDir = path.join(HOSTED_DIR, dirName);
+    if (!fs.existsSync(targetDir)) continue;
+    try {
+      fs.rmSync(targetDir, { recursive: true, force: true });
+    } catch (err) {
+      console.warn(`Hosted flat page delete failed for ${dirName}:`, err.message);
+    }
+  }
 }
 
 // Validate + normalize an incoming { name, files } payload.
@@ -207,7 +252,7 @@ function registerFlatPageRoutes(app) {
       let dbPages = [];
       if (isDbEnabled()) {
         const { rows } = await query(
-          `SELECT slug, name, files_manifest, hosted_url, is_hosted, updated_at
+          `SELECT slug, name, files_manifest, hosted_path, hosted_url, is_hosted, updated_at
            FROM flat_page_projects WHERE student_id = $1 ORDER BY updated_at DESC`,
           [studentId]
         );
@@ -216,6 +261,7 @@ function registerFlatPageRoutes(app) {
           name: r.name,
           files: r.files_manifest,
           hostedUrl: r.hosted_url,
+          hostedPath: r.hosted_path,
           isHosted: r.is_hosted,
           updatedAt: r.updated_at,
         }));
@@ -411,34 +457,41 @@ function registerFlatPageRoutes(app) {
     }
   });
 
-  // Delete a flat page
+  // Delete a flat page (Backblaze, hosted files, and database record)
   app.delete('/api/student/flat-pages/:slug', requireStudentStrict, async (req, res) => {
     try {
-      if (!isDbEnabled()) {
-        return res.status(503).json({ success: false, message: 'Database not configured' });
-      }
       const studentId = req.studentSession.studentId;
       const slug = slugify(req.params.slug);
-      const { rows } = await query(
-        `SELECT b2_prefix, files_manifest FROM flat_page_projects
-         WHERE student_id = $1 AND slug = $2`,
-        [studentId, slug]
-      );
-      if (rows.length) {
-        const manifest = Array.isArray(rows[0].files_manifest) ? rows[0].files_manifest : [];
-        for (const entry of manifest) {
-          if (entry && entry.name) {
-            try {
-              await b2Service.deleteFile(`${rows[0].b2_prefix}${entry.name}`);
-            } catch (_) {}
-          }
+      const classSlug = await resolveClassSlug(studentId, req.studentSession);
+
+      let b2Prefix = buildPrefix(classSlug, studentId, slug);
+      let manifest = [];
+      let hostedPath = null;
+
+      if (isDbEnabled()) {
+        const { rows } = await query(
+          `SELECT b2_prefix, files_manifest, hosted_path FROM flat_page_projects
+           WHERE student_id = $1 AND slug = $2`,
+          [studentId, slug]
+        );
+        if (rows.length) {
+          if (rows[0].b2_prefix) b2Prefix = rows[0].b2_prefix;
+          manifest = Array.isArray(rows[0].files_manifest) ? rows[0].files_manifest : [];
+          hostedPath = rows[0].hosted_path || null;
         }
+      }
+
+      await deleteFlatPageB2Files(b2Prefix, manifest);
+      removeHostedFlatPageDir(studentId, slug, hostedPath);
+
+      if (isDbEnabled()) {
         await query(`DELETE FROM flat_page_projects WHERE student_id = $1 AND slug = $2`, [
           studentId,
           slug,
         ]);
       }
-      res.json({ success: true });
+
+      res.json({ success: true, slug });
     } catch (err) {
       console.error('Delete flat page error:', err);
       res.status(500).json({ success: false, message: err.message });

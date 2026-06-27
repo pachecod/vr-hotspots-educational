@@ -19998,6 +19998,7 @@ const CommonAssetsPicker = {
           window.open(page.hostedUrl, '_blank', 'noopener,noreferrer');
         }
         if (btn.dataset.caAction === 'load-page') this.loadSavedPageIntoEditor(slug);
+        if (btn.dataset.caAction === 'delete-page') this.deleteSavedPage(page);
         return;
       }
 
@@ -20426,7 +20427,8 @@ const CommonAssetsPicker = {
           <div class="ca-item-actions" style="flex-wrap:wrap;">
             ${copyBtn}
             ${openBtn}
-            <button type="button" data-ca-action="load-page" data-slug="${page.slug}" style="background:#4caf50;color:#fff;">Load in Editor</button>
+            <button type="button" data-ca-action="load-page" data-slug="${esc(page.slug)}" style="background:#4caf50;color:#fff;">Load in Editor</button>
+            <button type="button" data-ca-action="delete-page" data-slug="${esc(page.slug)}" style="background:#f44336;color:#fff;">Delete</button>
           </div>
         </div>`;
       })
@@ -20451,6 +20453,31 @@ const CommonAssetsPicker = {
       this.close();
     } catch (err) {
       alert(err.message || 'Could not load saved page');
+    }
+  },
+
+  async deleteSavedPage(page) {
+    if (!page?.slug) return;
+    const label = page.name || page.slug;
+    const message =
+      page.isHosted || page.hostedUrl
+        ? `Delete "${label}"?\n\nThis removes the published page, its live URL will stop working, and all cloud copies will be deleted.`
+        : `Delete "${label}"?\n\nThis removes the cloud draft and cannot be undone.`;
+    if (!confirm(message)) return;
+
+    try {
+      const res = await fetch(`/api/student/flat-pages/${encodeURIComponent(page.slug)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Delete failed (${res.status})`);
+      }
+      this.savedPages = (this.savedPages || []).filter((p) => p.slug !== page.slug);
+      this.renderSavedPages();
+    } catch (err) {
+      alert(err.message || 'Could not delete saved page');
     }
   },
 

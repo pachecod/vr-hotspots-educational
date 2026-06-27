@@ -5,6 +5,9 @@
     <title>Template Editor — VR Hotspots Admin</title>
     <link rel="stylesheet" href="admin-nav.css" />
     <link rel="stylesheet" href="vr-hotspots-educational.css" />
+    <link rel="stylesheet" href="admin-flat-editing-tools.css" />
+    <link rel="stylesheet" href="asset-preview-modal.css" />
+    <link rel="stylesheet" href="asset-tags-ui.css" />
     <style>
       html,
       body.admin-template-editor-page {
@@ -14,7 +17,6 @@
       body.admin-template-editor-page {
         font-family: Arial, sans-serif;
         color: #333;
-        --hotspot-editor-panel-width: 0px;
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -106,14 +108,12 @@
       .btn-secondary { background: #6c757d; color: #fff; }
       #save-status { font-size: 13px; color: #666; }
       #admin-template-editor-slot {
-        flex: 1;
-        min-height: 0;
         position: relative;
         background: #1e1e1e;
       }
       #admin-template-editor-slot .admin-template-editor-mount,
       #admin-template-editor-slot .flat-page-editor-root {
-        position: absolute;
+        position: absolute !important;
         inset: 0;
         top: 0 !important;
         left: 0 !important;
@@ -132,14 +132,18 @@
         z-index: 100100;
       }
     </style>
+    <script src="common-assets-preview.js"></script>
+    <script src="asset-preview-modal.js"></script>
+    <script src="asset-tags-ui.js"></script>
     <script src="admin-auth-ui.js"></script>
     <script src="admin-nav.js"></script>
     <script>
       window.FLAT_EDITOR_BOOT = { mode: 'admin-template' };
     </script>
     <script src="flat-editor.bundle.js"></script>
+    <script src="admin-flat-editing-tools.js"></script>
   </head>
-  <body class="admin-template-editor-page">
+  <body class="admin-template-editor-page content-mode-flat">
     <div id="login-root"></div>
     <div id="main-content" style="display: none">
       <div class="admin-template-header">
@@ -170,8 +174,95 @@
         </div>
       </div>
 
-      <div id="admin-template-editor-slot" aria-label="Template code editor"></div>
+      <div class="admin-editor-row">
+        <div id="admin-template-editor-slot" aria-label="Template code editor"></div>
+
+        <aside id="admin-editing-tools" class="admin-editing-tools" aria-label="Editing Tools">
+          <button
+            type="button"
+            id="admin-editing-tools-toggle"
+            class="admin-editing-tools-toggle"
+            aria-label="Toggle editing tools"
+            aria-expanded="true"
+            title="Toggle editing tools"
+          >
+            <span id="admin-editing-tools-toggle-icon" aria-hidden="true">›</span>
+            <span class="admin-editing-tools-toggle-label">Editing Tools</span>
+          </button>
+          <div id="admin-editing-tools-content" class="admin-editing-tools-content">
+            <div class="panel-header">
+              <h2>Editing Tools</h2>
+            </div>
+            <div class="panel-section">
+              <div class="section-title">Online Assets</div>
+              <button type="button" class="btn btn-secondary" id="open-common-assets">
+                Browse Online Assets
+              </button>
+              <p class="help-text">
+                Pick shared images, audio, video, or 3D models and insert them into your template HTML.
+              </p>
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
+
+    <div id="common-assets-modal">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <h3 style="margin: 0; color: #4caf50">Asset Library</h3>
+          <button
+            type="button"
+            id="close-common-assets"
+            style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer"
+          >
+            &times;
+          </button>
+        </div>
+        <div class="modal-body">
+          <p style="margin: 0 0 12px; color: #ccc; font-size: 14px">
+            Shared assets uploaded in <strong>Admin → Assets</strong>. Use
+            <strong>Insert Into Page</strong> to add markup at the cursor.
+          </p>
+          <div id="common-assets-tag-filter" class="asset-tag-filter-mount"></div>
+          <div class="ca-tabs" id="common-assets-tabs">
+            <button type="button" class="ca-tab active" data-category="images">Flat Images</button>
+            <button type="button" class="ca-tab" data-category="videos">Flat Videos</button>
+            <button type="button" class="ca-tab" data-category="360-images">360 Photos</button>
+            <button type="button" class="ca-tab" data-category="360-videos">360 Videos</button>
+            <button type="button" class="ca-tab" data-category="audio">Audio</button>
+            <button type="button" class="ca-tab" data-category="3d">3D</button>
+            <button type="button" class="ca-tab" data-category="other">Other</button>
+          </div>
+          <div id="common-assets-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="asset-preview-modal" role="dialog" aria-modal="true" aria-labelledby="asset-preview-title">
+      <div class="asset-preview-panel">
+        <button type="button" class="asset-preview-close" aria-label="Close">&times;</button>
+        <h3 id="asset-preview-title" class="asset-preview-title"></h3>
+        <div id="asset-preview-counter" class="asset-preview-counter"></div>
+        <div id="asset-preview-body" class="asset-preview-body"></div>
+        <p id="asset-preview-url" class="asset-preview-url"></p>
+        <div class="asset-preview-footer">
+          <button type="button" id="asset-preview-prev-btn" class="btn-preview-nav" style="display: none">
+            ← Prev
+          </button>
+          <button type="button" id="asset-preview-next-btn" class="btn-preview-nav" style="display: none">
+            Next →
+          </button>
+          <button type="button" id="asset-preview-copy-btn" class="btn-preview-copy" style="display: none">
+            Copy URL
+          </button>
+          <button type="button" id="asset-preview-insert-btn" class="btn-preview-insert" style="display: none">
+            Insert Into Page
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast">Saved!</div>
     <script src="admin-template-editor.js"></script>
   </body>

@@ -104,6 +104,10 @@ function initMainApp() {
   main.style.display = 'flex';
   renderAdminNav('templates');
 
+  if (window.AdminFlatEditingTools) {
+    AdminFlatEditingTools.init();
+  }
+
   document.getElementById('save-tpl-btn').addEventListener('click', saveTemplate);
 
   const editId = getQueryParam('edit');

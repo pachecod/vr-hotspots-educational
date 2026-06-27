@@ -6,6 +6,7 @@ import SnippetsModal from './SnippetsModal.jsx';
 import AIAssistant from './AIAssistant.jsx';
 import CustomFileModal from './CustomFileModal.jsx';
 import TemplateGalleryModal from './TemplateGalleryModal.jsx';
+import RideyIcon from './RideyIcon.jsx';
 import { FileType } from './types.js';
 import { formatCode } from './formatCode.js';
 
@@ -160,7 +161,9 @@ export default function FlatPageEditorUI({ bridge }) {
                   type="button"
                   className="flat-tool-btn flat-tool-btn-ridey"
                   onClick={() => setShowRidey(true)}
+                  title="Ridey · AI Code Assistant"
                 >
+                  <RideyIcon size={20} />
                   Ask Ridey
                 </button>
               )}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { analyzeWithRidey } from './ridey-api.js';
 import { buildPreviewDocument } from './buildPreview.js';
+import RideyIcon from './RideyIcon.jsx';
 
 const QUICK_PROMPTS = [
   { text: 'Find bugs', prompt: 'Review this code and identify bugs or errors. Provide fixes.' },
@@ -117,12 +118,20 @@ export default function AIAssistant({
     <div className="flat-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="flat-modal flat-modal-ridey">
         <div className="flat-modal-header">
-          <div>
-            <h2>Ask Ridey</h2>
-            <span className="flat-muted">
-              {fileName || language}
-              {projectFiles?.length > 1 ? ' · multi-file project' : ''}
-            </span>
+          <div className="flat-modal-header-ridey">
+            <RideyIcon
+              isThinking={loading}
+              isHappy={!!response && !error}
+              isConfused={!!error}
+              size={40}
+            />
+            <div>
+              <h2>Ask Ridey</h2>
+              <span className="flat-muted">
+                {fileName || language}
+                {projectFiles?.length > 1 ? ' · multi-file project' : ''}
+              </span>
+            </div>
           </div>
           <button type="button" className="flat-modal-close" onClick={onClose}>
             ×
@@ -186,10 +195,32 @@ export default function AIAssistant({
               disabled={loading || !query.trim()}
               onClick={() => handleSubmit()}
             >
-              {loading ? 'Thinking…' : 'Ask'}
+              {loading ? (
+                <>
+                  <RideyIcon isThinking size={22} />
+                  <span>Thinking…</span>
+                </>
+              ) : (
+                'Ask'
+              )}
             </button>
 
-            {error && <p className="flat-error">{error}</p>}
+            {loading && (
+              <div className="flat-ridey-loading">
+                <RideyIcon isThinking size={60} />
+                <p className="flat-muted">Working under the hood…</p>
+                <p className="flat-muted" style={{ fontSize: 11 }}>
+                  This might take a moment
+                </p>
+              </div>
+            )}
+
+            {error && (
+              <div className="flat-ridey-response flat-error-block">
+                <RideyIcon isConfused size={48} />
+                <p>{error}</p>
+              </div>
+            )}
 
             {response && !previewMode && (
               <div className="flat-ridey-response">
@@ -218,9 +249,20 @@ export default function AIAssistant({
             )}
 
             {!loading && !error && !response && (
-              <p className="flat-muted flat-ridey-intro">
-                Ridey uses your full project. CSS goes in style.css, JavaScript in script.js, and HTML stays structural.
-              </p>
+              <div className="flat-ridey-empty">
+                <RideyIcon isHappy size={72} />
+                <p className="flat-ridey-empty-title">Hi! I&apos;m Ridey, your coding assistant</p>
+                <p className="flat-muted">I can help you with:</p>
+                <ul className="flat-ridey-empty-list">
+                  <li>Fixing bugs and errors in your code</li>
+                  <li>Optimizing performance</li>
+                  <li>Adding new features</li>
+                  <li>Improving code quality</li>
+                </ul>
+                <p className="flat-muted" style={{ marginTop: 12, fontSize: 11 }}>
+                  CSS goes in style.css, JavaScript in script.js, and HTML stays structural.
+                </p>
+              </div>
             )}
           </div>
         </div>

@@ -612,7 +612,9 @@ export class FlatPageEditorBridge {
   async cloudSave() {
     this._setCloudStatus('Saving…');
     try {
+      const page = this.getActivePage();
       const data = await saveFlatPage(this._filesPayload());
+      await this._syncSavedPagesToAssets(data, page);
       this._setCloudStatus('Saved to cloud ✓ — find it under Online Assets → My Saved Pages');
       return data;
     } catch (err) {
@@ -635,7 +637,8 @@ export class FlatPageEditorBridge {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '') || 'flat-web-page';
       const data = await publishFlatPage(slug, this._filesPayload());
-      this._setCloudStatus('Published ✓');
+      await this._syncSavedPagesToAssets(data, page, slug, { published: true });
+      this._setCloudStatus('Published ✓ — find it under Online Assets → My Saved Pages');
       if (data.url && confirm(`Published to:\n${data.url}\n\nCopy this URL to your clipboard?`)) {
         try {
           await navigator.clipboard.writeText(data.url);
@@ -644,6 +647,32 @@ export class FlatPageEditorBridge {
     } catch (err) {
       this._setCloudStatus(err.message || 'Publish failed', true);
       alert('Could not publish flat page: ' + (err.message || 'unknown error'));
+    }
+  }
+
+  async _syncSavedPagesToAssets(data, page, slugHint, { published = false } = {}) {
+    const picker = window.CommonAssetsPicker;
+    if (!picker) return;
+    const slug =
+      data?.slug ||
+      slugHint ||
+      (page?.name || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') ||
+      'flat-web-page';
+    if (typeof picker.notifyFlatPageSaved === 'function') {
+      picker.notifyFlatPageSaved({
+        slug,
+        name: data?.name || page?.name || slug,
+        hostedUrl: data?.url || null,
+        isHosted: published,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    if (typeof picker.refreshSavedPages === 'function') {
+      await picker.refreshSavedPages();
     }
   }
 

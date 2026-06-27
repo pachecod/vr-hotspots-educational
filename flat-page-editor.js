@@ -645,6 +645,7 @@ button:hover { background: #1d4ed8; }`;
     async cloudSave() {
       this._setCloudStatus('Saving…');
       try {
+        const page = this.getActivePage();
         const resp = await fetch('/api/student/flat-pages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -655,7 +656,8 @@ button:hover { background: #1d4ed8; }`;
         if (!resp.ok || !data.success) {
           throw new Error(data.message || `Save failed (${resp.status})`);
         }
-        this._setCloudStatus('Saved to cloud ✓');
+        await this._syncSavedPagesToAssets(data, page);
+        this._setCloudStatus('Saved to cloud ✓ — find it under Online Assets → My Saved Pages');
       } catch (err) {
         console.warn('[FlatPage] cloud save failed', err);
         this._setCloudStatus(err.message || 'Save failed', true);
@@ -663,10 +665,43 @@ button:hover { background: #1d4ed8; }`;
       }
     }
 
+    async _syncSavedPagesToAssets(data, page, slugHint, { published = false } = {}) {
+      const picker = window.CommonAssetsPicker;
+      if (!picker) return;
+      const slug =
+        data?.slug ||
+        slugHint ||
+        (page?.name || '')
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') ||
+        'flat-web-page';
+      if (typeof picker.notifyFlatPageSaved === 'function') {
+        picker.notifyFlatPageSaved({
+          slug,
+          name: data?.name || page?.name || slug,
+          hostedUrl: data?.url || null,
+          isHosted: published,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      if (typeof picker.refreshSavedPages === 'function') {
+        await picker.refreshSavedPages();
+      }
+    }
+
     // Publish the flat page to a live hosted URL via the backend.
     async publish() {
       this._setCloudStatus('Publishing…');
       try {
+        const page = this.getActivePage();
+        const slug =
+          (page.name || '')
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '') || 'flat-web-page';
         const resp = await fetch('/api/student/flat-pages/publish', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -677,7 +712,8 @@ button:hover { background: #1d4ed8; }`;
         if (!resp.ok || !data.success) {
           throw new Error(data.message || `Publish failed (${resp.status})`);
         }
-        this._setCloudStatus('Published ✓');
+        await this._syncSavedPagesToAssets(data, page, slug, { published: true });
+        this._setCloudStatus('Published ✓ — find it under Online Assets → My Saved Pages');
         if (data.url) {
           const useIt =
             typeof window.hotspotEditor !== 'undefined' &&

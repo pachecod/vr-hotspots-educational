@@ -20241,6 +20241,47 @@ const CommonAssetsPicker = {
     return (this.savedPages || []).find((p) => p.slug === slug);
   },
 
+  isModalVisible() {
+    const modal = document.getElementById('common-assets-modal');
+    return Boolean(modal && modal.style.display === 'flex');
+  },
+
+  notifyFlatPageSaved(pageMeta) {
+    if (!pageMeta?.slug) return;
+    const entry = {
+      slug: pageMeta.slug,
+      name: pageMeta.name || pageMeta.slug,
+      files: pageMeta.files || [],
+      hostedUrl: pageMeta.hostedUrl || null,
+      isHosted: Boolean(pageMeta.isHosted),
+      updatedAt: pageMeta.updatedAt || new Date().toISOString(),
+    };
+    const list = this.savedPages || [];
+    const idx = list.findIndex((p) => p.slug === entry.slug);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...entry };
+      this.savedPages = list;
+    } else {
+      this.savedPages = [entry, ...list];
+    }
+    if (this.isModalVisible() && this.activeCategory === 'saved-pages') {
+      this.renderSavedPages();
+    }
+  },
+
+  async refreshSavedPages() {
+    if (!this.canManageStudentAssets) return;
+    try {
+      const res = await fetch('/api/student/flat-pages', { credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok || !data.success) return;
+      this.savedPages = data.pages || [];
+      if (this.isModalVisible() && this.activeCategory === 'saved-pages') {
+        this.renderSavedPages();
+      }
+    } catch (_) {}
+  },
+
   async loadSavedPages() {
     const list = document.getElementById('common-assets-list');
     if (!this.canManageStudentAssets) {

@@ -29,6 +29,66 @@ async function getStudentContext(studentId) {
   return rows[0] || null;
 }
 
+async function resolveClassSlug(studentId, session) {
+  const ctx = await getStudentContext(studentId);
+  if (ctx?.class_slug) return ctx.class_slug;
+  if (session?.classSlug && typeof session.classSlug === 'string') {
+    return session.classSlug;
+  }
+  return 'local';
+}
+
+async function uploadFlatPageFilesToB2(prefix, files) {
+  if (!process.env.B2_KEY_ID) return;
+  for (const file of files) {
+    try {
+      await b2Service.uploadBuffer(
+        Buffer.from(file.content, 'utf8'),
+        `${prefix}${file.name}`,
+        contentTypeForFilename(file.name)
+      );
+    } catch (err) {
+      console.warn('Flat page B2 upload failed:', err.message);
+    }
+  }
+}
+
+async function upsertFlatPageRecord({
+  studentId,
+  classSlug,
+  name,
+  slug,
+  files,
+  hostedPath = null,
+  hostedUrl = null,
+  isHosted = false,
+}) {
+  if (!isDbEnabled()) return;
+  const prefix = buildPrefix(classSlug, studentId, slug);
+  const manifest = files.map((f) => ({ name: f.name }));
+  if (isHosted && hostedPath && hostedUrl) {
+    await query(
+      `INSERT INTO flat_page_projects
+        (student_id, name, slug, b2_prefix, files_manifest, hosted_path, hosted_url, hosted_at, is_hosted, updated_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, NOW(), TRUE, NOW())
+       ON CONFLICT (student_id, slug)
+       DO UPDATE SET name = EXCLUDED.name, b2_prefix = EXCLUDED.b2_prefix,
+                     files_manifest = EXCLUDED.files_manifest, hosted_path = EXCLUDED.hosted_path,
+                     hosted_url = EXCLUDED.hosted_url, hosted_at = NOW(), is_hosted = TRUE, updated_at = NOW()`,
+      [studentId, name, slug, prefix, JSON.stringify(manifest), hostedPath, hostedUrl]
+    );
+  } else {
+    await query(
+      `INSERT INTO flat_page_projects (student_id, name, slug, b2_prefix, files_manifest, updated_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+       ON CONFLICT (student_id, slug)
+       DO UPDATE SET name = EXCLUDED.name, b2_prefix = EXCLUDED.b2_prefix,
+                     files_manifest = EXCLUDED.files_manifest, updated_at = NOW()`,
+      [studentId, name, slug, prefix, JSON.stringify(manifest)]
+    );
+  }
+}
+
 function buildPrefix(classSlug, studentId, slug) {
   return `student-pages/${classSlug}/${studentId}/${slug}/`;
 }
@@ -143,10 +203,9 @@ function registerFlatPageRoutes(app) {
       if (payload.error) return res.status(400).json({ success: false, message: payload.error });
 
       const studentId = req.studentSession.studentId;
-      const ctx = await getStudentContext(studentId);
-      if (!ctx) return res.status(401).json({ success: false, message: 'Student not found' });
+      const classSlug = await resolveClassSlug(studentId, req.studentSession);
 
-      const prefix = buildPrefix(ctx.class_slug, studentId, payload.slug);
+      const prefix = buildPrefix(classSlug, studentId, payload.slug);
       for (const file of payload.files) {
         await b2Service.uploadBuffer(
           Buffer.from(file.content, 'utf8'),
@@ -156,14 +215,13 @@ function registerFlatPageRoutes(app) {
       }
 
       const manifest = payload.files.map((f) => ({ name: f.name }));
-      await query(
-        `INSERT INTO flat_page_projects (student_id, name, slug, b2_prefix, files_manifest, updated_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
-         ON CONFLICT (student_id, slug)
-         DO UPDATE SET name = EXCLUDED.name, b2_prefix = EXCLUDED.b2_prefix,
-                       files_manifest = EXCLUDED.files_manifest, updated_at = NOW()`,
-        [studentId, payload.name, payload.slug, prefix, JSON.stringify(manifest)]
-      );
+      await upsertFlatPageRecord({
+        studentId,
+        classSlug,
+        name: payload.name,
+        slug: payload.slug,
+        files: payload.files,
+      });
 
       res.json({ success: true, slug: payload.slug, name: payload.name });
     } catch (err) {
@@ -183,10 +241,9 @@ function registerFlatPageRoutes(app) {
 
       const slug = slugify(req.params.slug);
       const studentId = req.studentSession.studentId;
-      const ctx = await getStudentContext(studentId);
-      if (!ctx) return res.status(401).json({ success: false, message: 'Student not found' });
+      const classSlug = await resolveClassSlug(studentId, req.studentSession);
 
-      const prefix = buildPrefix(ctx.class_slug, studentId, slug);
+      const prefix = buildPrefix(classSlug, studentId, slug);
       for (const file of payload.files) {
         await b2Service.uploadBuffer(
           Buffer.from(file.content, 'utf8'),
@@ -195,15 +252,13 @@ function registerFlatPageRoutes(app) {
         );
       }
 
-      const manifest = payload.files.map((f) => ({ name: f.name }));
-      await query(
-        `INSERT INTO flat_page_projects (student_id, name, slug, b2_prefix, files_manifest, updated_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
-         ON CONFLICT (student_id, slug)
-         DO UPDATE SET name = EXCLUDED.name, b2_prefix = EXCLUDED.b2_prefix,
-                       files_manifest = EXCLUDED.files_manifest, updated_at = NOW()`,
-        [studentId, payload.name, slug, prefix, JSON.stringify(manifest)]
-      );
+      await upsertFlatPageRecord({
+        studentId,
+        classSlug,
+        name: payload.name,
+        slug,
+        files: payload.files,
+      });
 
       res.json({ success: true, slug, name: payload.name });
     } catch (err) {
@@ -218,11 +273,7 @@ function registerFlatPageRoutes(app) {
     if (slugOverride) payload.slug = slugOverride;
 
     const studentId = req.studentSession.studentId;
-    let classSlug = 'local';
-    if (isDbEnabled()) {
-      const ctx = await getStudentContext(studentId);
-      if (ctx) classSlug = ctx.class_slug;
-    }
+    const classSlug = await resolveClassSlug(studentId, req.studentSession);
 
     const shortId = String(studentId).replace(/-/g, '').slice(0, 8);
     const hostedPath = `flat-${shortId}-${payload.slug}`;
@@ -233,42 +284,23 @@ function registerFlatPageRoutes(app) {
       fs.writeFileSync(path.join(targetDir, file.name), file.content, 'utf8');
     }
 
-    if (process.env.B2_KEY_ID) {
-      const prefix = buildPrefix(classSlug, studentId, payload.slug);
-      for (const file of payload.files) {
-        try {
-          await b2Service.uploadBuffer(
-            Buffer.from(file.content, 'utf8'),
-            `${prefix}${file.name}`,
-            contentTypeForFilename(file.name)
-          );
-        } catch (err) {
-          console.warn('Flat page B2 backup failed:', err.message);
-        }
-      }
-    }
+    const prefix = buildPrefix(classSlug, studentId, payload.slug);
+    await uploadFlatPageFilesToB2(prefix, payload.files);
 
     const url = `${getServerBaseUrl(req)}/hosted/${hostedPath}/index.html`;
 
-    if (isDbEnabled()) {
-      const ctx = await getStudentContext(studentId);
-      if (ctx) {
-        const prefix = buildPrefix(ctx.class_slug, studentId, payload.slug);
-        const manifest = payload.files.map((f) => ({ name: f.name }));
-        await query(
-          `INSERT INTO flat_page_projects
-            (student_id, name, slug, b2_prefix, files_manifest, hosted_path, hosted_url, hosted_at, is_hosted, updated_at)
-           VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, NOW(), TRUE, NOW())
-           ON CONFLICT (student_id, slug)
-           DO UPDATE SET name = EXCLUDED.name, b2_prefix = EXCLUDED.b2_prefix,
-                         files_manifest = EXCLUDED.files_manifest, hosted_path = EXCLUDED.hosted_path,
-                         hosted_url = EXCLUDED.hosted_url, hosted_at = NOW(), is_hosted = TRUE, updated_at = NOW()`,
-          [studentId, payload.name, payload.slug, prefix, JSON.stringify(manifest), hostedPath, url]
-        );
-      }
-    }
+    await upsertFlatPageRecord({
+      studentId,
+      classSlug,
+      name: payload.name,
+      slug: payload.slug,
+      files: payload.files,
+      hostedPath,
+      hostedUrl: url,
+      isHosted: true,
+    });
 
-    res.json({ success: true, url, hostedPath });
+    res.json({ success: true, url, hostedPath, slug: payload.slug, name: payload.name });
   }
 
   // Publish a flat page to a live hosted URL (served from /hosted/<path>/)

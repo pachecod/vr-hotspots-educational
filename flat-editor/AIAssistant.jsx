@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { analyzeWithRidey } from './ridey-api.js';
+import { buildPreviewDocument } from './buildPreview.js';
 
 const QUICK_PROMPTS = [
   { text: 'Find bugs', prompt: 'Review this code and identify bugs or errors. Provide fixes.' },
@@ -41,14 +42,31 @@ function computeLineDiff(a, b) {
   return parts;
 }
 
-export default function AIAssistant({ open, onClose, code, language, fileName, onApplySuggestion }) {
+function buildPreviewPage(projectFiles, updatesByName) {
+  const files = (projectFiles || []).map((f) => ({
+    id: f.fileName,
+    name: f.fileName,
+    content: updatesByName[f.fileName] != null ? updatesByName[f.fileName] : f.content,
+  }));
+  return buildPreviewDocument({ files });
+}
+
+export default function AIAssistant({
+  open,
+  onClose,
+  code,
+  language,
+  fileName,
+  projectFiles,
+  onApplySuggestion,
+}) {
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [temperature, setTemperature] = useState(0.2);
   const [previewMode, setPreviewMode] = useState(false);
-  const [modifiedCode, setModifiedCode] = useState('');
+  const [modifiedByFile, setModifiedByFile] = useState({});
 
   useEffect(() => {
     const onKey = (e) => {
@@ -61,8 +79,8 @@ export default function AIAssistant({ open, onClose, code, language, fileName, o
   if (!open) return null;
 
   const handleSubmit = async (customPrompt) => {
-    const prompt = customPrompt || query;
-    if (!prompt.trim()) return;
+    const promptText = customPrompt || query;
+    if (!promptText.trim()) return;
     setLoading(true);
     setError(null);
     setResponse(null);
@@ -71,8 +89,10 @@ export default function AIAssistant({ open, onClose, code, language, fileName, o
         code,
         language: (language || 'html').toLowerCase(),
         fileName,
-        prompt: prompt.trim(),
+        prompt: promptText.trim(),
         temperature,
+        projectFiles,
+        activeFileName: fileName,
       });
       setResponse(data);
     } catch (err) {
@@ -82,8 +102,16 @@ export default function AIAssistant({ open, onClose, code, language, fileName, o
     }
   };
 
-  const lang = (language || 'html').toLowerCase();
-  const isHtml = lang === 'html' || fileName === 'index.html';
+  const activeUpdate = response?.fileUpdates?.find((f) => f.fileName === fileName);
+  const activeModified = activeUpdate?.suggestion ?? modifiedByFile[fileName] ?? code;
+  const changedFiles = response?.fileUpdates?.map((f) => f.fileName) || [];
+  const previewHtml = buildPreviewPage(projectFiles || [{ fileName, content: code }], {
+    ...(projectFiles || []).reduce((acc, f) => {
+      acc[f.fileName] = f.content;
+      return acc;
+    }, {}),
+    ...modifiedByFile,
+  });
 
   return (
     <div className="flat-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -92,7 +120,8 @@ export default function AIAssistant({ open, onClose, code, language, fileName, o
           <div>
             <h2>Ask Ridey</h2>
             <span className="flat-muted">
-              {fileName || lang}
+              {fileName || language}
+              {projectFiles?.length > 1 ? ' · multi-file project' : ''}
             </span>
           </div>
           <button type="button" className="flat-modal-close" onClick={onClose}>
@@ -133,7 +162,7 @@ export default function AIAssistant({ open, onClose, code, language, fileName, o
 
         <div className="flat-ridey-panels">
           <div className="flat-ridey-code-pane">
-            <h3>Current Code</h3>
+            <h3>Current Code ({fileName})</h3>
             <pre className="flat-ridey-pre">{code}</pre>
           </div>
           <div className="flat-ridey-chat-pane">
@@ -165,12 +194,21 @@ export default function AIAssistant({ open, onClose, code, language, fileName, o
             {response && !previewMode && (
               <div className="flat-ridey-response">
                 <p>{response.explanation}</p>
+                {changedFiles.length > 0 && (
+                  <p className="flat-muted">
+                    Updates: {changedFiles.join(', ')}
+                  </p>
+                )}
                 <p className="flat-muted">Confidence: {Math.round((response.confidence || 0) * 100)}%</p>
                 <button
                   type="button"
                   className="flat-tool-btn flat-tool-btn-accent"
                   onClick={() => {
-                    setModifiedCode(response.suggestion);
+                    const next = {};
+                    (response.fileUpdates || []).forEach((f) => {
+                      next[f.fileName] = f.suggestion;
+                    });
+                    setModifiedByFile(next);
                     setPreviewMode(true);
                   }}
                 >
@@ -181,7 +219,7 @@ export default function AIAssistant({ open, onClose, code, language, fileName, o
 
             {!loading && !error && !response && (
               <p className="flat-muted flat-ridey-intro">
-                Ridey can fix bugs, optimize code, add features, and improve quality for HTML, CSS, and JS.
+                Ridey uses your full project. CSS goes in style.css, JavaScript in script.js, and HTML stays structural.
               </p>
             )}
           </div>
@@ -198,24 +236,18 @@ export default function AIAssistant({ open, onClose, code, language, fileName, o
               </div>
               <div className="flat-ridey-preview-grid">
                 <pre className="flat-ridey-diff">
-                  {computeLineDiff(code, modifiedCode).map((part, idx) => (
+                  {computeLineDiff(code, activeModified).map((part, idx) => (
                     <div key={idx} className={`flat-diff-${part.type}`}>
                       {part.text}
                     </div>
                   ))}
                 </pre>
-                {isHtml ? (
-                  <iframe
-                    title="Ridey preview"
-                    className="flat-ridey-preview-frame"
-                    sandbox="allow-scripts allow-same-origin"
-                    srcDoc={modifiedCode}
-                  />
-                ) : (
-                  <div className="flat-muted flat-ridey-preview-placeholder">
-                    Visual preview is available for HTML files only.
-                  </div>
-                )}
+                <iframe
+                  title="Ridey preview"
+                  className="flat-ridey-preview-frame"
+                  sandbox="allow-scripts allow-same-origin"
+                  srcDoc={previewHtml}
+                />
               </div>
               <div className="flat-modal-footer">
                 <button type="button" className="flat-tool-btn" onClick={() => setPreviewMode(false)}>
@@ -225,11 +257,13 @@ export default function AIAssistant({ open, onClose, code, language, fileName, o
                   type="button"
                   className="flat-tool-btn flat-tool-btn-accent"
                   onClick={() => {
-                    if (onApplySuggestion) onApplySuggestion(modifiedCode);
+                    if (onApplySuggestion) {
+                      onApplySuggestion(response?.fileUpdates || []);
+                    }
                     setResponse(null);
                     setQuery('');
                     setPreviewMode(false);
-                    setModifiedCode('');
+                    setModifiedByFile({});
                     onClose();
                   }}
                 >

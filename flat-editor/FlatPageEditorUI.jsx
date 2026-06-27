@@ -224,8 +224,17 @@ export default function FlatPageEditorUI({ bridge }) {
         code={fileContent}
         language={fileTypeForId(activeFileId)}
         fileName={activeFileId}
-        onApplySuggestion={(suggestion) => {
-          bridge.setFileContent(activeFileId, suggestion);
+        projectFiles={(page.files || []).map((f) => ({
+          fileName: f.id || f.name,
+          language: fileTypeForId(f.id || f.name).toLowerCase(),
+          content: f.content || '',
+        }))}
+        onApplySuggestion={(fileUpdates) => {
+          (fileUpdates || []).forEach((update) => {
+            if (update?.fileName && update.suggestion != null) {
+              bridge.setFileContent(update.fileName, update.suggestion);
+            }
+          });
           setPreviewKey((k) => k + 1);
         }}
       />

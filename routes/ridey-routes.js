@@ -33,21 +33,24 @@ function registerRideyRoutes(app) {
         return res.status(403).json({ success: false, message: 'Ridey is disabled by admin' });
       }
 
-      const { code, language, fileName, prompt, temperature } = req.body || {};
-      if (!code || typeof code !== 'string') {
-        return res.status(400).json({ success: false, message: 'code is required' });
+      const { code, language, fileName, prompt, temperature, projectFiles, activeFileName } =
+        req.body || {};
+      if (!code && (!Array.isArray(projectFiles) || !projectFiles.length)) {
+        return res.status(400).json({ success: false, message: 'code or projectFiles is required' });
       }
       if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
         return res.status(400).json({ success: false, message: 'prompt is required' });
       }
 
       const result = await analyzeCodeWithAI({
-        code,
+        code: code || '',
         language: language || 'html',
         fileName,
         prompt: prompt.trim(),
         context: 'WebXR development with A-Frame, Three.js, and modern web technologies',
         temperature,
+        projectFiles: Array.isArray(projectFiles) ? projectFiles : undefined,
+        activeFileName,
       });
 
       res.json({ success: true, ...result });

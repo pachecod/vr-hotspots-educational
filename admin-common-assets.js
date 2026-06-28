@@ -556,18 +556,38 @@ async function loadStudentPeekDropdown() {
   }
 }
 
+function setupContentHubButton() {
+  const btn = document.getElementById('open-content-hub-btn');
+  if (!btn || btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('view', 'content');
+    window.history.replaceState({}, '', url.pathname + url.search);
+    if (window.ContentHub) ContentHub.open();
+  });
+}
+
+window.refreshAssetsAfterContentDelete = function (item) {
+  if (item && item.type === 'common_asset' && typeof loadAssets === 'function') {
+    loadAssets().catch(() => {});
+  }
+};
+
 function initMainApp() {
   document.getElementById('login-root').innerHTML = '';
   document.getElementById('main-content').style.display = 'block';
   renderAdminNav('assets');
   setupUploadToggle();
   setupStudentPeekDropdown();
+  setupContentHubButton();
   setupUploadZone();
   initTagFilterBar();
   setupTabs();
   setupAssetList();
   refreshVideoPipelineBanner();
   loadStudentPeekDropdown();
+  if (window.ContentHub) ContentHub.init();
   loadAssets().catch((err) => {
     if (err.code === 'AUTH_REQUIRED') location.reload();
     else alert(err.message || 'Failed to load assets');

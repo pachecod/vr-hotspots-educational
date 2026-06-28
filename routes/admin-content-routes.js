@@ -89,10 +89,12 @@ function registerAdminContentRoutes(app, { requireAdmin }) {
       const body = req.body || {};
       const studentId = req.query.studentId || body.studentId;
       const slug = req.query.slug || body.slug;
+      const category = req.query.category || body.category;
+      const filename = req.query.filename || body.filename;
       const fileName = req.query.fileName || body.fileName || (type === 'legacy_submission' ? id : null);
       const versionId = req.query.versionId || body.versionId;
 
-      const purgeParams = { type, id, studentId, slug, fileName, versionId };
+      const purgeParams = { type, id, studentId, slug, category, filename, fileName, versionId };
 
       if (req.query.dryRun === '1' || req.query.dryRun === 'true') {
         const manifest = await describePurge(purgeParams);

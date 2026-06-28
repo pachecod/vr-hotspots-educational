@@ -102,7 +102,7 @@ function renderStudents() {
         <td>${escapeHtml(s.class_name || '')}</td>
         <td>${s.is_active ? 'Yes' : 'No'}</td>
         <td>
-          <a class="btn btn-secondary" href="admin-content-hub.html?studentId=${encodeURIComponent(s.id)}&classId=${encodeURIComponent(s.class_id || '')}">Content</a>
+          <a class="btn btn-secondary" href="admin-common-assets.html?view=content&studentId=${encodeURIComponent(s.id)}&classId=${encodeURIComponent(s.class_id || '')}">Content</a>
           <button class="btn-peek" onclick="openStudentPeek('${s.id}')">Peek</button>
           <button class="btn-secondary" onclick="resetPassword('${s.id}')">Reset Password</button>
           <button class="btn-danger" onclick="deleteStudent('${s.id}')">Delete</button>

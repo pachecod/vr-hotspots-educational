@@ -143,7 +143,7 @@ async function loadInbox() {
               <strong>Version:</strong> #${sub.versionNumber || 1}<br>
               <strong>Submitted:</strong> ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '—'}<br>
               <strong>File:</strong> ${escapeHtml(sub.fileName)}${hostedLink}
-              ${sub.studentId ? `<br><a href="admin-content-hub.html?studentId=${encodeURIComponent(sub.studentId)}">View in Content Hub</a>` : ''}
+              ${sub.studentId ? `<br><a href="admin-common-assets.html?view=content&studentId=${encodeURIComponent(sub.studentId)}">View in Content Hub</a>` : ''}
             </div>
             ${noteBlock}
             <div class="actions">

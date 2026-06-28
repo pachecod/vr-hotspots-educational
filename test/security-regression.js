@@ -12,6 +12,7 @@ const {
   startLocalTestUser,
   getLocalTestSession,
 } = require('../lib/local-test-user');
+const { handleStudentLogout } = require('../student-auth');
 
 function testSafeRedirect() {
   const base = 'https://example.com';
@@ -99,9 +100,36 @@ function testCloudWriteAuthWithLocalTestCookie() {
   console.log('✓ cloud write auth with local test cookie');
 }
 
+function testStudentLogoutSetsBothClearCookies() {
+  const headers = {};
+  const mockRes = {
+    appendHeader(key, value) {
+      const prev = headers[key];
+      if (!prev) headers[key] = value;
+      else if (Array.isArray(prev)) headers[key] = [...prev, value];
+      else headers[key] = [prev, value];
+    },
+    setHeader(key, value) {
+      headers[key] = value;
+    },
+    getHeader(key) {
+      return headers[key];
+    },
+    json() {},
+  };
+
+  handleStudentLogout({}, mockRes);
+  const cookies = headers['Set-Cookie'];
+  const list = Array.isArray(cookies) ? cookies : [cookies];
+  assert.ok(list.some((c) => String(c).startsWith('student_session=')), 'student_session clear missing');
+  assert.ok(list.some((c) => String(c).startsWith('local_test_session=')), 'local_test_session clear missing');
+  console.log('✓ student logout clears both session cookies');
+}
+
 testSafeRedirect();
 testSsrfBlocklist();
 testCloudWriteAuthFlag();
 testLocalTestUserModeAvailability();
 testCloudWriteAuthWithLocalTestCookie();
+testStudentLogoutSetsBothClearCookies();
 console.log('\nAll security regression tests passed.');

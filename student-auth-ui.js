@@ -23,7 +23,11 @@ async function studentLogin(classId, studentId, password) {
 }
 
 async function studentLogout() {
-  await fetch('/api/student/logout', { method: 'POST', credentials: 'include' });
+  const res = await fetch('/api/student/logout', { method: 'POST', credentials: 'include' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.success === false) {
+    throw new Error(data.message || 'Logout failed');
+  }
 }
 
 async function startLocalTestUser() {
@@ -203,11 +207,15 @@ function bindStudentEditorLogout() {
   btn.dataset.bound = '1';
   btn.addEventListener('click', async () => {
     if (!confirm('Log out and return to the sign-in screen?')) return;
-    await studentLogout();
-    window.currentStudent = null;
-    window.editorAccessMode = 'none';
-    hideStudentEditorSession();
-    window.location.reload();
+    try {
+      await studentLogout();
+      window.currentStudent = null;
+      window.editorAccessMode = 'none';
+      hideStudentEditorSession();
+      window.location.reload();
+    } catch (err) {
+      alert(err.message || 'Could not log out. Please try again.');
+    }
   });
 }
 

@@ -44,7 +44,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .integrated-welcome-samples {
@@ -65,7 +65,7 @@
 }
 
 #integrated-welcome-inner.integrated-welcome-with-playground .integrated-welcome-auth {
-  padding: 36px 32px;
+  padding: 28px 32px;
   border-right: 1px solid rgba(255, 255, 255, 0.22);
   overflow-y: auto;
   text-align: center;

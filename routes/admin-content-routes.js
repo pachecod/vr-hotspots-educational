@@ -8,6 +8,7 @@ const {
   buildContentInventory,
   buildContentSummary,
   CONTENT_TYPES,
+  ADMIN_CONTENT_CLASS_ID,
 } = require('../lib/student-content/inventory');
 const {
   purgeContentItem,
@@ -127,11 +128,17 @@ function registerAdminContentRoutes(app, { requireAdmin }) {
 }
 
 function parseFilters(query) {
+  const rawClassId = query.classId || null;
+  const adminOnly =
+    rawClassId === ADMIN_CONTENT_CLASS_ID ||
+    query.adminOnly === '1' ||
+    query.adminOnly === 'true';
   return {
-    classId: query.classId || null,
-    studentId: query.studentId || null,
+    classId: adminOnly ? ADMIN_CONTENT_CLASS_ID : rawClassId,
+    adminOnly,
+    studentId: adminOnly ? null : query.studentId || null,
     type: query.type || null,
-    orphaned: query.orphaned === '1' || query.orphaned === 'true',
+    orphaned: adminOnly ? false : query.orphaned === '1' || query.orphaned === 'true',
     q: query.q || null,
     page: query.page || 1,
     limit: query.limit || 50,

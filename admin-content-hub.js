@@ -1,6 +1,8 @@
 /**
  * Content Hub UI — embedded in Assets page (admin-common-assets.html).
  */
+const ADMIN_CONTENT_CLASS_ID = '__admin__';
+
 const ContentHub = {
   root: null,
   pendingDelete: null,
@@ -56,11 +58,31 @@ const ContentHub = {
     const orphaned = this.$('ch-filter-orphaned')?.checked;
     const q = this.$('ch-filter-q')?.value?.trim();
     if (classId) params.set('classId', classId);
-    if (studentId) params.set('studentId', studentId);
+    if (studentId && classId !== ADMIN_CONTENT_CLASS_ID) params.set('studentId', studentId);
     if (type) params.set('type', type);
-    if (orphaned) params.set('orphaned', '1');
+    if (orphaned && classId !== ADMIN_CONTENT_CLASS_ID) params.set('orphaned', '1');
     if (q) params.set('q', q);
     return params;
+  },
+
+  onClassFilterChange() {
+    const classSel = this.$('ch-filter-class');
+    const studentSel = this.$('ch-filter-student');
+    const orphanCb = this.$('ch-filter-orphaned');
+    if (!classSel || !studentSel) return;
+
+    const isAdmin = classSel.value === ADMIN_CONTENT_CLASS_ID;
+    studentSel.innerHTML = '<option value="">All students</option>';
+    studentSel.disabled = isAdmin;
+    if (isAdmin) {
+      studentSel.innerHTML = '<option value="">—</option>';
+      if (orphanCb) {
+        orphanCb.checked = false;
+        orphanCb.disabled = true;
+      }
+      return;
+    }
+    if (orphanCb) orphanCb.disabled = false;
   },
 
   async loadSummary() {
@@ -254,6 +276,11 @@ const ContentHub = {
       const studentSel = this.$('ch-filter-student');
       if (!classSel || !studentSel) return;
 
+      const adminOpt = document.createElement('option');
+      adminOpt.value = ADMIN_CONTENT_CLASS_ID;
+      adminOpt.textContent = 'Admin Content';
+      classSel.appendChild(adminOpt);
+
       classes.forEach((c) => {
         const opt = document.createElement('option');
         opt.value = c.id;
@@ -262,8 +289,12 @@ const ContentHub = {
       });
 
       classSel.addEventListener('change', async () => {
-        studentSel.innerHTML = '<option value="">All students</option>';
+        this.onClassFilterChange();
         const classId = classSel.value;
+        if (classId === ADMIN_CONTENT_CLASS_ID) {
+          await this.loadContent();
+          return;
+        }
         if (!classId) return;
         const sRes = await adminFetch(`/api/classes/${classId}/students`);
         const students = await sRes.json();
@@ -289,7 +320,10 @@ const ContentHub = {
     const studentSel = this.$('ch-filter-student');
     if (presetClass && classSel) {
       classSel.value = presetClass;
-      classSel.dispatchEvent(new Event('change'));
+      this.onClassFilterChange();
+      if (presetClass !== ADMIN_CONTENT_CLASS_ID) {
+        classSel.dispatchEvent(new Event('change'));
+      }
     }
     if (presetStudent && studentSel) {
       setTimeout(() => {

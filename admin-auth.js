@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
+const { SESSION_BOOT_ID } = require('./lib/session-boot-id');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_SESSION_SECRET =
@@ -36,6 +37,7 @@ function verifySession(token) {
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
     if (!payload || payload.role !== 'admin') return null;
+    if (payload.boot !== SESSION_BOOT_ID) return null;
     if (!payload.exp || Date.now() > payload.exp) return null;
     return payload;
   } catch (_) {
@@ -46,6 +48,7 @@ function verifySession(token) {
 function createAdminSessionToken() {
   return signSession({
     role: 'admin',
+    boot: SESSION_BOOT_ID,
     exp: Date.now() + SESSION_MAX_AGE_MS,
   });
 }

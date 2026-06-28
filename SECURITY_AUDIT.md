@@ -56,6 +56,7 @@ Server **exits on startup** in production if weak/default secrets are detected.
 | CSRF | Origin/Referer/`X-Requested-With` guard on mutating requests (strict in production) |
 | ZIP | `assertValidZipFile` on legacy `/submit-project` |
 | Tests | `npm run test:security` |
+| Deploy | Sessions invalidate on server restart (boot ID in cookies) |
 
 ### Known remaining risks (post-2.8)
 

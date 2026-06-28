@@ -65,6 +65,21 @@ npm run build:flat-editor
 
 > `/admin-dashboard.html` redirects to Submissions.
 
+### Local Test User (dev only)
+
+For local demos without student accounts, enable **Test User** mode in `.env`:
+
+```bash
+LOCAL_TEST_USER_ENABLED=true
+```
+
+Then run `npm run dev` and open the editor. You will see an entry gate:
+
+- **Continue as Guest** — build 360° tours and flat pages locally, pick **local files** (preview + ZIP export), browse **Shared Online Assets**, load a ZIP template, and **Save Template**. No cloud save or submit to admin.
+- **Sign in with class account** — full student features if you have a class password from your teacher.
+
+Test User mode is disabled automatically when `NODE_ENV=production` (including Render deploys).
+
 ### 4. Workflow
 
 1. Admin creates classes and students in **Users & Classes**

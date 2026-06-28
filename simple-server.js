@@ -32,6 +32,8 @@ const { registerFlatPageRoutes } = require('./routes/flat-page-routes');
 const { registerVrTourRoutes } = require('./routes/vr-tour-routes');
 const { registerSnippetRoutes } = require('./routes/snippet-routes');
 const { registerRideyRoutes } = require('./routes/ridey-routes');
+const { registerLocalTestUserRoutes } = require('./routes/local-test-user-routes');
+const { rejectLocalTestUserWrites } = require('./lib/local-test-user');
 const { registerTemplateRoutes } = require('./routes/template-routes');
 const { runMigrations, importSubmissionsFromJson } = require('./db/migrate');
 const { isDbEnabled } = require('./services/db-service');
@@ -312,6 +314,7 @@ const staticNoStaleOptions = {
 };
 app.use(express.static('.', staticNoStaleOptions));
 app.use(express.json({ limit: '50mb' }));
+app.use(rejectLocalTestUserWrites);
 
 function protectAdminRoutes(req, res, next) {
   if (!req.path.startsWith('/admin')) return next();
@@ -329,6 +332,7 @@ app.get('/admin', (req, res) => {
 });
 
 registerCommonAssetRoutes(app, upload);
+registerLocalTestUserRoutes(app);
 registerStudentRoutes(app);
 registerRosterRoutes(app, { requireAdmin });
 registerStudentAssetRoutes(app, upload);
@@ -1388,7 +1392,7 @@ app.post('/api/submit-project-meta', requireAuthForCloudWrites, express.json(), 
 });
 
 function requireAuthForVideoFetch(req, res, next) {
-  if (cloudWritesRequireAuth()) {
+  if (cloudWritesRequireAuth(req)) {
     return requireStudentStrict(req, res, next);
   }
   return next();

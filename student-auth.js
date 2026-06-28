@@ -3,6 +3,11 @@ const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
 const { createSessionHelpers, parseCookies } = require('./lib/session');
 const { query, isDbEnabled } = require('./services/db-service');
+const {
+  isLocalTestUserModeAvailable,
+  getLocalTestSession,
+  endLocalTestUser,
+} = require('./lib/local-test-user');
 
 const STUDENT_AUTH_REQUIRED = process.env.STUDENT_AUTH_REQUIRED === 'true';
 const STUDENT_SESSION_SECRET =
@@ -93,6 +98,7 @@ async function handleStudentLogin(req, res) {
       className: student.class_name,
       classSlug: student.class_slug,
     });
+    endLocalTestUser(res);
     session.setCookie(res, token);
     return res.json({
       success: true,
@@ -112,15 +118,31 @@ async function handleStudentLogin(req, res) {
 
 function handleStudentLogout(req, res) {
   session.clearCookie(res);
+  endLocalTestUser(res);
   return res.json({ success: true });
 }
 
 async function handleStudentSessionStatus(req, res) {
+  const testUserModeAvailable = isLocalTestUserModeAvailable();
+  const localTestSession = testUserModeAvailable ? getLocalTestSession(req) : null;
+
   const sess = getStudentSession(req);
   if (!sess || !sess.studentId) {
+    if (localTestSession) {
+      return res.json({
+        authenticated: false,
+        authRequired: isStudentAuthRequired(),
+        testUserModeAvailable,
+        localTestUser: true,
+        mode: 'local_test',
+      });
+    }
     return res.json({
       authenticated: false,
       authRequired: isStudentAuthRequired(),
+      testUserModeAvailable,
+      localTestUser: false,
+      mode: testUserModeAvailable ? 'none' : 'anonymous',
     });
   }
   if (!isDbEnabled()) {
@@ -135,12 +157,21 @@ async function handleStudentSessionStatus(req, res) {
     );
     if (!rows.length) {
       session.clearCookie(res);
-      return res.json({ authenticated: false, authRequired: isStudentAuthRequired() });
+      return res.json({
+        authenticated: false,
+        authRequired: isStudentAuthRequired(),
+        testUserModeAvailable,
+        localTestUser: !!localTestSession,
+        mode: localTestSession ? 'local_test' : 'none',
+      });
     }
     const student = rows[0];
     return res.json({
       authenticated: true,
       authRequired: isStudentAuthRequired(),
+      testUserModeAvailable,
+      localTestUser: false,
+      mode: 'student',
       student: {
         id: student.id,
         displayName: student.display_name,
@@ -151,7 +182,13 @@ async function handleStudentSessionStatus(req, res) {
     });
   } catch (err) {
     console.error('Student session error:', err);
-    return res.json({ authenticated: false, authRequired: isStudentAuthRequired() });
+    return res.json({
+      authenticated: false,
+      authRequired: isStudentAuthRequired(),
+      testUserModeAvailable,
+      localTestUser: !!localTestSession,
+      mode: localTestSession ? 'local_test' : 'none',
+    });
   }
 }
 

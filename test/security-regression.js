@@ -7,6 +7,11 @@ const assert = require('assert');
 const { sanitizeReturnTo } = require('../lib/security/safe-redirect');
 const { hostnameLooksBlocked, isPrivateOrMetadataIp } = require('../lib/security/ssrf-guard');
 const { cloudWritesRequireAuth } = require('../lib/security/cloud-write-auth');
+const {
+  isLocalTestUserModeAvailable,
+  startLocalTestUser,
+  getLocalTestSession,
+} = require('../lib/local-test-user');
 
 function testSafeRedirect() {
   const base = 'https://example.com';
@@ -34,6 +39,7 @@ function testCloudWriteAuthFlag() {
     delete process.env.DATABASE_URL;
     delete process.env.B2_KEY_ID;
     delete process.env.STUDENT_AUTH_REQUIRED;
+    delete process.env.LOCAL_TEST_USER_ENABLED;
     assert.strictEqual(cloudWritesRequireAuth(), false);
 
     process.env.B2_KEY_ID = 'x';
@@ -46,7 +52,53 @@ function testCloudWriteAuthFlag() {
   console.log('✓ cloud write auth flag');
 }
 
+function testLocalTestUserModeAvailability() {
+  const prev = { ...process.env };
+  try {
+    delete process.env.NODE_ENV;
+    process.env.LOCAL_TEST_USER_ENABLED = 'true';
+    assert.strictEqual(isLocalTestUserModeAvailable(), true);
+
+    process.env.NODE_ENV = 'production';
+    assert.strictEqual(isLocalTestUserModeAvailable(), false);
+  } finally {
+    process.env = prev;
+  }
+  console.log('✓ local test user mode availability');
+}
+
+function testCloudWriteAuthWithLocalTestCookie() {
+  const prev = { ...process.env };
+  try {
+    delete process.env.NODE_ENV;
+    delete process.env.DATABASE_URL;
+    delete process.env.B2_KEY_ID;
+    delete process.env.STUDENT_AUTH_REQUIRED;
+    process.env.LOCAL_TEST_USER_ENABLED = 'true';
+
+    const mockRes = {
+      _headers: {},
+      setHeader(key, value) {
+        this._headers[key] = value;
+      },
+    };
+    startLocalTestUser(mockRes);
+    const setCookie = mockRes._headers['Set-Cookie'] || '';
+    const cookiePair = setCookie.split(';')[0];
+    const mockReq = { headers: { cookie: cookiePair } };
+
+    assert.ok(getLocalTestSession(mockReq), 'expected valid local test session');
+    assert.strictEqual(cloudWritesRequireAuth(mockReq), true);
+    assert.strictEqual(cloudWritesRequireAuth(), false);
+  } finally {
+    process.env = prev;
+  }
+  console.log('✓ cloud write auth with local test cookie');
+}
+
 testSafeRedirect();
 testSsrfBlocklist();
 testCloudWriteAuthFlag();
+testLocalTestUserModeAvailability();
+testCloudWriteAuthWithLocalTestCookie();
 console.log('\nAll security regression tests passed.');

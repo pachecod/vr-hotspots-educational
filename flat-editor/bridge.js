@@ -171,17 +171,28 @@ export class FlatPageEditorBridge {
     return { version: PROJECT_VERSION, activePageId, pages: cleanPages };
   }
 
+  _capabilities() {
+    if (typeof window !== 'undefined' && typeof window.getEditorCapabilities === 'function') {
+      return window.getEditorCapabilities();
+    }
+    return {
+      canUseCloudSave: !!window.currentStudent,
+      canUseRidey: !!window.currentStudent,
+    };
+  }
+
   getState() {
     const page = this.getActivePage();
+    const caps = this._capabilities();
     return {
       project: this.project,
       activeFileId: this.activeFileId,
       visible: this._visible,
       cloudStatus: this._cloudStatus,
       cloudStatusError: this._cloudStatusError,
-      showCloudActions: !!window.currentStudent,
+      showCloudActions: caps.canUseCloudSave,
       files: page.files || [],
-      rideyEnabled: this._rideyStatus.enabled && this._rideyStatus.hasApiKey,
+      rideyEnabled: caps.canUseRidey && this._rideyStatus.enabled && this._rideyStatus.hasApiKey,
       blockedExtensions: this._blockedExtensions,
       adminTemplateMode: this._adminTemplateMode,
     };
@@ -553,6 +564,10 @@ export class FlatPageEditorBridge {
   }
 
   onStudentSession() {
+    this._notify();
+  }
+
+  onCapabilitiesChange() {
     this._notify();
   }
 

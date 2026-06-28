@@ -159,11 +159,16 @@
               <label for="tpl-desc">Description</label>
               <textarea id="tpl-desc" rows="1" placeholder="Short description for students"></textarea>
             </div>
+            <div class="field field-grow">
+              <label for="tpl-thumb">Thumbnail URL</label>
+              <input type="text" id="tpl-thumb" placeholder="Optional image for welcome screen" />
+            </div>
           </div>
           <div class="admin-template-meta-row">
             <div class="admin-template-flags">
               <label><input type="checkbox" id="tpl-public" checked /> Public</label>
               <label><input type="checkbox" id="tpl-default" /> Default starter</label>
+              <label><input type="checkbox" id="tpl-playground" /> Show on welcome screen</label>
             </div>
             <div class="admin-template-actions">
               <span id="save-status"></span>

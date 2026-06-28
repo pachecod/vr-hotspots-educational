@@ -213,8 +213,11 @@ CREATE TABLE IF NOT EXISTS project_templates (
   sort_order INT NOT NULL DEFAULT 0,
   files_manifest JSONB NOT NULL DEFAULT '[]'::jsonb,
   thumbnail_url TEXT,
+  is_playground BOOLEAN NOT NULL DEFAULT FALSE,
+  bundle_b2_key TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_project_templates_public ON project_templates(is_public, sort_order);
+CREATE INDEX IF NOT EXISTS idx_project_templates_playground ON project_templates(is_playground, sort_order);

@@ -13,6 +13,12 @@ const {
   getLocalTestSession,
 } = require('../lib/local-test-user');
 const { handleStudentLogout } = require('../student-auth');
+const { isPublicPlaygroundEnabled } = require('../lib/playground-config');
+const { validateZipHasConfig, playgroundBundleKey } = require('../routes/playground-routes');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const AdmZip = require('adm-zip');
 
 function testSafeRedirect() {
   const base = 'https://example.com';
@@ -126,10 +132,44 @@ function testStudentLogoutSetsBothClearCookies() {
   console.log('✓ student logout clears both session cookies');
 }
 
+function testPublicPlaygroundFlag() {
+  const prev = process.env.PUBLIC_PLAYGROUND_ENABLED;
+  try {
+    delete process.env.PUBLIC_PLAYGROUND_ENABLED;
+    assert.strictEqual(isPublicPlaygroundEnabled(), false);
+    process.env.PUBLIC_PLAYGROUND_ENABLED = 'true';
+    assert.strictEqual(isPublicPlaygroundEnabled(), true);
+  } finally {
+    if (prev === undefined) delete process.env.PUBLIC_PLAYGROUND_ENABLED;
+    else process.env.PUBLIC_PLAYGROUND_ENABLED = prev;
+  }
+  console.log('✓ public playground flag');
+}
+
+function testPlaygroundBundleValidation() {
+  assert.strictEqual(playgroundBundleKey('farm-tour'), 'playground-tours/farm-tour.zip');
+  const tmp = path.join(os.tmpdir(), `pg-test-${Date.now()}.zip`);
+  const badZip = new AdmZip();
+  badZip.addFile('readme.txt', Buffer.from('hi'));
+  badZip.writeZip(tmp);
+  assert.strictEqual(validateZipHasConfig(tmp), false);
+  fs.unlinkSync(tmp);
+
+  const good = path.join(os.tmpdir(), `pg-good-${Date.now()}.zip`);
+  const goodZip = new AdmZip();
+  goodZip.addFile('config.json', Buffer.from('{"name":"demo"}'));
+  goodZip.writeZip(good);
+  assert.strictEqual(validateZipHasConfig(good), true);
+  fs.unlinkSync(good);
+  console.log('✓ playground bundle validation');
+}
+
 testSafeRedirect();
 testSsrfBlocklist();
 testCloudWriteAuthFlag();
 testLocalTestUserModeAvailability();
 testCloudWriteAuthWithLocalTestCookie();
 testStudentLogoutSetsBothClearCookies();
+testPublicPlaygroundFlag();
+testPlaygroundBundleValidation();
 console.log('\nAll security regression tests passed.');

@@ -1,0 +1,157 @@
+const fs = require('fs');
+const path = require('path');
+const AdmZip = require('adm-zip');
+const multer = require('multer');
+const { requireAdmin } = require('../admin-auth');
+const { isDbEnabled } = require('../services/db-service');
+const templatesDb = require('../lib/templates');
+const { isPublicPlaygroundEnabled } = require('../lib/playground-config');
+const b2Service = require('../services/b2-service');
+
+const upload = multer({ dest: 'temp-uploads/' });
+
+function playgroundBundleKey(slug) {
+  return `playground-tours/${slug}.zip`;
+}
+
+function validateZipHasConfig(localPath) {
+  const zip = new AdmZip(localPath);
+  return zip.getEntry('config.json') != null;
+}
+
+function registerPlaygroundRoutes(app) {
+  app.get('/api/playground/config', (_req, res) => {
+    res.json({ success: true, enabled: isPublicPlaygroundEnabled() });
+  });
+
+  app.get('/api/playground/templates', async (_req, res) => {
+    if (!isPublicPlaygroundEnabled()) {
+      return res.json({ success: true, enabled: false, templates: [] });
+    }
+    try {
+      const templates = await templatesDb.listPlaygroundTemplates();
+      res.json({ success: true, enabled: true, templates });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/api/playground/templates/:slug', async (req, res) => {
+    if (!isPublicPlaygroundEnabled()) {
+      return res.status(404).json({ success: false, message: 'Playground not enabled' });
+    }
+    try {
+      const template = await templatesDb.getPlaygroundTemplateBySlug(req.params.slug);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+      res.json({
+        success: true,
+        template: {
+          id: template.id,
+          title: template.title,
+          slug: template.slug,
+          description: template.description,
+          scope: template.scope,
+          thumbnail_url: template.thumbnail_url,
+          has_bundle: !!template.bundle_b2_key,
+          files_manifest: template.scope === 'flat' ? template.files_manifest : undefined,
+        },
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/api/playground/templates/:slug/bundle', async (req, res) => {
+    if (!isPublicPlaygroundEnabled()) {
+      return res.status(404).json({ success: false, message: 'Playground not enabled' });
+    }
+    try {
+      const template = await templatesDb.getPlaygroundTemplateBySlug(req.params.slug);
+      if (!template || !template.bundle_b2_key) {
+        return res.status(404).json({ success: false, message: 'Bundle not found' });
+      }
+      await b2Service.ensureCommonAssetsBucket();
+      if (b2Service.commonAssetsPublicAccess) {
+        const url = b2Service.getCommonAssetPublicUrl(template.bundle_b2_key);
+        return res.redirect(302, url);
+      }
+      const streamResult = await b2Service.downloadCommonAssetStream(template.bundle_b2_key);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${template.slug}.zip"`);
+      streamResult.stream.pipe(res);
+    } catch (err) {
+      console.error('Playground bundle download error:', err);
+      res.status(500).json({ success: false, message: 'Could not download bundle' });
+    }
+  });
+
+  app.post('/admin/templates/:id/bundle', requireAdmin, upload.single('bundle'), async (req, res) => {
+    if (!isDbEnabled()) {
+      return res.status(503).json({ success: false, message: 'Database not configured' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'ZIP file required' });
+    }
+    const localPath = req.file.path;
+    try {
+      const template = await templatesDb.getTemplateById(req.params.id);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+      if (!req.file.originalname.toLowerCase().endsWith('.zip')) {
+        return res.status(400).json({ success: false, message: 'File must be a .zip archive' });
+      }
+      if (!validateZipHasConfig(localPath)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid project ZIP: config.json not found. Export from the editor using Save Template (bundle mode).',
+        });
+      }
+
+      const remotePath = playgroundBundleKey(template.slug);
+      if (template.bundle_b2_key && template.bundle_b2_key !== remotePath) {
+        try {
+          await b2Service.deleteCommonAsset(template.bundle_b2_key);
+        } catch (_) {}
+      }
+
+      await b2Service.uploadCommonAsset(localPath, remotePath, 'application/zip');
+      const updated = await templatesDb.updateTemplate(template.id, { bundle_b2_key: remotePath });
+      res.json({ success: true, template: updated });
+    } catch (err) {
+      console.error('Playground bundle upload error:', err);
+      res.status(500).json({ success: false, message: err.message || 'Upload failed' });
+    } finally {
+      try {
+        fs.unlinkSync(localPath);
+      } catch (_) {}
+    }
+  });
+
+  app.delete('/admin/templates/:id/bundle', requireAdmin, async (req, res) => {
+    if (!isDbEnabled()) {
+      return res.status(503).json({ success: false, message: 'Database not configured' });
+    }
+    try {
+      const template = await templatesDb.getTemplateById(req.params.id);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+      if (template.bundle_b2_key) {
+        try {
+          await b2Service.deleteCommonAsset(template.bundle_b2_key);
+        } catch (err) {
+          console.warn('Could not delete bundle from B2:', err.message);
+        }
+      }
+      const updated = await templatesDb.clearTemplateBundle(template.id);
+      res.json({ success: true, template: updated });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+}
+
+module.exports = { registerPlaygroundRoutes, playgroundBundleKey, validateZipHasConfig };

@@ -13,7 +13,20 @@
       .btn-secondary { background: #6c757d; color: #fff; }
       .template-card { background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
       .template-meta { font-size: 12px; color: #666; margin-top: 4px; }
+      .template-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+      .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #e9ecef; color: #495057; }
+      .badge-playground { background: #667eea; color: #fff; }
+      .badge-bundle { background: #17a2b8; color: #fff; }
       .create-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .create-form { display: grid; gap: 10px; max-width: 640px; }
+      .create-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: bold; }
+      .create-form input[type='text'],
+      .create-form textarea,
+      .create-form select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+      .create-form textarea { min-height: 72px; resize: vertical; }
+      .create-form .flags { display: flex; gap: 16px; font-weight: normal; }
+      .bundle-row { margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; }
+      .bundle-row input[type='file'] { font-size: 12px; }
       #toast { position: fixed; bottom: 20px; right: 20px; background: #28a745; color: #fff; padding: 12px 18px; border-radius: 6px; display: none; z-index: 10001; }
     </style>
     <script src="admin-auth-ui.js"></script>
@@ -24,16 +37,35 @@
     <div id="main-content" style="display: none">
       <nav id="admin-nav" data-active="templates"></nav>
       <h1>Project Templates</h1>
-      <p style="color: #666">Curate public starter templates students can load in the flat page editor.</p>
+      <p style="color: #666">
+        Curate flat page starters for students and optional <strong>welcome-screen sample projects</strong> (360° + web bundles).
+      </p>
 
       <div class="section">
-        <h2>Create Template</h2>
+        <h2>Create Flat Template</h2>
         <p style="color: #666; font-size: 14px; margin-top: 0">
-          Use the flat page editor to build HTML, CSS, and JS — same tools students get (Snippets, Format, multi-file, Ridey when enabled).
+          Use the flat page editor to build HTML, CSS, and JS — same tools students get.
         </p>
         <div class="create-actions">
-          <a href="admin-template-editor.html" class="btn btn-primary">+ Create with Editor</a>
+          <a href="admin-template-editor.html" class="btn btn-primary">+ Create Flat with Editor</a>
         </div>
+      </div>
+
+      <div class="section">
+        <h2>Create Combined Playground Sample</h2>
+        <p style="color: #666; font-size: 14px; margin-top: 0">
+          For welcome-screen samples: build a full project in the main editor, export a <strong>bundle ZIP</strong>, then upload it below after creating the entry.
+        </p>
+        <form id="create-combined-form" class="create-form">
+          <label>Title<input type="text" id="combined-title" required placeholder="e.g. Farm Tour Demo" /></label>
+          <label>Description<textarea id="combined-desc" placeholder="Shown on the welcome screen"></textarea></label>
+          <label>Thumbnail URL<input type="text" id="combined-thumb" placeholder="https://… or /common-assets/…" /></label>
+          <div class="flags">
+            <label><input type="checkbox" id="combined-public" checked /> Public</label>
+            <label><input type="checkbox" id="combined-playground" checked /> Show on welcome screen</label>
+          </div>
+          <button type="submit" class="btn btn-primary">Create combined sample entry</button>
+        </form>
       </div>
 
       <div class="section">

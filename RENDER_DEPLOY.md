@@ -43,6 +43,7 @@ Copy values from your local `.env` into Render → **Environment**:
 | `STUDENT_AUTH_REQUIRED` | Set `true` in production to require student sign-in |
 | `LOCAL_TEST_USER_ENABLED` | Set `true` to offer **Continue as Guest** on the welcome screen |
 | `LOCAL_TEST_USER_ALLOW_PRODUCTION` | Required with guest mode on Render (`NODE_ENV=production`) |
+| `PUBLIC_PLAYGROUND_ENABLED` | Set `true` to show **Try a sample project** grid on the welcome screen |
 
 Optional:
 
@@ -100,6 +101,17 @@ On first deploy, check **Logs** for PostgreSQL migration, B2 authorization, and 
 4. Upload shared media on **Assets** (`/admin-common-assets.html`); optional tags help students find files
 5. Optional: add **code snippets** and **flat page templates** under **Editor Settings** and **Templates**
 6. Optional: set `OPENAI_API_KEY` and enable **Ridey** under **Editor Settings**
+
+### Welcome-screen sample projects (optional)
+
+When `PUBLIC_PLAYGROUND_ENABLED=true` and guest mode is enabled, visitors see curated sample projects on the editor welcome screen.
+
+1. Build a showcase project in the main editor → **Save Template** → choose **bundle** export mode
+2. Open **Templates** (`/admin-templates.html`) → **Create combined playground sample** (or edit a flat template)
+3. Enable **Show on welcome screen**, set a thumbnail URL, and **Upload bundle** (combined samples)
+4. Set on Render: `PUBLIC_PLAYGROUND_ENABLED=true`, `LOCAL_TEST_USER_ENABLED=true`, `LOCAL_TEST_USER_ALLOW_PRODUCTION=true`
+
+Share a direct link: `https://YOUR-SERVICE.onrender.com/?playground=your-template-slug`
 
 For classroom workflows (grading, peek, asset tagging, flat page editor), see [USER_GUIDE.md](USER_GUIDE.md). Planned teacher-specific guides are listed in [DOCS_PLAN.md](DOCS_PLAN.md).
 

@@ -87,6 +87,16 @@ LOCAL_TEST_USER_ALLOW_PRODUCTION=true
 
 Guest mode still blocks cloud save, submit, and server uploads.
 
+### Welcome-screen sample projects
+
+Set `PUBLIC_PLAYGROUND_ENABLED=true` (with guest mode and `DATABASE_URL`) to show a **Try a sample project** grid on the welcome screen. Admins curate samples under **Templates** (`/admin-templates.html`):
+
+1. Export a full project ZIP from the main editor (bundle mode)
+2. Create a **combined playground sample**, upload the ZIP, enable **Show on welcome screen**, and add a thumbnail URL
+3. Flat templates can also appear on the welcome screen when marked playground (no ZIP required)
+
+Direct link: `/?playground=your-template-slug`
+
 ### 4. Workflow
 
 1. Admin creates classes and students in **Users & Classes**

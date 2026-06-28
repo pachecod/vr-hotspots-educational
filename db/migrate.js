@@ -135,6 +135,14 @@ async function applyIncrementalMigrations(pool) {
       `,
     },
     {
+      name: 'project_templates_playground_v1',
+      sql: `
+        ALTER TABLE project_templates ADD COLUMN IF NOT EXISTS is_playground BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE project_templates ADD COLUMN IF NOT EXISTS bundle_b2_key TEXT;
+        CREATE INDEX IF NOT EXISTS idx_project_templates_playground ON project_templates(is_playground, sort_order);
+      `,
+    },
+    {
       name: 'flat_page_projects_v1',
       sql: `
         CREATE TABLE IF NOT EXISTS flat_page_projects (

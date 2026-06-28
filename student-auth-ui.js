@@ -63,7 +63,7 @@ function welcomeGithubFooterHtml() {
 }
 
 function integratedWelcomeCardStyle() {
-  return 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 36px; border-radius: 16px; color: white; max-width: 520px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center; position: relative;';
+  return 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 36px; border-radius: 16px; color: white; max-width: 520px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center; position: relative;';
 }
 
 function integratedWelcomeShellStyle() {
@@ -290,10 +290,23 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
       integratedWelcome: true,
     });
   });
+
+  const welcomeInner = container.querySelector('#integrated-welcome-inner');
+  if (welcomeInner && typeof window.mountPlaygroundTemplatesSection === 'function') {
+    window.mountPlaygroundTemplatesSection(welcomeInner, { containerId, onAuthenticated });
+  }
 }
 
 function renderEntryGate(containerId, onAuthenticated) {
   renderIntegratedAuthStep(containerId, onAuthenticated, { showGuest: true });
+  const slug = window.__pendingPlaygroundSlug;
+  if (slug && typeof window.openPlaygroundTemplate === 'function') {
+    setTimeout(() => {
+      window.openPlaygroundTemplate(slug, { containerId, onAuthenticated }).catch((err) => {
+        alert(err.message || 'Could not open sample project');
+      });
+    }, 0);
+  }
 }
 
 function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {

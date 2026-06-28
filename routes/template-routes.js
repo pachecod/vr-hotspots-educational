@@ -73,17 +73,35 @@ function registerTemplateRoutes(app) {
       if (!isDbEnabled()) {
         return res.status(503).json({ success: false, message: 'Database not configured' });
       }
-      const { title, description, files_manifest, is_public, is_default, scope } = req.body || {};
-      if (!title || !Array.isArray(files_manifest) || !files_manifest.length) {
-        return res.status(400).json({ success: false, message: 'title and files_manifest required' });
+      const { title, description, files_manifest, is_public, is_default, scope, is_playground, thumbnail_url } =
+        req.body || {};
+      if (!title) {
+        return res.status(400).json({ success: false, message: 'title is required' });
+      }
+      let files = Array.isArray(files_manifest) ? files_manifest : [];
+      const templateScope = scope === 'combined' ? 'combined' : 'flat';
+      if (!files.length) {
+        if (templateScope === 'combined') {
+          files = [
+            {
+              name: 'index.html',
+              content:
+                '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Placeholder</title></head><body></body></html>',
+            },
+          ];
+        } else {
+          return res.status(400).json({ success: false, message: 'files_manifest required for flat templates' });
+        }
       }
       const template = await templatesDb.createTemplate({
         title,
         description,
-        files_manifest,
+        files_manifest: files,
         is_public,
         is_default,
-        scope,
+        is_playground,
+        thumbnail_url,
+        scope: templateScope,
       });
       res.json({ success: true, template });
     } catch (err) {

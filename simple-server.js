@@ -35,6 +35,7 @@ const { registerRideyRoutes } = require('./routes/ridey-routes');
 const { registerLocalTestUserRoutes } = require('./routes/local-test-user-routes');
 const { rejectLocalTestUserWrites } = require('./lib/local-test-user');
 const { registerTemplateRoutes } = require('./routes/template-routes');
+const { registerPlaygroundRoutes } = require('./routes/playground-routes');
 const { runMigrations, importSubmissionsFromJson } = require('./db/migrate');
 const { isDbEnabled } = require('./services/db-service');
 const {
@@ -350,6 +351,7 @@ registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe });
 registerSnippetRoutes(app);
 registerRideyRoutes(app);
 registerTemplateRoutes(app);
+registerPlaygroundRoutes(app);
 
 if (process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_BUCKET_NAME) {
   b2Service

@@ -38,6 +38,8 @@ async function loadTemplateForEdit(id) {
   document.getElementById('tpl-desc').value = tpl.description || '';
   document.getElementById('tpl-public').checked = !!tpl.is_public;
   document.getElementById('tpl-default').checked = !!tpl.is_default;
+  document.getElementById('tpl-playground').checked = !!tpl.is_playground;
+  document.getElementById('tpl-thumb').value = tpl.thumbnail_url || '';
   document.title = `Edit: ${tpl.title} — VR Hotspots Admin`;
 
   const bridge = await waitForFlatEditor();
@@ -69,6 +71,8 @@ async function saveTemplate() {
     files_manifest,
     is_public: document.getElementById('tpl-public').checked,
     is_default: document.getElementById('tpl-default').checked,
+    is_playground: document.getElementById('tpl-playground').checked,
+    thumbnail_url: document.getElementById('tpl-thumb').value.trim(),
     scope: 'flat',
   };
 

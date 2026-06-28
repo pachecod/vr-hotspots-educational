@@ -73,13 +73,13 @@ function render() {
         <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:4px">Thumbnail</label>
         ${
           t.thumbnail_url
-            ? `<p style="font-size:12px;color:#666;margin:0 0 6px;word-break:break-all">${escapeHtml(t.thumbnail_url)}</p>`
-            : '<p style="font-size:12px;color:#666;margin:0 0 6px">Auto-generated from a page screenshot when shown on welcome.</p>'
+            ? `<p style="font-size:12px;color:#666;margin:0 0 6px;word-break:break-all">${escapeHtml(displayThumbnailUrl(t))}</p>`
+            : '<p style="font-size:12px;color:#666;margin:0 0 6px">Auto-generated from a page screenshot. Use Regenerate below, or enable Show on Welcome to publish on the guest screen.</p>'
         }
         <input type="text" class="thumb-url-input" data-id="${t.id}" value="${escapeAttr(t.thumbnail_url || '')}" placeholder="Optional custom URL override" style="width:100%;max-width:480px;padding:6px;border:1px solid #ccc;border-radius:4px" />
         <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+          <button type="button" class="btn btn-secondary btn-regen-thumb" data-id="${t.id}">Regenerate thumbnail</button>
           <button type="button" class="btn btn-secondary btn-save-thumb" data-id="${t.id}">Save custom URL</button>
-          ${t.is_playground ? `<button type="button" class="btn btn-secondary btn-regen-thumb" data-id="${t.id}">Regenerate thumbnail</button>` : ''}
         </div>
       </div>
     </div>
@@ -102,6 +102,14 @@ function escapeAttr(s) {
     .replace(/</g, '&lt;');
 }
 
+function displayThumbnailUrl(t) {
+  if (!t?.thumbnail_url) return '';
+  const url = String(t.thumbnail_url);
+  if (url.startsWith('/api/playground/thumbnails/')) return url;
+  if (t.slug) return `/api/playground/thumbnails/${encodeURIComponent(t.slug)}`;
+  return url;
+}
+
 async function uploadBundle(id) {
   const input = document.querySelector(`.bundle-file-input[data-id="${id}"]`);
   if (!input || !input.files || !input.files[0]) {
@@ -122,7 +130,7 @@ async function uploadBundle(id) {
 }
 
 document.getElementById('template-list').addEventListener('click', async (e) => {
-  const btn = e.target.closest('button[data-id], button.btn-save-thumb');
+  const btn = e.target.closest('button[data-id]');
   if (!btn || !btn.dataset.id) return;
   const id = btn.dataset.id;
   const tpl = templates.find((t) => t.id === id);

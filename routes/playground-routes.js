@@ -7,7 +7,7 @@ const { isDbEnabled } = require('../services/db-service');
 const templatesDb = require('../lib/templates');
 const { isPublicPlaygroundEnabled } = require('../lib/playground-config');
 const b2Service = require('../services/b2-service');
-const { refreshPlaygroundThumbnail, resolvePlaygroundThumbnailUrl, playgroundThumbLookupPaths, contentTypeForThumbPath } = require('../lib/playground-thumbnail');
+const { refreshPlaygroundThumbnail, resolvePlaygroundThumbnailUrl, playgroundThumbLookupPaths, contentTypeForThumbPath, generatePlaygroundThumbnail } = require('../lib/playground-thumbnail');
 
 const upload = multer({ dest: 'temp-uploads/' });
 
@@ -193,22 +193,17 @@ function registerPlaygroundRoutes(app) {
       if (!template) {
         return res.status(404).json({ success: false, message: 'Template not found' });
       }
-      if (!template.is_playground) {
-        return res.status(400).json({
-          success: false,
-          message: 'Enable "Show on Welcome" before generating a thumbnail',
-        });
-      }
-      const updated = await refreshPlaygroundThumbnail(template);
-      if (!updated?.thumbnail_url) {
+      const thumbnail_url = await generatePlaygroundThumbnail(template);
+      if (!thumbnail_url) {
         return res.status(400).json({
           success: false,
           message:
             template.scope === 'combined'
               ? 'Upload a bundle ZIP first, or ensure the project has a scene image'
-              : 'Could not derive a thumbnail from this template',
+              : 'Could not generate a thumbnail from this template',
         });
       }
+      const updated = await templatesDb.updateTemplate(template.id, { thumbnail_url });
       res.json({ success: true, template: updated });
     } catch (err) {
       console.error('Generate thumbnail error:', err);

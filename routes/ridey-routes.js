@@ -1,7 +1,19 @@
 const rateLimit = require('express-rate-limit');
-const { requireStudent } = require('../student-auth');
+const {
+  requireStudent,
+  requireStudentStrict,
+  isStudentAuthRequired,
+} = require('../student-auth');
+const { isDbEnabled } = require('../services/db-service');
 const { getRideyEnabled } = require('../lib/app-settings');
 const { analyzeCodeWithAI } = require('../services/ridey-service');
+
+function requireRideyStudent(req, res, next) {
+  if (isDbEnabled() || isStudentAuthRequired()) {
+    return requireStudentStrict(req, res, next);
+  }
+  return requireStudent(req, res, next);
+}
 
 const rideyRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -26,7 +38,7 @@ function registerRideyRoutes(app) {
     }
   });
 
-  app.post('/api/ridey/analyze', requireStudent, rideyRateLimiter, async (req, res) => {
+  app.post('/api/ridey/analyze', requireRideyStudent, rideyRateLimiter, async (req, res) => {
     try {
       const enabled = await getRideyEnabled();
       if (!enabled) {

@@ -1,10 +1,19 @@
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_SESSION_SECRET =
   process.env.ADMIN_SESSION_SECRET || crypto.createHash('sha256').update(ADMIN_PASSWORD).digest('hex');
 const COOKIE_NAME = 'admin_session';
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+const loginRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many admin login attempts. Try again in a minute.' },
+});
 
 function signSession(payload) {
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -100,6 +109,7 @@ function handleAdminSessionStatus(req, res) {
 
 module.exports = {
   requireAdmin,
+  loginRateLimiter,
   handleAdminLogin,
   handleAdminLogout,
   handleAdminSessionStatus,

@@ -320,7 +320,7 @@ async function importProjectZip(file) {
     statusDiv.style.background = '#f8d7da';
     statusDiv.style.color = '#721c24';
     statusDiv.style.border = '1px solid #f5c6cb';
-    statusDiv.innerHTML = 'Import failed: ' + e.message;
+    statusDiv.textContent = 'Import failed: ' + (e.message || 'Unknown error');
   }
   const input = document.getElementById('import-project-zip-input');
   if (input) input.value = '';

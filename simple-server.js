@@ -1,7 +1,11 @@
 // Educational backend server for VR Hotspots
 
 require('dotenv').config();
+const { assertProductionSecrets } = require('./lib/security/production-secrets');
+assertProductionSecrets();
+
 const express = require('express');
+const helmet = require('helmet');
 const multer = require('multer');
 const path = require('path');
 const https = require('https');
@@ -39,9 +43,36 @@ const submissionsDb = require('./services/submissions-db');
 const projectVersionsDb = require('./services/project-versions-db');
 const { assertCanSubmit } = require('./services/usage-quota');
 const { parseCookies } = require('./lib/session');
+const { assertSafeOutboundUrl } = require('./lib/security/ssrf-guard');
+const { sanitizeReturnTo } = require('./lib/security/safe-redirect');
+const { csrfGuard } = require('./lib/security/csrf-guard');
+const { requireAuthForCloudWrites, cloudWritesRequireAuth } = require('./lib/security/cloud-write-auth');
+const {
+  createGitHubSession,
+  getGitHubToken,
+  clearGitHubSession,
+  setGitHubSessionCookie,
+} = require('./lib/github-oauth-store');
 
 const app = express();
 const upload = multer({ dest: 'temp-uploads/' });
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+app.use((req, res, next) => {
+  if (req.path.startsWith('/hosted/')) {
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; img-src * data: blob:; media-src * data: blob:; frame-src *;"
+    );
+  }
+  next();
+});
+app.use(csrfGuard);
 
 registerStripeWebhook(app);
 
@@ -351,9 +382,23 @@ const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 const GITHUB_OAUTH_CALLBACK_BASE = process.env.GITHUB_OAUTH_CALLBACK_BASE; // optional: e.g. http://localhost:3000
 
-let githubAccessToken = null;
-let githubUserCache = null;
-const githubOauthStates = new Map(); // state -> { returnTo, createdAt }
+let githubOauthStates = new Map(); // state -> { returnTo, createdAt, popup }
+
+function getGitHubTokenFromRequest(req, res) {
+  if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
+    res.status(500).json({
+      success: false,
+      message: 'Server missing GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET env vars',
+    });
+    return null;
+  }
+  const token = getGitHubToken(req);
+  if (!token) {
+    res.status(401).json({ success: false, message: 'Not authenticated with GitHub' });
+    return null;
+  }
+  return token;
+}
 
 function getServerBaseUrl(req) {
   if (GITHUB_OAUTH_CALLBACK_BASE && typeof GITHUB_OAUTH_CALLBACK_BASE === 'string') {
@@ -458,18 +503,7 @@ function githubOAuthTokenExchange(code, redirectUri) {
 }
 
 function ensureGitHubAuthed(req, res) {
-  if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
-    res.status(500).json({
-      success: false,
-      message: 'Server missing GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET env vars',
-    });
-    return false;
-  }
-  if (!githubAccessToken) {
-    res.status(401).json({ success: false, message: 'Not authenticated with GitHub' });
-    return false;
-  }
-  return true;
+  return getGitHubTokenFromRequest(req, res);
 }
 
 function sanitizeZipEntryPath(p) {
@@ -554,13 +588,13 @@ async function extractZipToDirSafe(zipPath, destDir) {
   });
 }
 
-async function ensureRepoInitialized(owner, repo) {
+async function ensureRepoInitialized(owner, repo, token) {
   // Many Git Data endpoints return 409 "Git Repository is empty" until at least one commit exists.
   try {
     const commits = await githubApiRequest(
       'GET',
       `/repos/${owner}/${repo}/commits?per_page=1`,
-      githubAccessToken
+      token
     );
     if (Array.isArray(commits) && commits.length > 0) return;
     // If GitHub ever returns [], treat as empty.
@@ -579,7 +613,7 @@ async function ensureRepoInitialized(owner, repo) {
   await githubApiRequest(
     'PUT',
     `/repos/${owner}/${repo}/contents/README.md`,
-    githubAccessToken,
+    token,
     {
       message: 'Initialize repository',
       content: contentB64,
@@ -587,7 +621,7 @@ async function ensureRepoInitialized(owner, repo) {
   );
 }
 
-async function ensureGitHubPagesEnabled(owner, repo, branch) {
+async function ensureGitHubPagesEnabled(owner, repo, branch, token) {
   // Requires a public repo unless the account supports private Pages.
   // We keep this simple: only attempt when the user selected it and the repo is public.
   const source = { branch, path: '/' };
@@ -601,7 +635,7 @@ async function ensureGitHubPagesEnabled(owner, repo, branch) {
 
   const tryGet = async () => {
     try {
-      return await githubApiRequest('GET', `/repos/${owner}/${repo}/pages`, githubAccessToken);
+      return await githubApiRequest('GET', `/repos/${owner}/${repo}/pages`, token);
     } catch (e) {
       // 404 when Pages not enabled
       if (e?.statusCode === 404) return null;
@@ -613,7 +647,7 @@ async function ensureGitHubPagesEnabled(owner, repo, branch) {
   const existing = await tryGet();
   if (existing) {
     try {
-      await githubApiRequest('PUT', `/repos/${owner}/${repo}/pages`, githubAccessToken, { source });
+      await githubApiRequest('PUT', `/repos/${owner}/${repo}/pages`, token, { source });
     } catch (e) {
       return { ok: false, error: fmtErr(e), pages: existing };
     }
@@ -623,13 +657,13 @@ async function ensureGitHubPagesEnabled(owner, repo, branch) {
 
   // Not enabled yet: try create
   try {
-    await githubApiRequest('POST', `/repos/${owner}/${repo}/pages`, githubAccessToken, { source });
+    await githubApiRequest('POST', `/repos/${owner}/${repo}/pages`, token, { source });
   } catch (e) {
     // If create fails due to "already exists" style conditions, attempt update.
     const msg = String(e?.message || '').toLowerCase();
     if (e?.statusCode === 409 || e?.statusCode === 422 || msg.includes('already')) {
       try {
-        await githubApiRequest('PUT', `/repos/${owner}/${repo}/pages`, githubAccessToken, { source });
+        await githubApiRequest('PUT', `/repos/${owner}/${repo}/pages`, token, { source });
       } catch (e2) {
         return { ok: false, error: fmtErr(e2) };
       }
@@ -655,7 +689,11 @@ async function pushZipBufferToGitHub({
   commitMessage,
   templateName,
   enablePages,
+  token,
 }) {
+  if (!token) {
+    throw new Error('GitHub token is required');
+  }
   if (!zipBuffer || !Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
     throw new Error('ZIP buffer is empty');
   }
@@ -666,12 +704,8 @@ async function pushZipBufferToGitHub({
       ? commitMessage.trim().slice(0, 200)
       : 'Update VR Hotspot project';
 
-  // Ensure we have user info
-  if (!githubUserCache) {
-    githubUserCache = await githubApiRequest('GET', '/user', githubAccessToken);
-  }
-
-  let owner = githubUserCache.login;
+  const githubUser = await githubApiRequest('GET', '/user', token);
+  let owner = githubUser.login;
   let repo = null;
 
   if (mode === 'create') {
@@ -680,7 +714,7 @@ async function pushZipBufferToGitHub({
     }
     const isPrivate = String(visibility || 'public').toLowerCase() === 'private';
     try {
-      const created = await githubApiRequest('POST', '/user/repos', githubAccessToken, {
+      const created = await githubApiRequest('POST', '/user/repos', token, {
         name: repoName,
         private: isPrivate,
         description: `VR Hotspot project${templateName ? `: ${templateName}` : ''}`,
@@ -707,7 +741,7 @@ async function pushZipBufferToGitHub({
         if (combined.includes('already exists')) {
           // Treat as an "update existing" flow to match UX expectations.
           repo = repoName;
-          owner = githubUserCache.login;
+          owner = githubUser.login;
         } else {
           throw new Error(
             `Repository creation failed${errorsText ? `: ${errorsText}` : ''}`
@@ -727,7 +761,7 @@ async function pushZipBufferToGitHub({
   }
 
   // Ensure the repository has at least one commit (handles "empty repo" for existing repos too)
-  await ensureRepoInitialized(owner, repo);
+  await ensureRepoInitialized(owner, repo, token);
 
   const zip = new AdmZip(zipBuffer);
   const entries = zip.getEntries();
@@ -751,7 +785,7 @@ async function pushZipBufferToGitHub({
     throw new Error('Too many files in ZIP');
   }
 
-  const repoInfo = await githubApiRequest('GET', `/repos/${owner}/${repo}`, githubAccessToken);
+  const repoInfo = await githubApiRequest('GET', `/repos/${owner}/${repo}`, token);
   const defaultBranch = repoInfo.default_branch || 'main';
   const targetBranch = safeBranch || defaultBranch;
 
@@ -762,7 +796,7 @@ async function pushZipBufferToGitHub({
     const ref = await githubApiRequest(
       'GET',
       `/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(targetBranch)}`,
-      githubAccessToken
+      token
     );
     baseCommitSha = ref?.object?.sha || null;
   } catch (_) {
@@ -772,7 +806,7 @@ async function pushZipBufferToGitHub({
     const commit = await githubApiRequest(
       'GET',
       `/repos/${owner}/${repo}/git/commits/${baseCommitSha}`,
-      githubAccessToken
+      token
     );
     baseTreeSha = commit?.tree?.sha || null;
   }
@@ -781,7 +815,7 @@ async function pushZipBufferToGitHub({
   const treeItems = [];
   for (const f of files) {
     const b64 = f.content.toString('base64');
-    const blob = await githubApiRequest('POST', `/repos/${owner}/${repo}/git/blobs`, githubAccessToken, {
+    const blob = await githubApiRequest('POST', `/repos/${owner}/${repo}/git/blobs`, token, {
       content: b64,
       encoding: 'base64',
     });
@@ -790,7 +824,7 @@ async function pushZipBufferToGitHub({
 
   // Create tree
   const treeBody = baseTreeSha ? { base_tree: baseTreeSha, tree: treeItems } : { tree: treeItems };
-  const newTree = await githubApiRequest('POST', `/repos/${owner}/${repo}/git/trees`, githubAccessToken, treeBody);
+  const newTree = await githubApiRequest('POST', `/repos/${owner}/${repo}/git/trees`, token, treeBody);
 
   // Create commit
   const commitBody = {
@@ -798,14 +832,14 @@ async function pushZipBufferToGitHub({
     tree: newTree.sha,
     parents: baseCommitSha ? [baseCommitSha] : [],
   };
-  const newCommit = await githubApiRequest('POST', `/repos/${owner}/${repo}/git/commits`, githubAccessToken, commitBody);
+  const newCommit = await githubApiRequest('POST', `/repos/${owner}/${repo}/git/commits`, token, commitBody);
 
   // Update or create ref
   const refPath = `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(targetBranch)}`;
   try {
-    await githubApiRequest('PATCH', refPath, githubAccessToken, { sha: newCommit.sha, force: true });
+    await githubApiRequest('PATCH', refPath, token, { sha: newCommit.sha, force: true });
   } catch (_) {
-    await githubApiRequest('POST', `/repos/${owner}/${repo}/git/refs`, githubAccessToken, {
+    await githubApiRequest('POST', `/repos/${owner}/${repo}/git/refs`, token, {
       ref: `refs/heads/${targetBranch}`,
       sha: newCommit.sha,
     });
@@ -816,7 +850,7 @@ async function pushZipBufferToGitHub({
   let pagesError = null;
   try {
     if (enablePages && repoInfo && repoInfo.private === false) {
-      const pagesResult = await ensureGitHubPagesEnabled(owner, repo, targetBranch);
+      const pagesResult = await ensureGitHubPagesEnabled(owner, repo, targetBranch, token);
       pagesEnabled = !!pagesResult?.ok;
       pagesUrl =
         pagesResult?.pages?.html_url ||
@@ -841,17 +875,14 @@ async function pushZipBufferToGitHub({
 
 app.get('/github/oauth/status', async (req, res) => {
   try {
-    if (!githubAccessToken) {
+    const token = getGitHubToken(req);
+    if (!token) {
       return res.json({ authed: false });
     }
-    if (!githubUserCache) {
-      githubUserCache = await githubApiRequest('GET', '/user', githubAccessToken);
-    }
-    return res.json({ authed: true, user: { login: githubUserCache.login, id: githubUserCache.id } });
+    const githubUser = await githubApiRequest('GET', '/user', token);
+    return res.json({ authed: true, user: { login: githubUser.login, id: githubUser.id } });
   } catch (e) {
-    // Token might be invalid/expired
-    githubAccessToken = null;
-    githubUserCache = null;
+    clearGitHubSession(req, res);
     return res.json({ authed: false });
   }
 });
@@ -859,7 +890,8 @@ app.get('/github/oauth/status', async (req, res) => {
 // List repos for the authenticated user (used for dropdown selection in the editor)
 app.get('/github/repos', async (req, res) => {
   try {
-    if (!ensureGitHubAuthed(req, res)) return;
+    const token = ensureGitHubAuthed(req, res);
+    if (!token) return;
 
     // Basic pagination without relying on Link headers (keeps githubApiRequest simple)
     const perPage = 100;
@@ -870,7 +902,7 @@ app.get('/github/repos', async (req, res) => {
       const pageRepos = await githubApiRequest(
         'GET',
         `/user/repos?per_page=${perPage}&page=${page}&sort=updated&direction=desc&affiliation=owner,collaborator,organization_member`,
-        githubAccessToken
+        token
       );
 
       if (!Array.isArray(pageRepos) || pageRepos.length === 0) break;
@@ -896,7 +928,8 @@ app.get('/github/repos', async (req, res) => {
 // List branches for a repo (owner/name) so the editor can offer a dropdown.
 app.get('/github/branches', async (req, res) => {
   try {
-    if (!ensureGitHubAuthed(req, res)) return;
+    const token = ensureGitHubAuthed(req, res);
+    if (!token) return;
 
     const repoFullName = typeof req.query.repo === 'string' ? req.query.repo.trim() : '';
     if (!repoFullName || !/^[^/\s]+\/[^/\s]+$/.test(repoFullName)) {
@@ -912,7 +945,7 @@ app.get('/github/branches', async (req, res) => {
       const pageBranches = await githubApiRequest(
         'GET',
         `/repos/${owner}/${repo}/branches?per_page=${perPage}&page=${page}`,
-        githubAccessToken
+        token
       );
       if (!Array.isArray(pageBranches) || pageBranches.length === 0) break;
       for (const b of pageBranches) {
@@ -938,7 +971,11 @@ app.get('/github/oauth/start', (req, res) => {
     return res.status(500).send('Server missing GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET env vars');
   }
   const state = crypto.randomBytes(16).toString('hex');
-  const returnTo = typeof req.query.returnTo === 'string' ? req.query.returnTo : '/';
+  const baseUrl = getServerBaseUrl(req);
+  const returnTo = sanitizeReturnTo(
+    typeof req.query.returnTo === 'string' ? req.query.returnTo : '/',
+    baseUrl
+  );
   const popup = String(req.query.popup || '').toLowerCase() === 'true' || String(req.query.popup || '') === '1';
   githubOauthStates.set(state, { returnTo, createdAt: Date.now(), popup });
 
@@ -966,8 +1003,7 @@ app.get('/github/oauth/start', (req, res) => {
 });
 
 app.post('/github/oauth/logout', (req, res) => {
-  githubAccessToken = null;
-  githubUserCache = null;
+  clearGitHubSession(req, res);
   return res.json({ success: true });
 });
 
@@ -990,18 +1026,21 @@ app.get('/github/oauth/callback', async (req, res) => {
     const redirectUri = `${getServerBaseUrl(req)}/github/oauth/callback`;
     const token = await githubOAuthTokenExchange(code, redirectUri);
 
-    githubAccessToken = token;
-    githubUserCache = null;
+    let githubUser = null;
     try {
-      githubUserCache = await githubApiRequest('GET', '/user', githubAccessToken);
+      githubUser = await githubApiRequest('GET', '/user', token);
     } catch (_) {
-      githubUserCache = null;
+      githubUser = null;
     }
+    const sessionId = createGitHubSession(token, githubUser);
+    setGitHubSessionCookie(res, sessionId);
+
+    const safeReturnTo = sanitizeReturnTo(stateEntry.returnTo || '/', getServerBaseUrl(req));
 
     if (stateEntry.popup) {
       let targetOrigin = null;
       try {
-        const u = new URL(stateEntry.returnTo || '/', getServerBaseUrl(req));
+        const u = new URL(safeReturnTo || '/', getServerBaseUrl(req));
         targetOrigin = `${u.protocol}//${u.host}`;
       } catch (_) {
         targetOrigin = null;
@@ -1033,7 +1072,7 @@ app.get('/github/oauth/callback', async (req, res) => {
 </html>`);
     }
 
-    return res.redirect(stateEntry.returnTo || '/');
+    return res.redirect(safeReturnTo);
   } catch (e) {
     console.error('GitHub OAuth callback error:', e);
     return res.status(500).send(e.message || 'OAuth error');
@@ -1043,7 +1082,8 @@ app.get('/github/oauth/callback', async (req, res) => {
 // Push an exported project ZIP as a single commit (create new repo or update existing)
 app.post('/github/push-zip', express.json({ limit: '500mb' }), async (req, res) => {
   try {
-    if (!ensureGitHubAuthed(req, res)) return;
+    const token = ensureGitHubAuthed(req, res);
+    if (!token) return;
 
     const {
       mode,
@@ -1063,68 +1103,11 @@ app.post('/github/push-zip', express.json({ limit: '500mb' }), async (req, res) 
     if (zipBase64.length > 700 * 1024 * 1024) {
       return res.status(413).json({ success: false, message: 'ZIP too large' });
     }
-    const safeBranch = (typeof branch === 'string' && branch.trim()) ? branch.trim() : 'main';
+    const safeBranch = typeof branch === 'string' && branch.trim() ? branch.trim() : 'main';
     const safeMessage =
-      (typeof commitMessage === 'string' && commitMessage.trim())
+      typeof commitMessage === 'string' && commitMessage.trim()
         ? commitMessage.trim().slice(0, 200)
         : 'Update VR Hotspot project';
-
-    // Ensure we have user info
-    if (!githubUserCache) {
-      githubUserCache = await githubApiRequest('GET', '/user', githubAccessToken);
-    }
-
-    let owner = githubUserCache.login;
-    let repo = null;
-
-    if (mode === 'create') {
-      if (!repoName || typeof repoName !== 'string' || !/^[a-zA-Z0-9_.-]{1,100}$/.test(repoName)) {
-        return res.status(400).json({ success: false, message: 'Invalid repoName' });
-      }
-      const isPrivate = String(visibility || 'public').toLowerCase() === 'private';
-      try {
-        const created = await githubApiRequest('POST', '/user/repos', githubAccessToken, {
-          name: repoName,
-          private: isPrivate,
-          description: `VR Hotspot project${templateName ? `: ${templateName}` : ''}`,
-          auto_init: true,
-        });
-        repo = created.name;
-        owner = created.owner?.login || owner;
-      } catch (e) {
-        if (e && e.statusCode === 422) {
-          const errors = Array.isArray(e.details?.errors) ? e.details.errors : [];
-          const errorsText = errors
-            .map((er) => {
-              const field = er?.field ? `field=${er.field}` : '';
-              const code = er?.code ? `code=${er.code}` : '';
-              const msg = er?.message ? er.message : '';
-              return [field, code, msg].filter(Boolean).join(' ');
-            })
-            .filter(Boolean)
-            .join('; ');
-
-          const combined = `${String(e.message || '')} ${errorsText}`.toLowerCase();
-          if (combined.includes('already exists')) {
-            repo = repoName;
-            owner = githubUserCache.login;
-          } else {
-            return res
-              .status(422)
-              .json({ success: false, message: `Repository creation failed${errorsText ? `: ${errorsText}` : ''}` });
-          }
-        } else {
-          throw e;
-        }
-      }
-    } else {
-      if (!repoFullName || typeof repoFullName !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(repoFullName)) {
-        return res.status(400).json({ success: false, message: 'Invalid repoFullName' });
-      }
-      const parts = repoFullName.split('/');
-      owner = parts[0];
-      repo = parts[1];
-    }
 
     const zipBuffer = Buffer.from(zipBase64, 'base64');
     if (!zipBuffer || zipBuffer.length === 0) {
@@ -1141,6 +1124,7 @@ app.post('/github/push-zip', express.json({ limit: '500mb' }), async (req, res) 
       commitMessage: safeMessage,
       templateName,
       enablePages: !!enablePages,
+      token,
     });
 
     return res.json({ success: true, ...result });
@@ -1153,7 +1137,8 @@ app.post('/github/push-zip', express.json({ limit: '500mb' }), async (req, res) 
 // Multipart upload version (preferred): avoids base64 JSON size limits
 app.post('/github/push-zip-upload', upload.single('project'), async (req, res) => {
   try {
-    if (!ensureGitHubAuthed(req, res)) return;
+    const token = ensureGitHubAuthed(req, res);
+    if (!token) return;
 
     const file = req.file;
     if (!file || !file.path) {
@@ -1184,6 +1169,7 @@ app.post('/github/push-zip-upload', upload.single('project'), async (req, res) =
       commitMessage,
       templateName,
       enablePages,
+      token,
     });
 
     return res.json({ success: true, ...result });
@@ -1196,8 +1182,8 @@ app.post('/github/push-zip-upload', upload.single('project'), async (req, res) =
 // Serve hosted student projects with the same anti-stale headers
 app.use('/hosted', express.static('hosted-projects', staticNoStaleOptions));
 
-// Collect student project submissions
-app.post('/submit-project', upload.single('project'), async (req, res) => {
+// Collect student project submissions (auth required when DB/B2/production)
+app.post('/submit-project', requireAuthForCloudWrites, upload.single('project'), async (req, res) => {
   try {
     const projectFile = req.file;
     if (!projectFile) {
@@ -1205,6 +1191,8 @@ app.post('/submit-project', upload.single('project'), async (req, res) => {
         .status(400)
         .json({ success: false, message: 'No project ZIP uploaded (field name: project)' });
     }
+
+    assertValidZipFile(projectFile.path);
 
     // Attempt to derive metadata from the ZIP's config.json
     let derivedStudent = (req.body.studentName || '').trim();
@@ -1271,34 +1259,24 @@ app.post('/submit-project', upload.single('project'), async (req, res) => {
   }
 });
 
-// Endpoint to fetch B2 direct upload credentials (student auth required when enabled)
-app.get('/api/b2-upload-url', async (req, res, next) => {
-  if (isStudentAuthRequired()) {
-    return requireStudentStrict(req, res, async () => {
-      try {
-        const data = await b2Service.getUploadUrl();
-        res.json({
-          success: true,
-          ...data,
-          studentId: req.studentSession.studentId,
-          classId: req.studentSession.classId,
-          classSlug: req.studentSession.classSlug,
-        });
-      } catch (err) {
-        res.status(500).json({ success: false, message: 'Failed to get secure upload URL' });
-      }
-    });
-  }
+// Endpoint to fetch B2 direct upload credentials (student auth required for cloud writes)
+app.get('/api/b2-upload-url', requireAuthForCloudWrites, async (req, res) => {
   try {
     const data = await b2Service.getUploadUrl();
-    res.json({ success: true, ...data });
+    res.json({
+      success: true,
+      ...data,
+      studentId: req.studentSession?.studentId || null,
+      classId: req.studentSession?.classId || null,
+      classSlug: req.studentSession?.classSlug || null,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Failed to get secure upload URL' });
   }
 });
 
 // Endpoint to log project submission after successful B2 upload
-app.post('/api/submit-project-meta', express.json(), async (req, res) => {
+app.post('/api/submit-project-meta', requireAuthForCloudWrites, express.json(), async (req, res) => {
   req.on('aborted', () => {
     console.log('Project meta upload aborted');
   });
@@ -1310,23 +1288,14 @@ app.post('/api/submit-project-meta', express.json(), async (req, res) => {
       let classId = null;
       let classSlug = 'default';
 
-      if (isStudentAuthRequired()) {
-        const sess = getStudentSession(req);
-        if (!sess || !sess.studentId) {
-          return res.status(401).json({ success: false, message: 'Student authentication required' });
-        }
+      const sess = req.studentSession || getStudentSession(req);
+      if (sess && sess.studentId) {
         studentId = sess.studentId;
         studentName = sess.displayName || studentName;
         classId = sess.classId;
         classSlug = sess.classSlug || 'default';
-        await assertCanSubmit({ classId });
-      } else if (isDbEnabled()) {
-        const sess = getStudentSession(req);
-        if (sess && sess.studentId) {
-          studentId = sess.studentId;
-          studentName = sess.displayName || studentName;
-          classId = sess.classId;
-          classSlug = sess.classSlug || 'default';
+        if (classId) {
+          await assertCanSubmit({ classId });
         }
       }
 
@@ -1409,101 +1378,107 @@ app.post('/api/submit-project-meta', express.json(), async (req, res) => {
     }
   };
 
-  if (isStudentAuthRequired()) {
-    return requireStudentStrict(req, res, finish);
-  }
   return finish();
 });
 
-// Server-side video fetch endpoint (bypasses CORS)
-app.post('/fetch-video', express.json(), async (req, res) => {
+function requireAuthForVideoFetch(req, res, next) {
+  if (cloudWritesRequireAuth()) {
+    return requireStudentStrict(req, res, next);
+  }
+  return next();
+}
+
+// Server-side video fetch endpoint (bypasses CORS; auth + SSRF protections)
+app.post('/fetch-video', requireAuthForVideoFetch, express.json(), async (req, res) => {
   const { url } = req.body;
 
-  // Validate URL
-  if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+  let safeUrl;
+  try {
+    safeUrl = await assertSafeOutboundUrl(url);
+  } catch (err) {
     return res.status(400).json({
       success: false,
-      error: 'Invalid URL. Must be http or https.',
+      error: err.message || 'Invalid URL.',
     });
   }
 
-  // Prevent localhost/private IP abuse
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase();
+  const targetUrl = safeUrl.toString();
+  console.log(`📹 Fetching video from: ${targetUrl}`);
 
-    if (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname.startsWith('192.168.') ||
-      hostname.startsWith('10.') ||
-      hostname.startsWith('172.')
-    ) {
-      return res.status(403).json({
+  const protocol = safeUrl.protocol === 'https:' ? https : require('http');
+  const MAX_BYTES = 500 * 1024 * 1024;
+  let bytesReceived = 0;
+
+  const request = protocol.get(targetUrl, { timeout: 60000 }, (videoRes) => {
+    if (videoRes.statusCode >= 300 && videoRes.statusCode < 400 && videoRes.headers.location) {
+      videoRes.resume();
+      return res.status(400).json({
         success: false,
-        error: 'Cannot fetch from private/local addresses.',
+        error: 'Redirects are not allowed for video fetch.',
       });
     }
-  } catch (e) {
-    return res.status(400).json({
-      success: false,
-      error: 'Invalid URL format.',
-    });
-  }
 
-  console.log(`📹 Fetching video from: ${url}`);
-
-  const protocol = url.startsWith('https') ? https : require('http');
-
-  protocol
-    .get(url, { timeout: 60000 }, (videoRes) => {
-      // Check response status
-      if (videoRes.statusCode !== 200) {
-        return res.status(videoRes.statusCode).json({
-          success: false,
-          error: `Remote server returned ${videoRes.statusCode}`,
-        });
-      }
-
-      // Set headers
-      const contentType = videoRes.headers['content-type'] || 'video/mp4';
-      const contentLength = videoRes.headers['content-length'];
-
-      // Check file size (limit to 500MB)
-      if (contentLength && parseInt(contentLength) > 500 * 1024 * 1024) {
-        videoRes.destroy();
-        return res.status(413).json({
-          success: false,
-          error: 'Video file too large (max 500MB).',
-        });
-      }
-
-      res.setHeader('Content-Type', contentType);
-      if (contentLength) {
-        res.setHeader('Content-Length', contentLength);
-      }
-      res.setHeader('Access-Control-Allow-Origin', '*');
-
-      // Stream video directly to client
-      videoRes.pipe(res);
-
-      videoRes.on('error', (err) => {
-        console.error('Video fetch error:', err);
-        if (!res.headersSent) {
-          res.status(500).json({
-            success: false,
-            error: 'Failed to fetch video.',
-          });
-        }
+    if (videoRes.statusCode !== 200) {
+      videoRes.resume();
+      return res.status(videoRes.statusCode).json({
+        success: false,
+        error: `Remote server returned ${videoRes.statusCode}`,
       });
-    })
-    .on('error', (err) => {
+    }
+
+    const contentType = videoRes.headers['content-type'] || 'video/mp4';
+    const contentLength = videoRes.headers['content-length'];
+
+    if (contentLength && parseInt(contentLength, 10) > MAX_BYTES) {
+      videoRes.destroy();
+      return res.status(413).json({
+        success: false,
+        error: 'Video file too large (max 500MB).',
+      });
+    }
+
+    res.setHeader('Content-Type', contentType);
+    if (contentLength) {
+      res.setHeader('Content-Length', contentLength);
+    }
+
+    videoRes.on('data', (chunk) => {
+      bytesReceived += chunk.length;
+      if (bytesReceived > MAX_BYTES) {
+        videoRes.destroy();
+        if (!res.headersSent) {
+          res.status(413).json({
+            success: false,
+            error: 'Video file too large (max 500MB).',
+          });
+        } else {
+          res.destroy();
+        }
+      }
+    });
+
+    videoRes.pipe(res);
+
+    videoRes.on('error', (err) => {
       console.error('Video fetch error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch video.',
+        });
+      }
+    });
+  });
+
+  request.on('error', (err) => {
+    console.error('Video fetch error:', err);
+    if (!res.headersSent) {
       res.status(500).json({
         success: false,
-        error: `Network error: ${err.message}`,
+        error: 'Failed to fetch video.',
       });
-    });
+    }
+  });
 });
 
 // Admin: Save updated config.json back to hosted project (with backup)

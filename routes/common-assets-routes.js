@@ -11,6 +11,7 @@ const {
 } = require('../lib/common-assets');
 const {
   requireAdmin,
+  loginRateLimiter,
   handleAdminLogin,
   handleAdminLogout,
   handleAdminSessionStatus,
@@ -230,7 +231,7 @@ async function runAsyncCommonAssetVideoJob(jobId, { tempPath, originalName, orig
 }
 
 function registerCommonAssetRoutes(app, upload) {
-  app.post('/admin/login', handleAdminLogin);
+  app.post('/admin/login', loginRateLimiter, handleAdminLogin);
   app.post('/admin/logout', handleAdminLogout);
   app.get('/admin/session', handleAdminSessionStatus);
 

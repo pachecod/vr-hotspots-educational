@@ -24,7 +24,10 @@ async function adminLogin(password) {
     res = await fetch('/admin/login', {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
       body: JSON.stringify({ password }),
     });
   } catch (_) {
@@ -45,7 +48,11 @@ async function adminLogin(password) {
 }
 
 async function adminLogout() {
-  await fetch('/admin/logout', { method: 'POST', credentials: 'include' });
+  await fetch('/admin/logout', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+  });
 }
 
 async function adminFetch(url, options = {}) {
@@ -55,6 +62,7 @@ async function adminFetch(url, options = {}) {
       ...options,
       credentials: 'include',
       headers: {
+        'X-Requested-With': 'XMLHttpRequest',
         ...(options.headers || {}),
       },
     });

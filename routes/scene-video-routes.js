@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const b2Service = require('../services/b2-service');
 const { requireStudentStrict } = require('../student-auth');
-const { query } = require('../services/db-service');
+const { isDbEnabled, query } = require('../services/db-service');
 const {
   getExtension,
   isExtensionAllowedForCategory,
@@ -23,6 +23,21 @@ const {
   failUploadJob,
   deleteUploadJob,
 } = require('../lib/video-upload-jobs');
+
+function requireCompressionAuth(req, res, next) {
+  if (isDbEnabled()) {
+    return requireStudentStrict(req, res, next);
+  }
+  return next();
+}
+
+function assertJobAccess(req, job) {
+  if (!job) return false;
+  if (!isDbEnabled()) return true;
+  const ownerId = job.ownerStudentId;
+  if (!ownerId) return false;
+  return req.studentSession && req.studentSession.studentId === ownerId;
+}
 
 async function getStudentContext(studentId) {
   const { rows } = await query(
@@ -114,10 +129,13 @@ function registerSceneVideoRoutes(app, upload) {
     res.json({ success: true, ...getVideoPipelineConfig() });
   });
 
-  app.get('/api/editor-video/compression-jobs/:jobId', (req, res) => {
+  app.get('/api/editor-video/compression-jobs/:jobId', requireCompressionAuth, (req, res) => {
     const job = getUploadJob(req.params.jobId);
     if (!job) {
       return res.status(404).json({ success: false, message: 'Video compression job not found' });
+    }
+    if (!assertJobAccess(req, job)) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
     }
     const asset = job.asset
       ? {
@@ -145,8 +163,11 @@ function registerSceneVideoRoutes(app, upload) {
     });
   });
 
-  app.get('/api/editor-video/compression-jobs/:jobId/file', (req, res) => {
+  app.get('/api/editor-video/compression-jobs/:jobId/file', requireCompressionAuth, (req, res) => {
     const job = getUploadJob(req.params.jobId);
+    if (!assertJobAccess(req, job)) {
+      return res.status(403).send('Access denied');
+    }
     const asset = job && job.asset;
     if (!asset || !asset.tempPath) {
       return res.status(404).send('Compressed video not found');
@@ -164,7 +185,7 @@ function registerSceneVideoRoutes(app, upload) {
     });
   });
 
-  app.post('/api/editor-video/compress', upload.single('file'), async (req, res) => {
+  app.post('/api/editor-video/compress', requireCompressionAuth, upload.single('file'), async (req, res) => {
     const tempPath = req.file && req.file.path;
     const cleanupPaths = tempPath ? [tempPath] : [];
     try {
@@ -191,6 +212,7 @@ function registerSceneVideoRoutes(app, upload) {
       const job = createUploadJob({
         fileName: req.file.originalname,
         category: VIDEO_CATEGORY,
+        ownerStudentId: req.studentSession?.studentId || null,
       });
       const ownedTempPath = tempPath;
       cleanupPaths.length = 0;

@@ -123,6 +123,12 @@ async function loadContent() {
       }
     }
   } catch (err) {
+    if (err.code === 'AUTH_REQUIRED') {
+      const main = document.getElementById('main-content');
+      if (main) main.style.display = 'none';
+      requireAdminSession('login-root', initContentHub);
+      return;
+    }
     container.innerHTML = `<p style="color:#c00;">Error: ${escapeHtml(err.message)}</p>`;
   }
 }
@@ -270,6 +276,13 @@ function bindEvents() {
 }
 
 async function initContentHub() {
+  const loginRoot = document.getElementById('login-root');
+  const main = document.getElementById('main-content');
+  if (loginRoot) loginRoot.innerHTML = '';
+  if (main) main.style.display = 'block';
+
+  renderAdminNav('content');
+
   bindEvents();
   await loadClassesAndStudents();
   await loadContent();

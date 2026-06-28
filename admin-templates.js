@@ -39,11 +39,6 @@ function render() {
         ${t.bundle_b2_key ? '<span class="badge badge-bundle">Bundle uploaded</span>' : ''}
       </div>
       ${t.description ? `<p style="font-size:13px;margin:8px 0 0">${escapeHtml(t.description)}</p>` : ''}
-      ${
-        t.thumbnail_url
-          ? `<p style="font-size:12px;color:#666;margin:6px 0 0">Thumbnail: ${escapeHtml(t.thumbnail_url)}</p>`
-          : ''
-      }
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${
           t.scope === 'flat'
@@ -75,9 +70,17 @@ function render() {
           : ''
       }
       <div class="bundle-row" style="margin-top:10px">
-        <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:4px">Thumbnail URL</label>
-        <input type="text" class="thumb-url-input" data-id="${t.id}" value="${escapeAttr(t.thumbnail_url || '')}" placeholder="https://…" style="width:100%;max-width:480px;padding:6px;border:1px solid #ccc;border-radius:4px" />
-        <button type="button" class="btn btn-secondary btn-save-thumb" data-id="${t.id}" style="margin-top:6px">Save thumbnail URL</button>
+        <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:4px">Thumbnail</label>
+        ${
+          t.thumbnail_url
+            ? `<p style="font-size:12px;color:#666;margin:0 0 6px;word-break:break-all">${escapeHtml(t.thumbnail_url)}</p>`
+            : '<p style="font-size:12px;color:#666;margin:0 0 6px">Auto-generated when shown on welcome (or upload a bundle for 360° samples).</p>'
+        }
+        <input type="text" class="thumb-url-input" data-id="${t.id}" value="${escapeAttr(t.thumbnail_url || '')}" placeholder="Optional custom URL override" style="width:100%;max-width:480px;padding:6px;border:1px solid #ccc;border-radius:4px" />
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+          <button type="button" class="btn btn-secondary btn-save-thumb" data-id="${t.id}">Save custom URL</button>
+          ${t.is_playground ? `<button type="button" class="btn btn-secondary btn-regen-thumb" data-id="${t.id}">Regenerate thumbnail</button>` : ''}
+        </div>
       </div>
     </div>
   `
@@ -202,6 +205,14 @@ document.getElementById('template-list').addEventListener('click', async (e) => 
       if (!data.success) throw new Error(data.message || 'Save failed');
       showToast('Thumbnail saved');
       await loadTemplates();
+      return;
+    }
+    if (btn.classList.contains('btn-regen-thumb')) {
+      const res = await adminFetch(`/admin/templates/${id}/generate-thumbnail`, { method: 'POST' });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Regenerate failed');
+      showToast('Thumbnail regenerated');
+      await loadTemplates();
     }
   } catch (err) {
     alert(err.message || 'Action failed');
@@ -219,7 +230,6 @@ document.getElementById('create-combined-form').addEventListener('submit', async
       body: JSON.stringify({
         title,
         description: document.getElementById('combined-desc').value.trim(),
-        thumbnail_url: document.getElementById('combined-thumb').value.trim(),
         scope: 'combined',
         is_public: document.getElementById('combined-public').checked,
         is_playground: document.getElementById('combined-playground').checked,

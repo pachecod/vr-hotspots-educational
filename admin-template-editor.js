@@ -27,6 +27,12 @@ function waitForFlatEditor() {
   });
 }
 
+function updateThumbDisplay(url) {
+  const el = document.getElementById('tpl-thumb-display');
+  if (!el) return;
+  el.textContent = url || 'Will be generated on save when shown on welcome.';
+}
+
 async function loadTemplateForEdit(id) {
   const res = await adminFetch(`/admin/templates/${id}`);
   const data = await res.json();
@@ -39,7 +45,7 @@ async function loadTemplateForEdit(id) {
   document.getElementById('tpl-public').checked = !!tpl.is_public;
   document.getElementById('tpl-default').checked = !!tpl.is_default;
   document.getElementById('tpl-playground').checked = !!tpl.is_playground;
-  document.getElementById('tpl-thumb').value = tpl.thumbnail_url || '';
+  updateThumbDisplay(tpl.thumbnail_url);
   document.title = `Edit: ${tpl.title} — VR Hotspots Admin`;
 
   const bridge = await waitForFlatEditor();
@@ -72,7 +78,6 @@ async function saveTemplate() {
     is_public: document.getElementById('tpl-public').checked,
     is_default: document.getElementById('tpl-default').checked,
     is_playground: document.getElementById('tpl-playground').checked,
-    thumbnail_url: document.getElementById('tpl-thumb').value.trim(),
     scope: 'flat',
   };
 
@@ -96,6 +101,9 @@ async function saveTemplate() {
     }
 
     document.getElementById('save-status').textContent = 'Saved.';
+    if (data.template) {
+      updateThumbDisplay(data.template.thumbnail_url);
+    }
     showToast('Template saved');
   } catch (err) {
     document.getElementById('save-status').textContent = err.message || 'Save failed';

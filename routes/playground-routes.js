@@ -7,6 +7,7 @@ const { isDbEnabled } = require('../services/db-service');
 const templatesDb = require('../lib/templates');
 const { isPublicPlaygroundEnabled } = require('../lib/playground-config');
 const b2Service = require('../services/b2-service');
+const { refreshPlaygroundThumbnail } = require('../lib/playground-thumbnail');
 
 const upload = multer({ dest: 'temp-uploads/' });
 
@@ -118,7 +119,10 @@ function registerPlaygroundRoutes(app) {
       }
 
       await b2Service.uploadCommonAsset(localPath, remotePath, 'application/zip');
-      const updated = await templatesDb.updateTemplate(template.id, { bundle_b2_key: remotePath });
+      let updated = await templatesDb.updateTemplate(template.id, { bundle_b2_key: remotePath });
+      if (updated?.is_playground) {
+        updated = await refreshPlaygroundThumbnail(updated, { bundleLocalPath: localPath });
+      }
       res.json({ success: true, template: updated });
     } catch (err) {
       console.error('Playground bundle upload error:', err);
@@ -150,6 +154,38 @@ function registerPlaygroundRoutes(app) {
       res.json({ success: true, template: updated });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/admin/templates/:id/generate-thumbnail', requireAdmin, async (req, res) => {
+    if (!isDbEnabled()) {
+      return res.status(503).json({ success: false, message: 'Database not configured' });
+    }
+    try {
+      const template = await templatesDb.getTemplateById(req.params.id);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+      if (!template.is_playground) {
+        return res.status(400).json({
+          success: false,
+          message: 'Enable "Show on Welcome" before generating a thumbnail',
+        });
+      }
+      const updated = await refreshPlaygroundThumbnail(template);
+      if (!updated?.thumbnail_url) {
+        return res.status(400).json({
+          success: false,
+          message:
+            template.scope === 'combined'
+              ? 'Upload a bundle ZIP first, or ensure the project has a scene image'
+              : 'Could not derive a thumbnail from this template',
+        });
+      }
+      res.json({ success: true, template: updated });
+    } catch (err) {
+      console.error('Generate thumbnail error:', err);
+      res.status(500).json({ success: false, message: err.message || 'Thumbnail generation failed' });
     }
   });
 }

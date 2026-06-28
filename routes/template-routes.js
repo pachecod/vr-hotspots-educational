@@ -2,6 +2,15 @@ const { requireAdmin } = require('../admin-auth');
 const { isDbEnabled } = require('../services/db-service');
 const templatesDb = require('../lib/templates');
 const { getBlockedExtensions } = require('../lib/app-settings');
+const { refreshPlaygroundThumbnail } = require('../lib/playground-thumbnail');
+
+async function maybeRefreshPlaygroundThumbnail(template, body = {}) {
+  if (!template?.is_playground) return template;
+  const manualThumb =
+    body.thumbnail_url !== undefined && String(body.thumbnail_url || '').trim() !== '';
+  if (manualThumb) return template;
+  return (await refreshPlaygroundThumbnail(template)) || template;
+}
 
 function registerTemplateRoutes(app) {
   app.get('/api/blocked-extensions', async (_req, res) => {
@@ -93,7 +102,7 @@ function registerTemplateRoutes(app) {
           return res.status(400).json({ success: false, message: 'files_manifest required for flat templates' });
         }
       }
-      const template = await templatesDb.createTemplate({
+      let template = await templatesDb.createTemplate({
         title,
         description,
         files_manifest: files,
@@ -103,6 +112,7 @@ function registerTemplateRoutes(app) {
         thumbnail_url,
         scope: templateScope,
       });
+      template = await maybeRefreshPlaygroundThumbnail(template, req.body || {});
       res.json({ success: true, template });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
@@ -114,8 +124,9 @@ function registerTemplateRoutes(app) {
       if (!isDbEnabled()) {
         return res.status(503).json({ success: false, message: 'Database not configured' });
       }
-      const template = await templatesDb.updateTemplate(req.params.id, req.body || {});
+      let template = await templatesDb.updateTemplate(req.params.id, req.body || {});
       if (!template) return res.status(404).json({ success: false, message: 'Template not found' });
+      template = await maybeRefreshPlaygroundThumbnail(template, req.body || {});
       res.json({ success: true, template });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });

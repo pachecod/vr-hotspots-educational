@@ -216,11 +216,13 @@ document.getElementById('template-list').addEventListener('click', async (e) => 
       return;
     }
     if (btn.classList.contains('btn-regen-thumb')) {
+      btn.disabled = true;
       const res = await adminFetch(`/admin/templates/${id}/generate-thumbnail`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || 'Regenerate failed');
       showToast('Thumbnail regenerated');
       await loadTemplates();
+      return;
     }
   } catch (err) {
     alert(err.message || 'Action failed');

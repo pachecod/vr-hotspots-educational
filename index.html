@@ -1668,6 +1668,54 @@
       </div>
 
 
+      <!-- 360° Video Audio (video scenes only) -->
+      <div class="panel-section" id="video-audio-settings-section" style="display: none">
+        <div class="section-title">360° Video Audio</div>
+        <div class="form-group">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <div
+              id="mute-video-audio-switch"
+              role="switch"
+              aria-checked="true"
+              tabindex="0"
+              style="
+                width: 52px;
+                height: 28px;
+                background: #4caf50;
+                border-radius: 14px;
+                position: relative;
+                cursor: pointer;
+                transition: background 160ms ease;
+                outline: none;
+              "
+            >
+              <div
+                class="thumb"
+                style="
+                  position: absolute;
+                  top: 2px;
+                  left: 26px;
+                  width: 24px;
+                  height: 24px;
+                  background: #fff;
+                  border-radius: 50%;
+                  transition: left 160ms ease;
+                "
+              ></div>
+            </div>
+            <div style="flex: 1; min-width: 0">
+              <div id="mute-video-audio-label" style="font-weight: 700; color: #e0e0e0">
+                🔇 Video Audio: Muted
+              </div>
+              <small id="mute-video-audio-help" style="color: #888; font-size: 11px"
+                >Built-in video audio is off — use Scene Audio below</small
+              >
+            </div>
+          </div>
+          <input type="checkbox" id="mute-video-audio-enabled" checked style="display: none" />
+        </div>
+      </div>
+
       <!-- Global Scene Sound -->
       <div class="panel-section">
         <div class="section-title">Global Scene Sound</div>

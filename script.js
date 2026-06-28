@@ -133,6 +133,11 @@ function isEditorVideoSkyboxScene() {
   }
 }
 
+/** True when a 360° video scene should never play its built-in audio (default for video scenes). */
+function isSceneVideoAudioPermanentlyMuted(scene) {
+  return !!(scene && scene.type === 'video' && scene.muteVideoAudio !== false);
+}
+
 function resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl) {
   const videos = [];
   const seen = new Set();
@@ -2751,6 +2756,7 @@ class HotspotEditor {
     const controls = document.getElementById('video-controls');
     if (!controls) return;
 
+    const permanentlyMuted = isSceneVideoAudioPermanentlyMuted(scene);
     controls.style.display = 'flex';
 
     // Play/Pause button
@@ -2759,19 +2765,50 @@ class HotspotEditor {
       if (videoEl.paused) {
         videoEl.play();
         playPauseBtn.textContent = '⏸ Pause';
+        this._tryStartEditorGlobalSoundPreview();
       } else {
         videoEl.pause();
         playPauseBtn.textContent = '▶ Play';
       }
     };
 
-    // Mute/Unmute button
     const muteBtn = document.getElementById('video-mute');
-    muteBtn.onclick = () => {
-      videoEl.muted = !videoEl.muted;
-      muteBtn.textContent = videoEl.muted ? '🔇 Muted' : '🔊 Sound';
-      muteBtn.style.background = videoEl.muted ? '#28a745' : '#ffc107';
-    };
+    const volumeSlider = document.getElementById('video-volume');
+
+    if (permanentlyMuted) {
+      videoEl.muted = true;
+      if (muteBtn) muteBtn.style.display = 'none';
+      if (volumeSlider) volumeSlider.style.display = 'none';
+    } else {
+      if (muteBtn) {
+        muteBtn.style.display = '';
+        muteBtn.onclick = () => {
+          videoEl.muted = !videoEl.muted;
+          muteBtn.textContent = videoEl.muted ? '🔇 Muted' : '🔊 Sound';
+          muteBtn.style.background = videoEl.muted ? '#28a745' : '#ffc107';
+        };
+        muteBtn.textContent = videoEl.muted ? '🔇 Muted' : '🔊 Sound';
+        muteBtn.style.background = videoEl.muted ? '#28a745' : '#ffc107';
+      }
+      if (volumeSlider) {
+        volumeSlider.style.display = '';
+        volumeSlider.value = (scene.videoVolume || 0.5) * 100;
+        videoEl.volume = scene.videoVolume || 0.5;
+        volumeSlider.oninput = (e) => {
+          const volume = e.target.value / 100;
+          videoEl.volume = volume;
+          scene.videoVolume = volume;
+          if (volume > 0) {
+            videoEl.muted = false;
+            if (muteBtn) {
+              muteBtn.textContent = '🔊 Sound';
+              muteBtn.style.background = '#ffc107';
+            }
+          }
+          this.saveScenesData();
+        };
+      }
+    }
 
     // Progress bar
     const progressBar = document.getElementById('video-progress');
@@ -2791,18 +2828,6 @@ class HotspotEditor {
     progressBar.addEventListener('input', (e) => {
       const time = (e.target.value / 100) * videoEl.duration;
       videoEl.currentTime = time;
-    });
-
-    // Volume control
-    const volumeSlider = document.getElementById('video-volume');
-    volumeSlider.value = (scene.videoVolume || 0.5) * 100;
-    videoEl.volume = scene.videoVolume || 0.5;
-
-    volumeSlider.addEventListener('input', (e) => {
-      const volume = e.target.value / 100;
-      videoEl.volume = volume;
-      scene.videoVolume = volume;
-      this.saveScenesData();
     });
   }
 
@@ -3225,6 +3250,14 @@ class HotspotEditor {
     document.getElementById('global-sound-enabled').addEventListener('change', (e) => {
       this.toggleGlobalSoundControls(e.target.checked);
       this._syncGlobalSoundToggleUI();
+      if (e.target.checked) {
+        this.updateGlobalSound();
+        this._tryStartEditorGlobalSoundPreview();
+      } else {
+        this.editorGlobalSoundEnabled = false;
+        this.updateEditorSoundButton();
+        this.stopEditorGlobalSound();
+      }
     });
 
     // Global sound file/URL coordination
@@ -3279,6 +3312,41 @@ class HotspotEditor {
 
     // Initial sync for global sound switch
     this._syncGlobalSoundToggleUI();
+
+    // 360° video audio mute (video scenes only)
+    document.getElementById('mute-video-audio-enabled').addEventListener('change', () => {
+      this.updateVideoAudioSettings();
+      this._syncVideoAudioToggleUI();
+      const scene = this.scenes[this.currentScene];
+      if (scene && scene.type === 'video') {
+        const videoEl = document.getElementById('scene-video-dynamic');
+        if (videoEl) this.updateVideoControls(videoEl, scene);
+      }
+    });
+
+    try {
+      const mva = document.getElementById('mute-video-audio-switch');
+      if (mva) {
+        const activateMVA = () => {
+          const chk = document.getElementById('mute-video-audio-enabled');
+          if (!chk) return;
+          chk.checked = !chk.checked;
+          chk.dispatchEvent(new Event('change', { bubbles: true }));
+          this._syncVideoAudioToggleUI();
+        };
+        mva.addEventListener('click', activateMVA);
+        mva.addEventListener('keydown', (e) => {
+          if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            activateMVA();
+          }
+        });
+      }
+    } catch (_) {
+      /* ignore */
+    }
+
+    this._syncVideoAudioToggleUI();
 
     // Ground/Texture controls
     document.getElementById('ground-enabled-toggle').addEventListener('change', (e) => {
@@ -4195,6 +4263,30 @@ class HotspotEditor {
         help.textContent = isOn
           ? 'Click to disable ambient sound for this scene'
           : 'Click to enable ambient sound for this scene';
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  _syncVideoAudioToggleUI() {
+    try {
+      const chk = document.getElementById('mute-video-audio-enabled');
+      const sw = document.getElementById('mute-video-audio-switch');
+      const thumb = sw ? sw.querySelector('.thumb') : null;
+      const label = document.getElementById('mute-video-audio-label');
+      const help = document.getElementById('mute-video-audio-help');
+      if (!chk || !sw || !thumb || !label) return;
+      const isMuted = !!chk.checked;
+
+      sw.setAttribute('aria-checked', String(isMuted));
+      sw.style.background = isMuted ? '#4caf50' : '#777';
+      thumb.style.left = isMuted ? '26px' : '2px';
+
+      label.textContent = isMuted ? '🔇 Video Audio: Muted' : '🔊 Video Audio: On';
+      if (help)
+        help.textContent = isMuted
+          ? 'Built-in video audio is off — use Scene Audio below'
+          : 'Viewers can adjust video volume in the player';
     } catch (_) {
       /* ignore */
     }
@@ -9064,6 +9156,7 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
             ? scene.commonAssetUrl
             : scene.videoSrc || null,
         videoVolume: scene.videoVolume || 0.5, // Include video volume
+        muteVideoAudio: scene.type === 'video' ? scene.muteVideoAudio !== false : undefined,
         hotspots: [],
         startingPoint: scene.startingPoint,
         globalSound: null,
@@ -11593,6 +11686,9 @@ Generated by VR Hotspot Editor on ${new Date().toLocaleDateString()}
           if (scene.videoVolume === undefined) {
             scene.videoVolume = 0.5; // Default video volume
           }
+          if (scene.type === 'video' && scene.muteVideoAudio === undefined) {
+            scene.muteVideoAudio = true; // Default: mute built-in 360° video audio
+          }
           // Clear any stale blob URLs so we won’t try to load invalid sources after refresh
           if (
             scene.type === 'video' &&
@@ -12533,6 +12629,10 @@ function isExportVideoSkyboxScene() {
     var hp = window.hotspotProject;
     return !!(hp && hp._sceneMediaType === 'video');
   } catch(e) { return false; }
+}
+
+function isSceneVideoAudioPermanentlyMuted(scene) {
+  return !!(scene && scene.type === 'video' && scene.muteVideoAudio !== false);
 }
 
 function resolveFlatVideoHotspotVideos(videoSrcRef, aVideoEl, parentEl) {
@@ -13634,13 +13734,11 @@ class HotspotProject {
 
     const armTapToPlay = () => {
       this.showTapToPlayBanner('Tap anywhere to start the video');
-      const resume = (e) => {
-        try {
-          e && e.stopPropagation && e.stopPropagation();
-        } catch (_) {}
+      const resume = () => {
         cleanup();
         this.hideTapToPlayBanner();
         videoEl.play().catch(() => {});
+        this.playCurrentGlobalSound();
       };
       const cleanup = () => {
         document.removeEventListener('pointerdown', resume, true);
@@ -13716,11 +13814,22 @@ class HotspotProject {
     // HTML uses video-time-current and video-time-total; support both IDs for robustness
     const currentTimeSpan = document.getElementById('video-time-current') || document.getElementById('video-current-time');
     const durationSpan = document.getElementById('video-time-total') || document.getElementById('video-duration');
+    const scene = this.scenes[this.currentScene];
+    const permanentlyMuted = isSceneVideoAudioPermanentlyMuted(scene);
     
     if (!videoEl || !videoControls) return;
     
     // Show video controls
     videoControls.style.display = 'block';
+
+    if (permanentlyMuted) {
+      videoEl.muted = true;
+      if (muteBtn) muteBtn.style.display = 'none';
+      if (volumeSlider) volumeSlider.style.display = 'none';
+    } else {
+      if (muteBtn) muteBtn.style.display = '';
+      if (volumeSlider) volumeSlider.style.display = '';
+    }
     
     // Play/Pause button
     if (playPauseBtn) {
@@ -13728,6 +13837,7 @@ class HotspotProject {
         if (videoEl.paused) {
           videoEl.play();
           playPauseBtn.textContent = '⏸';
+          this.playCurrentGlobalSound();
         } else {
           videoEl.pause();
           playPauseBtn.textContent = '▶';
@@ -13736,7 +13846,7 @@ class HotspotProject {
     }
     
     // Mute button
-    if (muteBtn) {
+    if (muteBtn && !permanentlyMuted) {
       muteBtn.onclick = () => {
         videoEl.muted = !videoEl.muted;
         muteBtn.textContent = videoEl.muted ? '🔇' : '🔊';
@@ -13764,7 +13874,7 @@ class HotspotProject {
     }
     
     // Volume slider
-    if (volumeSlider) {
+    if (volumeSlider && !permanentlyMuted) {
       volumeSlider.value = videoEl.volume * 100;
       volumeSlider.addEventListener('input', (e) => {
         videoEl.volume = e.target.value / 100;
@@ -15061,25 +15171,13 @@ class HotspotProject {
       
       // Set up one-time event listener for first user interaction
       const enableAudioOnInteraction = () => {
-        this.currentGlobalAudio.play().then(() => {
-          console.log('Audio enabled after user interaction');
-          this.showProgressBar();
-          this.updateProgressDisplay();
-          this.startProgressTracking();
-        }).catch(e => {
-          console.warn('Audio still cannot play:', e);
-        });
-        
-        // Remove the event listener after first use
-        document.removeEventListener('click', enableAudioOnInteraction);
-        document.removeEventListener('touchstart', enableAudioOnInteraction);
-        document.removeEventListener('keydown', enableAudioOnInteraction);
+        this.playCurrentGlobalSound();
       };
       
-      // Listen for any user interaction
-      document.addEventListener('click', enableAudioOnInteraction, { once: true });
-      document.addEventListener('touchstart', enableAudioOnInteraction, { once: true });
-      document.addEventListener('keydown', enableAudioOnInteraction, { once: true });
+      // Listen for any user interaction (capture so we run alongside video tap-to-play)
+      document.addEventListener('pointerdown', enableAudioOnInteraction, { once: true, capture: true });
+      document.addEventListener('touchstart', enableAudioOnInteraction, { once: true, capture: true });
+      document.addEventListener('click', enableAudioOnInteraction, { once: true, capture: true });
     });
   }
   
@@ -15709,6 +15807,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // If using a File, persist into IndexedDB and switch to blob URL
       if (audio instanceof File) {
+        this._tryStartEditorGlobalSoundPreview();
         (async () => {
           try {
             const storageKey =
@@ -15721,6 +15820,7 @@ document.addEventListener('DOMContentLoaded', () => {
               this.scenes[this.currentScene].globalSound.audioFileName = audio.name || null;
               this.scenes[this.currentScene].globalSound.audio = blobURL;
               this.saveScenesData();
+              this._tryStartEditorGlobalSoundPreview();
             }
           } catch (e) {
             console.warn('[GlobalSound] Failed to save audio to IndexedDB', e);
@@ -15739,10 +15839,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!this.isCommonAssetObject(this.scenes[this.currentScene].globalSound)) {
           this.clearCommonAssetProvenance(this.scenes[this.currentScene].globalSound);
         }
+        this._tryStartEditorGlobalSoundPreview();
       }
     } else {
       this.scenes[this.currentScene].globalSound = null;
     }
+  }
+
+  _tryStartEditorGlobalSoundPreview() {
+    const scene = this.scenes[this.currentScene];
+    const panelEnabled = document.getElementById('global-sound-enabled')?.checked;
+    if (!panelEnabled || !scene?.globalSound?.enabled || !scene.globalSound.audio) return;
+    this.editorGlobalSoundEnabled = true;
+    this.updateEditorSoundButton();
+    this.playEditorGlobalSound();
   }
 
   loadGlobalSoundControls() {
@@ -15776,6 +15886,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sync the visible Global Sound switch visuals to the current checkbox state
     this._syncGlobalSoundToggleUI();
+  }
+
+  updateVideoAudioSettings() {
+    const scene = this.scenes[this.currentScene];
+    if (!scene || scene.type !== 'video') return;
+    const chk = document.getElementById('mute-video-audio-enabled');
+    scene.muteVideoAudio = chk ? !!chk.checked : true;
+    this.saveScenesData();
+  }
+
+  loadVideoAudioControls() {
+    const scene = this.scenes[this.currentScene];
+    const section = document.getElementById('video-audio-settings-section');
+    const chk = document.getElementById('mute-video-audio-enabled');
+    if (!section || !chk) return;
+
+    if (scene && scene.type === 'video') {
+      section.style.display = '';
+      if (scene.muteVideoAudio === undefined) scene.muteVideoAudio = true;
+      chk.checked = scene.muteVideoAudio !== false;
+    } else {
+      section.style.display = 'none';
+    }
+    this._syncVideoAudioToggleUI();
   }
 
   playGlobalSound() {
@@ -15893,9 +16027,24 @@ document.addEventListener('DOMContentLoaded', () => {
       this.updateEditorProgressDisplay();
     });
 
-    this.editorGlobalAudio.play().catch((e) => {
+    const startPlayback = () =>
+      this.editorGlobalAudio.play().then(() => {
+        this.showEditorProgressBar();
+        this.updateEditorProgressDisplay();
+        this.startEditorProgressTracking();
+      });
+
+    startPlayback().catch((e) => {
       console.warn('Could not play editor global sound:', e);
       this.hideEditorProgressBar();
+
+      const retryOnGesture = () => {
+        if (!this.editorGlobalSoundEnabled || !this.editorGlobalAudio) return;
+        startPlayback().catch((err) => console.warn('Editor global sound still blocked:', err));
+      };
+      document.addEventListener('pointerdown', retryOnGesture, { once: true, capture: true });
+      document.addEventListener('touchstart', retryOnGesture, { once: true, capture: true });
+      document.addEventListener('click', retryOnGesture, { once: true, capture: true });
     });
   }
 
@@ -16675,6 +16824,7 @@ document.addEventListener('DOMContentLoaded', () => {
             scene.videoStorageKey = key;
             scene.videoFileName = file.name;
             scene.videoVolume = scene.videoVolume || 0.5;
+            if (scene.muteVideoAudio === undefined) scene.muteVideoAudio = true;
             this.saveScenesData();
             // reload scene now that source is available
             this.switchToScene(this.currentScene);
@@ -16815,6 +16965,7 @@ document.addEventListener('DOMContentLoaded', () => {
     this.updateStartingPointInfo();
     this.updateInSceneEditButtons(); // Update edit button visibility for new scene
     this.loadGlobalSoundControls();
+    this.loadVideoAudioControls();
     this.loadGroundControls();
 
     // Audio is now controlled ONLY by the editor audio button
@@ -16865,6 +17016,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Save current scene hotspots and global sound
         this.scenes[this.currentScene].hotspots = [...this.hotspots];
         this.updateGlobalSound(); // Save current global sound settings
+        this.updateVideoAudioSettings();
         this.saveScenesData(); // Save when switching scenes
 
         // Stop current global sound and editor sound
@@ -16897,6 +17049,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fallback to direct switch
         this.scenes[this.currentScene].hotspots = [...this.hotspots];
         this.updateGlobalSound();
+        this.updateVideoAudioSettings();
         this.saveScenesData();
         this.stopGlobalSound();
         this.stopEditorGlobalSound();
@@ -17146,6 +17299,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sc.videoSrc = url;
         sc.videoFileName = url.split('/').pop();
         sc.videoVolume = sc.videoVolume || 0.5;
+        if (sc.muteVideoAudio === undefined) sc.muteVideoAudio = true;
         this.scenes.scene1 = sc;
         this.saveScenesData();
 
@@ -17519,6 +17673,7 @@ document.addEventListener('DOMContentLoaded', () => {
           videoStorageKey: processed.videoStorageKey,
           videoFileName: processed.videoFileName,
           videoVolume: 0.5,
+          muteVideoAudio: true,
           hotspots: [],
           startingPoint: null,
           globalSound: null,
@@ -17584,6 +17739,7 @@ document.addEventListener('DOMContentLoaded', () => {
       videoSrc: url,
       videoFileName: (asset && asset.name) || url.split('/').pop(),
       videoVolume: 0.5,
+      muteVideoAudio: true,
       hotspots: [],
       startingPoint: null,
       globalSound: null,
@@ -17790,6 +17946,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scene.videoSrc = url;
     scene.videoFileName = (asset && asset.name) || url.split('/').pop();
     scene.videoVolume = scene.videoVolume || 0.5;
+    if (scene.muteVideoAudio === undefined) scene.muteVideoAudio = true;
     delete scene.videoStorageKey;
     delete scene.imageStorageKey;
     delete scene.imageFileName;
@@ -17838,6 +17995,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sc.videoStorageKey = storageKey;
       sc.videoFileName = file.name;
       sc.videoVolume = sc.videoVolume || 0.5;
+      if (sc.muteVideoAudio === undefined) sc.muteVideoAudio = true;
       this.clearCommonAssetProvenance(sc);
       this.scenes[sceneId] = sc;
       this.saveScenesData();
@@ -18203,6 +18361,7 @@ document.addEventListener('DOMContentLoaded', () => {
             scene.videoStorageKey = processed.videoStorageKey;
             scene.videoFileName = processed.videoFileName;
             scene.videoVolume = scene.videoVolume || 0.5;
+            if (scene.muteVideoAudio === undefined) scene.muteVideoAudio = true;
             this.clearCommonAssetProvenance(scene);
             this.applyHostedVideoProvenance(scene, processed);
 

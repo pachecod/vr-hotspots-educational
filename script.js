@@ -17193,13 +17193,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let inner = container.querySelector('#integrated-welcome-inner');
     if (!shell || !inner) {
       container.innerHTML = `
-        <div id="student-login-shell" style="
-          position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100000;display:flex;
-          align-items:center;justify-content:center;font-family:Arial;animation:fadeIn 0.3s ease-in;">
-          <div id="integrated-welcome-inner" style="
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; border-radius: 16px;
-            color: white; max-width: 520px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-            text-align: center; position: relative;"></div>
+        <div id="student-login-shell">
+          <div id="integrated-welcome-inner"></div>
         </div>`;
       shell = container.querySelector('#student-login-shell');
       inner = container.querySelector('#integrated-welcome-inner');

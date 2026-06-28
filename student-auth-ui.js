@@ -63,29 +63,25 @@ function welcomeGithubFooterHtml() {
 }
 
 function integratedWelcomeCardStyle() {
-  return 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 36px; border-radius: 16px; color: white; max-width: 520px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center; position: relative;';
+  return '';
 }
 
 function integratedWelcomeShellStyle() {
-  return 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100000;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;animation:fadeIn 0.3s ease-in;';
+  return '';
 }
 
 function ensureWelcomeAnimationStyle() {
-  if (document.getElementById('prompt-animation-style')) return;
-  const style = document.createElement('style');
-  style.id = 'prompt-animation-style';
-  style.textContent = '@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }';
-  document.head.appendChild(style);
+  /* fadeIn keyframes live in welcome-playground.css */
 }
 
 function ensureIntegratedWelcomeShell(container) {
   ensureWelcomeAnimationStyle();
   let shell = container.querySelector('#student-login-shell');
   if (!shell) {
-    container.innerHTML = `
-      <div id="student-login-shell" style="${integratedWelcomeShellStyle()}">
-        <div id="integrated-welcome-inner" style="${integratedWelcomeCardStyle()}"></div>
-      </div>`;
+      container.innerHTML = `
+        <div id="student-login-shell" style="${integratedWelcomeShellStyle()}">
+          <div id="integrated-welcome-inner" style="${integratedWelcomeCardStyle()}"></div>
+        </div>`;
     shell = container.querySelector('#student-login-shell');
   }
   return {

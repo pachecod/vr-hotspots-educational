@@ -119,67 +119,79 @@ async function uploadBundle(id) {
 }
 
 document.getElementById('template-list').addEventListener('click', async (e) => {
-  const id = e.target.dataset.id;
-  if (!id) return;
+  const btn = e.target.closest('button[data-id], button.btn-save-thumb');
+  if (!btn || !btn.dataset.id) return;
+  const id = btn.dataset.id;
   const tpl = templates.find((t) => t.id === id);
   if (!tpl) return;
 
   try {
-    if (e.target.classList.contains('btn-toggle-public')) {
+    if (btn.classList.contains('btn-toggle-public')) {
       const res = await adminFetch(`/admin/templates/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_public: !tpl.is_public }),
       });
       const data = await res.json();
-      if (data.success) await loadTemplates();
+      if (!data.success) throw new Error(data.message || 'Update failed');
+      showToast(tpl.is_public ? 'Template is now private' : 'Template is now public');
+      await loadTemplates();
       return;
     }
-    if (e.target.classList.contains('btn-toggle-playground')) {
+    if (btn.classList.contains('btn-toggle-playground')) {
+      const enabling = !tpl.is_playground;
+      const payload = { is_playground: enabling };
+      if (enabling) payload.is_public = true;
       const res = await adminFetch(`/admin/templates/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_playground: !tpl.is_playground }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (data.success) await loadTemplates();
+      if (!data.success) throw new Error(data.message || 'Update failed');
+      if (enabling && tpl.scope === 'combined' && !tpl.bundle_b2_key) {
+        showToast('On welcome screen — upload a bundle ZIP to open this sample');
+      } else {
+        showToast(enabling ? 'Now on welcome screen' : 'Removed from welcome screen');
+      }
+      await loadTemplates();
       return;
     }
-    if (e.target.classList.contains('btn-toggle-default')) {
+    if (btn.classList.contains('btn-toggle-default')) {
       const res = await adminFetch(`/admin/templates/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_default: !tpl.is_default }),
       });
       const data = await res.json();
-      if (data.success) await loadTemplates();
+      if (!data.success) throw new Error(data.message || 'Update failed');
+      showToast('Default updated');
+      await loadTemplates();
       return;
     }
-    if (e.target.classList.contains('btn-delete')) {
+    if (btn.classList.contains('btn-delete')) {
       if (!confirm(`Delete template "${tpl.title}"?`)) return;
       const res = await adminFetch(`/admin/templates/${id}`, { method: 'DELETE' });
       const data = await res.json();
-      if (data.success) {
-        showToast('Deleted');
-        await loadTemplates();
-      }
+      if (!data.success) throw new Error(data.message || 'Delete failed');
+      showToast('Deleted');
+      await loadTemplates();
       return;
     }
-    if (e.target.classList.contains('btn-upload-bundle')) {
+    if (btn.classList.contains('btn-upload-bundle')) {
       await uploadBundle(id);
       return;
     }
-    if (e.target.classList.contains('btn-delete-bundle')) {
+    if (btn.classList.contains('btn-delete-bundle')) {
       if (!confirm('Remove the uploaded bundle from storage?')) return;
       const res = await adminFetch(`/admin/templates/${id}/bundle`, { method: 'DELETE' });
       const data = await res.json();
-      if (data.success) {
-        showToast('Bundle removed');
-        await loadTemplates();
-      }
+      if (!data.success) throw new Error(data.message || 'Remove failed');
+      showToast('Bundle removed');
+      await loadTemplates();
       return;
     }
-    if (e.target.classList.contains('btn-save-thumb')) {
+    if (btn.classList.contains('btn-save-thumb')) {
       const input = document.querySelector(`.thumb-url-input[data-id="${id}"]`);
       const res = await adminFetch(`/admin/templates/${id}`, {
         method: 'PUT',
@@ -187,10 +199,9 @@ document.getElementById('template-list').addEventListener('click', async (e) => 
         body: JSON.stringify({ thumbnail_url: input ? input.value.trim() : '' }),
       });
       const data = await res.json();
-      if (data.success) {
-        showToast('Thumbnail saved');
-        await loadTemplates();
-      }
+      if (!data.success) throw new Error(data.message || 'Save failed');
+      showToast('Thumbnail saved');
+      await loadTemplates();
     }
   } catch (err) {
     alert(err.message || 'Action failed');

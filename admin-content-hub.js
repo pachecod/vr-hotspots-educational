@@ -34,7 +34,6 @@ const ContentHub = {
       hosted_submission: 'Hosted',
       common_asset: 'Shared Online Asset',
       template: 'Flat Template',
-      snippet: 'Editor Snippet',
     };
     return labels[type] || type;
   },
@@ -101,7 +100,6 @@ const ContentHub = {
       `<span class="chip">${s.asset || 0} student assets</span>`,
       `<span class="chip">${s.common_asset || 0} shared assets</span>`,
       `<span class="chip">${s.template || 0} templates</span>`,
-      `<span class="chip">${s.snippet || 0} snippets</span>`,
       `<span class="chip">${s.orphan_asset || 0} orphaned</span>`,
       `<span class="chip">${s.legacy_submission || 0} legacy B2</span>`,
     ].join('');

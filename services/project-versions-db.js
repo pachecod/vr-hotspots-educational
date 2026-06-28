@@ -212,7 +212,7 @@ async function listStudentProjects(studentId) {
             (SELECT COUNT(*)::int FROM project_versions pv2
              WHERE pv2.thread_id = pt.id AND pv2.kind = 'admin_return' AND pv2.student_seen_at IS NULL) AS unread_feedback
      FROM project_threads pt
-     LEFT JOIN LATERAL (
+     INNER JOIN LATERAL (
        SELECT * FROM project_versions pv
        WHERE pv.thread_id = pt.id
        ORDER BY pv.version_number DESC
@@ -310,6 +310,20 @@ async function deleteVersion(versionId) {
   await query(`DELETE FROM project_versions WHERE id = $1`, [versionId]);
 }
 
+async function deleteThread(threadId) {
+  if (!isDbEnabled()) return;
+  await query(`DELETE FROM project_threads WHERE id = $1`, [threadId]);
+}
+
+async function listRawVersionsForThread(threadId) {
+  if (!isDbEnabled()) return [];
+  const { rows } = await query(
+    `SELECT id, b2_path, file_name, hosted_path FROM project_versions WHERE thread_id = $1`,
+    [threadId]
+  );
+  return rows;
+}
+
 async function getUnreadFeedbackCount(studentId) {
   const { rows } = await query(
     `SELECT COUNT(*)::int AS count FROM project_versions pv
@@ -392,6 +406,8 @@ module.exports = {
   markVersionSeen,
   updateVersionHosting,
   deleteVersion,
+  deleteThread,
+  listRawVersionsForThread,
   getUnreadFeedbackCount,
   importLegacySubmissions,
   formatVersionRow,

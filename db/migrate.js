@@ -179,6 +179,25 @@ async function applyIncrementalMigrations(pool) {
     await pool.query(`INSERT INTO schema_migrations (name) VALUES ($1)`, ['project_versions_import_v1']);
     console.log(`✅ Imported ${result.imported} legacy submission(s) into project_versions`);
   }
+
+  const { rows: cleanupRows } = await pool.query(
+    `SELECT name FROM schema_migrations WHERE name = $1`,
+    ['orphan_project_thread_cleanup_v1']
+  );
+  if (cleanupRows.length === 0) {
+    const {
+      purgeOrphanProjectThreads,
+      purgeEmptyProjectThreads,
+    } = require('../lib/purge-project-thread');
+    const orphans = await purgeOrphanProjectThreads();
+    const empty = await purgeEmptyProjectThreads();
+    await pool.query(`INSERT INTO schema_migrations (name) VALUES ($1)`, [
+      'orphan_project_thread_cleanup_v1',
+    ]);
+    console.log(
+      `✅ Project thread cleanup: ${orphans.purged} orphan(s), ${empty.purged} empty thread(s) removed`
+    );
+  }
 }
 
 async function importSubmissionsFromJson(loadSubmissionsLog, writeSubmissionsLog) {

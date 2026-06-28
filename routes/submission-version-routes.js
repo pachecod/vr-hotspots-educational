@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { purgeProjectThread } = require('../lib/purge-project-thread');
 const projectVersionsDb = require('../services/project-versions-db');
 const b2Service = require('../services/b2-service');
 const { isDbEnabled } = require('../services/db-service');
@@ -414,19 +415,8 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       if (!version) {
         return res.status(404).json({ success: false, message: 'Version not found' });
       }
-      try {
-        await b2Service.deleteFile(version.b2Path);
-      } catch (err) {
-        console.warn('B2 delete warning:', err.message);
-      }
-      if (version.hostedPath) {
-        const hostedDir = path.join('hosted-projects', version.hostedPath);
-        if (fs.existsSync(hostedDir)) {
-          fs.rmSync(hostedDir, { recursive: true, force: true });
-        }
-      }
-      await projectVersionsDb.deleteVersion(version.id);
-      return res.json({ success: true });
+      const removed = await purgeProjectThread(version.threadId);
+      return res.json({ success: true, removedVersions: removed });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }

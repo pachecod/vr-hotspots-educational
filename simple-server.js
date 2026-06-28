@@ -43,6 +43,7 @@ const submissionsDb = require('./services/submissions-db');
 const projectVersionsDb = require('./services/project-versions-db');
 const { assertCanSubmit } = require('./services/usage-quota');
 const { parseCookies } = require('./lib/session');
+const { purgeProjectThread } = require('./lib/purge-project-thread');
 const { assertSafeOutboundUrl } = require('./lib/security/ssrf-guard');
 const { sanitizeReturnTo } = require('./lib/security/safe-redirect');
 const { csrfGuard } = require('./lib/security/csrf-guard');
@@ -1880,10 +1881,24 @@ app.get('/admin/download/:filename', async (req, res) => {
   }
 });
 
-// Admin can delete individual projects
+// Admin can delete individual projects (legacy filename or full versioned thread)
 app.delete('/admin/delete/:filename', async (req, res) => {
   try {
     const filename = req.params.filename;
+
+    if (isDbEnabled()) {
+      const version = await projectVersionsDb.getVersionByFileName(filename);
+      if (version && version.threadId) {
+        const removed = await purgeProjectThread(version.threadId);
+        console.log(`✅ Project thread deleted (${removed} version(s))`);
+        return res.json({
+          success: true,
+          message: 'Project deleted successfully from cloud storage',
+          removedVersions: removed,
+        });
+      }
+    }
+
     const remotePath = await resolveSubmissionRemotePath(filename);
 
     console.log(`🗑️ Deleting ${remotePath} from B2...`);

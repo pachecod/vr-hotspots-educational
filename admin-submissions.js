@@ -218,7 +218,7 @@ async function hostVersion(versionId, studentName) {
 }
 
 async function deleteVersion(versionId) {
-  if (!confirm('Delete this version from cloud storage?')) return;
+  if (!confirm('Delete this project and all its versions (including teacher feedback) from cloud storage?')) return;
   try {
     const deleteUrl = isLegacyVersion(versionId)
       ? `/admin/delete/${encodeURIComponent(legacyFileName(versionId))}`

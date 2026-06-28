@@ -229,7 +229,7 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
   inner.innerHTML = `
     <div class="integrated-welcome-layout">
       <div class="integrated-welcome-auth">
-        <h2 style="margin: 0 0 12px; font-size: 28px; font-weight: bold;">Welcome to VR Hotspot Editor!</h2>
+        <h2 style="margin: 0 0 12px; font-size: 28px; font-weight: bold;">Immersive Storytelling Publishing Tool</h2>
         <p style="color: #f0f0f0; margin: 0 0 28px; font-size: 16px; line-height: 1.6;">
           Every project has a 360° tour and a flat web page. Choose how you'd like to get started.
         </p>

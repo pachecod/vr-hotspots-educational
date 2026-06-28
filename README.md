@@ -78,7 +78,14 @@ Then run `npm run dev` and open the editor. You will see an entry gate:
 - **Continue as Guest** — build 360° tours and flat pages locally, pick **local files** (preview + ZIP export), browse **Shared Online Assets**, load a ZIP template, and **Save Template**. No cloud save or submit to admin.
 - **Sign in with class account** — full student features if you have a class password from your teacher.
 
-Test User mode is disabled automatically when `NODE_ENV=production` (including Render deploys).
+Test User mode is off on production by default. For a **demo/staging** deploy on Render, set both:
+
+```bash
+LOCAL_TEST_USER_ENABLED=true
+LOCAL_TEST_USER_ALLOW_PRODUCTION=true
+```
+
+Guest mode still blocks cloud save, submit, and server uploads.
 
 ### 4. Workflow
 

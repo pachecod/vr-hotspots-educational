@@ -486,7 +486,11 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
 
   async function loadClasses() {
     const res = await fetch('/api/classes');
-    classes = await res.json();
+    const data = await res.json();
+    classes = Array.isArray(data) ? data : [];
+    if (!res.ok && !classes.length) {
+      throw new Error(data?.message || 'Could not load classes');
+    }
   }
 
   async function loadStudents(classId) {
@@ -494,7 +498,14 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
     students = await res.json();
   }
 
-  loadClasses().then(renderClassStep);
+  loadClasses()
+    .then(renderClassStep)
+    .catch((err) => {
+      showError(err.message || 'Could not load classes. Try again later.');
+      subtitleEl.textContent = 'Choose your class';
+      stepEl.innerHTML =
+        '<p style="color:#f0f0f0;">Could not load classes. Check your connection or ask your teacher.</p>';
+    });
 }
 
 function escapeHtml(str) {
@@ -523,7 +534,7 @@ async function requireStudentSession(containerId, onAuthenticated) {
     return;
   }
 
-  if (status.testUserModeAvailable && !status.authRequired) {
+  if (status.testUserModeAvailable) {
     hideSceneLoadingOverlay();
     renderEntryGate(containerId, onAuthenticated);
     return;

@@ -61,6 +61,9 @@ function testLocalTestUserModeAvailability() {
 
     process.env.NODE_ENV = 'production';
     assert.strictEqual(isLocalTestUserModeAvailable(), false);
+
+    process.env.LOCAL_TEST_USER_ALLOW_PRODUCTION = 'true';
+    assert.strictEqual(isLocalTestUserModeAvailable(), true);
   } finally {
     process.env = prev;
   }

@@ -41,6 +41,8 @@ Copy values from your local `.env` into Render → **Environment**:
 | `ADMIN_SESSION_SECRET` | Long random string for admin session cookies |
 | `STUDENT_SESSION_SECRET` | Long random string for student session cookies |
 | `STUDENT_AUTH_REQUIRED` | Set `true` in production to require student sign-in |
+| `LOCAL_TEST_USER_ENABLED` | Set `true` to offer **Continue as Guest** on the welcome screen |
+| `LOCAL_TEST_USER_ALLOW_PRODUCTION` | Required with guest mode on Render (`NODE_ENV=production`) |
 
 Optional:
 

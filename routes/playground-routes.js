@@ -7,7 +7,7 @@ const { isDbEnabled } = require('../services/db-service');
 const templatesDb = require('../lib/templates');
 const { isPublicPlaygroundEnabled } = require('../lib/playground-config');
 const b2Service = require('../services/b2-service');
-const { refreshPlaygroundThumbnail } = require('../lib/playground-thumbnail');
+const { refreshPlaygroundThumbnail, resolvePlaygroundThumbnailUrl, playgroundThumbLookupPaths, contentTypeForThumbPath } = require('../lib/playground-thumbnail');
 
 const upload = multer({ dest: 'temp-uploads/' });
 
@@ -37,6 +37,33 @@ function registerPlaygroundRoutes(app) {
     }
   });
 
+  app.get('/api/playground/thumbnails/:slug', async (req, res) => {
+    const slug = String(req.params.slug || '')
+      .replace(/\.(jpe?g|png|webp|svg)$/i, '')
+      .trim();
+    if (!slug) {
+      return res.status(400).send('Invalid thumbnail slug');
+    }
+    try {
+      await b2Service.ensureCommonAssetsBucket();
+      for (const remotePath of playgroundThumbLookupPaths(slug)) {
+        try {
+          const { stream, statusCode, headers } = await b2Service.downloadCommonAssetStream(remotePath);
+          if (statusCode === 404) continue;
+          res.setHeader('Content-Type', headers['content-type'] || contentTypeForThumbPath(remotePath));
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          if (statusCode === 206) res.status(206);
+          return stream.pipe(res);
+        } catch (_) {}
+      }
+      res.status(404).send('Thumbnail not found');
+    } catch (err) {
+      console.error('Playground thumbnail error:', err);
+      res.status(500).send('Could not load thumbnail');
+    }
+  });
+
   app.get('/api/playground/templates/:slug', async (req, res) => {
     if (!isPublicPlaygroundEnabled()) {
       return res.status(404).json({ success: false, message: 'Playground not enabled' });
@@ -54,7 +81,7 @@ function registerPlaygroundRoutes(app) {
           slug: template.slug,
           description: template.description,
           scope: template.scope,
-          thumbnail_url: template.thumbnail_url,
+          thumbnail_url: resolvePlaygroundThumbnailUrl(template),
           has_bundle: !!template.bundle_b2_key,
           files_manifest: template.scope === 'flat' ? template.files_manifest : undefined,
         },

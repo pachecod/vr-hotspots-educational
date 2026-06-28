@@ -23,6 +23,13 @@ function scopeBadgeLabel(scope) {
   return scope === 'combined' ? '360° + Web' : 'Flat page';
 }
 
+function escapeAttr(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
 function renderPlaygroundCards(templates, loadingSlug) {
   if (!templates.length) {
     return '<p class="welcome-playground-empty">No public templates are available yet.</p>';
@@ -36,9 +43,10 @@ function renderPlaygroundCards(templates, loadingSlug) {
       <div class="welcome-playground-thumb${t.thumbnail_url ? ' has-image' : ''}">
         ${
           t.thumbnail_url
-            ? `<img src="${escapeHtml(t.thumbnail_url)}" alt="" loading="lazy" />`
-            : '<span class="welcome-playground-thumb-fallback">🌐</span>'
+            ? `<img src="${escapeAttr(t.thumbnail_url)}" alt="" loading="lazy" onerror="this.style.display='none';this.parentElement.classList.remove('has-image');var f=this.parentElement.querySelector('.welcome-playground-thumb-fallback');if(f)f.style.display='flex';" />`
+            : ''
         }
+        <span class="welcome-playground-thumb-fallback"${t.thumbnail_url ? ' style="display:none"' : ''}>🌐</span>
       </div>
       <div class="welcome-playground-card-body">
         <div class="welcome-playground-card-title">${escapeHtml(t.title)}</div>

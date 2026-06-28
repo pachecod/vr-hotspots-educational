@@ -4,7 +4,7 @@
  */
 const path = require('path');
 const fs = require('fs');
-const { slugify } = require('../services/db-service');
+const { slugify, query, isDbEnabled } = require('../services/db-service');
 const { writeTourQrPng, tourUrlToQrUrl } = require('../services/qr-service');
 const { requireStudentStrict } = require('../student-auth');
 
@@ -53,6 +53,18 @@ function registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDir
       const url = `${getServerBaseUrl(req)}/hosted/${hostedPath}/index.html`;
       await writeTourQrPng(targetDir, url);
       const qrUrl = tourUrlToQrUrl(url);
+
+      if (isDbEnabled()) {
+        await query(
+          `INSERT INTO student_published_tours (student_id, slug, hosted_path, hosted_url, qr_url, published_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())
+           ON CONFLICT (student_id, slug)
+           DO UPDATE SET hosted_path = EXCLUDED.hosted_path, hosted_url = EXCLUDED.hosted_url,
+                         qr_url = EXCLUDED.qr_url, published_at = NOW()`,
+          [studentId, slug, hostedPath, url, qrUrl]
+        );
+      }
+
       res.json({ success: true, url, hostedPath, hostedUrl: url, qrUrl });
     } catch (err) {
       console.error('VR tour publish error:', err);

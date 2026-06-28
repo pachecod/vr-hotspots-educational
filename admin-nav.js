@@ -5,6 +5,7 @@ function renderAdminNav(activeTab) {
   const tabs = [
     { id: 'home', label: 'Overview', href: '/admin' },
     { id: 'submissions', label: 'Submissions', href: 'admin-submissions.html' },
+    { id: 'content', label: 'Content', href: 'admin-content-hub.html' },
     { id: 'assets', label: 'Assets', href: 'admin-common-assets.html' },
     { id: 'snippets', label: 'Editor Settings', href: 'admin-snippets.html' },
     { id: 'templates', label: 'Templates', href: 'admin-templates.html' },

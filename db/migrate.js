@@ -198,6 +198,105 @@ async function applyIncrementalMigrations(pool) {
       `✅ Project thread cleanup: ${orphans.purged} orphan(s), ${empty.purged} empty thread(s) removed`
     );
   }
+
+  await applyContentHubMigrations(pool);
+}
+
+async function applyContentHubMigrations(pool) {
+  const contentHubMigration = {
+    name: 'content_hub_v1',
+    sql: `
+      ALTER TABLE student_assets ADD COLUMN IF NOT EXISTS ownership TEXT NOT NULL DEFAULT 'student';
+      ALTER TABLE student_assets ADD COLUMN IF NOT EXISTS orphaned_from JSONB;
+      ALTER TABLE student_assets ALTER COLUMN student_id DROP NOT NULL;
+      ALTER TABLE student_assets DROP CONSTRAINT IF EXISTS student_assets_student_id_category_filename_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_student_assets_student_unique
+        ON student_assets (student_id, category, filename)
+        WHERE ownership = 'student' AND student_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_student_assets_orphaned
+        ON student_assets(ownership) WHERE ownership = 'orphaned';
+
+      CREATE TABLE IF NOT EXISTS student_published_tours (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        slug TEXT NOT NULL,
+        hosted_path TEXT NOT NULL,
+        hosted_url TEXT NOT NULL,
+        qr_url TEXT,
+        published_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (student_id, slug)
+      );
+      CREATE INDEX IF NOT EXISTS idx_student_published_tours_student_id ON student_published_tours(student_id);
+
+      CREATE TABLE IF NOT EXISTS purged_b2_paths (
+        b2_path TEXT PRIMARY KEY,
+        purged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `,
+  };
+
+  const { rows } = await pool.query(`SELECT name FROM schema_migrations WHERE name = $1`, [
+    contentHubMigration.name,
+  ]);
+  if (rows.length === 0) {
+    console.log(`🔄 Applying migration: ${contentHubMigration.name}`);
+    await pool.query(contentHubMigration.sql);
+    await pool.query(`INSERT INTO schema_migrations (name) VALUES ($1)`, [contentHubMigration.name]);
+    console.log(`✅ Migration applied: ${contentHubMigration.name}`);
+  }
+
+  const { rows: backfillRows } = await pool.query(
+    `SELECT name FROM schema_migrations WHERE name = $1`,
+    ['content_hub_vr_tour_backfill_v1']
+  );
+  if (backfillRows.length === 0) {
+    const backfilled = await backfillVrToursFromDisk(pool);
+    await pool.query(`INSERT INTO schema_migrations (name) VALUES ($1)`, [
+      'content_hub_vr_tour_backfill_v1',
+    ]);
+    console.log(`✅ VR tour backfill: ${backfilled} tour(s) registered`);
+  }
+}
+
+async function backfillVrToursFromDisk(pool) {
+  const fs = require('fs');
+  const path = require('path');
+  const hostedDir = path.join(process.cwd(), 'hosted-projects');
+  if (!fs.existsSync(hostedDir)) return 0;
+
+  const { rows: students } = await pool.query(
+    `SELECT s.id, s.display_name FROM students s`
+  );
+  const shortIdMap = new Map();
+  for (const s of students) {
+    const shortId = String(s.id).replace(/-/g, '').slice(0, 8);
+    shortIdMap.set(shortId, s.id);
+  }
+
+  let count = 0;
+  const baseUrl = process.env.SERVER_BASE_URL || 'http://localhost:3000';
+  for (const entry of fs.readdirSync(hostedDir)) {
+    if (!entry.startsWith('vr-')) continue;
+    const rest = entry.slice(3);
+    const dashIdx = rest.indexOf('-');
+    if (dashIdx < 1) continue;
+    const shortId = rest.slice(0, dashIdx);
+    const slug = rest.slice(dashIdx + 1);
+    const studentId = shortIdMap.get(shortId);
+    if (!studentId || !slug) continue;
+    const indexPath = path.join(hostedDir, entry, 'index.html');
+    if (!fs.existsSync(indexPath)) continue;
+    const hostedUrl = `${baseUrl.replace(/\/$/, '')}/hosted/${entry}/index.html`;
+    const qrUrl = `${baseUrl.replace(/\/$/, '')}/hosted/${entry}/qr.png`;
+    const { rowCount } = await pool.query(
+      `INSERT INTO student_published_tours (student_id, slug, hosted_path, hosted_url, qr_url, published_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (student_id, slug) DO NOTHING`,
+      [studentId, slug, entry, hostedUrl, qrUrl]
+    );
+    if (rowCount > 0) count++;
+  }
+  return count;
 }
 
 async function importSubmissionsFromJson(loadSubmissionsLog, writeSubmissionsLog) {

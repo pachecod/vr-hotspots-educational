@@ -84,16 +84,22 @@ CREATE INDEX IF NOT EXISTS idx_project_versions_kind ON project_versions(kind, s
 
 CREATE TABLE IF NOT EXISTS student_assets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+  ownership TEXT NOT NULL DEFAULT 'student' CHECK (ownership IN ('student', 'orphaned')),
+  orphaned_from JSONB,
   category TEXT NOT NULL,
   filename TEXT NOT NULL,
   b2_path TEXT NOT NULL UNIQUE,
   size BIGINT NOT NULL DEFAULT 0,
-  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (student_id, category, filename)
+  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_student_assets_student_unique
+  ON student_assets (student_id, category, filename)
+  WHERE ownership = 'student' AND student_id IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_student_assets_student_id ON student_assets(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_assets_orphaned ON student_assets(ownership) WHERE ownership = 'orphaned';
 
 -- Flat Web Page projects (WebXRIDE-style HTML/CSS/JS authored alongside spherical content)
 CREATE TABLE IF NOT EXISTS flat_page_projects (
@@ -114,6 +120,24 @@ CREATE TABLE IF NOT EXISTS flat_page_projects (
 );
 
 CREATE INDEX IF NOT EXISTS idx_flat_page_projects_student_id ON flat_page_projects(student_id);
+
+CREATE TABLE IF NOT EXISTS student_published_tours (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  slug TEXT NOT NULL,
+  hosted_path TEXT NOT NULL,
+  hosted_url TEXT NOT NULL,
+  qr_url TEXT,
+  published_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (student_id, slug)
+);
+
+CREATE INDEX IF NOT EXISTS idx_student_published_tours_student_id ON student_published_tours(student_id);
+
+CREATE TABLE IF NOT EXISTS purged_b2_paths (
+  b2_path TEXT PRIMARY KEY,
+  purged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS asset_tags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

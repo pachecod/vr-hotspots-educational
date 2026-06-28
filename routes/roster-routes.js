@@ -78,6 +78,11 @@ async function updateClass(id, { name, description }) {
 }
 
 async function deleteClass(id) {
+  const { rows } = await query(`SELECT id FROM students WHERE class_id = $1`, [id]);
+  const { purgeStudentAccount } = require('../lib/student-content/purge');
+  for (const row of rows) {
+    await purgeStudentAccount(row.id);
+  }
   await query(`DELETE FROM classes WHERE id = $1`, [id]);
 }
 
@@ -150,7 +155,8 @@ async function updateStudent(id, { displayName, classId, isActive }) {
 }
 
 async function deleteStudent(id) {
-  await query(`DELETE FROM students WHERE id = $1`, [id]);
+  const { purgeStudentAccount } = require('../lib/student-content/purge');
+  await purgeStudentAccount(id);
 }
 
 async function resetStudentPassword(id, password) {

@@ -300,6 +300,16 @@ function registerSceneVideoRoutes(app, upload) {
 
         await b2Service.uploadFile(prepared.path, b2Path, contentType);
 
+        if (isDbEnabled()) {
+          await query(
+            `INSERT INTO student_assets (student_id, category, filename, b2_path, size, ownership)
+             VALUES ($1, $2, $3, $4, $5, 'student')
+             ON CONFLICT (student_id, category, filename) WHERE ownership = 'student' AND student_id IS NOT NULL
+             DO UPDATE SET b2_path = EXCLUDED.b2_path, size = EXCLUDED.size, uploaded_at = NOW()`,
+            [studentId, VIDEO_CATEGORY, storedFilename, b2Path, prepared.size]
+          );
+        }
+
         const proxyUrl = `/api/scene-video/${encodeURIComponent(storedFilename)}`;
         const url = `${getServerBaseUrl(req)}${proxyUrl}`;
 

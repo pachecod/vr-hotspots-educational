@@ -27,6 +27,7 @@ const { registerSceneVideoRoutes } = require('./routes/scene-video-routes');
 const { registerBillingRoutes } = require('./routes/billing-routes');
 const { registerSubmissionVersionRoutes } = require('./routes/submission-version-routes');
 const { registerAdminStudentPeekRoutes } = require('./routes/admin-student-peek-routes');
+const { registerAdminContentRoutes } = require('./routes/admin-content-routes');
 const { registerFlatPageRoutes } = require('./routes/flat-page-routes');
 const { registerVrTourRoutes } = require('./routes/vr-tour-routes');
 const { registerSnippetRoutes } = require('./routes/snippet-routes');
@@ -43,7 +44,10 @@ const submissionsDb = require('./services/submissions-db');
 const projectVersionsDb = require('./services/project-versions-db');
 const { assertCanSubmit } = require('./services/usage-quota');
 const { parseCookies } = require('./lib/session');
-const { purgeProjectThread } = require('./lib/purge-project-thread');
+const {
+  purgeLegacySubmission,
+  purgeHostedSubmission,
+} = require('./lib/student-content/purge');
 const { assertSafeOutboundUrl } = require('./lib/security/ssrf-guard');
 const { sanitizeReturnTo } = require('./lib/security/safe-redirect');
 const { csrfGuard } = require('./lib/security/csrf-guard');
@@ -336,6 +340,7 @@ registerSubmissionVersionRoutes(app, {
   extractZipToDirSafe,
 });
 registerAdminStudentPeekRoutes(app, { requireAdmin });
+registerAdminContentRoutes(app, { requireAdmin });
 registerFlatPageRoutes(app);
 registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe });
 registerSnippetRoutes(app);
@@ -1885,59 +1890,12 @@ app.get('/admin/download/:filename', async (req, res) => {
 app.delete('/admin/delete/:filename', async (req, res) => {
   try {
     const filename = req.params.filename;
-
-    if (isDbEnabled()) {
-      const version = await projectVersionsDb.getVersionByFileName(filename);
-      if (version && version.threadId) {
-        const removed = await purgeProjectThread(version.threadId);
-        console.log(`✅ Project thread deleted (${removed} version(s))`);
-        return res.json({
-          success: true,
-          message: 'Project deleted successfully from cloud storage',
-          removedVersions: removed,
-        });
-      }
-    }
-
-    const remotePath = await resolveSubmissionRemotePath(filename);
-
-    console.log(`🗑️ Deleting ${remotePath} from B2...`);
-
-    // Delete the main project ZIP from B2
-    await b2Service.deleteFile(remotePath);
-    console.log(`✅ Deleted from B2: ${remotePath}`);
-
-    // Find and delete any local hosted project files
-    if (fs.existsSync('submissions.json')) {
-      const logs = loadSubmissionsLog();
-      const submission = logs.find((sub) => sub.fileName === filename);
-
-      if (submission && submission.hostedPath) {
-        console.log(`🗑️ Deleting local hosted files for ${submission.hostedPath}...`);
-        const hostedDir = path.join('hosted-projects', submission.hostedPath);
-
-        // Delete local hosted directory if it exists
-        if (fs.existsSync(hostedDir)) {
-          fs.rmSync(hostedDir, { recursive: true, force: true });
-          console.log(`   ✅ Deleted local hosted directory: ${hostedDir}`);
-        } else {
-          console.log(`   ⚠️ Local hosted directory not found: ${hostedDir}`);
-        }
-      }
-
-      // Remove from submissions log
-      const updatedLogs = logs.filter((submission) => submission.fileName !== filename);
-      writeSubmissionsLog(updatedLogs);
-    }
-
-    if (isDbEnabled()) {
-      await submissionsDb.deleteSubmission(filename);
-    }
-
-    console.log(`✅ Project deleted successfully`);
+    const result = await purgeLegacySubmission(filename);
+    console.log(`✅ Project deleted: ${filename}`);
     res.json({
       success: true,
       message: 'Project deleted successfully from cloud storage',
+      result,
     });
   } catch (error) {
     console.error('Delete error:', error);
@@ -2033,40 +1991,8 @@ app.post('/admin/unhost/:filename', async (req, res) => {
   const { filename } = req.params;
 
   try {
-    // Update submissions.json to remove hosting info
-    const logs = loadSubmissionsLog();
-    const submission = logs.find((sub) => sub.fileName === filename);
-
-    if (!submission) {
-      return res.status(404).json({ error: 'Project not found in submissions' });
-    }
-
-    const hostedPath = submission.hostedPath;
-
-    if (hostedPath) {
-      // Remove hosted directory
-      const hostedDir = path.join('hosted-projects', hostedPath);
-      if (fs.existsSync(hostedDir)) {
-        fs.rmSync(hostedDir, { recursive: true, force: true });
-      }
-    }
-
-    // Update submission record
-    delete submission.hostedPath;
-    delete submission.hostedUrl;
-    delete submission.hostedAt;
-    submission.isHosted = false;
-
-    writeSubmissionsLog(logs);
-    if (isDbEnabled()) {
-      await submissionsDb.updateSubmissionHosting(filename, {
-        hostedPath: null,
-        hostedUrl: null,
-        isHosted: false,
-      });
-    }
-
-    res.json({ success: true, message: 'Project unhosted successfully' });
+    const result = await purgeHostedSubmission({ fileName: filename });
+    res.json({ success: true, message: 'Project unhosted successfully', result });
   } catch (error) {
     console.error('Unhost error:', error);
     res.status(500).json({

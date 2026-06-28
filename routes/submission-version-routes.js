@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { purgeProjectThread } = require('../lib/purge-project-thread');
+const { purgeContentItem } = require('../lib/student-content/purge');
 const projectVersionsDb = require('../services/project-versions-db');
 const b2Service = require('../services/b2-service');
 const { isDbEnabled } = require('../services/db-service');
@@ -415,8 +416,8 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       if (!version) {
         return res.status(404).json({ success: false, message: 'Version not found' });
       }
-      const removed = await purgeProjectThread(version.threadId);
-      return res.json({ success: true, removedVersions: removed });
+      const removed = await purgeContentItem({ type: 'project', id: version.threadId });
+      return res.json({ success: true, removedVersions: removed.removedVersions ?? removed });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }

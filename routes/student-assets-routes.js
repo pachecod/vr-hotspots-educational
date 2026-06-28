@@ -65,7 +65,7 @@ function registerStudentAssetRoutes(app, upload) {
       const studentId = req.studentSession.studentId;
       const { rows } = await query(
         `SELECT category, filename, b2_path, size, uploaded_at
-         FROM student_assets WHERE student_id = $1 ORDER BY uploaded_at DESC`,
+         FROM student_assets WHERE student_id = $1 AND ownership = 'student' ORDER BY uploaded_at DESC`,
         [studentId]
       );
       const grouped = {};
@@ -144,9 +144,9 @@ function registerStudentAssetRoutes(app, upload) {
 
         await b2Service.uploadFile(prepared.path, b2Path, contentType);
         await query(
-          `INSERT INTO student_assets (student_id, category, filename, b2_path, size)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (student_id, category, filename)
+          `INSERT INTO student_assets (student_id, category, filename, b2_path, size, ownership)
+           VALUES ($1, $2, $3, $4, $5, 'student')
+           ON CONFLICT (student_id, category, filename) WHERE ownership = 'student' AND student_id IS NOT NULL
            DO UPDATE SET b2_path = EXCLUDED.b2_path, size = EXCLUDED.size, uploaded_at = NOW()`,
           [studentId, category, storedFilename, b2Path, prepared.size]
         );
@@ -197,7 +197,7 @@ function registerStudentAssetRoutes(app, upload) {
         }
         const { rows } = await query(
           `SELECT 1 FROM student_assets
-           WHERE student_id = $1 AND category = $2 AND filename = $3`,
+           WHERE student_id = $1 AND category = $2 AND filename = $3 AND ownership = 'student'`,
           [studentId, category, filename]
         );
         if (!rows.length) {
@@ -230,17 +230,13 @@ function registerStudentAssetRoutes(app, upload) {
           return res.status(400).json({ success: false, message: 'Invalid category' });
         }
         const { rows } = await query(
-          `SELECT b2_path FROM student_assets
-           WHERE student_id = $1 AND category = $2 AND filename = $3`,
+          `SELECT id, b2_path FROM student_assets
+           WHERE student_id = $1 AND category = $2 AND filename = $3 AND ownership = 'student'`,
           [studentId, category, filename]
         );
         if (!rows.length) return res.status(404).json({ success: false, message: 'Asset not found' });
-        await b2Service.deleteFile(rows[0].b2_path);
-        await query(
-          `DELETE FROM student_assets WHERE student_id = $1 AND category = $2 AND filename = $3`,
-          [studentId, category, filename]
-        );
-        await deleteTagsForKey(buildStudentAssetKey(studentId, category, filename));
+        const { purgeAssetById } = require('../lib/student-content/purge');
+        await purgeAssetById(rows[0].id);
         res.json({ success: true });
       } catch (err) {
         console.error('Delete student asset error:', err);
@@ -257,7 +253,7 @@ function registerStudentAssetRoutes(app, upload) {
       const { studentId, category, filename } = req.params;
       const { rows } = await query(
         `SELECT b2_path FROM student_assets
-         WHERE student_id = $1 AND category = $2 AND filename = $3`,
+         WHERE student_id = $1 AND category = $2 AND filename = $3 AND ownership = 'student'`,
         [studentId, category, filename]
       );
       if (!rows.length) return res.status(404).send('Not found');

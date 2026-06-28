@@ -15,6 +15,7 @@ const {
   listTagsForScope,
   parseTagSortParam,
 } = require('../lib/asset-tags');
+const { purgeAssetById } = require('../lib/student-content/purge');
 
 async function getStudentPeekMeta(studentId) {
   const { rows } = await query(
@@ -67,7 +68,7 @@ function registerAdminStudentPeekRoutes(app, { requireAdmin }) {
 
       const { rows } = await query(
         `SELECT category, filename, b2_path, size, uploaded_at
-         FROM student_assets WHERE student_id = $1 ORDER BY uploaded_at DESC`,
+         FROM student_assets WHERE student_id = $1 AND ownership = 'student' ORDER BY uploaded_at DESC`,
         [studentId]
       );
 
@@ -162,25 +163,15 @@ function registerAdminStudentPeekRoutes(app, { requireAdmin }) {
         }
 
         const { rows } = await query(
-          `SELECT b2_path FROM student_assets
-           WHERE student_id = $1 AND category = $2 AND filename = $3`,
+          `SELECT id FROM student_assets
+           WHERE student_id = $1 AND category = $2 AND filename = $3 AND ownership = 'student'`,
           [studentId, category, filename]
         );
         if (!rows.length) {
           return res.status(404).json({ success: false, message: 'Asset not found' });
         }
 
-        try {
-          await b2Service.deleteFile(rows[0].b2_path);
-        } catch (err) {
-          console.warn('B2 delete warning:', err.message);
-        }
-
-        await query(
-          `DELETE FROM student_assets WHERE student_id = $1 AND category = $2 AND filename = $3`,
-          [studentId, category, filename]
-        );
-        await deleteTagsForKey(buildStudentAssetKey(studentId, category, filename));
+        await purgeAssetById(rows[0].id);
 
         return res.json({ success: true });
       } catch (err) {

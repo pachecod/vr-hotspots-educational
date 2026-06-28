@@ -17222,7 +17222,6 @@ document.addEventListener('DOMContentLoaded', () => {
             background: none; border: none; color: rgba(255,255,255,0.85);
             font-size: 28px; line-height: 1; cursor: pointer; padding: 4px 8px;
           ">&times;</button>
-          <div style="font-size: 48px; margin-bottom: 20px;">👋</div>
           <h2 style="margin: 0 0 15px 0; font-size: 28px; font-weight: bold;">Welcome to VR Hotspot Editor!</h2>
           <p style="color: #f0f0f0; margin-bottom: 25px; font-size: 16px; line-height: 1.6;">
             Every project has a 360° tour as well as a flat Web page. Which do you want to work on first?

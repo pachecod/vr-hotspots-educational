@@ -227,39 +227,43 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
   const showGuest = options.showGuest !== false;
 
   inner.innerHTML = `
-    <div style="font-size: 48px; margin-bottom: 16px;">👋</div>
-    <h2 style="margin: 0 0 12px; font-size: 28px; font-weight: bold;">Welcome to VR Hotspot Editor!</h2>
-    <p style="color: #f0f0f0; margin: 0 0 28px; font-size: 16px; line-height: 1.6;">
-      Every project has a 360° tour and a flat web page. Choose how you'd like to get started.
-    </p>
-    ${
-      showGuest
-        ? `
-      <button type="button" id="entry-guest-btn" style="
-        width: 100%; padding: 15px 24px; margin-bottom: 10px;
-        background: white; color: #667eea; border: none; border-radius: 8px;
-        font-size: 16px; font-weight: bold; cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      ">Continue as Guest</button>
-      <p style="color: rgba(255,255,255,0.75); font-size: 12px; margin: 0 0 16px;">
-        Local files, shared assets, and ZIP export. No cloud save or submit.
-      </p>
-      <div style="display: flex; align-items: center; gap: 12px; margin: 20px 0 16px;">
-        <div style="flex:1;height:1px;background:rgba(255,255,255,0.25);"></div>
-        <span style="color: rgba(255,255,255,0.7); font-size: 12px;">or</span>
-        <div style="flex:1;height:1px;background:rgba(255,255,255,0.25);"></div>
+    <div class="integrated-welcome-layout">
+      <div class="integrated-welcome-auth">
+        <h2 style="margin: 0 0 12px; font-size: 28px; font-weight: bold;">Welcome to VR Hotspot Editor!</h2>
+        <p style="color: #f0f0f0; margin: 0 0 28px; font-size: 16px; line-height: 1.6;">
+          Every project has a 360° tour and a flat web page. Choose how you'd like to get started.
+        </p>
+        ${
+          showGuest
+            ? `
+          <button type="button" id="entry-guest-btn" style="
+            width: 100%; padding: 15px 24px; margin-bottom: 10px;
+            background: white; color: #667eea; border: none; border-radius: 8px;
+            font-size: 16px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+          ">Continue as Guest</button>
+          <p style="color: rgba(255,255,255,0.75); font-size: 12px; margin: 0 0 16px;">
+            Local files, shared assets, and ZIP export. No cloud save or submit.
+          </p>
+          <div style="display: flex; align-items: center; gap: 12px; margin: 20px 0 16px;">
+            <div style="flex:1;height:1px;background:rgba(255,255,255,0.25);"></div>
+            <span style="color: rgba(255,255,255,0.7); font-size: 12px;">or</span>
+            <div style="flex:1;height:1px;background:rgba(255,255,255,0.25);"></div>
+          </div>
+        `
+            : ''
+        }
+        <button type="button" id="entry-signin-btn" style="
+          width: 100%; padding: 14px 24px;
+          background: #4CAF50; color: white; border: none; border-radius: 8px;
+          font-size: 16px; font-weight: bold; cursor: pointer;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        ">Sign in with class account</button>
+        <div id="student-login-error" style="color: #ffcdd2; margin-top: 14px; display: none; font-size: 14px;"></div>
+        ${welcomeGithubFooterHtml()}
       </div>
-    `
-        : ''
-    }
-    <button type="button" id="entry-signin-btn" style="
-      width: 100%; padding: 14px 24px;
-      background: #4CAF50; color: white; border: none; border-radius: 8px;
-      font-size: 16px; font-weight: bold; cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    ">Sign in with class account</button>
-    <div id="student-login-error" style="color: #ffcdd2; margin-top: 14px; display: none; font-size: 14px;"></div>
-    ${welcomeGithubFooterHtml()}
+      <div class="integrated-welcome-samples" id="integrated-welcome-samples"></div>
+    </div>
   `;
 
   const errorEl = document.getElementById('student-login-error');
@@ -288,8 +292,9 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
   });
 
   const welcomeInner = container.querySelector('#integrated-welcome-inner');
-  if (welcomeInner && typeof window.mountPlaygroundTemplatesSection === 'function') {
-    window.mountPlaygroundTemplatesSection(welcomeInner, { containerId, onAuthenticated });
+  const samplesEl = container.querySelector('#integrated-welcome-samples');
+  if (welcomeInner && samplesEl && typeof window.mountPlaygroundTemplatesSection === 'function') {
+    window.mountPlaygroundTemplatesSection(samplesEl, { containerId, onAuthenticated, welcomeInner });
   }
 }
 

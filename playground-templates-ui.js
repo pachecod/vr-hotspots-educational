@@ -59,7 +59,8 @@ function renderPlaygroundCards(templates, loadingSlug) {
     .join('')}</div>`;
 }
 
-async function mountPlaygroundTemplatesSection(innerEl, { containerId, onAuthenticated }) {
+async function mountPlaygroundTemplatesSection(innerEl, { containerId, onAuthenticated, welcomeInner }) {
+  const shell = welcomeInner || innerEl.closest('#integrated-welcome-inner');
   let section = innerEl.querySelector('.welcome-playground-section');
   if (!section) {
     section = document.createElement('div');
@@ -73,11 +74,11 @@ async function mountPlaygroundTemplatesSection(innerEl, { containerId, onAuthent
     const config = await fetchPlaygroundConfig();
     if (!config.enabled) {
       section.remove();
-      innerEl.classList.remove('integrated-welcome-with-playground');
+      if (shell) shell.classList.remove('integrated-welcome-with-playground');
       return;
     }
 
-    innerEl.classList.add('integrated-welcome-with-playground');
+    if (shell) shell.classList.add('integrated-welcome-with-playground');
     const data = await fetchPlaygroundTemplates();
     let loadingSlug = null;
 

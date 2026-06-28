@@ -74,7 +74,7 @@ function render() {
         ${
           t.thumbnail_url
             ? `<p style="font-size:12px;color:#666;margin:0 0 6px;word-break:break-all">${escapeHtml(t.thumbnail_url)}</p>`
-            : '<p style="font-size:12px;color:#666;margin:0 0 6px">Auto-generated when shown on welcome (or upload a bundle for 360° samples).</p>'
+            : '<p style="font-size:12px;color:#666;margin:0 0 6px">Auto-generated from a page screenshot when shown on welcome.</p>'
         }
         <input type="text" class="thumb-url-input" data-id="${t.id}" value="${escapeAttr(t.thumbnail_url || '')}" placeholder="Optional custom URL override" style="width:100%;max-width:480px;padding:6px;border:1px solid #ccc;border-radius:4px" />
         <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">

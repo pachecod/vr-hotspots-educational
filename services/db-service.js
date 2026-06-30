@@ -51,15 +51,36 @@ function generateUsername(displayName) {
   return base.slice(0, 40);
 }
 
-function generateRandomPassword(length = 10) {
-  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
+function generateRandomPassword() {
   const crypto = require('crypto');
-  const bytes = crypto.randomBytes(length);
-  for (let i = 0; i < length; i++) {
-    out += chars[bytes[i] % chars.length];
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const digits = '23456789';
+
+  function randomChar(pool) {
+    const bytes = crypto.randomBytes(1);
+    return pool[bytes[0] % pool.length];
   }
-  return out;
+
+  function generateLowerSegment(len = 6) {
+    let seg = '';
+    for (let i = 0; i < len; i++) seg += randomChar(lowercase);
+    return seg;
+  }
+
+  function generateMixedSegment(len = 6) {
+    const bytes = crypto.randomBytes(len);
+    let seg = '';
+    for (let i = 0; i < len; i++) {
+      seg += lowercase[bytes[i] % lowercase.length];
+    }
+    const pos = crypto.randomInt(1, len - 1);
+    const mixPool = crypto.randomInt(0, 2) === 0 ? uppercase : digits;
+    seg = seg.slice(0, pos) + randomChar(mixPool) + seg.slice(pos + 1);
+    return seg;
+  }
+
+  return [generateLowerSegment(), generateMixedSegment(), generateLowerSegment()].join('-');
 }
 
 async function closePool() {

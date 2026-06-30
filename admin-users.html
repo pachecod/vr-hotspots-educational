@@ -22,6 +22,21 @@
       .error { color: #dc3545; margin: 10px 0; }
       .success { color: #28a745; margin: 10px 0; }
       #admin-gate { min-height: 200px; }
+      #password-modal {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+        align-items: center; justify-content: center; z-index: 1000;
+      }
+      #password-modal.open { display: flex; }
+      #password-modal .password-dialog {
+        background: #fff; border-radius: 8px; padding: 24px; width: min(420px, 92vw);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      }
+      #password-modal h3 { margin: 0 0 8px; }
+      #password-modal p { margin: 0 0 16px; color: #666; font-size: 14px; }
+      #password-modal input[type="text"] { width: 100%; box-sizing: border-box; margin: 0 0 12px; }
+      #password-modal .password-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .password-field-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+      .password-field-row input { flex: 1; min-width: 180px; margin-right: 0; }
     </style>
     <script src="admin-auth-ui.js"></script>
     <script src="admin-nav.js"></script>
@@ -50,12 +65,16 @@
           <div style="margin-bottom:12px;">
             <select id="filter-class"></select>
             <input type="text" id="new-student-name" placeholder="Student display name" />
-            <input type="text" id="new-student-password" placeholder="Password (optional — auto-generated if blank)" />
+            <div class="password-field-row">
+              <input type="text" id="new-student-password" placeholder="Password (optional — auto-generated if blank)" />
+              <button type="button" class="btn-secondary" id="generate-new-password-btn">Generate</button>
+            </div>
             <button class="btn-primary" id="add-student-btn">Add Student</button>
             <button class="btn-secondary" id="export-passwords-btn">Download All Passwords (CSV)</button>
           </div>
           <p style="color:#666;font-size:13px;margin:0 0 12px;">
-            Passwords are saved on the server so you can download them later. Use Reset Password for students added before this update.
+            Leave the password blank to auto-generate (word-word-word format). Use Generate to preview,
+            or type your own. Passwords are saved on the server — download the CSV anytime.
           </p>
           <div id="students-msg"></div>
           <div id="students-list"></div>
@@ -97,6 +116,20 @@
     </div>
 
     <div id="peek-toast">Copied!</div>
+
+    <div id="password-modal" role="dialog" aria-modal="true" aria-labelledby="password-modal-title">
+      <div class="password-dialog">
+        <h3 id="password-modal-title">Set Password</h3>
+        <p id="password-modal-student"></p>
+        <input type="text" id="password-modal-input" placeholder="Type a password, or generate one below" autocomplete="off" />
+        <div class="password-actions">
+          <button type="button" class="btn-secondary" id="password-modal-generate-btn">Generate</button>
+          <button type="button" class="btn-primary" id="password-modal-save-btn">Save Password</button>
+          <button type="button" class="btn-secondary" id="password-modal-cancel-btn">Cancel</button>
+        </div>
+        <div id="password-modal-msg" class="error" style="display:none;margin-top:12px;"></div>
+      </div>
+    </div>
 
     <script src="common-assets-preview.js"></script>
     <script src="asset-preview-modal.js"></script>

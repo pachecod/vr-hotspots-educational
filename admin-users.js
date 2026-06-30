@@ -1,6 +1,14 @@
 let classes = [];
 let students = [];
 let filterClassId = 'all';
+let passwordModalStudentId = null;
+
+async function fetchSamplePassword() {
+  const res = await adminFetch('/admin/students/sample-password');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Could not generate password');
+  return data.password;
+}
 
 async function initAdminUsers() {
   const billingLink = document.getElementById('billing-link-wrap');
@@ -21,11 +29,87 @@ async function initAdminUsers() {
 function bindEvents() {
   document.getElementById('add-class-btn').addEventListener('click', addClass);
   document.getElementById('add-student-btn').addEventListener('click', addStudent);
+  document.getElementById('generate-new-password-btn').addEventListener('click', async () => {
+    try {
+      document.getElementById('new-student-password').value = await fetchSamplePassword();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
   document.getElementById('filter-class').addEventListener('change', (e) => {
     filterClassId = e.target.value;
     loadStudents();
   });
   document.getElementById('export-passwords-btn').addEventListener('click', exportPasswords);
+  bindPasswordModal();
+}
+
+function bindPasswordModal() {
+  const modal = document.getElementById('password-modal');
+  const input = document.getElementById('password-modal-input');
+  const msg = document.getElementById('password-modal-msg');
+
+  document.getElementById('password-modal-cancel-btn').addEventListener('click', closePasswordModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closePasswordModal();
+  });
+  document.getElementById('password-modal-generate-btn').addEventListener('click', async () => {
+    msg.style.display = 'none';
+    try {
+      input.value = await fetchSamplePassword();
+      input.focus();
+      input.select();
+    } catch (err) {
+      msg.textContent = err.message;
+      msg.style.display = 'block';
+    }
+  });
+  document.getElementById('password-modal-save-btn').addEventListener('click', savePasswordFromModal);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') savePasswordFromModal();
+    if (e.key === 'Escape') closePasswordModal();
+  });
+}
+
+function openPasswordModal(studentId) {
+  const student = students.find((s) => s.id === studentId);
+  if (!student) return;
+  passwordModalStudentId = studentId;
+  document.getElementById('password-modal-student').textContent =
+    `Set a password for ${student.display_name} (${student.username}). Type your own, click Generate to preview, or leave blank and Save to auto-generate.`;
+  document.getElementById('password-modal-input').value = '';
+  document.getElementById('password-modal-msg').style.display = 'none';
+  document.getElementById('password-modal').classList.add('open');
+  document.getElementById('password-modal-input').focus();
+}
+
+function closePasswordModal() {
+  passwordModalStudentId = null;
+  document.getElementById('password-modal').classList.remove('open');
+}
+
+async function savePasswordFromModal() {
+  const input = document.getElementById('password-modal-input');
+  const msg = document.getElementById('password-modal-msg');
+  const password = input.value.trim();
+  if (!passwordModalStudentId) return;
+  msg.style.display = 'none';
+  const body = password ? { password } : {};
+  const res = await adminFetch(`/admin/students/${passwordModalStudentId}/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!data.success) {
+    msg.textContent = data.message || 'Could not save password';
+    msg.style.display = 'block';
+    return;
+  }
+  closePasswordModal();
+  alert(
+    `Password saved for ${data.student.display_name}: ${data.password}\n\nIncluded in CSV download.`
+  );
 }
 
 async function loadClasses() {
@@ -104,7 +188,7 @@ function renderStudents() {
         <td>
           <a class="btn btn-secondary" href="admin-common-assets.html?view=content&studentId=${encodeURIComponent(s.id)}&classId=${encodeURIComponent(s.class_id || '')}">Content</a>
           <button class="btn-peek" onclick="openStudentPeek('${s.id}')">Peek</button>
-          <button class="btn-secondary" onclick="resetPassword('${s.id}')">Reset Password</button>
+          <button class="btn-secondary" onclick="openPasswordModal('${s.id}')">Set Password</button>
           <button class="btn-danger" onclick="deleteStudent('${s.id}')">Delete</button>
         </td>
       </tr>`).join('')}</tbody></table>`;
@@ -135,22 +219,7 @@ async function addStudent() {
 }
 
 async function resetPassword(id) {
-  const custom = prompt(
-    'Enter a new password for this student, or leave blank to auto-generate one:'
-  );
-  if (custom === null) return;
-  const body = {};
-  if (custom.trim()) body.password = custom.trim();
-  const res = await adminFetch(`/admin/students/${id}/reset-password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!data.success) return alert(data.message);
-  alert(
-    `New password for ${data.student.display_name}: ${data.password}\n\nSaved on server — included in CSV download.`
-  );
+  openPasswordModal(id);
 }
 
 async function deleteStudent(id) {
@@ -185,6 +254,7 @@ function escapeHtml(str) {
 window.deleteClass = deleteClass;
 window.deleteStudent = deleteStudent;
 window.resetPassword = resetPassword;
+window.openPasswordModal = openPasswordModal;
 
 requireAdminSession('admin-gate', () => {
   document.getElementById('admin-gate').style.display = 'none';

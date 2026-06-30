@@ -315,6 +315,10 @@ function registerRosterRoutes(app, { requireAdmin }) {
     }
   });
 
+  app.get('/admin/students/sample-password', requireAdmin, (req, res) => {
+    res.json({ password: generateRandomPassword() });
+  });
+
   app.get('/admin/students/password-report', requireAdmin, requireDb, async (req, res) => {
     try {
       const format = req.query.format || 'json';

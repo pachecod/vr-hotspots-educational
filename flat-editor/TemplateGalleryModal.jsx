@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { fetchPublicTemplates, fetchTemplateBySlug } from './templates-api.js';
+import {
+  fetchPublicTemplates,
+  fetchTemplateBySlug,
+  fetchStarterTemplate,
+  listStarterTemplates,
+} from './templates-api.js';
 
 export default function TemplateGalleryModal({ open, onClose, onLoad }) {
   const [templates, setTemplates] = useState([]);
+  const [starters, setStarters] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingSlug, setLoadingSlug] = useState(null);
   const [error, setError] = useState('');
@@ -11,11 +17,18 @@ export default function TemplateGalleryModal({ open, onClose, onLoad }) {
     if (!open) return;
     setLoading(true);
     setError('');
-    fetchPublicTemplates()
-      .then(setTemplates)
+    Promise.all([
+      fetchPublicTemplates().catch(() => []),
+      listStarterTemplates().catch(() => []),
+    ])
+      .then(([publicTemplates, starterList]) => {
+        setTemplates(publicTemplates);
+        setStarters(starterList);
+      })
       .catch((err) => {
         setError(err.message);
         setTemplates([]);
+        setStarters([]);
       })
       .finally(() => setLoading(false));
   }, [open]);
@@ -27,6 +40,20 @@ export default function TemplateGalleryModal({ open, onClose, onLoad }) {
     setError('');
     try {
       const template = await fetchTemplateBySlug(slug);
+      onLoad(template);
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingSlug(null);
+    }
+  };
+
+  const handleLoadStarter = async (slug) => {
+    setLoadingSlug(`starter:${slug}`);
+    setError('');
+    try {
+      const template = await fetchStarterTemplate(slug);
       onLoad(template);
       onClose();
     } catch (err) {
@@ -49,28 +76,66 @@ export default function TemplateGalleryModal({ open, onClose, onLoad }) {
           {error && <p className="flat-error">{error}</p>}
           {loading ? (
             <p className="flat-muted">Loading templates…</p>
-          ) : templates.length === 0 ? (
-            <p className="flat-muted">No public templates yet. Ask your teacher to add some.</p>
           ) : (
-            <div className="flat-template-list">
-              {templates.map((t) => (
-                <div key={t.id} className="flat-template-card">
-                  <div>
-                    <strong>{t.title}</strong>
-                    {t.is_default && <span className="flat-badge">Default</span>}
-                    {t.description && <p className="flat-muted">{t.description}</p>}
+            <>
+              {starters.length > 0 && (
+                <>
+                  <p className="flat-muted" style={{ marginTop: 0 }}>
+                    Local starter templates (from <code>starter-templates/</code> on disk)
+                  </p>
+                  <div className="flat-template-list">
+                    {starters.map((t) => (
+                      <div key={`starter-${t.slug}`} className="flat-template-card">
+                        <div>
+                          <strong>{t.title}</strong>
+                          <span className="flat-badge">Starter</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="flat-tool-btn flat-tool-btn-accent"
+                          disabled={loadingSlug === `starter:${t.slug}`}
+                          onClick={() => handleLoadStarter(t.slug)}
+                        >
+                          {loadingSlug === `starter:${t.slug}` ? 'Loading…' : 'Load'}
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <button
-                    type="button"
-                    className="flat-tool-btn flat-tool-btn-accent"
-                    disabled={loadingSlug === t.slug}
-                    onClick={() => handleLoad(t.slug)}
-                  >
-                    {loadingSlug === t.slug ? 'Loading…' : 'Load'}
-                  </button>
-                </div>
-              ))}
-            </div>
+                </>
+              )}
+              {templates.length === 0 ? (
+                !starters.length && (
+                  <p className="flat-muted">No public templates yet. Ask your teacher to add some.</p>
+                )
+              ) : (
+                <>
+                  {starters.length > 0 && (
+                    <p className="flat-muted" style={{ marginTop: '1rem' }}>
+                      Published templates
+                    </p>
+                  )}
+                  <div className="flat-template-list">
+                    {templates.map((t) => (
+                      <div key={t.id} className="flat-template-card">
+                        <div>
+                          <strong>{t.title}</strong>
+                          {t.is_default && <span className="flat-badge">Default</span>}
+                          {t.description && <p className="flat-muted">{t.description}</p>}
+                        </div>
+                        <button
+                          type="button"
+                          className="flat-tool-btn flat-tool-btn-accent"
+                          disabled={loadingSlug === t.slug}
+                          onClick={() => handleLoad(t.slug)}
+                        >
+                          {loadingSlug === t.slug ? 'Loading…' : 'Load'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
           )}
         </div>
       </div>

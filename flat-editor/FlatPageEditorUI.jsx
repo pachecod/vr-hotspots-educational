@@ -9,6 +9,7 @@ import TemplateGalleryModal from './TemplateGalleryModal.jsx';
 import RideyIcon from './RideyIcon.jsx';
 import { FileType } from './types.js';
 import { formatCode } from './formatCode.js';
+import ConfigFormPanel from './configForm/ConfigFormPanel.jsx';
 
 const SPLIT_PRESETS = {
   editor: { editor: 80, preview: 20 },
@@ -17,6 +18,15 @@ const SPLIT_PRESETS = {
 };
 
 const SPLIT_STORAGE_KEY = 'flat-editor-split-preset';
+const CONFIG_MODE_STORAGE_KEY = 'flat-editor-config-mode';
+
+function initialConfigMode(bridge) {
+  try {
+    const saved = localStorage.getItem(CONFIG_MODE_STORAGE_KEY);
+    if (saved === 'code' || saved === 'visual') return saved;
+  } catch (_) {}
+  return bridge.hasConfigUiSchema() ? 'visual' : 'code';
+}
 
 function fileTypeForId(fileId) {
   if (fileId === 'style.css' || String(fileId).endsWith('.css')) return FileType.CSS;
@@ -43,6 +53,7 @@ export default function FlatPageEditorUI({ bridge }) {
   const [splitPreset, setSplitPreset] = useState(
     () => localStorage.getItem(SPLIT_STORAGE_KEY) || 'balanced'
   );
+  const [configMode, setConfigMode] = useState(() => initialConfigMode(bridge));
 
   useEffect(
     () =>
@@ -58,6 +69,15 @@ export default function FlatPageEditorUI({ bridge }) {
   const activeFileId = state.activeFileId;
   const fileContent = bridge.getFileContent(activeFileId);
   const split = SPLIT_PRESETS[splitPreset] || SPLIT_PRESETS.balanced;
+  const isConfigTab = activeFileId === 'config.json';
+  const showConfigVisual = isConfigTab && configMode === 'visual';
+
+  const setConfigEditorMode = (mode) => {
+    setConfigMode(mode);
+    try {
+      localStorage.setItem(CONFIG_MODE_STORAGE_KEY, mode);
+    } catch (_) {}
+  };
 
   const handleContentChange = useCallback(
     (value) => {
@@ -149,13 +169,31 @@ export default function FlatPageEditorUI({ bridge }) {
           <div className="flat-pane-bar">
             <span>{activeFileId}</span>
             <div className="flat-pane-tools">
+              {isConfigTab && (
+                <div className="flat-config-mode-toggle">
+                  <button
+                    type="button"
+                    className={`flat-config-mode-btn${configMode === 'visual' ? ' active' : ''}`}
+                    onClick={() => setConfigEditorMode('visual')}
+                  >
+                    Visual
+                  </button>
+                  <button
+                    type="button"
+                    className={`flat-config-mode-btn${configMode === 'code' ? ' active' : ''}`}
+                    onClick={() => setConfigEditorMode('code')}
+                  >
+                    Code
+                  </button>
+                </div>
+              )}
               <button type="button" className="flat-tool-btn" onClick={handleCopy}>
                 {copyLabel || 'Copy'}
               </button>
               <button type="button" className="flat-tool-btn" onClick={() => setShowSnippets(true)}>
                 Snippets
               </button>
-              <button type="button" className="flat-tool-btn" onClick={handleFormat}>
+              <button type="button" className="flat-tool-btn" onClick={handleFormat} disabled={showConfigVisual}>
                 Format
               </button>
               {!state.adminTemplateMode && (
@@ -176,14 +214,18 @@ export default function FlatPageEditorUI({ bridge }) {
               )}
             </div>
           </div>
-          <Editor
-            key={activeFileId}
-            value={fileContent}
-            onChange={handleContentChange}
-            language={fileTypeForId(activeFileId)}
-            bridge={bridge}
-            activeFileId={activeFileId}
-          />
+          {showConfigVisual ? (
+            <ConfigFormPanel bridge={bridge} onUpdated={() => setPreviewKey((k) => k + 1)} />
+          ) : (
+            <Editor
+              key={activeFileId}
+              value={fileContent}
+              onChange={handleContentChange}
+              language={fileTypeForId(activeFileId)}
+              bridge={bridge}
+              activeFileId={activeFileId}
+            />
+          )}
         </div>
         <div className="flat-preview-pane">
           <div className="flat-pane-bar">
@@ -261,6 +303,9 @@ export default function FlatPageEditorUI({ bridge }) {
         onClose={() => setShowTemplates(false)}
         onLoad={(template) => {
           bridge.loadTemplate(template);
+          if (bridge.hasConfigUiSchema()) {
+            setConfigEditorMode('visual');
+          }
           setPreviewKey((k) => k + 1);
         }}
       />

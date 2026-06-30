@@ -224,6 +224,38 @@ export class FlatPageEditorBridge {
     return file ? file.content : '';
   }
 
+  getConfigObject() {
+    const raw = this.getFileContent('config.json');
+    const trimmed = String(raw || '').trim();
+    if (!trimmed || trimmed === '{}') {
+      return { ok: true, data: {}, raw: trimmed };
+    }
+    try {
+      const data = JSON.parse(trimmed);
+      if (!data || typeof data !== 'object') {
+        return { ok: false, error: 'config.json must be a JSON object', raw: trimmed };
+      }
+      return { ok: true, data, raw: trimmed };
+    } catch (err) {
+      return { ok: false, error: err.message || 'Invalid JSON', raw: trimmed };
+    }
+  }
+
+  setConfigObject(obj) {
+    this.setFileContent('config.json', JSON.stringify(obj, null, 2));
+  }
+
+  hasConfigUiSchema() {
+    const raw = String(this.getFileContent('config.ui.json') || '').trim();
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw);
+      return !!(parsed && Array.isArray(parsed.sections) && parsed.sections.length);
+    } catch (_) {
+      return false;
+    }
+  }
+
   setFileContent(fileId, content) {
     const page = this.getActivePage();
     const file = page.files.find((f) => f.id === fileId);

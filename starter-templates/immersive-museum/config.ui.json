@@ -1,0 +1,121 @@
+{
+  "sections": [
+    {
+      "title": "Project",
+      "fields": [
+        { "path": "name", "label": "Museum name", "type": "text" },
+        { "path": "description", "label": "Description", "type": "textarea" }
+      ]
+    },
+    {
+      "title": "Images",
+      "fields": [
+        {
+          "path": "assets.images.image1",
+          "label": "Info panel image 1",
+          "type": "url",
+          "assetCategory": "images"
+        },
+        {
+          "path": "assets.images.image2",
+          "label": "Info panel image 2",
+          "type": "url",
+          "assetCategory": "images"
+        },
+        {
+          "path": "assets.images.image3",
+          "label": "Info panel image 3",
+          "type": "url",
+          "assetCategory": "images"
+        }
+      ]
+    },
+    {
+      "title": "3D Models",
+      "fields": [
+        {
+          "path": "assets.models.model1",
+          "label": "Exhibit 1 model (GLB)",
+          "type": "url",
+          "assetCategory": "3d",
+          "help": "Used by Exhibit One (#model1 reference in config)."
+        },
+        {
+          "path": "assets.models.model2",
+          "label": "Exhibit 2 model (GLB)",
+          "type": "url",
+          "assetCategory": "3d",
+          "help": "Used by Exhibit Two (#model2 reference in config)."
+        }
+      ]
+    },
+    {
+      "title": "Audio",
+      "fields": [
+        {
+          "path": "assets.audio.audio1",
+          "label": "Shared audio slot 1",
+          "type": "url",
+          "assetCategory": "audio"
+        },
+        {
+          "path": "assets.audio.audio2",
+          "label": "Shared audio slot 2",
+          "type": "url",
+          "assetCategory": "audio"
+        }
+      ]
+    },
+    {
+      "title": "Environment",
+      "fields": [
+        {
+          "path": "environment.sky.day",
+          "label": "Sky / 360° background",
+          "type": "url",
+          "assetCategory": "360-images"
+        },
+        {
+          "path": "environment.ground.color",
+          "label": "Ground color",
+          "type": "color"
+        }
+      ]
+    },
+    {
+      "title": "Welcome slides",
+      "fields": [
+        {
+          "path": "infoDisplay.text.content.slide1",
+          "label": "Slide 1 text",
+          "type": "text"
+        },
+        {
+          "path": "infoDisplay.text.content.slide2",
+          "label": "Slide 2 text",
+          "type": "text"
+        },
+        {
+          "path": "infoDisplay.text.content.slide3",
+          "label": "Slide 3 text",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "title": "Exhibits",
+      "repeat": { "path": "exhibits", "itemLabel": "name" },
+      "fields": [
+        { "path": "name", "label": "Exhibit title", "type": "text" },
+        { "path": "hotspot.label", "label": "Hotspot button label", "type": "text" },
+        { "path": "hotspot.info", "label": "Hotspot caption", "type": "textarea" },
+        {
+          "path": "hotspot.audio",
+          "label": "Hotspot audio",
+          "type": "url",
+          "assetCategory": "audio"
+        }
+      ]
+    }
+  ]
+}

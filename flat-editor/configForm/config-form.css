@@ -1,0 +1,187 @@
+.cfg-panel {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px 24px;
+  background: #1e1e1e;
+}
+
+.cfg-panel-intro {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: #999;
+  line-height: 1.5;
+}
+
+.cfg-panel-intro code,
+.cfg-panel-empty code,
+.cfg-help code {
+  font-family: monospace;
+  font-size: 11px;
+  color: #9ad29a;
+}
+
+.cfg-panel-error {
+  color: #ff8a80;
+}
+
+.cfg-panel-empty {
+  color: #ccc;
+  padding: 24px 16px;
+}
+
+.cfg-section {
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  background: #252526;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+}
+
+.cfg-section-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #4caf50;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cfg-repeat-block {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 4px;
+}
+
+.cfg-repeat-block:last-child {
+  margin-bottom: 0;
+}
+
+.cfg-repeat-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #ddd;
+}
+
+.cfg-form-group {
+  margin-bottom: 12px;
+}
+
+.cfg-form-group:last-child {
+  margin-bottom: 0;
+}
+
+.cfg-form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.cfg-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.cfg-checkbox-label input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.cfg-input,
+.cfg-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #333;
+  color: #fff;
+  font-size: 13px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.cfg-textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.cfg-input:focus,
+.cfg-textarea:focus {
+  outline: none;
+  border-color: #4caf50;
+}
+
+.cfg-color-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cfg-color-row input[type='color'] {
+  width: 40px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #333;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cfg-color-row .cfg-input {
+  flex: 1;
+}
+
+.cfg-btn-browse {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #444;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cfg-btn-browse:hover {
+  background: #555;
+  border-color: #4caf50;
+}
+
+.cfg-help {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #888;
+  line-height: 1.4;
+}
+
+.flat-config-mode-toggle {
+  display: inline-flex;
+  border: 1px solid #555;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-right: 8px;
+}
+
+.flat-config-mode-btn {
+  padding: 4px 10px;
+  border: none;
+  background: #333;
+  color: #ccc;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.flat-config-mode-btn.active {
+  background: rgba(76, 175, 80, 0.25);
+  color: #9ad29a;
+}
+
+.flat-config-mode-btn:not(.active):hover {
+  background: #3a3a3a;
+}

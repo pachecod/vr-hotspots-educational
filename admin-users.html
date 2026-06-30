@@ -37,6 +37,17 @@
       #password-modal .password-actions { display: flex; gap: 8px; flex-wrap: wrap; }
       .password-field-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
       .password-field-row input { flex: 1; min-width: 180px; margin-right: 0; }
+      #passwords-panel { display: none; margin-top: 16px; border-top: 1px solid #eee; padding-top: 16px; }
+      #passwords-panel.open { display: block; }
+      #passwords-panel .passwords-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+      #passwords-panel .security-note {
+        font-size: 13px; color: #856404; background: #fff3cd; border: 1px solid #ffeeba;
+        border-radius: 4px; padding: 10px 12px; margin-bottom: 12px;
+      }
+      .pw-cell { font-family: monospace; font-size: 13px; }
+      .pw-masked { letter-spacing: 2px; color: #888; }
+      .pw-missing { color: #999; font-style: italic; }
+      .btn-link { background: none; color: #007bff; padding: 0 4px; text-decoration: underline; }
     </style>
     <script src="admin-auth-ui.js"></script>
     <script src="admin-nav.js"></script>
@@ -70,12 +81,25 @@
               <button type="button" class="btn-secondary" id="generate-new-password-btn">Generate</button>
             </div>
             <button class="btn-primary" id="add-student-btn">Add Student</button>
-            <button class="btn-secondary" id="export-passwords-btn">Download All Passwords (CSV)</button>
+            <button class="btn-secondary" id="view-passwords-btn">View Passwords</button>
+            <button class="btn-secondary" id="export-passwords-btn">Download CSV</button>
           </div>
           <p style="color:#666;font-size:13px;margin:0 0 12px;">
             Leave the password blank to auto-generate (word-word-word format). Use Generate to preview,
-            or type your own. Passwords are saved on the server — download the CSV anytime.
+            or type your own. Passwords are saved on the server — view or download them anytime.
           </p>
+          <div id="passwords-panel">
+            <div class="security-note">
+              Passwords are visible only to signed-in admins. Do not share this screen or leave it open on a shared computer.
+            </div>
+            <div class="passwords-toolbar">
+              <button type="button" class="btn-secondary" id="toggle-password-visibility-btn">Reveal All</button>
+              <button type="button" class="btn-secondary" id="refresh-passwords-btn">Refresh</button>
+              <button type="button" class="btn-link" id="hide-passwords-panel-btn">Hide</button>
+              <span id="passwords-panel-status" style="color:#666;font-size:13px;"></span>
+            </div>
+            <div id="passwords-list"></div>
+          </div>
           <div id="students-msg"></div>
           <div id="students-list"></div>
         </div>

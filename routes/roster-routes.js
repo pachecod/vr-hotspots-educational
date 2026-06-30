@@ -171,13 +171,17 @@ async function resetStudentPassword(id, password) {
   return { student: rows[0], plainPassword };
 }
 
-async function getPasswordReport() {
-  const { rows } = await query(
-    `SELECT s.id, s.display_name, s.username, s.password_encrypted, s.password_set_at, s.is_active,
-            c.name AS class_name
-     FROM students s JOIN classes c ON c.id = s.class_id
-     ORDER BY c.name, s.display_name`
-  );
+async function getPasswordReport({ classId } = {}) {
+  let sql = `SELECT s.id, s.display_name, s.username, s.password_encrypted, s.password_set_at, s.is_active,
+                    c.name AS class_name
+             FROM students s JOIN classes c ON c.id = s.class_id`;
+  const params = [];
+  if (classId) {
+    sql += ` WHERE s.class_id = $1`;
+    params.push(classId);
+  }
+  sql += ` ORDER BY c.name, s.display_name`;
+  const { rows } = await query(sql, params);
   return rows.map((row) => ({
     ...row,
     password: decryptAdminPassword(row.password_encrypted),
@@ -322,7 +326,8 @@ function registerRosterRoutes(app, { requireAdmin }) {
   app.get('/admin/students/password-report', requireAdmin, requireDb, async (req, res) => {
     try {
       const format = req.query.format || 'json';
-      const rows = await getPasswordReport();
+      const classId = req.query.classId || null;
+      const rows = await getPasswordReport({ classId });
       if (format === 'csv') {
         const header = 'class_name,display_name,username,password,password_set_at,is_active\n';
         const body = rows

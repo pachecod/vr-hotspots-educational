@@ -2,6 +2,9 @@ let classes = [];
 let students = [];
 let filterClassId = 'all';
 let passwordModalStudentId = null;
+let passwordReportRows = [];
+let passwordsVisible = false;
+let passwordsPanelOpen = false;
 
 async function fetchSamplePassword() {
   const res = await adminFetch('/admin/students/sample-password');
@@ -39,8 +42,13 @@ function bindEvents() {
   document.getElementById('filter-class').addEventListener('change', (e) => {
     filterClassId = e.target.value;
     loadStudents();
+    if (passwordsPanelOpen) loadPasswordReport();
   });
   document.getElementById('export-passwords-btn').addEventListener('click', exportPasswords);
+  document.getElementById('view-passwords-btn').addEventListener('click', togglePasswordsPanel);
+  document.getElementById('hide-passwords-panel-btn').addEventListener('click', closePasswordsPanel);
+  document.getElementById('toggle-password-visibility-btn').addEventListener('click', togglePasswordVisibility);
+  document.getElementById('refresh-passwords-btn').addEventListener('click', loadPasswordReport);
   bindPasswordModal();
 }
 
@@ -108,8 +116,121 @@ async function savePasswordFromModal() {
   }
   closePasswordModal();
   alert(
-    `Password saved for ${data.student.display_name}: ${data.password}\n\nIncluded in CSV download.`
+    `Password saved for ${data.student.display_name}: ${data.password}\n\nIncluded in password list and CSV download.`
   );
+  if (passwordsPanelOpen) loadPasswordReport();
+}
+
+async function togglePasswordsPanel() {
+  if (passwordsPanelOpen) {
+    closePasswordsPanel();
+    return;
+  }
+  const ok = confirm(
+    'View student passwords on this page?\n\nOnly continue on a trusted device. Anyone with admin access can see these passwords.'
+  );
+  if (!ok) return;
+  passwordsPanelOpen = true;
+  passwordsVisible = false;
+  document.getElementById('passwords-panel').classList.add('open');
+  document.getElementById('view-passwords-btn').textContent = 'Hide Passwords';
+  await loadPasswordReport();
+}
+
+function closePasswordsPanel() {
+  passwordsPanelOpen = false;
+  passwordsVisible = false;
+  passwordReportRows = [];
+  document.getElementById('passwords-panel').classList.remove('open');
+  document.getElementById('view-passwords-btn').textContent = 'View Passwords';
+  document.getElementById('passwords-list').innerHTML = '';
+  document.getElementById('passwords-panel-status').textContent = '';
+  updatePasswordVisibilityButton();
+}
+
+function togglePasswordVisibility() {
+  passwordsVisible = !passwordsVisible;
+  renderPasswordReport();
+  updatePasswordVisibilityButton();
+}
+
+function updatePasswordVisibilityButton() {
+  const btn = document.getElementById('toggle-password-visibility-btn');
+  btn.textContent = passwordsVisible ? 'Mask All' : 'Reveal All';
+}
+
+function passwordReportUrl() {
+  const base = '/admin/students/password-report?format=json';
+  return filterClassId === 'all' ? base : `${base}&classId=${encodeURIComponent(filterClassId)}`;
+}
+
+async function loadPasswordReport() {
+  const status = document.getElementById('passwords-panel-status');
+  const list = document.getElementById('passwords-list');
+  status.textContent = 'Loading…';
+  list.innerHTML = '';
+  try {
+    const res = await adminFetch(passwordReportUrl());
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `Load failed (${res.status})`);
+    }
+    passwordReportRows = await res.json();
+    const scope =
+      filterClassId === 'all'
+        ? 'all classes'
+        : classes.find((c) => c.id === filterClassId)?.name || 'selected class';
+    status.textContent = `${passwordReportRows.length} student(s) — ${scope}`;
+    renderPasswordReport();
+  } catch (err) {
+    status.textContent = '';
+    list.innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderPasswordReport() {
+  const list = document.getElementById('passwords-list');
+  if (!passwordReportRows.length) {
+    list.innerHTML = '<p style="color:#666;">No students found.</p>';
+    return;
+  }
+  list.innerHTML = `<table>
+    <thead><tr>
+      <th>Class</th><th>Name</th><th>Username</th><th>Password</th><th>Set</th><th></th>
+    </tr></thead>
+    <tbody>${passwordReportRows.map((row, index) => {
+      const hasPassword = !!row.password;
+      const pwDisplay = !hasPassword
+        ? '<span class="pw-missing">Not stored — use Set Password</span>'
+        : passwordsVisible
+          ? `<span class="pw-cell">${escapeHtml(row.password)}</span>`
+          : '<span class="pw-cell pw-masked">••••••••••••</span>';
+      const setAt = row.password_set_at
+        ? new Date(row.password_set_at).toLocaleDateString()
+        : '—';
+      return `<tr>
+        <td>${escapeHtml(row.class_name)}</td>
+        <td>${escapeHtml(row.display_name)}</td>
+        <td><code>${escapeHtml(row.username)}</code></td>
+        <td>${pwDisplay}</td>
+        <td>${escapeHtml(setAt)}</td>
+        <td>${hasPassword ? `<button type="button" class="btn-link" data-copy-pw="${index}">Copy</button>` : ''}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+
+  list.querySelectorAll('[data-copy-pw]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const row = passwordReportRows[Number(btn.getAttribute('data-copy-pw'))];
+      if (!row?.password) return;
+      try {
+        await navigator.clipboard.writeText(row.password);
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+      } catch {
+        alert('Could not copy to clipboard');
+      }
+    });
+  });
 }
 
 async function loadClasses() {
@@ -211,11 +332,12 @@ async function addStudent() {
   if (!data.success) return alert(data.message);
   const msg = document.getElementById('students-msg');
   msg.className = 'success';
-  msg.textContent = `Added ${data.student.display_name}. Username: ${data.student.username} — Password: ${data.password} (saved on server; download CSV anytime)`;
+  msg.textContent = `Added ${data.student.display_name}. Username: ${data.student.username} — Password: ${data.password} (saved on server; view or download anytime)`;
   document.getElementById('new-student-name').value = '';
   document.getElementById('new-student-password').value = '';
   await loadStudents();
   await loadClasses();
+  if (passwordsPanelOpen) loadPasswordReport();
 }
 
 async function resetPassword(id) {
@@ -231,7 +353,10 @@ async function deleteStudent(id) {
 
 async function exportPasswords() {
   try {
-    const res = await adminFetch('/admin/students/password-report?format=csv');
+    const base = '/admin/students/password-report?format=csv';
+    const url =
+      filterClassId === 'all' ? base : `${base}&classId=${encodeURIComponent(filterClassId)}`;
+    const res = await adminFetch(url);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `Export failed (${res.status})`);

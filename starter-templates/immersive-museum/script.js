@@ -22,6 +22,24 @@ function showConfigError(message) {
   if (overlay) overlay.classList.remove('is-hidden');
 }
 
+function assetNeedsCors(src) {
+  if (!src || typeof src !== 'string') return false;
+  if (src.startsWith('/') || src.startsWith('.')) return false;
+  try {
+    return new URL(src, window.location.href).origin !== window.location.origin;
+  } catch (_) {
+    return false;
+  }
+}
+
+function setAssetCors(el, src) {
+  if (assetNeedsCors(src)) {
+    el.crossOrigin = 'anonymous';
+  } else if (el.removeAttribute) {
+    el.removeAttribute('crossorigin');
+  }
+}
+
 function resolveModelSrc(src) {
   if (!src || !src.startsWith('#')) return src;
   const assetId = src.slice(1);
@@ -227,7 +245,7 @@ class MuseumRuntime {
       const img = document.createElement('img');
       img.id = id;
       img.src = src;
-      img.crossOrigin = 'anonymous';
+      setAssetCors(img, src);
       assets.appendChild(img);
     });
 
@@ -246,7 +264,7 @@ class MuseumRuntime {
       audio.id = id;
       audio.src = src;
       audio.preload = 'auto';
-      audio.crossOrigin = 'anonymous';
+      setAssetCors(audio, src);
       assets.appendChild(audio);
     });
   }

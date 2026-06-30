@@ -1,5 +1,7 @@
 /** Inject parsed config.json for live preview (fetch does not work in srcdoc). */
-export function injectPreviewConfig(html, configJsonRaw) {
+import { resolveConfigAssetUrls } from './resolveConfigAssetUrls.js';
+
+export function injectPreviewConfig(html, configJsonRaw, options = {}) {
   const trimmed = String(configJsonRaw || '').trim();
   if (!trimmed || trimmed === '{}') return html;
   let parsed;
@@ -9,7 +11,13 @@ export function injectPreviewConfig(html, configJsonRaw) {
     return html;
   }
   if (!parsed || typeof parsed !== 'object' || !Object.keys(parsed).length) return html;
-  const bootstrap = `<script>window.__FLAT_PAGE_CONFIG__=${JSON.stringify(parsed)};</script>`;
+  const origin =
+    options.origin ||
+    (typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : '');
+  const forPreview = origin ? resolveConfigAssetUrls(parsed, origin) : parsed;
+  const bootstrap = `<script>window.__FLAT_PAGE_CONFIG__=${JSON.stringify(forPreview)};</script>`;
   if (/<\/body>/i.test(html)) {
     return html.replace(/<\/body>/i, `${bootstrap}\n</body>`);
   }
@@ -58,7 +66,13 @@ export function buildPreviewDocument(page, options = {}) {
       else if (/<\/head>/i.test(html)) html = html.replace(/<\/head>/i, `${tag}\n</head>`);
     });
 
-  html = injectPreviewConfig(html, configJson);
+  html = injectPreviewConfig(html, configJson, {
+    origin:
+      options.origin ||
+      (typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : ''),
+  });
 
   if (js) {
     const scriptTag = `<script>\n${js}\n</script>`;

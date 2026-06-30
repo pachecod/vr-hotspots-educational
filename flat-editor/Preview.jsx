@@ -18,7 +18,7 @@ export default function Preview({ page, refreshKey }) {
       key={refreshKey}
       title="Flat page live preview"
       className="flat-preview-frame"
-      sandbox="allow-scripts allow-modals allow-popups allow-forms"
+      sandbox="allow-scripts allow-same-origin allow-modals allow-popups allow-forms"
       srcDoc={srcdoc}
     />
   );

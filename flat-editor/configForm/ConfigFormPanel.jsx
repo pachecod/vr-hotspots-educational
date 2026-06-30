@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { getPath, setPath, joinPath } from './configPathUtils.js';
 import { fieldAssetCategory } from './inferFieldType.js';
 import { loadUiSchema } from './loadUiSchema.js';
+import { assetUrlForPreview } from '../resolveConfigAssetUrls.js';
 import './config-form.css';
 
 function browseAsset(category, onUrl) {
@@ -12,7 +13,8 @@ function browseAsset(category, onUrl) {
   window.CommonAssetsPicker.openFor({
     category: category || 'images',
     onSelect: (asset) => {
-      if (asset?.url) onUrl(asset.url);
+      const url = assetUrlForPreview(asset);
+      if (url) onUrl(url);
     },
   });
 }

@@ -20,8 +20,15 @@ const SPLIT_STORAGE_KEY = 'flat-editor-split-preset';
 
 function fileTypeForId(fileId) {
   if (fileId === 'style.css' || String(fileId).endsWith('.css')) return FileType.CSS;
-  if (fileId === 'script.js' || String(fileId).endsWith('.js') || String(fileId).endsWith('.mjs'))
+  if (
+    fileId === 'script.js' ||
+    fileId === 'config.json' ||
+    String(fileId).endsWith('.js') ||
+    String(fileId).endsWith('.mjs') ||
+    String(fileId).endsWith('.json')
+  ) {
     return FileType.JS;
+  }
   return FileType.HTML;
 }
 

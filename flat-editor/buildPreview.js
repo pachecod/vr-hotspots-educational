@@ -1,3 +1,21 @@
+/** Inject parsed config.json for live preview (fetch does not work in srcdoc). */
+export function injectPreviewConfig(html, configJsonRaw) {
+  const trimmed = String(configJsonRaw || '').trim();
+  if (!trimmed || trimmed === '{}') return html;
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (_) {
+    return html;
+  }
+  if (!parsed || typeof parsed !== 'object' || !Object.keys(parsed).length) return html;
+  const bootstrap = `<script>window.__FLAT_PAGE_CONFIG__=${JSON.stringify(parsed)};</script>`;
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${bootstrap}\n</body>`);
+  }
+  return `${html}\n${bootstrap}`;
+}
+
 /** Build a self-contained HTML document for iframe preview (WebXRIDE-style). */
 export function buildPreviewDocument(page, options = {}) {
   const files = page?.files || [];
@@ -9,6 +27,7 @@ export function buildPreviewDocument(page, options = {}) {
   let html = getContent('index.html') || '<!DOCTYPE html><html><head></head><body></body></html>';
   const css = getContent('style.css');
   const js = getContent('script.js');
+  const configJson = getContent('config.json');
 
   const baseHref = options.baseHref;
   if (baseHref && /<head[^>]*>/i.test(html)) {
@@ -38,6 +57,8 @@ export function buildPreviewDocument(page, options = {}) {
       if (ref.test(html)) html = html.replace(ref, tag);
       else if (/<\/head>/i.test(html)) html = html.replace(/<\/head>/i, `${tag}\n</head>`);
     });
+
+  html = injectPreviewConfig(html, configJson);
 
   if (js) {
     const scriptTag = `<script>\n${js}\n</script>`;

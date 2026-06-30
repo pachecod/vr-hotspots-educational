@@ -1,0 +1,115 @@
+{
+  "name": "My Immersive Museum",
+  "description": "Walk through 3D exhibits. Edit asset URLs and exhibit copy in this file.",
+  "assets": {
+    "images": {
+      "image1": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&auto=format&fit=crop",
+      "image2": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&auto=format&fit=crop",
+      "image3": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&auto=format&fit=crop"
+    },
+    "models": {
+      "model1": "https://modelviewer.dev/shared-assets/models/Astronaut.glb",
+      "model2": "https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb"
+    },
+    "audio": {
+      "audio1": "",
+      "audio2": ""
+    }
+  },
+  "environment": {
+    "sky": {
+      "day": "https://cdn.aframe.io/360-image-gallery-boilerplate/img/sechelt.jpg"
+    },
+    "ground": {
+      "color": "#3d5a3d",
+      "size": "80 80"
+    },
+    "lighting": {
+      "ambient": { "color": "#BBB", "intensity": 1 },
+      "directional": {
+        "color": "#FFF",
+        "intensity": 0.9,
+        "position": "-1 2 1",
+        "castShadow": true
+      }
+    }
+  },
+  "infoDisplay": {
+    "position": "0 0 -4",
+    "panel": {
+      "position": "0 2.4 -3.5",
+      "size": "3.5 2",
+      "images": ["#image1", "#image2", "#image3"]
+    },
+    "navigation": {
+      "left": { "position": "-1.9 0 0.02", "size": "0.55 0.55" },
+      "right": { "position": "1.9 0 0.02", "size": "0.55 0.55" }
+    },
+    "text": {
+      "position": "0 -1.35 0.02",
+      "size": "3.5 0.7",
+      "content": {
+        "slide1": "Welcome to the museum",
+        "slide2": "Walk to each exhibit",
+        "slide3": "Click hotspots to learn more"
+      }
+    }
+  },
+  "exhibits": [
+    {
+      "id": "exhibit-1",
+      "name": "Exhibit One",
+      "position": "-10 0 -12",
+      "model": {
+        "id": "exhibit-1-model",
+        "src": "#model1",
+        "position": "0 0.8 0",
+        "scale": "1.2 1.2 1.2",
+        "rotation": "0 35 0"
+      },
+      "environment": {
+        "geometry": "primitive: cylinder; radius: 4; height: 0.12",
+        "position": "0 0 0",
+        "material": "color: #2D5F34; roughness: 0.9"
+      },
+      "hotspot": {
+        "id": "exhibit-1-hotspot",
+        "position": "2.5 1.4 0",
+        "label": "Learn more",
+        "audio": "",
+        "info": "Edit this caption in config.json → exhibits[0].hotspot.info",
+        "exhibitModel": "exhibit-1-model",
+        "revealAnimation": true
+      }
+    },
+    {
+      "id": "exhibit-2",
+      "name": "Exhibit Two",
+      "position": "10 0 10",
+      "model": {
+        "id": "exhibit-2-model",
+        "src": "#model2",
+        "position": "0 0.8 0",
+        "scale": "1 1 1",
+        "rotation": "0 0 0"
+      },
+      "environment": {
+        "geometry": "primitive: cylinder; radius: 4; height: 0.12",
+        "position": "0 0 0",
+        "material": "color: #8B6914; roughness: 0.9"
+      },
+      "hotspot": {
+        "id": "exhibit-2-hotspot",
+        "position": "2.5 1.4 0",
+        "label": "Exhibit Two",
+        "audio": "",
+        "info": "Put GLB URLs in assets.models and reference them with #modelId in exhibits.",
+        "exhibitModel": "exhibit-2-model",
+        "revealAnimation": true
+      }
+    }
+  ],
+  "mobileControls": {
+    "speed": 3
+  }
+}

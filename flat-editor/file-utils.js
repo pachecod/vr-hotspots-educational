@@ -1,4 +1,4 @@
-export const CORE_FILE_IDS = ['index.html', 'style.css', 'script.js'];
+export const CORE_FILE_IDS = ['index.html', 'style.css', 'script.js', 'config.json'];
 export const MAX_FILES_PER_PAGE = 20;
 
 export function inferFileType(filename) {

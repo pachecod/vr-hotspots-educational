@@ -25,6 +25,7 @@
     { id: 'index.html', name: 'index.html', type: 'html', label: 'HTML' },
     { id: 'style.css', name: 'style.css', type: 'css', label: 'CSS' },
     { id: 'script.js', name: 'script.js', type: 'javascript', label: 'JS' },
+    { id: 'config.json', name: 'config.json', type: 'json', label: 'Config' },
   ];
 
   const DEFAULT_HTML = `<!DOCTYPE html>
@@ -79,6 +80,7 @@ button:hover { background: #1d4ed8; }`;
       'index.html': DEFAULT_HTML,
       'style.css': DEFAULT_CSS,
       'script.js': DEFAULT_JS,
+      'config.json': '{}',
     };
   }
 
@@ -244,6 +246,7 @@ button:hover { background: #1d4ed8; }`;
       let html = getContent('index.html') || '<!DOCTYPE html><html><head></head><body></body></html>';
       const css = getContent('style.css');
       const js = getContent('script.js');
+      const configJson = getContent('config.json');
 
       // Inline CSS: replace a <link> to style.css, else inject before </head>.
       if (css) {
@@ -256,6 +259,21 @@ button:hover { background: #1d4ed8; }`;
         } else {
           html = `${styleTag}\n${html}`;
         }
+      }
+
+      if (configJson && configJson.trim() && configJson.trim() !== '{}') {
+        try {
+          const parsed = JSON.parse(configJson);
+          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length) {
+            const bootstrap =
+              '<script>window.__FLAT_PAGE_CONFIG__=' + JSON.stringify(parsed) + ';</script>';
+            if (/<\/body>/i.test(html)) {
+              html = html.replace(/<\/body>/i, bootstrap + '\n</body>');
+            } else {
+              html = html + '\n' + bootstrap;
+            }
+          }
+        } catch (_) {}
       }
 
       // Inline JS: replace a <script src="script.js">, else inject before </body>.

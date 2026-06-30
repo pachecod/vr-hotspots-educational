@@ -70,8 +70,20 @@ function formatJS(js) {
     .join('\n');
 }
 
+function formatJSON(json) {
+  const parsed = JSON.parse(json);
+  return JSON.stringify(parsed, null, 2);
+}
+
 export function formatCode(content, fileId) {
   const id = String(fileId || '').toLowerCase();
+  if (id.endsWith('.json')) {
+    try {
+      return formatJSON(content);
+    } catch (_) {
+      return content;
+    }
+  }
   if (id.endsWith('.css')) return formatCSS(content);
   if (id.endsWith('.js') || id.endsWith('.mjs')) return formatJS(content);
   return formatHTML(content);

@@ -8,7 +8,10 @@ export const FILE_DEFS = [
   { id: 'index.html', name: 'index.html', type: 'html', label: 'HTML' },
   { id: 'style.css', name: 'style.css', type: 'css', label: 'CSS' },
   { id: 'script.js', name: 'script.js', type: 'javascript', label: 'JS' },
+  { id: 'config.json', name: 'config.json', type: 'json', label: 'Config' },
 ];
+
+export const DEFAULT_CONFIG_JSON = '{}';
 
 export const DEFAULT_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -62,6 +65,7 @@ export function defaultFilesContent() {
     'index.html': DEFAULT_HTML,
     'style.css': DEFAULT_CSS,
     'script.js': DEFAULT_JS,
+    'config.json': DEFAULT_CONFIG_JSON,
   };
 }
 

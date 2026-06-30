@@ -575,7 +575,12 @@ export class FlatPageEditorBridge {
   importCloudPage(page, slug) {
     if (!page) return false;
     const pageId = slug || page.slug || DEFAULT_PAGE_ID;
-    const typeByName = { 'index.html': 'html', 'style.css': 'css', 'script.js': 'javascript' };
+    const typeByName = {
+      'index.html': 'html',
+      'style.css': 'css',
+      'script.js': 'javascript',
+      'config.json': 'json',
+    };
     const files = (page.files || []).map((f) => ({
       id: f.name,
       name: f.name,

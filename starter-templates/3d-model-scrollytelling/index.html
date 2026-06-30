@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Model Scrollytelling</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+</head>
+<body>
+  <div class="scroll-progress" aria-hidden="true"></div>
+
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="nav-logo">Your Story</div>
+      <div class="nav-links">
+        <a href="#hero">Intro</a>
+        <a href="#model-story">3D Story</a>
+        <a href="#chapter-vr">360° Tour</a>
+        <a href="#chapter-close">Close</a>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero" id="hero">
+    <div class="parallax-bg" data-speed="0.45"></div>
+    <div class="hero-content">
+      <p class="hero-eyebrow">Scroll-driven 3D storytelling</p>
+      <h1 class="hero-title">Explore the Object in Three Dimensions</h1>
+      <p class="hero-subtitle">
+        Scroll through chapters while a 3D model rotates to match each beat of your narrative.
+        Replace the sample model with your own GLB from <strong>Online Assets</strong>.
+      </p>
+      <div class="scroll-indicator">
+        <div class="scroll-arrow"></div>
+        <span>Scroll to begin</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sticky model + scroll steps (core scrollytelling pattern) -->
+  <section class="model-scrolly" id="model-story">
+    <div class="model-scrolly__sticky">
+      <div class="model-scrolly__canvas">
+        <model-viewer
+          id="story-model"
+          src="https://modelviewer.dev/shared-assets/models/Astronaut.glb"
+          alt="Sample 3D model — replace with your GLB"
+          camera-controls
+          touch-action="pan-y"
+          shadow-intensity="1"
+          exposure="1"
+          environment-image="neutral"
+          camera-orbit="0deg 72deg 120%"
+          interaction-prompt="none"
+        ></model-viewer>
+        <p class="model-caption" id="model-caption">Chapter 1 — First look</p>
+      </div>
+    </div>
+
+    <div class="model-scrolly__steps">
+      <article class="step is-active" data-orbit="0deg 72deg 120%" data-caption="Chapter 1 — First look">
+        <span class="step-label">Step 1</span>
+        <h2>Introduce the subject</h2>
+        <p>
+          Open with context: what is this object, where does it come from, and why should the reader care?
+          The model holds its first pose while this section is in view.
+        </p>
+        <p class="step-hint">
+          Tip: use <strong>Browse Online Assets → 3D</strong> to insert a <code>model-viewer</code> block, then paste the <code>src</code> URL into each step below.
+        </p>
+      </article>
+
+      <article
+        class="step"
+        data-orbit="55deg 68deg 95%"
+        data-caption="Chapter 2 — Detail view"
+      >
+        <span class="step-label">Step 2</span>
+        <h2>Zoom into the details</h2>
+        <p>
+          As readers scroll here, the camera orbits to a new angle. Describe textures, mechanisms, or craft
+          that only become clear up close.
+        </p>
+      </article>
+
+      <article
+        class="step"
+        data-orbit="120deg 60deg 80%"
+        data-src="https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb"
+        data-caption="Chapter 3 — Swap the model"
+      >
+        <span class="step-label">Step 3</span>
+        <h2>Reveal a related artifact</h2>
+        <p>
+          This step demonstrates swapping to a second GLB when it enters view. Delete the <code>data-src</code>
+          attribute on any step if you only need camera moves on one model.
+        </p>
+      </article>
+
+      <article class="step" data-orbit="200deg 75deg 130%" data-caption="Chapter 4 — Pull back">
+        <span class="step-label">Step 4</span>
+        <h2>Pull back for the big picture</h2>
+        <p>
+          End the 3D sequence with a wider orbit and a takeaway line that connects the object to your larger story.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <!-- Optional 360° tour chapter (generate in Spherical Content, then insert from My Assets) -->
+  <section class="chapter" id="chapter-vr">
+    <div class="chapter-content">
+      <h2 class="chapter-title">Immersive 360° Chapter</h2>
+      <p class="story-text">
+        Pair scroll storytelling with a full spherical tour. Build hotspots in the main editor, publish a hosted
+        viewer, then insert it here from <strong>My Assets → Project VR</strong>.
+      </p>
+
+      <div class="embed-section" data-scroll="fade-in">
+        <div class="embed-placeholder">
+          <div class="embed-placeholder__icon">🌐</div>
+          <h3>Your 360° tour goes here</h3>
+          <p>
+            Delete this placeholder and paste the VR embed snippet from the flat page editor, or add an iframe
+            to a published flat page / hosted tour URL.
+          </p>
+          <!-- Example after you publish a tour:
+          <div class="vr-tour-embed" data-vr-tour-embed="1">
+            <iframe src="YOUR_HOSTED_TOUR_URL" title="My 360° Tour" allow="fullscreen; vr; accelerometer; gyroscope"></iframe>
+          </div>
+          -->
+        </div>
+      </div>
+
+      <div class="info-cards-grid">
+        <div class="info-card" data-scroll="slide-up">
+          <div class="card-icon">📍</div>
+          <h3>Hotspot navigation</h3>
+          <p>Link scenes so readers move through spaces as the story unfolds.</p>
+        </div>
+        <div class="info-card" data-scroll="slide-up" data-delay="150">
+          <div class="card-icon">🔊</div>
+          <h3>Spatial audio</h3>
+          <p>Layer narration or ambient sound on top of the panoramic experience.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter chapter--closing" id="chapter-close">
+    <div class="chapter-content">
+      <h2 class="chapter-title">Closing Chapter</h2>
+      <div class="full-parallax" data-speed="0.35">
+        <div class="parallax-bg-final"></div>
+        <div class="parallax-content">
+          <h3>What readers should remember</h3>
+          <p>End with impact — a quote, call to action, or link to explore further.</p>
+        </div>
+      </div>
+
+      <div class="info-card final-card" data-scroll="fade-in">
+        <div class="card-icon">✨</div>
+        <h3>Customize this template</h3>
+        <p>
+          Edit copy in <strong>index.html</strong>, colors in <strong>style.css</strong>, and scroll behavior in
+          <strong>script.js</strong>. Each <code>.step</code> supports <code>data-orbit</code> and optional
+          <code>data-src</code> for model swaps.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-content">
+      <p>3D Model Scrollytelling template — built for VR Hotspots flat pages.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

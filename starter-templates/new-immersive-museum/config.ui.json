@@ -1,0 +1,256 @@
+{
+  "sections": [
+    {
+      "title": "Project",
+      "fields": [
+        { "path": "name", "label": "Museum name", "type": "text" },
+        { "path": "description", "label": "Description", "type": "textarea" }
+      ]
+    },
+    {
+      "title": "Images",
+      "fields": [
+        {
+          "path": "assets.images.image1",
+          "label": "Info panel image 1",
+          "type": "url",
+          "assetCategory": "images"
+        },
+        {
+          "path": "assets.images.image2",
+          "label": "Info panel image 2",
+          "type": "url",
+          "assetCategory": "images"
+        },
+        {
+          "path": "assets.images.image3",
+          "label": "Info panel image 3",
+          "type": "url",
+          "assetCategory": "images"
+        }
+      ]
+    },
+    {
+      "title": "3D Models",
+      "fields": [
+        {
+          "path": "assets.models.model1",
+          "label": "Exhibit 1 model (GLB)",
+          "type": "url",
+          "assetCategory": "3d",
+          "help": "Used by Exhibit One (#model1 reference in config)."
+        },
+        {
+          "path": "assets.models.model2",
+          "label": "Exhibit 2 model (GLB)",
+          "type": "url",
+          "assetCategory": "3d",
+          "help": "Used by Exhibit Two (#model2 reference in config)."
+        },
+        {
+          "path": "assets.models.model3",
+          "label": "Exhibit 3 model (GLB)",
+          "type": "url",
+          "assetCategory": "3d",
+          "help": "Used by Exhibit Three (#model3 reference in config)."
+        }
+      ]
+    },
+    {
+      "title": "Audio",
+      "fields": [
+        {
+          "path": "assets.audio.audio1",
+          "label": "Shared audio slot 1",
+          "type": "url",
+          "assetCategory": "audio"
+        },
+        {
+          "path": "assets.audio.audio2",
+          "label": "Shared audio slot 2",
+          "type": "url",
+          "assetCategory": "audio"
+        },
+        {
+          "path": "assets.audio.audio3",
+          "label": "Shared audio slot 3",
+          "type": "url",
+          "assetCategory": "audio"
+        }
+      ]
+    },
+    {
+      "title": "Environment",
+      "fields": [
+        {
+          "path": "environment.sky.day",
+          "label": "Sky / 360° background",
+          "type": "url",
+          "assetCategory": "360-images"
+        },
+        {
+          "path": "environment.ground.color",
+          "label": "Ground color",
+          "type": "color"
+        },
+        {
+          "path": "environment.ground.size",
+          "label": "Ground size (W × D)",
+          "type": "vec2"
+        }
+      ]
+    },
+    {
+      "title": "Lighting",
+      "fields": [
+        {
+          "path": "environment.lighting.ambient.intensity",
+          "label": "Ambient light intensity",
+          "type": "number",
+          "step": 0.1,
+          "min": 0,
+          "max": 2
+        },
+        {
+          "path": "environment.lighting.directional.intensity",
+          "label": "Sun light intensity",
+          "type": "number",
+          "step": 0.1,
+          "min": 0,
+          "max": 2
+        },
+        {
+          "path": "environment.lighting.directional.position",
+          "label": "Sun position",
+          "type": "vec3"
+        }
+      ]
+    },
+    {
+      "title": "Movement",
+      "fields": [
+        {
+          "path": "mobileControls.speed",
+          "label": "Mobile walk speed",
+          "type": "number",
+          "step": 0.5,
+          "min": 0.5,
+          "max": 10
+        }
+      ]
+    },
+    {
+      "title": "Info panel layout",
+      "fields": [
+        { "path": "infoDisplay.position", "label": "Info display position", "type": "vec3" },
+        { "path": "infoDisplay.panel.position", "label": "Panel position", "type": "vec3" },
+        { "path": "infoDisplay.panel.size", "label": "Panel size (W × H)", "type": "vec2" },
+        { "path": "infoDisplay.text.position", "label": "Caption position", "type": "vec3" },
+        { "path": "infoDisplay.text.size", "label": "Caption size (W × H)", "type": "vec2" },
+        { "path": "infoDisplay.navigation.left.position", "label": "Left arrow position", "type": "vec3" },
+        { "path": "infoDisplay.navigation.left.size", "label": "Left arrow size (W × H)", "type": "vec2" },
+        { "path": "infoDisplay.navigation.right.position", "label": "Right arrow position", "type": "vec3" },
+        { "path": "infoDisplay.navigation.right.size", "label": "Right arrow size (W × H)", "type": "vec2" }
+      ]
+    },
+      "fields": [
+        {
+          "path": "infoDisplay.text.content.slide1",
+          "label": "Slide 1 text",
+          "type": "text"
+        },
+        {
+          "path": "infoDisplay.text.content.slide2",
+          "label": "Slide 2 text",
+          "type": "text"
+        },
+        {
+          "path": "infoDisplay.text.content.slide3",
+          "label": "Slide 3 text",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "title": "Slideshow arrows",
+      "fields": [
+        {
+          "path": "infoDisplay.navigation.left.visible",
+          "label": "Show left arrow",
+          "type": "boolean"
+        },
+        {
+          "path": "infoDisplay.navigation.left.label",
+          "label": "Left arrow label (legacy)",
+          "type": "text",
+          "help": "Unused when no custom image — SVG chevron is shown instead. Used only as a fallback caption in exports."
+        },
+        {
+          "path": "infoDisplay.navigation.left.image",
+          "label": "Left arrow image (optional)",
+          "type": "url",
+          "assetCategory": "images",
+          "help": "Optional PNG/JPG icon. Leave empty for a built-in SVG chevron tinted by arrow icon color."
+        },
+        {
+          "path": "infoDisplay.navigation.left.color",
+          "label": "Left arrow button color",
+          "type": "color"
+        },
+        {
+          "path": "infoDisplay.navigation.left.labelColor",
+          "label": "Left arrow icon color",
+          "type": "color"
+        },
+        {
+          "path": "infoDisplay.navigation.right.visible",
+          "label": "Show right arrow",
+          "type": "boolean"
+        },
+        {
+          "path": "infoDisplay.navigation.right.label",
+          "label": "Right arrow label (legacy)",
+          "type": "text",
+          "help": "Unused when no custom image — SVG chevron is shown instead."
+        },
+        {
+          "path": "infoDisplay.navigation.right.image",
+          "label": "Right arrow image (optional)",
+          "type": "url",
+          "assetCategory": "images",
+          "help": "Optional PNG/JPG icon. Leave empty for a built-in SVG chevron tinted by arrow icon color."
+        },
+        {
+          "path": "infoDisplay.navigation.right.color",
+          "label": "Right arrow button color",
+          "type": "color"
+        },
+        {
+          "path": "infoDisplay.navigation.right.labelColor",
+          "label": "Right arrow icon color",
+          "type": "color"
+        }
+      ]
+    },
+    {
+      "title": "Exhibits",
+      "repeat": { "path": "exhibits", "itemLabel": "name" },
+      "fields": [
+        { "path": "name", "label": "Exhibit title", "type": "text" },
+        { "path": "position", "label": "Exhibit position", "type": "vec3" },
+        { "path": "model.position", "label": "Model position", "type": "vec3" },
+        { "path": "model.scale", "label": "Model scale", "type": "vec3" },
+        { "path": "model.rotation", "label": "Model rotation (degrees)", "type": "vec3" },
+        { "path": "hotspot.position", "label": "Hotspot position", "type": "vec3" },
+        { "path": "hotspot.label", "label": "Hotspot button label", "type": "text" },
+        { "path": "hotspot.info", "label": "Hotspot caption", "type": "textarea" },
+        {
+          "path": "hotspot.audio",
+          "label": "Hotspot audio",
+          "type": "url",
+          "assetCategory": "audio"
+        }
+      ]
+    }
+  ]
+}

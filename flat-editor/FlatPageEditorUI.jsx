@@ -74,7 +74,8 @@ export default function FlatPageEditorUI({ bridge }) {
         }
         wasVisibleRef.current = visible;
         bump((n) => n + 1);
-        requestPreviewReload();
+        if (bridge.consumePendingPreviewReload()) forcePreviewReload();
+        else requestPreviewReload();
         if (bridge.consumePendingConfigVisual()) {
           setConfigEditorMode('visual');
         }
@@ -86,7 +87,10 @@ export default function FlatPageEditorUI({ bridge }) {
     if (bridge.consumePendingConfigVisual()) {
       setConfigEditorMode('visual');
     }
-  }, [bridge]);
+    if (bridge.consumePendingPreviewReload()) {
+      forcePreviewReload();
+    }
+  }, [bridge, forcePreviewReload]);
 
   const state = bridge.getState();
   const page = bridge.getActivePage();
@@ -369,7 +373,7 @@ export default function FlatPageEditorUI({ bridge }) {
               new CustomEvent('admin-starter-template-loaded', { detail: { title: template.title } })
             );
           }
-          requestPreviewReload();
+          setShowTemplates(false);
         }}
       />
     </div>

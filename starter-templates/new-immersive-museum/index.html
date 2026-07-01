@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Immersive Museum</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://aframe.io/releases/1.7.1/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+  <script src="script.js"></script>
+</head>
+<body>
+  <div id="loading-overlay" class="loading-overlay" aria-live="polite">
+    <div class="loading-text">Loading museum…</div>
+    <div class="loading-progress"><div id="loading-bar" class="loading-bar"></div></div>
+  </div>
+
+  <div class="museum-info" id="museum-info" role="status" aria-live="polite"></div>
+  <button type="button" class="vr-toggle" id="vr-toggle" hidden>Enter VR</button>
+
+  <a-scene
+    id="museum-scene"
+    renderer="colorManagement: true; physicallyCorrectLights: true"
+    cursor="rayOrigin: mouse; objects: .clickable"
+    loading-screen="enabled: false"
+  >
+    <a-assets timeout="120000"></a-assets>
+
+    <a-entity
+      id="cameraRig"
+      enhanced-mobile-controls="speed: 3"
+      position="0 0 0"
+    >
+      <a-entity
+        id="head"
+        camera="active: true"
+        look-controls="pointerLockEnabled: true; reverseMouseDrag: false"
+        wasd-controls="fly: false"
+        position="0 1.6 0"
+      >
+        <a-cursor
+          fuse="true"
+          fuse-timeout="1500"
+          raycaster="objects: .clickable"
+          animation__click="property: scale; startEvents: click; easing: easeInCubic; dur: 150; from: 0.1 0.1 0.1; to: 1 1 1"
+          animation__fusing="property: scale; startEvents: fusing; easing: easeInCubic; dur: 1500; from: 1 1 1; to: 0.1 0.1 0.1"
+          animation__mouseleave="property: scale; startEvents: mouseleave; easing: easeInCubic; dur: 500; to: 1 1 1"
+        ></a-cursor>
+      </a-entity>
+    </a-entity>
+  </a-scene>
+</body>
+</html>

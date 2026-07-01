@@ -1,0 +1,166 @@
+{
+  "name": "My Immersive Museum",
+  "description": "Walk through 3D exhibits. Edit asset URLs and exhibit copy in this file.",
+  "assets": {
+    "images": {
+      "image1": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/images/IMG_0772_1781875098429.jpeg",
+      "image2": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/images/IMG_0770_1781875097397.jpeg",
+      "image3": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/images/IMG_0757_1781875096343.jpeg"
+    },
+    "models": {
+      "model1": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/3d/rocks_1758665910940_1781874855569.glb",
+      "model2": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/3d/farm-equipment_1758487665150_1781874802205.glb",
+      "model3": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/3d/owl_1781799632564.glb"
+    },
+    "audio": {
+      "audio1": "",
+      "audio2": "",
+      "audio3": ""
+    }
+  },
+  "environment": {
+    "sky": {
+      "day": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/360-images/rows_1755865677400_1781818652356.jpg"
+    },
+    "ground": {
+      "color": "#3d5a3d",
+      "size": "80 80"
+    },
+    "lighting": {
+      "ambient": {
+        "color": "#BBB",
+        "intensity": 1.6
+      },
+      "directional": {
+        "color": "#FFF",
+        "intensity": 0.9,
+        "position": "-1 2 1",
+        "castShadow": true
+      }
+    }
+  },
+  "infoDisplay": {
+    "position": "0 0 -4",
+    "panel": {
+      "position": "0 2.4 -3.5",
+      "size": "3.5 2",
+      "images": [
+        "#image1",
+        "#image2",
+        "#image3"
+      ]
+    },
+    "navigation": {
+      "left": {
+        "position": "-1.9 0 0.02",
+        "size": "0.55 0.55",
+        "label": "‹",
+        "color": "#333333",
+        "labelColor": "#FFFFFF",
+        "image": "",
+        "visible": true
+      },
+      "right": {
+        "position": "1.9 0 0.02",
+        "size": "0.55 0.55",
+        "label": "›",
+        "color": "#333333",
+        "labelColor": "#FFFFFF",
+        "image": "",
+        "visible": true
+      }
+    },
+    "text": {
+      "position": "0 -1.35 0.02",
+      "size": "3.5 0.7",
+      "content": {
+        "slide1": "Welcome to the museum",
+        "slide2": "Walk to each exhibit",
+        "slide3": "Click hotspots to learn more"
+      }
+    }
+  },
+  "exhibits": [
+    {
+      "id": "exhibit-1",
+      "name": "Rocks Exhibit",
+      "position": "-10 0 -12",
+      "model": {
+        "id": "exhibit-1-model",
+        "src": "#model1",
+        "position": "0 0 0",
+        "scale": "4 4 4",
+        "rotation": "0 35 0"
+      },
+      "environment": {
+        "geometry": "primitive: cylinder; radius: 4; height: 0.12",
+        "position": "0 0 0",
+        "material": "color: #2D5F34; roughness: 0.9"
+      },
+      "hotspot": {
+        "id": "exhibit-1-hotspot",
+        "position": "2.5 1.4 0",
+        "label": "Rocks Exhibit",
+        "audio": "",
+        "info": "These rocks are at the entrance of the Salt City Harvest farm.",
+        "exhibitModel": "exhibit-1-model",
+        "revealAnimation": true
+      }
+    },
+    {
+      "id": "exhibit-2",
+      "name": "Farm Equipment exhibit",
+      "position": "10 0 10",
+      "model": {
+        "id": "exhibit-2-model",
+        "src": "#model2",
+        "position": "0 0 0",
+        "scale": "4 4 8",
+        "rotation": "0 0 0"
+      },
+      "environment": {
+        "geometry": "primitive: cylinder; radius: 4; height: 0.12",
+        "position": "0 0 0",
+        "material": "color: #8B6914; roughness: 0.9"
+      },
+      "hotspot": {
+        "id": "exhibit-2-hotspot",
+        "position": "2.5 1.4 0",
+        "label": "Farm Equipment exhibit",
+        "audio": "",
+        "info": "A 3D scan of some farm equipment at the Salt City Harvest farm.",
+        "exhibitModel": "exhibit-2-model",
+        "revealAnimation": true
+      }
+    },
+    {
+      "id": "exhibit-3",
+      "name": "Owl exhibit",
+      "position": "0 0 16",
+      "model": {
+        "id": "exhibit-3-model",
+        "src": "#model3",
+        "position": "0 0.8 0",
+        "scale": "7 7 7",
+        "rotation": "0 45 0"
+      },
+      "environment": {
+        "geometry": "primitive: cylinder; radius: 4; height: 0.12",
+        "position": "0 0 0",
+        "material": "color: #4A5568; roughness: 0.9"
+      },
+      "hotspot": {
+        "id": "exhibit-3-hotspot",
+        "position": "2.5 1.4 0",
+        "label": "Owl exhibit",
+        "audio": "",
+        "info": "This is a 3D scan of a carved owl trinket.",
+        "exhibitModel": "exhibit-3-model",
+        "revealAnimation": true
+      }
+    }
+  ],
+  "mobileControls": {
+    "speed": 3
+  }
+}

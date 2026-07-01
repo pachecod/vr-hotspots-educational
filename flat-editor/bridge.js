@@ -43,6 +43,7 @@ export class FlatPageEditorBridge {
     this._blockedExtensions = [];
     this._rideyStatus = { enabled: false, hasApiKey: false };
     this._pendingConfigVisual = false;
+    this._pendingPreviewReload = false;
     this._embeddedConfigUiSchema = '';
     this._loadFromStorage();
     this._focusConfigEditorIfConfigured({ preferVisual: true });
@@ -326,6 +327,17 @@ export class FlatPageEditorBridge {
     return pending;
   }
 
+  /** True once after loadTemplate / importCloudPage — preview must refresh even when auto-reload is off. */
+  consumePendingPreviewReload() {
+    const pending = this._pendingPreviewReload;
+    this._pendingPreviewReload = false;
+    return pending;
+  }
+
+  _markPreviewReloadRequired() {
+    this._pendingPreviewReload = true;
+  }
+
   setFileContent(fileId, content) {
     const page = this.getActivePage();
     const file = page.files.find((f) => f.id === fileId);
@@ -502,6 +514,7 @@ export class FlatPageEditorBridge {
     if (!this._focusConfigEditorIfConfigured({ preferVisual: true })) {
       this.activeFileId = 'index.html';
     }
+    this._markPreviewReloadRequired();
     this.save();
     this._syncScenesData();
     this._notify();
@@ -729,6 +742,7 @@ export class FlatPageEditorBridge {
     if (!this._focusConfigEditorIfConfigured({ preferVisual: true })) {
       this.activeFileId = 'index.html';
     }
+    this._markPreviewReloadRequired();
     this.save();
     this._visible = true;
     this._notify();

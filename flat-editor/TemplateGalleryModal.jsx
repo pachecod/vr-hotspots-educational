@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import {
   fetchPublicTemplates,
   fetchTemplateBySlug,
-  fetchStarterTemplate,
-  listStarterTemplates,
+  fetchAdminStarterTemplates,
+  fetchAdminStarterTemplate,
 } from './templates-api.js';
 
-export default function TemplateGalleryModal({ open, onClose, onLoad }) {
+export default function TemplateGalleryModal({ open, onClose, onLoad, mode = 'student' }) {
+  const isAdmin = mode === 'admin';
   const [templates, setTemplates] = useState([]);
-  const [starters, setStarters] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingSlug, setLoadingSlug] = useState(null);
   const [error, setError] = useState('');
@@ -17,25 +17,22 @@ export default function TemplateGalleryModal({ open, onClose, onLoad }) {
     if (!open) return;
     setLoading(true);
     setError('');
-    Promise.all([
-      fetchPublicTemplates().catch(() => []),
-      listStarterTemplates().catch(() => []),
-    ])
-      .then(([publicTemplates, starterList]) => {
-        setTemplates(publicTemplates);
-        setStarters(starterList);
-      })
+    const loader = isAdmin
+      ? fetchAdminStarterTemplates()
+      : fetchPublicTemplates().catch(() => []);
+
+    loader
+      .then((list) => setTemplates(list))
       .catch((err) => {
         setError(err.message);
         setTemplates([]);
-        setStarters([]);
       })
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [open, isAdmin]);
 
   if (!open) return null;
 
-  const handleLoad = async (slug) => {
+  const handleLoadPublished = async (slug) => {
     setLoadingSlug(slug);
     setError('');
     try {
@@ -53,7 +50,7 @@ export default function TemplateGalleryModal({ open, onClose, onLoad }) {
     setLoadingSlug(`starter:${slug}`);
     setError('');
     try {
-      const template = await fetchStarterTemplate(slug);
+      const template = await fetchAdminStarterTemplate(slug);
       onLoad(template);
       onClose();
     } catch (err) {
@@ -63,11 +60,16 @@ export default function TemplateGalleryModal({ open, onClose, onLoad }) {
     }
   };
 
+  const title = isAdmin ? 'Starter Templates' : 'Template Gallery';
+  const emptyMessage = isAdmin
+    ? 'No starter templates found in starter-templates/.'
+    : 'No public templates yet. Ask your teacher to add some.';
+
   return (
     <div className="flat-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="flat-modal flat-modal-wide">
         <div className="flat-modal-header">
-          <h2>Template Gallery</h2>
+          <h2>{title}</h2>
           <button type="button" className="flat-modal-close" onClick={onClose}>
             ×
           </button>
@@ -76,65 +78,41 @@ export default function TemplateGalleryModal({ open, onClose, onLoad }) {
           {error && <p className="flat-error">{error}</p>}
           {loading ? (
             <p className="flat-muted">Loading templates…</p>
+          ) : templates.length === 0 ? (
+            <p className="flat-muted">{emptyMessage}</p>
           ) : (
             <>
-              {starters.length > 0 && (
-                <>
-                  <p className="flat-muted" style={{ marginTop: 0 }}>
-                    Local starter templates (from <code>starter-templates/</code> on disk)
-                  </p>
-                  <div className="flat-template-list">
-                    {starters.map((t) => (
-                      <div key={`starter-${t.slug}`} className="flat-template-card">
-                        <div>
-                          <strong>{t.title}</strong>
-                          <span className="flat-badge">Starter</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="flat-tool-btn flat-tool-btn-accent"
-                          disabled={loadingSlug === `starter:${t.slug}`}
-                          onClick={() => handleLoadStarter(t.slug)}
-                        >
-                          {loadingSlug === `starter:${t.slug}` ? 'Loading…' : 'Load'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </>
+              {isAdmin && (
+                <p className="flat-muted" style={{ marginTop: 0 }}>
+                  Load a starter, customize it, then save as a published template for students.
+                </p>
               )}
-              {templates.length === 0 ? (
-                !starters.length && (
-                  <p className="flat-muted">No public templates yet. Ask your teacher to add some.</p>
-                )
-              ) : (
-                <>
-                  {starters.length > 0 && (
-                    <p className="flat-muted" style={{ marginTop: '1rem' }}>
-                      Published templates
-                    </p>
-                  )}
-                  <div className="flat-template-list">
-                    {templates.map((t) => (
-                      <div key={t.id} className="flat-template-card">
-                        <div>
-                          <strong>{t.title}</strong>
-                          {t.is_default && <span className="flat-badge">Default</span>}
-                          {t.description && <p className="flat-muted">{t.description}</p>}
-                        </div>
-                        <button
-                          type="button"
-                          className="flat-tool-btn flat-tool-btn-accent"
-                          disabled={loadingSlug === t.slug}
-                          onClick={() => handleLoad(t.slug)}
-                        >
-                          {loadingSlug === t.slug ? 'Loading…' : 'Load'}
-                        </button>
+              <div className="flat-template-list">
+                {templates.map((t) => {
+                  const slug = t.slug;
+                  const loadKey = isAdmin ? `starter:${slug}` : slug;
+                  return (
+                    <div key={loadKey} className="flat-template-card">
+                      <div>
+                        <strong>{t.title}</strong>
+                        {isAdmin && <span className="flat-badge">Starter</span>}
+                        {!isAdmin && t.is_default && <span className="flat-badge">Default</span>}
+                        {!isAdmin && t.description && <p className="flat-muted">{t.description}</p>}
                       </div>
-                    ))}
-                  </div>
-                </>
-              )}
+                      <button
+                        type="button"
+                        className="flat-tool-btn flat-tool-btn-accent"
+                        disabled={loadingSlug === loadKey}
+                        onClick={() =>
+                          isAdmin ? handleLoadStarter(slug) : handleLoadPublished(slug)
+                        }
+                      >
+                        {loadingSlug === loadKey ? 'Loading…' : 'Load'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
         </div>

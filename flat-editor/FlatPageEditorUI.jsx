@@ -196,7 +196,11 @@ export default function FlatPageEditorUI({ bridge }) {
               <button type="button" className="flat-tool-btn" onClick={handleFormat} disabled={showConfigVisual}>
                 Format
               </button>
-              {!state.adminTemplateMode && (
+              {state.adminTemplateMode ? (
+                <button type="button" className="flat-tool-btn" onClick={() => setShowTemplates(true)}>
+                  Load Starter
+                </button>
+              ) : (
                 <button type="button" className="flat-tool-btn" onClick={() => setShowTemplates(true)}>
                   Templates
                 </button>
@@ -301,8 +305,14 @@ export default function FlatPageEditorUI({ bridge }) {
       <TemplateGalleryModal
         open={showTemplates}
         onClose={() => setShowTemplates(false)}
+        mode={state.adminTemplateMode ? 'admin' : 'student'}
         onLoad={(template) => {
           bridge.loadTemplate(template);
+          if (state.adminTemplateMode && template?.title) {
+            window.dispatchEvent(
+              new CustomEvent('admin-starter-template-loaded', { detail: { title: template.title } })
+            );
+          }
           if (bridge.hasConfigUiSchema()) {
             setConfigEditorMode('visual');
           }

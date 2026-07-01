@@ -3,6 +3,10 @@ const { isDbEnabled } = require('../services/db-service');
 const templatesDb = require('../lib/templates');
 const { getBlockedExtensions } = require('../lib/app-settings');
 const { refreshPlaygroundThumbnail } = require('../lib/playground-thumbnail');
+const {
+  listStarterTemplates,
+  loadStarterTemplate,
+} = require('../lib/starter-templates');
 
 async function maybeRefreshPlaygroundThumbnail(template, body = {}) {
   if (!template?.is_playground) return template;
@@ -49,6 +53,23 @@ function registerTemplateRoutes(app) {
       res.json({ success: true, template });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/admin/starter-templates', requireAdmin, (_req, res) => {
+    try {
+      res.json({ success: true, templates: listStarterTemplates() });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/admin/starter-templates/:slug', requireAdmin, (req, res) => {
+    try {
+      const template = loadStarterTemplate(req.params.slug);
+      res.json({ success: true, template });
+    } catch (err) {
+      res.status(404).json({ success: false, message: err.message });
     }
   });
 

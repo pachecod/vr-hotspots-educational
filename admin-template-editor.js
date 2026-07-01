@@ -122,6 +122,15 @@ function initMainApp() {
 
   document.getElementById('save-tpl-btn').addEventListener('click', saveTemplate);
 
+  window.addEventListener('admin-starter-template-loaded', (e) => {
+    const title = e.detail && e.detail.title;
+    if (!title) return;
+    const titleInput = document.getElementById('tpl-title');
+    if (titleInput && !titleInput.value.trim()) {
+      titleInput.value = title;
+    }
+  });
+
   const editId = getQueryParam('edit');
   if (editId) {
     loadTemplateForEdit(editId).catch((err) => {

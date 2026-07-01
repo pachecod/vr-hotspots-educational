@@ -19,36 +19,20 @@ export async function fetchDefaultTemplate() {
   return data.template;
 }
 
-const STARTER_TEMPLATE_FILES = ['index.html', 'style.css', 'script.js', 'config.json', 'config.ui.json'];
-
-/** Load a template from starter-templates/ on disk (for local dev / testing). */
-export async function fetchStarterTemplate(slug) {
-  const safe = String(slug || '')
-    .trim()
-    .replace(/[^a-z0-9-]/gi, '');
-  if (!safe) throw new Error('Invalid starter template slug');
-
-  const files_manifest = [];
-  for (const name of STARTER_TEMPLATE_FILES) {
-    try {
-      const res = await fetch(`/starter-templates/${safe}/${name}`);
-      if (!res.ok) continue;
-      files_manifest.push({ name, content: await res.text() });
-    } catch (_) {}
-  }
-
-  if (!files_manifest.some((f) => f.name === 'index.html')) {
-    throw new Error(`Starter template "${safe}" not found`);
-  }
-
-  const title = safe
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-
-  return { title, slug: safe, files_manifest, scope: 'flat' };
+/** List disk starter templates (admin session required). */
+export async function fetchAdminStarterTemplates() {
+  const res = await fetch('/admin/starter-templates', { credentials: 'same-origin' });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Failed to load starter templates');
+  return data.templates || [];
 }
 
-export async function listStarterTemplates() {
-  return [{ slug: 'immersive-museum', title: 'Immersive Museum (local starter)' }];
+/** Load a disk starter template into the admin editor (admin session required). */
+export async function fetchAdminStarterTemplate(slug) {
+  const res = await fetch(`/admin/starter-templates/${encodeURIComponent(slug)}`, {
+    credentials: 'same-origin',
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Starter template not found');
+  return data.template;
 }

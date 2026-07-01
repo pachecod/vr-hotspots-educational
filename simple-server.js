@@ -313,6 +313,11 @@ const staticNoStaleOptions = {
     res.setHeader('Cache-Control', 'no-cache');
   },
 };
+app.use(
+  '/starter-templates',
+  requireAdmin,
+  express.static(path.join(__dirname, 'starter-templates'), staticNoStaleOptions)
+);
 app.use(express.static('.', staticNoStaleOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(rejectLocalTestUserWrites);

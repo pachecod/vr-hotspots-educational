@@ -3,14 +3,14 @@
   "description": "Walk through 3D exhibits. Edit asset URLs and exhibit copy in this file.",
   "assets": {
     "images": {
-      "image1": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&auto=format&fit=crop",
-      "image2": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&auto=format&fit=crop",
-      "image3": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&auto=format&fit=crop"
+      "image1": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/images/IMG_0772_1781875098429.jpeg",
+      "image2": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/images/IMG_0770_1781875097397.jpeg",
+      "image3": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/images/IMG_0757_1781875096343.jpeg"
     },
     "models": {
-      "model1": "https://modelviewer.dev/shared-assets/models/Astronaut.glb",
-      "model2": "https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb",
-      "model3": "https://modelviewer.dev/shared-assets/models/RobotExpressive.glb"
+      "model1": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/3d/rocks_1758665910940_1781874855569.glb",
+      "model2": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/3d/farm-equipment_1758487665150_1781874802205.glb",
+      "model3": "https://vr-hotspots-educational-2-0.onrender.com/common-assets/3d/owl_1781799632564.glb"
     },
     "audio": {
       "audio1": "",
@@ -27,7 +27,10 @@
       "size": "80 80"
     },
     "lighting": {
-      "ambient": { "color": "#BBB", "intensity": 1 },
+      "ambient": {
+        "color": "#BBB",
+        "intensity": 1
+      },
       "directional": {
         "color": "#FFF",
         "intensity": 0.9,
@@ -41,7 +44,11 @@
     "panel": {
       "position": "0 2.4 -3.5",
       "size": "3.5 2",
-      "images": ["#image1", "#image2", "#image3"]
+      "images": [
+        "#image1",
+        "#image2",
+        "#image3"
+      ]
     },
     "navigation": {
       "left": {
@@ -76,7 +83,7 @@
   "exhibits": [
     {
       "id": "exhibit-1",
-      "name": "Exhibit One",
+      "name": "Rocks Exhibit",
       "position": "-10 0 -12",
       "model": {
         "id": "exhibit-1-model",
@@ -93,16 +100,16 @@
       "hotspot": {
         "id": "exhibit-1-hotspot",
         "position": "2.5 1.4 0",
-        "label": "Learn more",
+        "label": "Rocks Exhibit",
         "audio": "",
-        "info": "Edit this caption in config.json → exhibits[0].hotspot.info",
+        "info": "These rocks are at the entrance of the Salt City Harvest farm.",
         "exhibitModel": "exhibit-1-model",
         "revealAnimation": true
       }
     },
     {
       "id": "exhibit-2",
-      "name": "Exhibit Two",
+      "name": "Farm Equipment exhibit",
       "position": "10 0 10",
       "model": {
         "id": "exhibit-2-model",
@@ -119,16 +126,16 @@
       "hotspot": {
         "id": "exhibit-2-hotspot",
         "position": "2.5 1.4 0",
-        "label": "Exhibit Two",
+        "label": "Farm Equipment exhibit",
         "audio": "",
-        "info": "Put GLB URLs in assets.models and reference them with #modelId in exhibits.",
+        "info": "A 3D scan of some farm equipment at the Salt City Harvest farm.",
         "exhibitModel": "exhibit-2-model",
         "revealAnimation": true
       }
     },
     {
       "id": "exhibit-3",
-      "name": "Exhibit Three",
+      "name": "Owl exhibit",
       "position": "0 0 16",
       "model": {
         "id": "exhibit-3-model",
@@ -145,9 +152,9 @@
       "hotspot": {
         "id": "exhibit-3-hotspot",
         "position": "2.5 1.4 0",
-        "label": "Exhibit Three",
+        "label": "Owl exhibit",
         "audio": "",
-        "info": "Add a third story here — swap the model in assets.models.model3 or pick one from Online Assets.",
+        "info": "This is a 3D scan of a carved owl trinket.",
         "exhibitModel": "exhibit-3-model",
         "revealAnimation": true
       }

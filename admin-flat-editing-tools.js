@@ -7,8 +7,25 @@ const AdminFlatEditingTools = {
   activeCategory: 'images',
   searchFilter: { tags: [], text: '' },
   tagFilterBar: null,
+  onSelect: null,
+  filterCategory: null,
+  filterCategories: null,
 
   CATEGORIES: ['images', 'videos', '360-images', '360-videos', 'audio', '3d', 'other'],
+
+  getVisibleCategories() {
+    if (this.filterCategories?.length) {
+      return this.filterCategories.filter((cat) => this.CATEGORIES.includes(cat));
+    }
+    if (this.filterCategory && this.CATEGORIES.includes(this.filterCategory)) {
+      return [this.filterCategory];
+    }
+    return this.CATEGORIES;
+  },
+
+  isSelectMode() {
+    return typeof this.onSelect === 'function';
+  },
 
   isFlatPageEditorMode() {
     return (
@@ -90,9 +107,10 @@ const AdminFlatEditingTools = {
   },
 
   renderTabs() {
+    const visible = new Set(this.getVisibleCategories());
     document.querySelectorAll('#common-assets-tabs .ca-tab').forEach((tab) => {
       const cat = tab.dataset.category;
-      const show = this.CATEGORIES.includes(cat);
+      const show = visible.has(cat);
       tab.style.display = show ? '' : 'none';
       tab.classList.toggle('active', show && cat === this.activeCategory);
     });
@@ -128,7 +146,8 @@ const AdminFlatEditingTools = {
         '<p style="color:#888;text-align:center;padding:20px;">No assets found in this category.</p>';
       return;
     }
-    const flatInsert = this.isFlatPageEditorMode();
+    const selectMode = this.isSelectMode();
+    const flatInsert = !selectMode && this.isFlatPageEditorMode();
     list.innerHTML = items
       .map((asset) => {
         const cat = asset.category || this.activeCategory;
@@ -136,6 +155,9 @@ const AdminFlatEditingTools = {
           ? CommonAssetsPreview.renderPickerThumb(cat, asset)
           : '<div class="ca-item-thumb ca-item-thumb-fallback">📄</div>';
         const tagChips = window.AssetTagsUI ? AssetTagsUI.renderTagChips(asset.tags) : '';
+        const selectBtn = selectMode
+          ? `<button type="button" data-ca-action="select" data-name="${asset.name}" class="btn-insert-flat">Select</button>`
+          : '';
         const insertBtn = flatInsert
           ? `<button type="button" data-ca-action="insert" data-name="${asset.name}" class="btn-insert-flat">Insert Into Page</button>`
           : '';
@@ -145,6 +167,7 @@ const AdminFlatEditingTools = {
           <div class="ca-item-actions">
             <button type="button" data-ca-action="preview" data-name="${asset.name}">Preview</button>
             <button type="button" data-ca-action="copy" data-name="${asset.name}" style="background:#6f42c1;color:#fff;">Copy</button>
+            ${selectBtn}
             ${insertBtn}
           </div>
         </div>`;
@@ -157,22 +180,20 @@ const AdminFlatEditingTools = {
     const index = items.findIndex((a) => a.name === asset.name);
     const cat = asset.category || this.activeCategory;
     if (!window.AssetPreview) return;
-    const flatInsert = this.isFlatPageEditorMode();
+    const selectMode = this.isSelectMode();
+    const flatInsert = !selectMode && this.isFlatPageEditorMode();
     AssetPreview.open({
       category: cat,
       asset: { ...asset, category: cat },
       items: items.map((a) => ({ ...a, category: a.category || this.activeCategory })),
       index: index >= 0 ? index : 0,
       showCopyUrl: true,
+      showSelect: selectMode,
       showInsertIntoPage: flatInsert,
       replaceHost: '#common-assets-modal',
+      onSelect: selectMode ? (selected) => this.selectAsset(selected) : null,
       onInsertIntoPage: flatInsert ? (selected) => this.insertIntoFlatPage(selected) : null,
     });
-  },
-
-  async copyUrl(url) {
-    await navigator.clipboard.writeText(url);
-    alert('URL copied to clipboard!');
   },
 
   insertIntoFlatPage(asset) {
@@ -196,7 +217,42 @@ const AdminFlatEditingTools = {
     this.close();
   },
 
+  async copyUrl(url) {
+    await navigator.clipboard.writeText(url);
+    alert('URL copied to clipboard!');
+  },
+
+  selectAsset(asset) {
+    const handler = this.onSelect;
+    const cat = asset.category || this.activeCategory;
+    const selected = { ...asset, category: cat };
+    if (window.AssetPreview?.close) {
+      AssetPreview.close({ restoreHost: false });
+    }
+    this.close();
+    if (handler) handler(selected);
+  },
+
+  openFor({ category = null, categories = null, onSelect = null } = {}) {
+    this.onSelect = typeof onSelect === 'function' ? onSelect : null;
+    this.filterCategories = Array.isArray(categories) && categories.length ? categories : null;
+    this.filterCategory = this.filterCategories ? null : category || null;
+    if (this.filterCategories?.length) {
+      this.activeCategory = this.filterCategories[0];
+    } else if (category) {
+      this.activeCategory = category;
+    }
+    this.searchFilter = { tags: [], text: '' };
+    if (this.tagFilterBar?.clear) this.tagFilterBar.clear();
+    this.renderTabs();
+    this.showModal();
+    this.load();
+  },
+
   open() {
+    this.onSelect = null;
+    this.filterCategory = null;
+    this.filterCategories = null;
     this.renderTabs();
     this.showModal();
     this.load();
@@ -205,6 +261,10 @@ const AdminFlatEditingTools = {
   close() {
     const modal = document.getElementById('common-assets-modal');
     if (modal) modal.style.display = 'none';
+    this.onSelect = null;
+    this.filterCategory = null;
+    this.filterCategories = null;
+    this.renderTabs();
   },
 
   initPicker() {
@@ -248,6 +308,7 @@ const AdminFlatEditingTools = {
       if (!asset) return;
       if (btn.dataset.caAction === 'preview') this.openPreview(asset);
       if (btn.dataset.caAction === 'copy') this.copyUrl(asset.url);
+      if (btn.dataset.caAction === 'select') this.selectAsset(asset);
       if (btn.dataset.caAction === 'insert') this.insertIntoFlatPage(asset);
     });
 
@@ -279,10 +340,23 @@ const AdminFlatEditingTools = {
     this.uploadController.setup();
   },
 
+  initCommonAssetsPickerBridge() {
+    const tools = this;
+    window.CommonAssetsPicker = {
+      openFor(options = {}) {
+        tools.openFor(options);
+      },
+      close() {
+        tools.close();
+      },
+    };
+  },
+
   init() {
     this.initSidebar();
     this.initPicker();
     this.initUpload();
+    this.initCommonAssetsPickerBridge();
   },
 };
 

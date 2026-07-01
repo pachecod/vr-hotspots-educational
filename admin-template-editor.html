@@ -137,6 +137,7 @@
     <script src="asset-tags-ui.js"></script>
     <script src="admin-auth-ui.js"></script>
     <script src="admin-nav.js"></script>
+    <script src="admin-common-asset-upload.js"></script>
     <script>
       window.FLAT_EDITOR_BOOT = { mode: 'admin-template' };
     </script>
@@ -202,10 +203,10 @@
             <div class="panel-section">
               <div class="section-title">Online Assets</div>
               <button type="button" class="btn btn-secondary" id="open-common-assets">
-                Browse Online Assets
+                Browse &amp; Upload Online Assets
               </button>
               <p class="help-text">
-                Pick shared images, audio, video, or 3D models and insert them into your template HTML.
+                Upload shared images, audio, video, or 3D models to the library, then insert them into your template.
               </p>
             </div>
           </div>
@@ -227,9 +228,55 @@
         </div>
         <div class="modal-body">
           <p style="margin: 0 0 12px; color: #ccc; font-size: 14px">
-            Shared assets uploaded in <strong>Admin → Assets</strong>. Use
+            Upload new files or pick existing shared assets. Use the category tabs below, then
             <strong>Insert Into Page</strong> to add markup at the cursor.
           </p>
+          <div class="ca-upload-actions">
+            <button
+              type="button"
+              id="ca-upload-toggle"
+              class="ca-upload-toggle"
+              aria-expanded="false"
+            >
+              Upload to Online Assets
+            </button>
+          </div>
+          <div class="ca-upload-zone" id="ca-upload-zone">
+            <p><strong>Drag &amp; drop files here</strong> or click to browse</p>
+            <p class="ca-upload-hint">
+              Uploads go to the active category tab. Flat images (10MB), flat videos (50MB), 360
+              photos (50MB), 360 videos (200MB), audio (50MB), 3D (100MB), other (25MB).
+            </p>
+            <input type="file" id="ca-upload-input" multiple hidden />
+            <input
+              type="text"
+              id="ca-upload-tags-input"
+              class="ca-upload-tags"
+              placeholder="Tags (optional, comma-separated)"
+            />
+            <button type="button" id="ca-upload-browse" class="ca-upload-browse">Browse Files</button>
+            <div id="ca-upload-progress-panel" class="ca-upload-progress-panel" aria-live="polite">
+              <div class="ca-upload-progress-step">
+                <div class="ca-upload-progress-label">
+                  <span id="ca-upload-bytes-label">Uploading file…</span>
+                  <span id="ca-upload-bytes-pct">0%</span>
+                </div>
+                <div class="ca-upload-progress-track">
+                  <div id="ca-upload-bytes-fill" class="ca-upload-progress-fill"></div>
+                </div>
+              </div>
+              <div class="ca-upload-progress-step" id="ca-transcode-progress-step" style="display: none">
+                <div class="ca-upload-progress-label">
+                  <span id="ca-transcode-phase-label">Compressing video…</span>
+                  <span id="ca-transcode-phase-pct">0%</span>
+                </div>
+                <div class="ca-upload-progress-track">
+                  <div id="ca-transcode-phase-fill" class="ca-upload-progress-fill is-transcode"></div>
+                </div>
+              </div>
+            </div>
+            <div id="ca-upload-status" class="ca-upload-status"></div>
+          </div>
           <div id="common-assets-tag-filter" class="asset-tag-filter-mount"></div>
           <div class="ca-tabs" id="common-assets-tabs">
             <button type="button" class="ca-tab active" data-category="images">Flat Images</button>

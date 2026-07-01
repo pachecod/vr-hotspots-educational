@@ -254,9 +254,35 @@ const AdminFlatEditingTools = {
     if (window.AssetPreview) AssetPreview.init();
   },
 
+  initUpload() {
+    if (!window.AdminCommonAssetUpload) return;
+    this.uploadController = AdminCommonAssetUpload.createUploadController({
+      getActiveCategory: () => this.activeCategory,
+      onSuccess: () => this.load(),
+      ids: {
+        zone: 'ca-upload-zone',
+        fileInput: 'ca-upload-input',
+        browseBtn: 'ca-upload-browse',
+        toggleBtn: 'ca-upload-toggle',
+        status: 'ca-upload-status',
+        tagsInput: 'ca-upload-tags-input',
+        panel: 'ca-upload-progress-panel',
+        uploadLabel: 'ca-upload-bytes-label',
+        uploadPct: 'ca-upload-bytes-pct',
+        uploadFill: 'ca-upload-bytes-fill',
+        transcodeStep: 'ca-transcode-progress-step',
+        transcodeLabel: 'ca-transcode-phase-label',
+        transcodePct: 'ca-transcode-phase-pct',
+        transcodeFill: 'ca-transcode-phase-fill',
+      },
+    });
+    this.uploadController.setup();
+  },
+
   init() {
     this.initSidebar();
     this.initPicker();
+    this.initUpload();
   },
 };
 

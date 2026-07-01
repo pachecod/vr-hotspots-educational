@@ -258,3 +258,125 @@
   background: #ff9800;
   color: #1a1a1a;
 }
+
+#common-assets-modal .ca-upload-actions {
+  margin-bottom: 12px;
+}
+
+#common-assets-modal .ca-upload-toggle {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 4px;
+  background: #4caf50;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#common-assets-modal .ca-upload-zone {
+  display: none;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 2px dashed #555;
+  border-radius: 8px;
+  background: #333;
+}
+
+#common-assets-modal .ca-upload-zone.is-open {
+  display: block;
+}
+
+#common-assets-modal .ca-upload-zone.dragover {
+  border-color: #4caf50;
+  background: #3a4a3a;
+}
+
+#common-assets-modal .ca-upload-hint {
+  font-size: 12px;
+  color: #aaa;
+  margin: 8px 0;
+  line-height: 1.45;
+}
+
+#common-assets-modal .ca-upload-tags {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #2a2a2a;
+  color: #fff;
+  box-sizing: border-box;
+}
+
+#common-assets-modal .ca-upload-browse {
+  margin-top: 8px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 4px;
+  background: #555;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+#common-assets-modal .ca-upload-status {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+#common-assets-modal .ca-upload-progress-panel {
+  display: none;
+  margin-top: 12px;
+}
+
+#common-assets-modal .ca-upload-progress-panel.is-active {
+  display: block;
+}
+
+#common-assets-modal .ca-upload-progress-step {
+  margin-bottom: 10px;
+}
+
+#common-assets-modal .ca-upload-progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #ccc;
+  margin-bottom: 4px;
+}
+
+#common-assets-modal .ca-upload-progress-track {
+  height: 8px;
+  background: #222;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+#common-assets-modal .ca-upload-progress-fill {
+  height: 100%;
+  width: 0;
+  background: #4caf50;
+  transition: width 0.15s ease;
+}
+
+#common-assets-modal .ca-upload-progress-fill.is-transcode {
+  background: #2196f3;
+}
+
+#common-assets-modal .ca-upload-progress-fill.is-indeterminate {
+  width: 40% !important;
+  animation: ca-upload-progress-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ca-upload-progress-pulse {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(150%);
+  }
+}

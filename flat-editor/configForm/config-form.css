@@ -163,14 +163,19 @@
 .cfg-number-stepper {
   display: flex;
   align-items: stretch;
+  width: 100%;
+  min-height: 34px;
 }
 
 .cfg-number-input {
   flex: 1;
   min-width: 0;
+  width: 100%;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
-  padding-right: 6px;
+  padding: 6px 8px;
+  text-align: center;
+  font-size: 13px;
 }
 
 .cfg-number-input::-webkit-outer-spin-button,
@@ -187,7 +192,7 @@
 .cfg-number-arrows {
   display: flex;
   flex-direction: column;
-  width: 24px;
+  width: 30px;
   flex-shrink: 0;
 }
 
@@ -200,11 +205,12 @@
   margin: 0;
   border: 1px solid #555;
   background: #3a3a3a;
-  color: #bbb;
-  font-size: 9px;
+  color: #ddd;
+  font-size: 11px;
   line-height: 1;
   cursor: pointer;
-  min-height: 18px;
+  min-height: 17px;
+  user-select: none;
 }
 
 .cfg-number-arrow-up {
@@ -228,6 +234,27 @@
   background: #3d8b40;
 }
 
+.cfg-axis-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #444;
+  border-radius: 6px;
+}
+
+.cfg-axis-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #9ad29a;
+  text-align: center;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .cfg-vector-group {
   margin-bottom: 12px;
 }
@@ -241,26 +268,19 @@
 }
 
 .cfg-vector-row {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-.cfg-vector-row-3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.cfg-vector-row-3 .cfg-axis-cell {
+  flex: 1 1 0;
+  min-width: 72px;
 }
 
-.cfg-vector-row-2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.cfg-vector-row .cfg-form-group {
-  margin-bottom: 0;
-}
-
-.cfg-vector-row .cfg-form-group > label {
-  font-size: 11px;
-  color: #888;
-  margin-bottom: 4px;
+.cfg-vector-row-2 .cfg-axis-cell {
+  flex: 1 1 0;
+  min-width: 96px;
 }
 
 .flat-config-mode-toggle {

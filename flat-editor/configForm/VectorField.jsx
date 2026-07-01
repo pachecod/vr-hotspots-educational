@@ -24,6 +24,7 @@ export default function VectorField({ id, label, value, components = 3, field, h
         {axes.map((axis, index) => (
           <NumberStepper
             key={axis}
+            compact
             id={`${id}-${axis.toLowerCase()}`}
             label={axis}
             value={parts[index]}

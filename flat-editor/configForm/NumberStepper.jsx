@@ -22,19 +22,7 @@ export function inferNumberStep(field, value) {
   return 0.1;
 }
 
-export default function NumberStepper({
-  id,
-  label,
-  value,
-  onChange,
-  step,
-  min,
-  max,
-  help,
-}) {
-  const stepNum = Number(step) || 1;
-  const places = decimalPlaces(stepNum);
-
+function StepperControl({ id, value, stepNum, min, max, places, onChange }) {
   const applyDelta = (delta) => {
     let next = coerceNumber(value, 0) + delta;
     if (min != null && min !== '') next = Math.max(Number(min), next);
@@ -53,40 +41,77 @@ export default function NumberStepper({
   };
 
   return (
+    <div className="cfg-number-stepper">
+      <input
+        id={id}
+        type="number"
+        className="cfg-input cfg-number-input"
+        value={value ?? ''}
+        step={stepNum}
+        min={min}
+        max={max}
+        onChange={(e) => handleInput(e.target.value)}
+      />
+      <div className="cfg-number-arrows">
+        <button
+          type="button"
+          className="cfg-number-arrow cfg-number-arrow-up"
+          aria-label="Increase value"
+          onClick={() => applyDelta(stepNum)}
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          className="cfg-number-arrow cfg-number-arrow-down"
+          aria-label="Decrease value"
+          onClick={() => applyDelta(-stepNum)}
+        >
+          ▼
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function NumberStepper({
+  id,
+  label,
+  value,
+  onChange,
+  step,
+  min,
+  max,
+  help,
+  compact = false,
+}) {
+  const stepNum = Number(step) || 1;
+  const places = decimalPlaces(stepNum);
+  const control = (
+    <StepperControl
+      id={id}
+      value={value}
+      stepNum={stepNum}
+      min={min}
+      max={max}
+      places={places}
+      onChange={onChange}
+    />
+  );
+
+  if (compact) {
+    return (
+      <div className="cfg-axis-cell">
+        <span className="cfg-axis-label">{label}</span>
+        {control}
+      </div>
+    );
+  }
+
+  return (
     <div className="cfg-form-group">
       <label htmlFor={id}>{label}</label>
-      <div className="cfg-number-stepper">
-        <input
-          id={id}
-          type="number"
-          className="cfg-input cfg-number-input"
-          value={value ?? ''}
-          step={stepNum}
-          min={min}
-          max={max}
-          onChange={(e) => handleInput(e.target.value)}
-        />
-        <div className="cfg-number-arrows" aria-hidden="true">
-          <button
-            type="button"
-            className="cfg-number-arrow cfg-number-arrow-up"
-            tabIndex={-1}
-            aria-label={`Increase ${label}`}
-            onClick={() => applyDelta(stepNum)}
-          >
-            ▴
-          </button>
-          <button
-            type="button"
-            className="cfg-number-arrow cfg-number-arrow-down"
-            tabIndex={-1}
-            aria-label={`Decrease ${label}`}
-            onClick={() => applyDelta(-stepNum)}
-          >
-            ▾
-          </button>
-        </div>
-      </div>
+      {control}
       {help && <p className="cfg-help">{help}</p>}
     </div>
   );

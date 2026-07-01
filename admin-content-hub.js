@@ -28,7 +28,7 @@ const ContentHub = {
       project: 'VR Project',
       flat_page: 'Flat Page',
       vr_tour: 'VR Tour',
-      asset: 'Student Asset',
+      asset: 'Team member or student asset',
       orphan_asset: 'Orphaned Asset',
       legacy_submission: 'Legacy B2',
       hosted_submission: 'Hosted',
@@ -70,7 +70,7 @@ const ContentHub = {
     if (!classSel || !studentSel) return;
 
     const isAdmin = classSel.value === ADMIN_CONTENT_CLASS_ID;
-    studentSel.innerHTML = '<option value="">All students</option>';
+    studentSel.innerHTML = '<option value="">All team members or students</option>';
     studentSel.disabled = isAdmin;
     if (isAdmin) {
       studentSel.innerHTML = '<option value="">—</option>';
@@ -96,7 +96,7 @@ const ContentHub = {
       `<span class="chip">${s.project || 0} projects</span>`,
       `<span class="chip">${s.flat_page || 0} flat pages</span>`,
       `<span class="chip">${s.vr_tour || 0} VR tours</span>`,
-      `<span class="chip">${s.asset || 0} student assets</span>`,
+      `<span class="chip">${s.asset || 0} team member or student assets</span>`,
       `<span class="chip">${s.common_asset || 0} shared assets</span>`,
       `<span class="chip">${s.orphan_asset || 0} orphaned</span>`,
       `<span class="chip">${s.legacy_submission || 0} legacy B2</span>`,

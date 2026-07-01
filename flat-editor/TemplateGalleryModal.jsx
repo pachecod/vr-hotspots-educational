@@ -63,7 +63,7 @@ export default function TemplateGalleryModal({ open, onClose, onLoad, mode = 'st
   const title = isAdmin ? 'Starter Templates' : 'Template Gallery';
   const emptyMessage = isAdmin
     ? 'No starter templates found in starter-templates/.'
-    : 'No public templates yet. Ask your teacher to add some.';
+    : 'No public templates yet. Ask your team leader or teacher to add some.';
 
   return (
     <div className="flat-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -84,7 +84,7 @@ export default function TemplateGalleryModal({ open, onClose, onLoad, mode = 'st
             <>
               {isAdmin && (
                 <p className="flat-muted" style={{ marginTop: 0 }}>
-                  Load a starter, customize it, then save as a published template for students.
+                  Load a starter, customize it, then save as a published template for team members or students.
                 </p>
               )}
               <div className="flat-template-list">

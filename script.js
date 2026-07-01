@@ -19519,11 +19519,11 @@ const AdminReviewMode = {
 
       const metaEl = document.getElementById('admin-review-meta');
       if (metaEl) {
-        metaEl.textContent = `${this.versionMeta.studentDisplayName || 'Student'} — ${this.versionMeta.projectName || 'Project'} (v${this.versionMeta.versionNumber || '?'})`;
+        metaEl.textContent = `${this.versionMeta.studentDisplayName || 'Team member or student'} — ${this.versionMeta.projectName || 'Project'} (v${this.versionMeta.versionNumber || '?'})`;
       }
       const noteEl = document.getElementById('admin-review-student-note');
       if (noteEl && this.versionMeta.studentNote) {
-        noteEl.textContent = 'Student note: ' + this.versionMeta.studentNote;
+        noteEl.textContent = 'Team member or student note: ' + this.versionMeta.studentNote;
       }
 
       const waitForEditor = () =>
@@ -19549,13 +19549,13 @@ const AdminReviewMode = {
     `;
     dialog.innerHTML = `
       <div style="background:#2a2a2a;color:#fff;border-radius:10px;padding:24px;max-width:480px;width:90%;">
-        <h3 style="margin:0 0 12px;color:#4CAF50;">Save and Send to Student</h3>
-        <p style="color:#ccc;font-size:14px;">Your edits will be saved as a new version. The student's original submission is never overwritten.</p>
-        <label style="display:block;margin:16px 0 6px;color:#ccc;">Feedback note for student:</label>
+        <h3 style="margin:0 0 12px;color:#4CAF50;">Save and Send to Team Member or Student</h3>
+        <p style="color:#ccc;font-size:14px;">Your edits will be saved as a new version. The team member's or student's original submission is never overwritten.</p>
+        <label style="display:block;margin:16px 0 6px;color:#ccc;">Feedback note for team member or student:</label>
         <textarea id="admin-return-note" rows="4" style="width:100%;padding:10px;background:#333;border:1px solid #555;color:#fff;border-radius:4px;box-sizing:border-box;" placeholder="Optional feedback..."></textarea>
         <div id="admin-return-status" style="margin-top:12px;color:#ccc;font-size:13px;"></div>
         <div style="margin-top:16px;display:flex;gap:8px;">
-          <button id="admin-return-confirm" style="padding:10px 18px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Send to Student</button>
+          <button id="admin-return-confirm" style="padding:10px 18px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Send to Team Member or Student</button>
           <button id="admin-return-cancel" style="padding:10px 18px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
         </div>
       </div>`;
@@ -19576,7 +19576,7 @@ const AdminReviewMode = {
     try {
       if (!window.hotspotEditor) throw new Error('Editor not ready');
       const exportMode = await window.hotspotEditor.showExportModeDialog({
-        title: 'Send to Student',
+        title: 'Send to Team Member or Student',
         description: 'Choose how media should be included in the returned package.',
       });
       if (!exportMode) {
@@ -19623,7 +19623,7 @@ window.AdminReviewMode = AdminReviewMode;
 class StudentSubmission {
   static showSubmissionDialog() {
     if (typeof window.getEditorCapabilities === 'function' && !window.getEditorCapabilities().canSubmit) {
-      alert('Sign in with your class account to submit projects to your teacher.');
+      alert('Sign in with your team or class account to submit projects to your team leader or teacher.');
       return;
     }
     const dialog = document.createElement('div');
@@ -19710,7 +19710,7 @@ class StudentSubmission {
 
   static async saveCloudDraft() {
     if (typeof window.getEditorCapabilities === 'function' && !window.getEditorCapabilities().canUseCloudSave) {
-      alert('Sign in with your class account to save drafts to the cloud.');
+      alert('Sign in with your team or class account to save drafts to the cloud.');
       return;
     }
     const projectName = document.getElementById('template-name')?.value?.trim();
@@ -19734,7 +19734,7 @@ class StudentSubmission {
 
   static async submitProject(projectDisplayName, options = {}) {
     if (typeof window.getEditorCapabilities === 'function' && !window.getEditorCapabilities().canSubmit) {
-      alert('Sign in with your class account to submit or save projects online.');
+      alert('Sign in with your team or class account to submit or save projects online.');
       return;
     }
     if (!projectDisplayName || !projectDisplayName.trim()) {
@@ -19951,7 +19951,7 @@ class StudentSubmission {
                 
                 if (metaRes.status === 402) {
                   const quota = await metaRes.json();
-                  throw new Error(quota.message || 'Usage limit reached. Ask your teacher about upgrading.');
+                  throw new Error(quota.message || 'Usage limit reached. Ask your team leader or teacher about upgrading.');
                 }
                 
                 if (!metaRes.ok) throw new Error('Failed to log submission');
@@ -20332,7 +20332,7 @@ const CommonAssetsPicker = {
       });
       const data = await res.json();
       if (res.status === 402) {
-        alert('Storage limit reached. Ask your teacher about upgrading.');
+        alert('Storage limit reached. Ask your team leader or teacher about upgrading.');
         return;
       }
       if (!data.success) throw new Error(data.message || 'Upload failed');

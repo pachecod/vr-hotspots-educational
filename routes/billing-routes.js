@@ -174,7 +174,7 @@ function registerBillingRoutes(app) {
 
   app.post('/api/student/billing/checkout', requireStudentStrict, async (req, res) => {
     if (!isStripeEnabled() || process.env.STRIPE_ALLOW_STUDENT_UPGRADES !== 'true') {
-      return res.status(403).json({ success: false, message: 'Student upgrades not available' });
+      return res.status(403).json({ success: false, message: 'Team member or student upgrades not available' });
     }
     try {
       const { tier } = req.body || {};

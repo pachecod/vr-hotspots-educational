@@ -36,11 +36,11 @@
       <div class="panel">
         <h2>Billing &amp; limits</h2>
         <p style="color:#666;margin-top:0;">
-          Set per-class limits below. Choose a plan tier for defaults, then override individual limits.
+          Set per-team or class limits below. Choose a plan tier for defaults, then override individual limits.
           Check <strong>Unlimited</strong> for no cap on that metric.
         </p>
         <div id="billing-ui">
-          <label for="billing-class-select"><strong>Select class:</strong></label><br />
+          <label for="billing-class-select"><strong>Select team or class:</strong></label><br />
           <select id="billing-class-select"></select>
           <div id="billing-summary" style="margin-top:16px;"></div>
 
@@ -53,8 +53,8 @@
 
           <div id="stripe-upgrade" style="display:none;">
             <h3>Stripe upgrades</h3>
-            <p style="color:#666;">Paid self-service upgrades for this class.</p>
-            <button type="button" class="btn-primary" onclick="upgradeClass('class')">Upgrade to Class ($9)</button>
+            <p style="color:#666;">Paid self-service upgrades for this team or class.</p>
+            <button type="button" class="btn-primary" onclick="upgradeClass('class')">Upgrade to Team or Class ($9)</button>
             <button type="button" class="btn-primary" onclick="upgradeClass('pro')">Upgrade to Pro ($29)</button>
             <button type="button" class="btn-secondary" onclick="openPortal()">Manage subscription</button>
           </div>

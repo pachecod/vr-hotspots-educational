@@ -299,7 +299,7 @@ async function loadStudentPeekDropdown() {
       const opt = document.createElement('option');
       opt.value = s.id;
       const classLabel = s.class_name ? ` (${s.class_name})` : '';
-      opt.textContent = `${s.display_name || s.username || 'Student'}${classLabel}`;
+      opt.textContent = `${s.display_name || s.username || 'Team member or student'}${classLabel}`;
       select.appendChild(opt);
     });
   } catch (err) {

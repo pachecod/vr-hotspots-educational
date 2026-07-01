@@ -116,10 +116,10 @@ async function getUsageSummary({ classId, studentId }) {
 
 function quotaError(metric, limit, current, upgradeUrl = '/admin-billing.html') {
   const messages = {
-    submission_count: 'Monthly submission limit reached for this class.',
-    hosted_project_count: 'Hosted project limit reached for this class.',
-    personal_storage_bytes: 'Storage limit reached for this class.',
-    asset_file_count: 'Student asset file limit reached.',
+    submission_count: 'Monthly submission limit reached for this team or class.',
+    hosted_project_count: 'Hosted project limit reached for this team or class.',
+    personal_storage_bytes: 'Storage limit reached for this team or class.',
+    asset_file_count: 'Team member or student asset file limit reached.',
   };
   const err = new Error(messages[metric] || 'Usage limit reached.');
   err.statusCode = 402;
@@ -129,7 +129,7 @@ function quotaError(metric, limit, current, upgradeUrl = '/admin-billing.html') 
     limit,
     current,
     upgradeUrl,
-    message: messages[metric] || 'Usage limit reached. Ask your teacher to adjust class limits.',
+    message: messages[metric] || 'Usage limit reached. Ask your team leader or teacher to adjust team or class limits.',
   };
   return err;
 }

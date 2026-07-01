@@ -127,9 +127,9 @@ function showStudentEditorSession(student) {
   const nameEl = document.getElementById('student-editor-name');
   const classEl = document.getElementById('student-editor-class');
   if (!bar || !student) return;
-  if (nameEl) nameEl.textContent = student.displayName || 'Student';
+  if (nameEl) nameEl.textContent = student.displayName || 'Team member or student';
   if (classEl) {
-    classEl.textContent = student.className ? `Class: ${student.className}` : '';
+    classEl.textContent = student.className ? `Team or Class: ${student.className}` : '';
     classEl.style.display = student.className ? '' : 'none';
   }
   bar.classList.add('visible');
@@ -229,9 +229,12 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
   inner.innerHTML = `
     <div class="integrated-welcome-layout">
       <div class="integrated-welcome-auth">
-        <h2 style="margin: 0 0 12px; font-size: 28px; font-weight: bold;">Immersive Storytelling<br>Publishing Tool</h2>
+        <h2 style="margin: 0 0 12px; font-size: 28px; font-weight: bold;">Welcome to the WebXR<i>IDE</i><br/>Immersive Storytelling Tool</h2>
         <p style="color: #f0f0f0; margin: 0 0 28px; font-size: 16px; line-height: 1.6;">
-          Every project has a 360° tour and a flat web page. Choose how you'd like to get started.
+          Create 360° tours that work on desktop and mobile browsers and Quest headsets, along with traditional web pages that highlight your immersive content. You can also make storytelling worlds users can move through using WASD keys or thumbs (on mobile).</p>
+          
+          <p style="color: #f0f0f0; margin: 0 0 28px; font-size: 16px; line-height: 1.6;">
+          Choose how you'd like to get started.
         </p>
         ${
           showGuest
@@ -243,7 +246,7 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
           ">Continue as Guest</button>
           <p style="color: rgba(255,255,255,0.75); font-size: 12px; margin: 0 0 16px;">
-            Local files, shared assets, and ZIP export. No cloud save or submit.
+            Local files, shared assets, and ZIP export. No cloud saves or submissions to administrators.
           </p>
           <div style="display: flex; align-items: center; gap: 12px; margin: 20px 0 16px;">
             <div style="flex:1;height:1px;background:rgba(255,255,255,0.25);"></div>
@@ -258,7 +261,7 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
           background: #4CAF50; color: white; border: none; border-radius: 8px;
           font-size: 16px; font-weight: bold; cursor: pointer;
           box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        ">Sign in with class account</button>
+        ">Sign in to a team or class account</button>
         <div id="student-login-error" style="color: #ffcdd2; margin-top: 14px; display: none; font-size: 14px;"></div>
         ${welcomeGithubFooterHtml()}
       </div>
@@ -337,7 +340,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
         font-size: 14px; cursor: pointer; padding: 4px 8px;">← Back</button>
       <div style="font-size: 40px; margin-bottom: 12px;">🎓</div>
       <h2 style="margin: 0 0 8px; font-size: 24px; font-weight: bold;">Sign in</h2>
-      <p id="student-login-subtitle" style="color: #f0f0f0; margin: 0 0 20px; font-size: 15px;">Choose your class</p>
+      <p id="student-login-subtitle" style="color: #f0f0f0; margin: 0 0 20px; font-size: 15px;">Choose your team or class</p>
       <div id="student-login-step" style="text-align: left;"></div>
       <div id="student-login-error" style="color: #ffcdd2; margin-top: 12px; display: none; font-size: 14px;"></div>
     `;
@@ -365,7 +368,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
         display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;">
         <div style="background:#2a2a2a;color:#fff;border-radius:12px;padding:32px;max-width:420px;width:90%;border:2px solid #4caf50;">
           <h2 style="margin:0 0 8px;color:#4caf50;">VR Hotspots</h2>
-          <p id="student-login-subtitle" style="color:#ccc;margin:0 0 20px;">Choose your class</p>
+          <p id="student-login-subtitle" style="color:#ccc;margin:0 0 20px;">Choose your team or class</p>
           <div id="student-login-step"></div>
           <div id="student-login-error" style="color:#f44336;margin-top:12px;display:none;"></div>
         </div>
@@ -387,14 +390,14 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
 
   function renderClassStep() {
     selectedStudent = null;
-    subtitleEl.textContent = 'Step 1 of 3 — Choose your class';
+    subtitleEl.textContent = 'Step 1 of 3 — Choose your team or class';
     const backBtn =
       options.showBackToEntry && !useWelcomeShell
         ? `<button type="button" id="student-back-entry" style="background:none;border:none;color:#4caf50;cursor:pointer;margin-bottom:12px;padding:0;">← Back</button>`
         : '';
     if (!classes.length) {
       stepEl.innerHTML =
-        backBtn + '<p style="color:#f0f0f0;">No classes available. Ask your teacher to add you.</p>';
+        backBtn + '<p style="color:#f0f0f0;">No teams or classes available. Ask your team leader or teacher to add you.</p>';
       return;
     }
     stepEl.innerHTML =
@@ -407,7 +410,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
           <button type="button" class="student-class-btn" data-id="${c.id}" style="
             text-align:left;padding:12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;cursor:pointer;">
             <strong>${escapeHtml(c.name)}</strong>
-            <span style="color:rgba(255,255,255,0.65);font-size:12px;display:block;">${c.student_count || 0} student(s)</span>
+            <span style="color:rgba(255,255,255,0.65);font-size:12px;display:block;">${c.student_count || 0} team member(s) or student(s)</span>
           </button>`
           )
           .join('')}
@@ -425,7 +428,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   function renderStudentStep() {
     subtitleEl.textContent = `Step 2 of 3 — Choose your name (${selectedClass.name})`;
     stepEl.innerHTML = `
-      <button type="button" id="student-back-class" style="background:none;border:none;color:rgba(255,255,255,0.9);cursor:pointer;margin-bottom:12px;padding:0;">← Back to classes</button>
+      <button type="button" id="student-back-class" style="background:none;border:none;color:rgba(255,255,255,0.9);cursor:pointer;margin-bottom:12px;padding:0;">← Back to teams or classes</button>
       <div style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto;">
         ${students.length
           ? students
@@ -437,7 +440,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
           </button>`
               )
               .join('')
-          : '<p style="color:#f0f0f0;">No students in this class yet.</p>'}
+          : '<p style="color:#f0f0f0;">No team members or students in this team or class yet.</p>'}
       </div>
     `;
 
@@ -455,9 +458,9 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
     stepEl.innerHTML = `
       <button type="button" id="student-back-student" style="background:none;border:none;color:rgba(255,255,255,0.9);cursor:pointer;margin-bottom:12px;padding:0;">← Back to names</button>
       <div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:12px;margin-bottom:16px;">
-        <div style="color:rgba(255,255,255,0.65);font-size:12px;">Class</div>
+        <div style="color:rgba(255,255,255,0.65);font-size:12px;">Team or Class</div>
         <div style="font-weight:bold;">${escapeHtml(selectedClass.name)}</div>
-        <div style="color:rgba(255,255,255,0.65);font-size:12px;margin-top:8px;">Student</div>
+        <div style="color:rgba(255,255,255,0.65);font-size:12px;margin-top:8px;">Team member or student</div>
         <div style="font-weight:bold;">${escapeHtml(selectedStudent.display_name)}</div>
       </div>
       <label style="display:block;color:#f0f0f0;margin-bottom:6px;font-size:13px;">Password from your teacher</label>
@@ -511,7 +514,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
     const data = await res.json();
     classes = Array.isArray(data) ? data : [];
     if (!res.ok && !classes.length) {
-      throw new Error(data?.message || 'Could not load classes');
+      throw new Error(data?.message || 'Could not load teams or classes');
     }
   }
 
@@ -523,10 +526,10 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   loadClasses()
     .then(renderClassStep)
     .catch((err) => {
-      showError(err.message || 'Could not load classes. Try again later.');
-      subtitleEl.textContent = 'Choose your class';
+      showError(err.message || 'Could not load teams or classes. Try again later.');
+      subtitleEl.textContent = 'Choose your team or class';
       stepEl.innerHTML =
-        '<p style="color:#f0f0f0;">Could not load classes. Check your connection or ask your teacher.</p>';
+        '<p style="color:#f0f0f0;">Could not load teams or classes. Check your connection or ask your team leader or teacher.</p>';
     });
 }
 

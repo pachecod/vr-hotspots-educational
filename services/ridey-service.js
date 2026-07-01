@@ -99,7 +99,7 @@ async function analyzeCodeWithAI(request) {
       suggestion: `<!-- OpenAI API key not configured on server -->\n${code}`,
       fileUpdates: [{ fileName: fileName || activeFileName || 'index.html', suggestion: code }],
       explanation:
-        'Ridey requires OPENAI_API_KEY in the server environment. Ask your teacher or admin to configure it.',
+        'Ridey requires OPENAI_API_KEY in the server environment. Ask your team leader, teacher, or admin to configure it.',
       confidence: 0,
     };
   }
@@ -138,7 +138,7 @@ Respond in JSON with:
 - "confidence": Number 0-1`;
 
   const userPrompt = multiFile
-    ? `The student is currently editing: ${activeFileName || fileName || 'index.html'}
+    ? `The team member or student is currently editing: ${activeFileName || fileName || 'index.html'}
 
 User Question: ${prompt}
 

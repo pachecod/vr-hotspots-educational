@@ -49,7 +49,7 @@ function registerAdminStudentPeekRoutes(app, { requireAdmin }) {
     try {
       const meta = await getStudentPeekMeta(req.params.studentId);
       if (!meta) {
-        return res.status(404).json({ success: false, message: 'Student not found' });
+        return res.status(404).json({ success: false, message: 'Team member or student not found' });
       }
       return res.json({ success: true, student: meta });
     } catch (err) {
@@ -63,7 +63,7 @@ function registerAdminStudentPeekRoutes(app, { requireAdmin }) {
       const studentId = req.params.studentId;
       const meta = await getStudentPeekMeta(studentId);
       if (!meta) {
-        return res.status(404).json({ success: false, message: 'Student not found' });
+        return res.status(404).json({ success: false, message: 'Team member or student not found' });
       }
 
       const { rows } = await query(
@@ -99,7 +99,7 @@ function registerAdminStudentPeekRoutes(app, { requireAdmin }) {
       const studentId = req.params.studentId;
       const meta = await getStudentPeekMeta(studentId);
       if (!meta) {
-        return res.status(404).json({ success: false, message: 'Student not found' });
+        return res.status(404).json({ success: false, message: 'Team member or student not found' });
       }
       const tags = await listTagsForScope(buildStudentScopePrefix(studentId), {
         sort: parseTagSortParam(req.query.sort),
@@ -185,7 +185,7 @@ function registerAdminStudentPeekRoutes(app, { requireAdmin }) {
     try {
       const meta = await getStudentPeekMeta(req.params.studentId);
       if (!meta) {
-        return res.status(404).json({ success: false, message: 'Student not found' });
+        return res.status(404).json({ success: false, message: 'Team member or student not found' });
       }
       const versions = await projectVersionsDb.listAllVersionsForStudent(req.params.studentId);
       return res.json({ success: true, versions, student: meta });

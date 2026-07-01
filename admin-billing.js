@@ -8,7 +8,7 @@ const LIMIT_FIELDS = [
   {
     key: 'submissionsPerMonth',
     label: 'Submissions per month',
-    hint: 'Total student project submissions for this class each calendar month.',
+    hint: 'Total team member or student project submissions for this team or class each calendar month.',
   },
   {
     key: 'hostedProjects',
@@ -18,13 +18,13 @@ const LIMIT_FIELDS = [
   {
     key: 'storageMb',
     label: 'Storage limit (MB)',
-    hint: 'Class pooled storage on Class/Pro tiers; per-student cap on Free tier.',
+    hint: 'Team or class pooled storage on Class/Pro tiers; per-team-member-or-student cap on Free tier.',
     storage: true,
   },
   {
     key: 'maxAssetFilesPerStudent',
-    label: 'Asset files per student',
-    hint: 'Maximum uploaded files in each student personal asset library.',
+    label: 'Asset files per team member or student',
+    hint: 'Maximum uploaded files in each team member or student personal asset library.',
   },
 ];
 
@@ -193,7 +193,7 @@ async function loadBillingSummary() {
        / ${formatLimit(submissionsLimit)}</p>
     <p><strong>Hosted projects:</strong> ${u.hostedProjectCount || 0}
        / ${formatLimit(hostedLimit)}</p>
-    <p><strong>Asset files (current student context):</strong> ${u.assetFileCount || 0}
+    <p><strong>Asset files (current team member or student context):</strong> ${u.assetFileCount || 0}
        / ${formatLimit(limits.maxAssetFilesPerStudent)}</p>
   `;
 
@@ -243,7 +243,7 @@ async function saveClassLimits() {
   const msg = document.getElementById('limits-msg');
   msg.textContent = '';
   msg.className = '';
-  if (!selectedClassId) return alert('Select a class');
+  if (!selectedClassId) return alert('Select a team or class');
 
   const planTier = document.getElementById('plan-tier-select').value;
   const limitOverridesPatch = collectLimitOverrides(planTier);
@@ -271,7 +271,7 @@ async function saveClassLimits() {
 
 async function resetOverrides() {
   if (!selectedClassId) return;
-  if (!confirm('Remove all custom limit overrides for this class? Tier defaults will apply.')) return;
+  if (!confirm('Remove all custom limit overrides for this team or class? Tier defaults will apply.')) return;
   const msg = document.getElementById('limits-msg');
   try {
     const res = await adminFetch('/admin/billing/class-settings', {
@@ -291,7 +291,7 @@ async function resetOverrides() {
 }
 
 async function upgradeClass(tier) {
-  if (!selectedClassId) return alert('Select a class');
+  if (!selectedClassId) return alert('Select a team or class');
   const res = await adminFetch('/admin/billing/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -303,7 +303,7 @@ async function upgradeClass(tier) {
 }
 
 async function openPortal() {
-  if (!selectedClassId) return alert('Select a class');
+  if (!selectedClassId) return alert('Select a team or class');
   const res = await adminFetch('/admin/billing/portal', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

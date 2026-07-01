@@ -117,7 +117,7 @@ function registerStudentAssetRoutes(app, upload) {
 
         const studentId = req.studentSession.studentId;
         const ctx = await getStudentContext(studentId);
-        if (!ctx) return res.status(401).json({ success: false, message: 'Student not found' });
+        if (!ctx) return res.status(401).json({ success: false, message: 'Team member or student not found' });
 
         const prepared = await prepareVideoForStorage({
           tempPath,

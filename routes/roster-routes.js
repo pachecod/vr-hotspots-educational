@@ -230,12 +230,12 @@ function registerRosterRoutes(app, { requireAdmin }) {
     try {
       const { name, description } = req.body || {};
       if (!name || !name.trim()) {
-        return res.status(400).json({ success: false, message: 'Class name is required' });
+        return res.status(400).json({ success: false, message: 'Team or class name is required' });
       }
       const created = await createClass({ name, description });
       res.json({ success: true, class: created });
     } catch (err) {
-      const msg = err.code === '23505' ? 'Class name already exists' : err.message;
+      const msg = err.code === '23505' ? 'Team or class name already exists' : err.message;
       res.status(400).json({ success: false, message: msg });
     }
   });
@@ -243,7 +243,7 @@ function registerRosterRoutes(app, { requireAdmin }) {
   app.put('/admin/classes/:id', requireAdmin, requireDb, async (req, res) => {
     try {
       const updated = await updateClass(req.params.id, req.body || {});
-      if (!updated) return res.status(404).json({ success: false, message: 'Class not found' });
+      if (!updated) return res.status(404).json({ success: false, message: 'Team or class not found' });
       res.json({ success: true, class: updated });
     } catch (err) {
       res.status(400).json({ success: false, message: err.message });
@@ -293,7 +293,7 @@ function registerRosterRoutes(app, { requireAdmin }) {
   app.put('/admin/students/:id', requireAdmin, requireDb, async (req, res) => {
     try {
       const updated = await updateStudent(req.params.id, req.body || {});
-      if (!updated) return res.status(404).json({ success: false, message: 'Student not found' });
+      if (!updated) return res.status(404).json({ success: false, message: 'Team member or student not found' });
       res.json({ success: true, student: updated });
     } catch (err) {
       res.status(400).json({ success: false, message: err.message });
@@ -312,7 +312,7 @@ function registerRosterRoutes(app, { requireAdmin }) {
   app.post('/admin/students/:id/reset-password', requireAdmin, requireDb, async (req, res) => {
     try {
       const result = await resetStudentPassword(req.params.id, req.body && req.body.password);
-      if (!result.student) return res.status(404).json({ success: false, message: 'Student not found' });
+      if (!result.student) return res.status(404).json({ success: false, message: 'Team member or student not found' });
       res.json({ success: true, student: result.student, password: result.plainPassword });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });

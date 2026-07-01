@@ -46,7 +46,7 @@ function requireStudent(req, res, next) {
   }
   const sess = getStudentSession(req);
   if (!sess || !sess.studentId) {
-    return res.status(401).json({ success: false, message: 'Student authentication required' });
+    return res.status(401).json({ success: false, message: 'Team member or student authentication required' });
   }
   req.studentSession = sess;
   return next();
@@ -55,7 +55,7 @@ function requireStudent(req, res, next) {
 function requireStudentStrict(req, res, next) {
   const sess = getStudentSession(req);
   if (!sess || !sess.studentId) {
-    return res.status(401).json({ success: false, message: 'Student authentication required' });
+    return res.status(401).json({ success: false, message: 'Team member or student authentication required' });
   }
   req.studentSession = sess;
   return next();
@@ -88,7 +88,7 @@ async function handleStudentLogin(req, res) {
   try {
     const student = await verifyStudentPassword(classId, studentId, password);
     if (!student) {
-      return res.status(401).json({ success: false, message: 'Invalid class, student, or password' });
+      return res.status(401).json({ success: false, message: 'Invalid team or class, team member or student, or password' });
     }
     const token = session.createToken({
       studentId: student.id,

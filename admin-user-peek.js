@@ -120,7 +120,7 @@ const StudentPeek = {
       const assetsData = await assetsRes.json();
       const versionsData = await versionsRes.json();
 
-      if (!metaData.success) throw new Error(metaData.message || 'Student not found');
+      if (!metaData.success) throw new Error(metaData.message || 'Team member or student not found');
 
       const student = metaData.student;
       if (header) {
@@ -145,7 +145,7 @@ const StudentPeek = {
         });
         return;
       }
-      if (header) header.innerHTML = '<p style="color:#dc3545;">Could not load student.</p>';
+      if (header) header.innerHTML = '<p style="color:#dc3545;">Could not load team member or student.</p>';
       if (versionsEl) versionsEl.innerHTML = '<p style="color:#dc3545;">Error loading data.</p>';
     }
   },
@@ -174,7 +174,7 @@ const StudentPeek = {
           .map((v) => {
             const date = v.submittedAt || v.createdAt;
             const studentNote = v.studentNote
-              ? `<div class="version-note">Student: ${this.escapeHtml(v.studentNote)}</div>`
+              ? `<div class="version-note">Team member or student: ${this.escapeHtml(v.studentNote)}</div>`
               : '';
             const adminNote = v.adminNote
               ? `<div class="version-note">Teacher: ${this.escapeHtml(v.adminNote)}</div>`

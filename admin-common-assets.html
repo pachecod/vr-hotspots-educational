@@ -429,9 +429,9 @@
 
         <h1>Assets</h1>
         <p style="color: #666">
-          Upload online flat images, 360° photos/videos, audio, and 3D models. Students can copy
+          Upload online flat images, 360° photos/videos, audio, and 3D models. Team members or students can copy
           stable URLs into hotspot fields or use 360° assets for scenes. The online assets below are
-          available to all students. To see assets students have uploaded, select the student's user
+          available to all team members or students. To see assets a team member or student has uploaded, select their
           name in the pulldown.
         </p>
 
@@ -443,9 +443,9 @@
             </button>
           </div>
           <div class="assets-action-col">
-            <h2>Peek Into Student Assets and Submissions</h2>
+            <h2>Peek Into Team Member or Student Assets and Submissions</h2>
             <select id="student-peek-select">
-              <option value="">— Select a student —</option>
+              <option value="">— Select a team member or student —</option>
             </select>
             <button type="button" id="open-content-hub-btn" class="assets-action-btn" style="background:#6f42c1;margin-top:4px;">
               Review &amp; Manage All Content
@@ -506,18 +506,18 @@
         <div id="content-hub-view" style="display: none">
           <button type="button" id="content-hub-back-btn" class="assets-action-btn" style="background:#6c757d;margin-bottom:16px;">← Back to Assets</button>
           <h2 style="margin-top:0;">Review &amp; Manage All Content</h2>
-          <p style="color:#555;margin-top:0;">Student projects, uploads, published tours, shared online assets, and orphaned files.</p>
+          <p style="color:#555;margin-top:0;">Team member or student projects, uploads, published tours, shared online assets, and orphaned files.</p>
           <div id="ch-summary-chips" class="content-hub-chips"></div>
           <div class="content-hub-filters">
-            <label>Class: <select id="ch-filter-class"><option value="">All classes</option></select></label>
-            <label>Student: <select id="ch-filter-student"><option value="">All students</option></select></label>
+            <label>Team or Class: <select id="ch-filter-class"><option value="">All teams or classes</option></select></label>
+            <label>Team members or students: <select id="ch-filter-student"><option value="">All team members or students</option></select></label>
             <label>Type:
               <select id="ch-filter-type">
                 <option value="">All types</option>
                 <option value="project">VR Projects</option>
                 <option value="flat_page">Flat Pages</option>
                 <option value="vr_tour">VR Tour Publishes</option>
-                <option value="asset">Student Assets</option>
+                <option value="asset">Team member or student assets</option>
                 <option value="common_asset">Shared Online Assets</option>
                 <option value="orphan_asset">Orphaned Assets</option>
                 <option value="legacy_submission">Legacy B2</option>

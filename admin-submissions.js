@@ -81,7 +81,7 @@ async function loadClassesAndStudents() {
     });
 
     classSel.addEventListener('change', async () => {
-      studentSel.innerHTML = '<option value="">All students</option>';
+      studentSel.innerHTML = '<option value="">All team members or students</option>';
       const classId = classSel.value;
       if (!classId) return;
       const sRes = await adminFetch(`/api/classes/${classId}/students`);
@@ -122,7 +122,7 @@ async function loadInbox() {
         const versionId = sub.id;
         const threadId = sub.threadId;
         const noteBlock = sub.studentNote
-          ? `<div class="note-block"><strong>Student note:</strong>${escapeHtml(sub.studentNote)}</div>`
+          ? `<div class="note-block"><strong>Team member or student note:</strong>${escapeHtml(sub.studentNote)}</div>`
           : '';
         const hostedLink = formatHostedLinks(sub);
 
@@ -138,7 +138,7 @@ async function loadInbox() {
           <div class="submission-card" data-version-id="${versionId}" data-thread-id="${threadId}">
             <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}${legacy ? ' <span class="badge badge-draft">B2 only</span>' : ''}</h3>
             <div class="meta">
-              <strong>Student:</strong> ${escapeHtml(sub.studentDisplayName || sub.studentName || 'Unknown')}
+              <strong>Team member or student:</strong> ${escapeHtml(sub.studentDisplayName || sub.studentName || 'Unknown')}
               ${sub.className ? ` (${escapeHtml(sub.className)})` : ''}<br>
               <strong>Version:</strong> #${sub.versionNumber || 1}<br>
               <strong>Submitted:</strong> ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '—'}<br>

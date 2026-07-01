@@ -127,7 +127,7 @@ async function togglePasswordsPanel() {
     return;
   }
   const ok = confirm(
-    'View student passwords on this page?\n\nOnly continue on a trusted device. Anyone with admin access can see these passwords.'
+    'View team member or student passwords on this page?\n\nOnly continue on a trusted device. Anyone with admin access can see these passwords.'
   );
   if (!ok) return;
   passwordsPanelOpen = true;
@@ -178,9 +178,9 @@ async function loadPasswordReport() {
     passwordReportRows = await res.json();
     const scope =
       filterClassId === 'all'
-        ? 'all classes'
-        : classes.find((c) => c.id === filterClassId)?.name || 'selected class';
-    status.textContent = `${passwordReportRows.length} student(s) — ${scope}`;
+        ? 'all teams or classes'
+        : classes.find((c) => c.id === filterClassId)?.name || 'selected team or class';
+    status.textContent = `${passwordReportRows.length} team member(s) or student(s) — ${scope}`;
     renderPasswordReport();
   } catch (err) {
     status.textContent = '';
@@ -191,12 +191,12 @@ async function loadPasswordReport() {
 function renderPasswordReport() {
   const list = document.getElementById('passwords-list');
   if (!passwordReportRows.length) {
-    list.innerHTML = '<p style="color:#666;">No students found.</p>';
+    list.innerHTML = '<p style="color:#666;">No team members or students found.</p>';
     return;
   }
   list.innerHTML = `<table>
     <thead><tr>
-      <th>Class</th><th>Name</th><th>Username</th><th>Password</th><th>Set</th><th></th>
+      <th>Team or class</th><th>Name</th><th>Username</th><th>Password</th><th>Set</th><th></th>
     </tr></thead>
     <tbody>${passwordReportRows.map((row, index) => {
       const hasPassword = !!row.password;
@@ -238,18 +238,18 @@ async function loadClasses() {
   classes = await res.json();
   renderClasses();
   const filter = document.getElementById('filter-class');
-  filter.innerHTML = '<option value="all">All classes</option>' +
+  filter.innerHTML = '<option value="all">All teams or classes</option>' +
     classes.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
 }
 
 function renderClasses() {
   const el = document.getElementById('classes-list');
   if (!classes.length) {
-    el.innerHTML = '<p style="color:#666;">No classes yet.</p>';
+    el.innerHTML = '<p style="color:#666;">No teams or classes yet.</p>';
     return;
   }
   el.innerHTML = `<table>
-    <thead><tr><th>Name</th><th>Students</th><th>Plan</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Name</th><th>Team members or students</th><th>Plan</th><th>Actions</th></tr></thead>
     <tbody>${classes.map((c) => `
       <tr>
         <td><strong>${escapeHtml(c.name)}</strong><br><small style="color:#888;">${escapeHtml(c.description || '')}</small></td>
@@ -265,7 +265,7 @@ function renderClasses() {
 async function addClass() {
   const name = document.getElementById('new-class-name').value.trim();
   const description = document.getElementById('new-class-desc').value.trim();
-  if (!name) return alert('Class name required');
+  if (!name) return alert('Team or Class name required');
   const res = await adminFetch('/admin/classes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -279,7 +279,7 @@ async function addClass() {
 }
 
 async function deleteClass(id) {
-  if (!confirm('Delete this class and all its students?')) return;
+    if (!confirm('Delete this team or class and all its team members or students?')) return;
   await adminFetch(`/admin/classes/${id}`, { method: 'DELETE' });
   await loadClasses();
   await loadStudents();
@@ -295,11 +295,11 @@ async function loadStudents() {
 function renderStudents() {
   const el = document.getElementById('students-list');
   if (!students.length) {
-    el.innerHTML = '<p style="color:#666;">No students yet.</p>';
+    el.innerHTML = '<p style="color:#666;">No team members or students yet.</p>';
     return;
   }
   el.innerHTML = `<table>
-    <thead><tr><th>Name</th><th>Username</th><th>Class</th><th>Active</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Name</th><th>Username</th><th>Team or Class</th><th>Active</th><th>Actions</th></tr></thead>
     <tbody>${students.map((s) => `
       <tr>
         <td>${escapeHtml(s.display_name)}</td>
@@ -319,8 +319,8 @@ async function addStudent() {
   const displayName = document.getElementById('new-student-name').value.trim();
   const password = document.getElementById('new-student-password').value;
   const classId = document.getElementById('filter-class').value;
-  if (!displayName) return alert('Student name required');
-  if (classId === 'all') return alert('Select a specific class first');
+  if (!displayName) return alert('Team member or student name required');
+  if (classId === 'all') return alert('Select a specific team or class first');
   const body = { classId, displayName };
   if (password.trim()) body.password = password.trim();
   const res = await adminFetch('/admin/students', {
@@ -345,7 +345,7 @@ async function resetPassword(id) {
 }
 
 async function deleteStudent(id) {
-  if (!confirm('Delete this student?')) return;
+    if (!confirm('Delete this team member or student?')) return;
   await adminFetch(`/admin/students/${id}`, { method: 'DELETE' });
   await loadStudents();
   await loadClasses();

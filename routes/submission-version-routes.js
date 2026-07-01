@@ -20,7 +20,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       try {
         const sess = getStudentSession(req);
         if (!sess || !sess.studentId) {
-          return res.status(401).json({ success: false, message: 'Student authentication required' });
+          return res.status(401).json({ success: false, message: 'Team member or student authentication required' });
         }
 
         const { projectName, kind = 'submitted', threadId } = req.body || {};
@@ -184,7 +184,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       try {
         const sess = getStudentSession(req);
         if (!sess || !sess.studentId) {
-          return res.status(401).json({ success: false, message: 'Student authentication required' });
+          return res.status(401).json({ success: false, message: 'Team member or student authentication required' });
         }
         const { projectName, fileName, remotePath, studentNote, threadId, versionNumber } =
           req.body || {};

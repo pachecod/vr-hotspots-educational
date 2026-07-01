@@ -40,7 +40,9 @@ export class FlatPageEditorBridge {
     this._editorSelections = {};
     this._blockedExtensions = [];
     this._rideyStatus = { enabled: false, hasApiKey: false };
+    this._pendingConfigVisual = false;
     this._loadFromStorage();
+    this._focusConfigEditorIfConfigured({ preferVisual: true });
     this._loadEditorSettings();
   }
 
@@ -126,8 +128,11 @@ export class FlatPageEditorBridge {
     const normalized = this._normalizeProject(input);
     if (!normalized) return false;
     this.project = normalized;
-    this.activeFileId = 'index.html';
+    if (!this._focusConfigEditorIfConfigured({ preferVisual: true })) {
+      this.activeFileId = 'index.html';
+    }
     this.save();
+    this._notify();
     return true;
   }
 
@@ -254,6 +259,23 @@ export class FlatPageEditorBridge {
     } catch (_) {
       return false;
     }
+  }
+
+  /** Open config.json in visual mode when config.ui.json defines a form schema. */
+  _focusConfigEditorIfConfigured({ preferVisual = false } = {}) {
+    if (!this.hasConfigUiSchema()) return false;
+    const page = this.getActivePage();
+    const hasConfig = (page.files || []).some((f) => f.id === 'config.json');
+    if (!hasConfig) return false;
+    this.activeFileId = 'config.json';
+    if (preferVisual) this._pendingConfigVisual = true;
+    return true;
+  }
+
+  consumePendingConfigVisual() {
+    const pending = this._pendingConfigVisual;
+    this._pendingConfigVisual = false;
+    return pending;
   }
 
   setFileContent(fileId, content) {
@@ -421,9 +443,12 @@ export class FlatPageEditorBridge {
     const page = this.getActivePage();
     page.name = template.title || page.name;
     page.files = this._mergePageFiles(byId);
-    this.activeFileId = 'index.html';
+    if (!this._focusConfigEditorIfConfigured({ preferVisual: true })) {
+      this.activeFileId = 'index.html';
+    }
     this.save();
     this._syncScenesData();
+    this._notify();
     return true;
   }
 

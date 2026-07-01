@@ -60,9 +60,18 @@ export default function FlatPageEditorUI({ bridge }) {
       bridge.subscribe(() => {
         bump((n) => n + 1);
         setPreviewKey((k) => k + 1);
+        if (bridge.consumePendingConfigVisual()) {
+          setConfigEditorMode('visual');
+        }
       }),
     [bridge]
   );
+
+  useEffect(() => {
+    if (bridge.consumePendingConfigVisual()) {
+      setConfigEditorMode('visual');
+    }
+  }, [bridge]);
 
   const state = bridge.getState();
   const page = bridge.getActivePage();
@@ -312,9 +321,6 @@ export default function FlatPageEditorUI({ bridge }) {
             window.dispatchEvent(
               new CustomEvent('admin-starter-template-loaded', { detail: { title: template.title } })
             );
-          }
-          if (bridge.hasConfigUiSchema()) {
-            setConfigEditorMode('visual');
           }
           setPreviewKey((k) => k + 1);
         }}

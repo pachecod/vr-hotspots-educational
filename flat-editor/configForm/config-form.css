@@ -228,6 +228,41 @@
   background: #3d8b40;
 }
 
+.cfg-vector-group {
+  margin-bottom: 12px;
+}
+
+.cfg-vector-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ccc;
+  margin-bottom: 6px;
+}
+
+.cfg-vector-row {
+  display: grid;
+  gap: 8px;
+}
+
+.cfg-vector-row-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cfg-vector-row-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cfg-vector-row .cfg-form-group {
+  margin-bottom: 0;
+}
+
+.cfg-vector-row .cfg-form-group > label {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
 .flat-config-mode-toggle {
   display: inline-flex;
   border: 1px solid #555;

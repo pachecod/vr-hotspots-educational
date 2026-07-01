@@ -1,6 +1,9 @@
+import { isAframeVectorString } from './vectorUtils.js';
+
 const URL_KEY = /url|src|href|sky|image|model|audio|video|glb|texture/i;
 const COLOR_KEY = /color/i;
 const NUMERIC_KEY = /intensity|speed|count|opacity|radius|brightness|renderorder|tiling|order/i;
+const VEC3_KEY = /position|rotation|scale/i;
 
 export function isNumericString(value) {
   if (typeof value !== 'string') return false;
@@ -11,6 +14,8 @@ export function isNumericString(value) {
 export function inferFieldType(key, value, path = '') {
   if (typeof value === 'boolean') return 'boolean';
   if (typeof value === 'number') return 'number';
+  if (/^size$/i.test(key) && isAframeVectorString(value, 2)) return 'vec2';
+  if (VEC3_KEY.test(key) && isAframeVectorString(value, 3)) return 'vec3';
   if (
     NUMERIC_KEY.test(key) &&
     (typeof value === 'number' || isNumericString(value))

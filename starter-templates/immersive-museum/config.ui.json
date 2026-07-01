@@ -92,6 +92,11 @@
           "path": "environment.ground.color",
           "label": "Ground color",
           "type": "color"
+        },
+        {
+          "path": "environment.ground.size",
+          "label": "Ground size (W × D)",
+          "type": "vec2"
         }
       ]
     },
@@ -113,6 +118,11 @@
           "step": 0.1,
           "min": 0,
           "max": 2
+        },
+        {
+          "path": "environment.lighting.directional.position",
+          "label": "Sun position",
+          "type": "vec3"
         }
       ]
     },
@@ -130,7 +140,19 @@
       ]
     },
     {
-      "title": "Welcome slides",
+      "title": "Info panel layout",
+      "fields": [
+        { "path": "infoDisplay.position", "label": "Info display position", "type": "vec3" },
+        { "path": "infoDisplay.panel.position", "label": "Panel position", "type": "vec3" },
+        { "path": "infoDisplay.panel.size", "label": "Panel size (W × H)", "type": "vec2" },
+        { "path": "infoDisplay.text.position", "label": "Caption position", "type": "vec3" },
+        { "path": "infoDisplay.text.size", "label": "Caption size (W × H)", "type": "vec2" },
+        { "path": "infoDisplay.navigation.left.position", "label": "Left arrow position", "type": "vec3" },
+        { "path": "infoDisplay.navigation.left.size", "label": "Left arrow size (W × H)", "type": "vec2" },
+        { "path": "infoDisplay.navigation.right.position", "label": "Right arrow position", "type": "vec3" },
+        { "path": "infoDisplay.navigation.right.size", "label": "Right arrow size (W × H)", "type": "vec2" }
+      ]
+    },
       "fields": [
         {
           "path": "infoDisplay.text.content.slide1",
@@ -215,6 +237,11 @@
       "repeat": { "path": "exhibits", "itemLabel": "name" },
       "fields": [
         { "path": "name", "label": "Exhibit title", "type": "text" },
+        { "path": "position", "label": "Exhibit position", "type": "vec3" },
+        { "path": "model.position", "label": "Model position", "type": "vec3" },
+        { "path": "model.scale", "label": "Model scale", "type": "vec3" },
+        { "path": "model.rotation", "label": "Model rotation (degrees)", "type": "vec3" },
+        { "path": "hotspot.position", "label": "Hotspot position", "type": "vec3" },
         { "path": "hotspot.label", "label": "Hotspot button label", "type": "text" },
         { "path": "hotspot.info", "label": "Hotspot caption", "type": "textarea" },
         {

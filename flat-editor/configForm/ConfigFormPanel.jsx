@@ -4,6 +4,7 @@ import { fieldAssetCategory } from './inferFieldType.js';
 import { loadUiSchema } from './loadUiSchema.js';
 import { assetUrlForConfig, normalizeConfigAssetUrl } from '../resolveConfigAssetUrls.js';
 import NumberStepper, { inferNumberStep } from './NumberStepper.jsx';
+import VectorField from './VectorField.jsx';
 import './config-form.css';
 
 function browseAsset(category, onUrl) {
@@ -62,6 +63,20 @@ function ConfigField({ field, fullPath, value, onChange }) {
           />
         </div>
       </div>
+    );
+  }
+
+  if (field.type === 'vec3' || field.type === 'vec2') {
+    return (
+      <VectorField
+        id={id}
+        label={field.label}
+        value={value}
+        components={field.type === 'vec2' ? 2 : 3}
+        field={field}
+        help={field.help}
+        onChange={handleChange}
+      />
     );
   }
 

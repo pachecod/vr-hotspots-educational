@@ -53,6 +53,7 @@ export default function FlatPageEditorUI({ bridge }) {
   const [showAddFile, setShowAddFile] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [copyLabel, setCopyLabel] = useState('');
+  const [downloadStarterLabel, setDownloadStarterLabel] = useState('');
   const [splitPreset, setSplitPreset] = useState(
     () => localStorage.getItem(SPLIT_STORAGE_KEY) || 'balanced'
   );
@@ -142,6 +143,18 @@ export default function FlatPageEditorUI({ bridge }) {
     if (!result.ok) alert(result.error);
   };
 
+  const handleDownloadStarter = async () => {
+    try {
+      setDownloadStarterLabel('…');
+      await bridge.downloadStarterZip();
+      setDownloadStarterLabel('Downloaded!');
+      setTimeout(() => setDownloadStarterLabel(''), 2000);
+    } catch (err) {
+      setDownloadStarterLabel('');
+      alert(err.message || 'Download failed');
+    }
+  };
+
   if (!state.visible) return null;
 
   return (
@@ -220,9 +233,19 @@ export default function FlatPageEditorUI({ bridge }) {
                 Format
               </button>
               {state.adminTemplateMode ? (
-                <button type="button" className="flat-tool-btn" onClick={() => setShowTemplates(true)}>
-                  Load Starter
-                </button>
+                <>
+                  <button type="button" className="flat-tool-btn" onClick={() => setShowTemplates(true)}>
+                    Load Starter
+                  </button>
+                  <button
+                    type="button"
+                    className="flat-tool-btn"
+                    onClick={handleDownloadStarter}
+                    title="Download all files as a ZIP folder for starter-templates/"
+                  >
+                    {downloadStarterLabel || 'Download Starter'}
+                  </button>
+                </>
               ) : (
                 <button type="button" className="flat-tool-btn" onClick={() => setShowTemplates(true)}>
                   Templates

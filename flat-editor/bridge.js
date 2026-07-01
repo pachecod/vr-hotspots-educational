@@ -27,6 +27,7 @@ import {
   rewriteVrTourEmbedsInHtml,
   stripExistingVrTourEmbeds,
 } from './vrTourEmbed.js';
+import { downloadStarterTemplateZip } from './downloadStarterZip.js';
 
 export class FlatPageEditorBridge {
   constructor(options = {}) {
@@ -221,6 +222,20 @@ export class FlatPageEditorBridge {
       name: f.name,
       content: f.content || '',
     }));
+  }
+
+  resolveStarterDownloadName() {
+    if (typeof document !== 'undefined') {
+      const tplTitle = document.getElementById('tpl-title')?.value?.trim();
+      if (tplTitle) return tplTitle;
+    }
+    return this.getActivePage().name || 'starter-template';
+  }
+
+  async downloadStarterZip(folderName) {
+    const files = this.getTemplateFilesManifest();
+    const name = String(folderName || '').trim() || this.resolveStarterDownloadName();
+    return downloadStarterTemplateZip(files, name);
   }
 
   getPageFiles() {

@@ -52,6 +52,20 @@ async function loadTemplateForEdit(id) {
   bridge.loadTemplate(tpl);
 }
 
+async function downloadStarterZip() {
+  const bridge = window.flatPageEditor;
+  if (!bridge) {
+    alert('Editor not ready yet.');
+    return;
+  }
+  try {
+    const folder = await bridge.downloadStarterZip();
+    showToast(`Downloaded ${folder}.zip`);
+  } catch (err) {
+    alert(err.message || 'Download failed');
+  }
+}
+
 async function saveTemplate() {
   const title = document.getElementById('tpl-title').value.trim();
   if (!title) {
@@ -121,6 +135,7 @@ function initMainApp() {
   }
 
   document.getElementById('save-tpl-btn').addEventListener('click', saveTemplate);
+  document.getElementById('download-starter-zip-btn').addEventListener('click', downloadStarterZip);
 
   window.addEventListener('admin-starter-template-loaded', (e) => {
     const title = e.detail && e.detail.title;

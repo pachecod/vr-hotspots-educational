@@ -1,7 +1,7 @@
 const { requireAdmin } = require('../admin-auth');
 const { isDbEnabled } = require('../services/db-service');
 const snippetsDb = require('../lib/snippets');
-const { getRideyEnabled, setRideyEnabled, getBlockedExtensions, setBlockedExtensions } = require('../lib/app-settings');
+const { getRideyEnabled, setRideyEnabled, getRideyVersion, setRideyVersion, getBlockedExtensions, setBlockedExtensions } = require('../lib/app-settings');
 
 function registerSnippetRoutes(app) {
   app.get('/api/snippets', async (_req, res) => {
@@ -71,11 +71,13 @@ function registerSnippetRoutes(app) {
   app.get('/admin/editor-settings', requireAdmin, async (_req, res) => {
     try {
       const rideyEnabled = await getRideyEnabled();
+      const rideyVersion = await getRideyVersion();
       const blockedExtensions = await getBlockedExtensions();
       const hasApiKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim());
       res.json({
         success: true,
         rideyEnabled,
+        rideyVersion,
         blockedExtensions,
         hasApiKey,
         dbEnabled: isDbEnabled(),
@@ -91,7 +93,14 @@ function registerSnippetRoutes(app) {
         return res.status(503).json({ success: false, message: 'Database not configured' });
       }
       await setRideyEnabled(!!req.body?.enabled);
-      res.json({ success: true, rideyEnabled: await getRideyEnabled() });
+      if (req.body?.version !== undefined) {
+        await setRideyVersion(req.body.version);
+      }
+      res.json({
+        success: true,
+        rideyEnabled: await getRideyEnabled(),
+        rideyVersion: await getRideyVersion(),
+      });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }

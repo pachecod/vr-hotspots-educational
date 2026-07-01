@@ -19,6 +19,14 @@
   }
 }
 
+.welcome-github-footer {
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 18px;
+  margin-bottom: 28px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 #integrated-welcome-inner {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 40px 36px;

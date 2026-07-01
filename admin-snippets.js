@@ -18,12 +18,55 @@ function setStatus(elId, msg, isError) {
   el.className = 'status' + (msg ? (isError ? ' err' : ' ok') : '');
 }
 
+function updateRideyVersionRowVisibility() {
+  const enabled = document.getElementById('ridey-enabled').checked;
+  const row = document.getElementById('ridey-version-row');
+  if (row) row.style.display = enabled ? 'block' : 'none';
+}
+
+function getSelectedRideyVersion() {
+  const selected = document.querySelector('input[name="ridey-version"]:checked');
+  return selected?.value === '2.0' ? '2.0' : '1.0';
+}
+
+function setSelectedRideyVersion(version) {
+  const v = version === '2.0' ? '2.0' : '1.0';
+  const input = document.getElementById(v === '2.0' ? 'ridey-version-2' : 'ridey-version-1');
+  if (input) input.checked = true;
+}
+
+async function saveRideySettings({ enabled, version } = {}) {
+  const checkbox = document.getElementById('ridey-enabled');
+  const body = {
+    enabled: enabled !== undefined ? enabled : checkbox.checked,
+    version: version !== undefined ? version : getSelectedRideyVersion(),
+  };
+  const res = await adminFetch('/admin/editor-settings/ridey', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message);
+  checkbox.checked = !!data.rideyEnabled;
+  setSelectedRideyVersion(data.rideyVersion);
+  updateRideyVersionRowVisibility();
+  const versionLabel = data.rideyVersion === '2.0' ? '2.0 (beta)' : '1.0';
+  setStatus(
+    'ridey-status',
+    data.rideyEnabled ? `Ridey enabled (${versionLabel}).` : 'Ridey disabled.'
+  );
+  showToast('Ridey settings saved');
+}
+
 async function loadSettings() {
   const res = await adminFetch('/admin/editor-settings');
   const data = await res.json();
   if (!data.success) throw new Error(data.message || 'Failed to load settings');
 
   document.getElementById('ridey-enabled').checked = !!data.rideyEnabled;
+  setSelectedRideyVersion(data.rideyVersion);
+  updateRideyVersionRowVisibility();
   document.getElementById('ridey-warn').style.display = data.hasApiKey ? 'none' : 'block';
 
   blockedExtensions = data.blockedExtensions || [];
@@ -98,19 +141,23 @@ function renderExtChips() {
 
 document.getElementById('ridey-enabled').addEventListener('change', async (e) => {
   try {
-    const res = await adminFetch('/admin/editor-settings/ridey', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: e.target.checked }),
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.message);
-    setStatus('ridey-status', data.rideyEnabled ? 'Ridey enabled.' : 'Ridey disabled.');
-    showToast('Ridey settings saved');
+    await saveRideySettings({ enabled: e.target.checked });
   } catch (err) {
     setStatus('ridey-status', err.message, true);
     e.target.checked = !e.target.checked;
+    updateRideyVersionRowVisibility();
   }
+});
+
+document.querySelectorAll('input[name="ridey-version"]').forEach((input) => {
+  input.addEventListener('change', async () => {
+    if (!document.getElementById('ridey-enabled').checked) return;
+    try {
+      await saveRideySettings({ version: getSelectedRideyVersion() });
+    } catch (err) {
+      setStatus('ridey-status', err.message, true);
+    }
+  });
 });
 
 document.getElementById('add-ext-btn').addEventListener('click', () => {

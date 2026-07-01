@@ -56,7 +56,7 @@ function hideSceneLoadingOverlay() {
 }
 
 function welcomeGithubFooterHtml() {
-  return `<p style="color: rgba(255,255,255,0.75); margin-top: 18px; margin-bottom: 0; font-size: 12px; line-height: 1.5;">
+  return `<p class="welcome-github-footer">
     Available for free for education use under the MIT License.
     <a href="https://github.com/pachecod/vr-hotspots-educational" target="_blank" rel="noopener noreferrer" style="color: #fff; text-decoration: underline;">See our Github</a>.
   </p>`;
@@ -463,7 +463,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
         <div style="color:rgba(255,255,255,0.65);font-size:12px;margin-top:8px;">Team member or student</div>
         <div style="font-weight:bold;">${escapeHtml(selectedStudent.display_name)}</div>
       </div>
-      <label style="display:block;color:#f0f0f0;margin-bottom:6px;font-size:13px;">Password from your teacher</label>
+      <label style="display:block;color:#f0f0f0;margin-bottom:6px;font-size:13px;">Password you were given</label>
       <input type="password" id="student-password-input" placeholder="Enter your password" autocomplete="current-password" style="
         width:100%;padding:10px;border:1px solid rgba(255,255,255,0.25);border-radius:4px;background:rgba(0,0,0,0.2);color:#fff;box-sizing:border-box;margin-bottom:12px;" />
       <button type="button" id="student-login-submit" style="

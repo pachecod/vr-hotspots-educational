@@ -16,6 +16,96 @@ function languageForFileName(fileName) {
   return 'text';
 }
 
+function languageForFileNameRidey2(fileName) {
+  const name = String(fileName || '').toLowerCase();
+  if (name.endsWith('.json')) return 'json';
+  if (name.endsWith('.md')) return 'markdown';
+  return languageForFileName(fileName);
+}
+
+function projectFileNames(projectFiles) {
+  return new Set((projectFiles || []).map((f) => f.fileName).filter(Boolean));
+}
+
+function validateRidey2FileUpdates(fileUpdates, projectFiles) {
+  const allowed = projectFileNames(projectFiles);
+  const strict = process.env.RIDEY_STRICT_VALIDATION === 'true';
+  const notes = [];
+  const validated = [];
+
+  for (const update of fileUpdates || []) {
+    if (!update?.fileName || update.suggestion == null) continue;
+    if (!allowed.has(update.fileName)) {
+      notes.push(`Skipped unknown file "${update.fileName}".`);
+      continue;
+    }
+    if (String(update.fileName).toLowerCase().endsWith('.json')) {
+      try {
+        JSON.parse(update.suggestion);
+      } catch (err) {
+        if (strict) {
+          throw new Error(`Invalid JSON in ${update.fileName}: ${err.message}`);
+        }
+        notes.push(`Warning: ${update.fileName} may contain invalid JSON.`);
+      }
+    }
+    validated.push(update);
+  }
+
+  if (!validated.length && (fileUpdates || []).length) {
+    throw new Error('No valid file updates after validation.');
+  }
+
+  return {
+    fileUpdates: validated,
+    explanationNote: notes.length ? `\n\n${notes.join(' ')}` : '',
+  };
+}
+
+function buildFileInventory(projectFiles) {
+  return (projectFiles || []).map((f) => f.fileName).filter(Boolean).join(', ') || 'index.html, style.css, script.js';
+}
+
+function buildRidey2MultiFilePrompt({ cssFile, jsFile, projectFiles, context, extraPersona }) {
+  const inventory = buildFileInventory(projectFiles);
+  const hasConfig = (projectFiles || []).some((f) => f.fileName === 'config.json');
+  const hasConfigUi = (projectFiles || []).some((f) => f.fileName === 'config.ui.json');
+
+  return `You are Ridey 2.0, the friendly WebXRide AI assistant — a helpful, upbeat purple car wearing a VR headset.
+You speak concisely, with a coaching tone. You prefer step-by-step fixes, small actionable diffs, and performance-minded guidance.
+Use simple language, avoid jargon unless necessary, and never guess when unsure — ask a brief clarifying question first.
+
+Primary expertise areas:
+- A-Frame framework for WebVR/WebAR
+- Three.js for 3D graphics
+- Modern JavaScript (ES6+)
+- HTML5 and CSS3
+- JSON configuration for immersive templates
+- WebXR APIs
+- Performance optimization for web-based 3D experiences
+
+Context: ${context || 'WebXR development with A-Frame, Three.js, and modern web technologies'}
+
+This is a multi-file flat web page project. Files in this project: ${inventory}.
+
+CRITICAL file separation rules — follow these unless the user explicitly asks otherwise:
+1. Put ALL new or changed CSS in "${cssFile}" (or another existing .css file if appropriate). Do NOT add <style> blocks, inline style="" attributes, or embedded CSS in HTML.
+2. Put ALL new or changed JavaScript in "${jsFile}" (or another existing .js/.mjs file if appropriate). Do NOT add inline <script> code in HTML — keep external script references.
+3. HTML files contain structure and semantic markup only. Preserve existing stylesheet and script references.
+${hasConfig ? `4. Put template/runtime settings (positions, labels, asset paths, scene options) in "config.json". Valid JSON object only. Do not duplicate logic that belongs in ${jsFile}. Preserve existing keys unless the user asks to remove them.` : ''}
+${hasConfigUi ? `5. Edit "config.ui.json" only when the user is editing that file or explicitly asks about the visual form schema.` : ''}
+6. For other existing files, edit the matching file by extension — do not embed that content into index.html.
+7. Return only files you actually changed in fileUpdates. Each suggestion must be the COMPLETE updated file content.
+8. Keep a positive, encouraging tone.
+
+${extraPersona}
+
+Respond in JSON with:
+- "fileUpdates": Array of { "fileName": string, "suggestion": string } for each changed file
+- "explanation": What changed and why
+- "confidence": Number 0-1`;
+}
+
 function pickStylesheetFile(projectFiles, activeFileName) {
   if (activeFileName && String(activeFileName).endsWith('.css')) return activeFileName;
   const files = projectFiles || [];
@@ -78,8 +168,12 @@ async function analyzeCodeWithAI(request) {
     temperature: customTemperature,
     projectFiles,
     activeFileName,
+    version: requestVersion,
   } = request;
+  const rideyVersion = requestVersion === '2.0' ? '2.0' : '1.0';
+  const useRidey2 = rideyVersion === '2.0';
   const multiFile = Array.isArray(projectFiles) && projectFiles.length > 0;
+  const langForFile = useRidey2 ? languageForFileNameRidey2 : languageForFileName;
 
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -108,7 +202,9 @@ async function analyzeCodeWithAI(request) {
   const jsFile = multiFile ? pickScriptFile(projectFiles, activeFileName) : 'script.js';
 
   const systemPrompt = multiFile
-    ? buildMultiFileSystemPrompt({ cssFile, jsFile, context, extraPersona })
+    ? useRidey2
+      ? buildRidey2MultiFilePrompt({ cssFile, jsFile, projectFiles, context, extraPersona })
+      : buildMultiFileSystemPrompt({ cssFile, jsFile, context, extraPersona })
     : `You are Ridey, the friendly WebXRide AI assistant — a helpful, upbeat purple car wearing a VR headset.
 You speak concisely, with a coaching tone. You prefer step-by-step fixes, small actionable diffs, and performance-minded guidance.
 Use simple language, avoid jargon unless necessary, and never guess when unsure — ask a brief clarifying question first.
@@ -146,7 +242,7 @@ Project files:
 ${projectFiles
   .map(
     (f) =>
-      `### ${f.fileName}\n\`\`\`${f.language || languageForFileName(f.fileName)}\n${f.content || ''}\n\`\`\``
+      `### ${f.fileName}\n\`\`\`${f.language || langForFile(f.fileName)}\n${f.content || ''}\n\`\`\``
   )
   .join('\n\n')}`
     : `Language: ${language}
@@ -254,9 +350,14 @@ ${code}
     }
 
     if (multiFile) {
-      const fileUpdates = Array.isArray(aiResponse.fileUpdates) ? aiResponse.fileUpdates : [];
+      let fileUpdates = Array.isArray(aiResponse.fileUpdates) ? aiResponse.fileUpdates : [];
       if (!fileUpdates.length) {
         throw new Error('Invalid response format from AI');
+      }
+      if (useRidey2) {
+        const validated = validateRidey2FileUpdates(fileUpdates, projectFiles);
+        fileUpdates = validated.fileUpdates;
+        aiResponse.explanation = (aiResponse.explanation || '') + (validated.explanationNote || '');
       }
       const primary =
         fileUpdates.find((f) => f.fileName === (activeFileName || fileName)) || fileUpdates[0];
@@ -265,6 +366,7 @@ ${code}
         suggestion: primary?.suggestion || '',
         explanation: aiResponse.explanation,
         confidence: aiResponse.confidence ?? 0.8,
+        version: rideyVersion,
       };
     }
 
@@ -277,11 +379,22 @@ ${code}
       fileUpdates: [{ fileName: fileName || 'index.html', suggestion: aiResponse.suggestion }],
       explanation: aiResponse.explanation,
       confidence: aiResponse.confidence ?? 0.8,
+      version: rideyVersion,
     };
   } catch (err) {
+    if (useRidey2 && err.message && !err.message.includes('OpenAI')) {
+      throw err;
+    }
     console.error('Ridey OpenAI error:', err.message);
     return createFallbackResponse(code, language, fileName || activeFileName || 'index.html');
   }
 }
 
-module.exports = { analyzeCodeWithAI, createFallbackResponse };
+module.exports = {
+  analyzeCodeWithAI,
+  createFallbackResponse,
+  languageForFileName,
+  languageForFileNameRidey2,
+  validateRidey2FileUpdates,
+  buildRidey2MultiFilePrompt,
+};

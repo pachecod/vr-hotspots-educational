@@ -102,6 +102,7 @@ export default function FlatPageEditorUI({ bridge }) {
   const page = bridge.getActivePage();
   const activeFileId = state.activeFileId;
   const fileContent = bridge.getFileContent(activeFileId);
+  const rideyVersion = state.rideyVersion === '2.0' ? '2.0' : '1.0';
   const split = SPLIT_PRESETS[splitPreset] || SPLIT_PRESETS.balanced;
   const isConfigTab = activeFileId === 'config.json';
   const showConfigVisual = isConfigTab && configMode === 'visual';
@@ -266,10 +267,10 @@ export default function FlatPageEditorUI({ bridge }) {
                   type="button"
                   className="flat-tool-btn flat-tool-btn-ridey"
                   onClick={() => setShowRidey(true)}
-                  title="Ridey · AI Code Assistant"
+                  title={rideyVersion === '2.0' ? 'Ridey 2.0 · holistic multi-file AI' : 'Ridey · AI Code Assistant'}
                 >
                   <RideyIcon size={20} />
-                  Ask Ridey
+                  Ask Ridey{rideyVersion === '2.0' ? ' 2.0' : ''}
                 </button>
               )}
             </div>
@@ -350,17 +351,34 @@ export default function FlatPageEditorUI({ bridge }) {
         code={fileContent}
         language={fileTypeForId(activeFileId)}
         fileName={activeFileId}
+        rideyVersion={rideyVersion}
         projectFiles={(page.files || []).map((f) => ({
           fileName: f.id || f.name,
           language: fileTypeForId(f.id || f.name).toLowerCase(),
           content: f.content || '',
         }))}
         onApplySuggestion={(fileUpdates) => {
-          (fileUpdates || []).forEach((update) => {
+          const updates = fileUpdates || [];
+          if (rideyVersion === '2.0') {
+            for (const update of updates) {
+              if (update?.fileName?.toLowerCase().endsWith('.json') && update.suggestion != null) {
+                try {
+                  JSON.parse(update.suggestion);
+                } catch (err) {
+                  alert(
+                    `Cannot apply: ${update.fileName} contains invalid JSON.\n${err.message}`
+                  );
+                  return;
+                }
+              }
+            }
+          }
+          updates.forEach((update) => {
             if (update?.fileName && update.suggestion != null) {
               bridge.setFileContent(update.fileName, update.suggestion);
             }
           });
+          bump((n) => n + 1);
           requestPreviewReload();
         }}
       />

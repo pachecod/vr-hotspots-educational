@@ -1,8 +1,12 @@
 export async function fetchRideyStatus() {
   const res = await fetch('/api/ridey/status');
   const data = await res.json();
-  if (!data.success) return { enabled: false, hasApiKey: false };
-  return { enabled: !!data.enabled, hasApiKey: !!data.hasApiKey };
+  if (!data.success) return { enabled: false, hasApiKey: false, version: '1.0' };
+  return {
+    enabled: !!data.enabled,
+    hasApiKey: !!data.hasApiKey,
+    version: data.version === '2.0' ? '2.0' : '1.0',
+  };
 }
 
 export async function analyzeWithRidey({

@@ -41,7 +41,7 @@ export class FlatPageEditorBridge {
     this._cloudStatusError = false;
     this._editorSelections = {};
     this._blockedExtensions = [];
-    this._rideyStatus = { enabled: false, hasApiKey: false };
+    this._rideyStatus = { enabled: false, hasApiKey: false, version: '1.0' };
     this._pendingConfigVisual = false;
     this._pendingPreviewReload = false;
     this._liveConfigUpdate = false;
@@ -58,7 +58,11 @@ export class FlatPageEditorBridge {
         fetch('/api/blocked-extensions').then((r) => r.json()).catch(() => ({})),
       ]);
       if (rideyRes.success) {
-        this._rideyStatus = { enabled: !!rideyRes.enabled, hasApiKey: !!rideyRes.hasApiKey };
+        this._rideyStatus = {
+          enabled: !!rideyRes.enabled,
+          hasApiKey: !!rideyRes.hasApiKey,
+          version: rideyRes.version === '2.0' ? '2.0' : '1.0',
+        };
       }
       if (extRes.success && Array.isArray(extRes.extensions)) {
         this._blockedExtensions = extRes.extensions;
@@ -203,6 +207,7 @@ export class FlatPageEditorBridge {
       showCloudActions: caps.canUseCloudSave,
       files: this._visiblePageFiles(page),
       rideyEnabled: caps.canUseRidey && this._rideyStatus.enabled && this._rideyStatus.hasApiKey,
+      rideyVersion: this._rideyStatus.version === '2.0' ? '2.0' : '1.0',
       blockedExtensions: this._blockedExtensions,
       adminTemplateMode: this._adminTemplateMode,
     };

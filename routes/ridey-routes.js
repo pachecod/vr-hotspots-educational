@@ -5,7 +5,7 @@ const {
   isStudentAuthRequired,
 } = require('../student-auth');
 const { isDbEnabled } = require('../services/db-service');
-const { getRideyEnabled } = require('../lib/app-settings');
+const { getRideyEnabled, getRideyVersion } = require('../lib/app-settings');
 const { analyzeCodeWithAI } = require('../services/ridey-service');
 
 function requireRideyStudent(req, res, next) {
@@ -31,8 +31,9 @@ function registerRideyRoutes(app) {
   app.get('/api/ridey/status', async (_req, res) => {
     try {
       const enabled = await getRideyEnabled();
+      const version = await getRideyVersion();
       const hasApiKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim());
-      res.json({ success: true, enabled, hasApiKey });
+      res.json({ success: true, enabled, version, hasApiKey });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -63,12 +64,14 @@ function registerRideyRoutes(app) {
         temperature,
         projectFiles: Array.isArray(projectFiles) ? projectFiles : undefined,
         activeFileName,
+        version: await getRideyVersion(),
       });
 
       res.json({ success: true, ...result });
     } catch (err) {
       console.error('POST /api/ridey/analyze:', err);
-      res.status(500).json({ success: false, message: err.message });
+      const status = err.message && !String(err.message).includes('OpenAI') ? 400 : 500;
+      res.status(status).json({ success: false, message: err.message });
     }
   });
 }

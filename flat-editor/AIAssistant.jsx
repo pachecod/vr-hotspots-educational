@@ -3,12 +3,27 @@ import { analyzeWithRidey } from './ridey-api.js';
 import { buildPreviewDocument } from './buildPreview.js';
 import RideyIcon from './RideyIcon.jsx';
 
-const QUICK_PROMPTS = [
+const QUICK_PROMPTS_BASE = [
   { text: 'Find bugs', prompt: 'Review this code and identify bugs or errors. Provide fixes.' },
   { text: 'Optimize', prompt: 'Analyze for performance improvements and suggest safe optimizations.' },
   { text: 'Add features', prompt: 'Suggest useful features with a complete working example.' },
   { text: 'Improve quality', prompt: 'Improve readability, maintainability, and best practices.' },
 ];
+
+function quickPromptPrefix(fileName, rideyVersion) {
+  if (rideyVersion !== '2.0') return '';
+  const name = String(fileName || '').toLowerCase();
+  if (name.endsWith('.json')) {
+    return 'Review config.json for valid JSON and settings consistent with script.js and index.html. ';
+  }
+  if (name.endsWith('.css')) {
+    return 'Review this CSS file and keep HTML structural only. ';
+  }
+  if (name.endsWith('.js') || name.endsWith('.mjs')) {
+    return 'Review this JavaScript file and avoid inline scripts in HTML. ';
+  }
+  return 'Consider the full project (HTML, CSS, JS, config.json) holistically. ';
+}
 
 function computeLineDiff(a, b) {
   const aLines = a.split('\n');
@@ -52,15 +67,22 @@ function buildPreviewPage(projectFiles, updatesByName) {
   return buildPreviewDocument({ files });
 }
 
+function originalContentForFile(projectFiles, fileName, fallback) {
+  const match = (projectFiles || []).find((f) => f.fileName === fileName);
+  return match?.content ?? fallback;
+}
+
 export default function AIAssistant({
   open,
   onClose,
   code,
   language,
   fileName,
+  rideyVersion = '1.0',
   projectFiles,
   onApplySuggestion,
 }) {
+  const isRidey2 = rideyVersion === '2.0';
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -68,6 +90,7 @@ export default function AIAssistant({
   const [temperature, setTemperature] = useState(0.2);
   const [previewMode, setPreviewMode] = useState(false);
   const [modifiedByFile, setModifiedByFile] = useState({});
+  const [previewDiffFile, setPreviewDiffFile] = useState(fileName);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -76,6 +99,10 @@ export default function AIAssistant({
     if (open) document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (open) setPreviewDiffFile(fileName);
+  }, [open, fileName]);
 
   if (!open) return null;
 
@@ -96,6 +123,8 @@ export default function AIAssistant({
         activeFileName: fileName,
       });
       setResponse(data);
+      const firstChanged = data.fileUpdates?.[0]?.fileName;
+      if (isRidey2 && firstChanged) setPreviewDiffFile(firstChanged);
     } catch (err) {
       setError(err.message || 'Failed to get Ridey response');
     } finally {
@@ -103,9 +132,20 @@ export default function AIAssistant({
     }
   };
 
-  const activeUpdate = response?.fileUpdates?.find((f) => f.fileName === fileName);
-  const activeModified = activeUpdate?.suggestion ?? modifiedByFile[fileName] ?? code;
+  const runQuickPrompt = (basePrompt) => {
+    const full = `${quickPromptPrefix(fileName, rideyVersion)}${basePrompt}`;
+    setQuery(full);
+    handleSubmit(full);
+  };
+
   const changedFiles = response?.fileUpdates?.map((f) => f.fileName) || [];
+  const diffFileName = isRidey2 && previewDiffFile ? previewDiffFile : fileName;
+  const diffOriginal = originalContentForFile(projectFiles, diffFileName, diffFileName === fileName ? code : '');
+  const diffModified =
+    modifiedByFile[diffFileName] ??
+    response?.fileUpdates?.find((f) => f.fileName === diffFileName)?.suggestion ??
+    diffOriginal;
+
   const previewHtml = buildPreviewPage(projectFiles || [{ fileName, content: code }], {
     ...(projectFiles || []).reduce((acc, f) => {
       acc[f.fileName] = f.content;
@@ -113,6 +153,8 @@ export default function AIAssistant({
     }, {}),
     ...modifiedByFile,
   });
+
+  const fileCount = projectFiles?.length || 0;
 
   return (
     <div className="flat-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -126,10 +168,11 @@ export default function AIAssistant({
               size={40}
             />
             <div>
-              <h2>Ask Ridey</h2>
+              <h2>Ask Ridey{isRidey2 ? ' 2.0' : ''}</h2>
               <span className="flat-muted">
                 {fileName || language}
-                {projectFiles?.length > 1 ? ' · multi-file project' : ''}
+                {fileCount > 1 ? ` · ${fileCount} files` : ''}
+                {isRidey2 ? ' · holistic multi-file' : fileCount > 1 ? ' · multi-file project' : ''}
               </span>
             </div>
           </div>
@@ -153,16 +196,13 @@ export default function AIAssistant({
         </div>
 
         <div className="flat-quick-prompts">
-          {QUICK_PROMPTS.map((q) => (
+          {QUICK_PROMPTS_BASE.map((q) => (
             <button
               key={q.text}
               type="button"
               className="flat-tool-btn"
               disabled={loading}
-              onClick={() => {
-                setQuery(q.prompt);
-                handleSubmit(q.prompt);
-              }}
+              onClick={() => runQuickPrompt(q.prompt)}
             >
               {q.text}
             </button>
@@ -179,7 +219,11 @@ export default function AIAssistant({
               className="flat-ridey-query"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ask Ridey to help with your code…"
+              placeholder={
+                isRidey2
+                  ? 'Ask Ridey to edit HTML, CSS, JS, or config.json across your project…'
+                  : 'Ask Ridey to help with your code…'
+              }
               rows={3}
               disabled={loading}
               onKeyDown={(e) => {
@@ -226,9 +270,7 @@ export default function AIAssistant({
               <div className="flat-ridey-response">
                 <p>{response.explanation}</p>
                 {changedFiles.length > 0 && (
-                  <p className="flat-muted">
-                    Updates: {changedFiles.join(', ')}
-                  </p>
+                  <p className="flat-muted">Updates: {changedFiles.join(', ')}</p>
                 )}
                 <p className="flat-muted">Confidence: {Math.round((response.confidence || 0) * 100)}%</p>
                 <button
@@ -240,6 +282,7 @@ export default function AIAssistant({
                       next[f.fileName] = f.suggestion;
                     });
                     setModifiedByFile(next);
+                    setPreviewDiffFile(changedFiles[0] || fileName);
                     setPreviewMode(true);
                   }}
                 >
@@ -251,7 +294,9 @@ export default function AIAssistant({
             {!loading && !error && !response && (
               <div className="flat-ridey-empty">
                 <RideyIcon isHappy size={72} />
-                <p className="flat-ridey-empty-title">Hi! I&apos;m Ridey, your coding assistant</p>
+                <p className="flat-ridey-empty-title">
+                  Hi! I&apos;m Ridey{isRidey2 ? ' 2.0' : ''}, your coding assistant
+                </p>
                 <p className="flat-muted">I can help you with:</p>
                 <ul className="flat-ridey-empty-list">
                   <li>Fixing bugs and errors in your code</li>
@@ -260,7 +305,9 @@ export default function AIAssistant({
                   <li>Improving code quality</li>
                 </ul>
                 <p className="flat-muted" style={{ marginTop: 12, fontSize: 11 }}>
-                  CSS goes in style.css, JavaScript in script.js, and HTML stays structural.
+                  {isRidey2
+                    ? 'CSS in .css files, JavaScript in .js files, settings in config.json, HTML stays structural.'
+                    : 'CSS goes in style.css, JavaScript in script.js, and HTML stays structural.'}
                 </p>
               </div>
             )}
@@ -276,9 +323,23 @@ export default function AIAssistant({
                   ×
                 </button>
               </div>
+              {isRidey2 && changedFiles.length > 1 && (
+                <div className="flat-ridey-diff-tabs" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '0 16px 12px' }}>
+                  {changedFiles.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      className={`flat-tool-btn${diffFileName === name ? ' flat-tool-btn-accent' : ''}`}
+                      onClick={() => setPreviewDiffFile(name)}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flat-ridey-preview-grid">
                 <pre className="flat-ridey-diff">
-                  {computeLineDiff(code, activeModified).map((part, idx) => (
+                  {computeLineDiff(diffOriginal, diffModified).map((part, idx) => (
                     <div key={idx} className={`flat-diff-${part.type}`}>
                       {part.text}
                     </div>

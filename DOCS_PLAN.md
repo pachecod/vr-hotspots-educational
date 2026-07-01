@@ -2,7 +2,7 @@
 
 This document tracks **what is documented today**, **what was updated recently**, and **teacher-focused guides still to write**. Use it to prioritize help content for instructors and admins.
 
-**Last reviewed:** June 2026 (aligned with `2.5` branch — flat page editor, snippets, Ridey, templates)
+**Last reviewed:** June 2026 (aligned with **`2.8`** / `main` — Ridey 2.0, visual config editor, content hub, inclusive terminology)
 
 ---
 
@@ -10,10 +10,23 @@ This document tracks **what is documented today**, **what was updated recently**
 
 | Document | Audience | Covers |
 |----------|----------|--------|
-| [USER_GUIDE.md](USER_GUIDE.md) | Students, teachers, admins | 360° editor, **flat web page mode**, content mode toggle, snippets/templates/Ridey, Online Assets (Insert Into Page), cloud save/publish, submit & My Submissions, admin submissions/assets/**editor settings/templates**/users/peek |
-| [README.md](README.md) | Developers, self-hosters | Install, B2 setup, flat editor overview, feature list, project structure |
-| [RENDER_DEPLOY.md](RENDER_DEPLOY.md) | DevOps, admins | Render deploy, env vars (incl. OpenAI/Ridey), PostgreSQL, Stripe, post-deploy setup |
+| [USER_GUIDE.md](USER_GUIDE.md) | Students, teachers, admins | 360° editor, **flat web page mode**, `config.json` visual/Code editing, content mode toggle, snippets/templates, **Ridey 1.0 vs 2.0**, Online Assets (Insert Into Page), cloud save/publish, submit & My Submissions, admin overview/content hub/submissions/assets/**editor settings/templates**/users/peek |
+| [README.md](README.md) | Developers, self-hosters | Install, B2 setup, flat editor overview, Ridey 2.0, feature list, project structure, 2.8 roadmap |
+| [RENDER_DEPLOY.md](RENDER_DEPLOY.md) | DevOps, admins | Render deploy, env vars (incl. OpenAI/Ridey 1.0/2.0), PostgreSQL, Stripe, post-deploy setup |
 | In-editor **ℹ️** instructions | Students | Context-sensitive edit/navigation hints (in `script.js`; spherical focus) |
+
+---
+
+## Shipped in 2.8 (documented in USER_GUIDE + README + RENDER_DEPLOY)
+
+- **Inclusive UI terminology** — “team or class”, “team member or student” across admin and sign-in (code identifiers unchanged)
+- **Ridey 2.0 (beta)** — admin-selectable under Editor Settings; holistic multi-file editing including `config.json`; multi-file preview diffs; JSON apply guard; optional `RIDEY_STRICT_VALIDATION`
+- **Ridey 1.0** remains default; rollback to 1.0 without redeploy
+- **Visual config editor** — Visual/Code toggle for `config.json` when template includes `config.ui.json` schema
+- **Immersive museum starter templates** — `immersive-museum`, `new-immersive-museum` with config-driven exhibits
+- **Admin overview** (`/admin`) and **Review All Content** hub on Assets
+- **Welcome screen** polish — sample projects grid, MIT license footer, “Password you were given” label
+- **`main` branch** aligned with `2.8` for production deploys
 
 ---
 
@@ -26,7 +39,7 @@ This document tracks **what is documented today**, **what was updated recently**
 - Cloud save & publish for flat pages
 - Admin Editor Settings (snippets, Ridey toggle, blocked extensions)
 - Admin template gallery + full template editor with Online Assets
-- Ridey AI (server OpenAI proxy, multi-file CSS/JS routing)
+- Ridey 1.0 AI (server OpenAI proxy, multi-file CSS/JS routing)
 
 ---
 
@@ -39,11 +52,11 @@ This document tracks **what is documented today**, **what was updated recently**
 **Length:** 2–3 pages  
 
 **Outline:**
-- What you need before class (admin URL, password, student list)
-- Day-one checklist: create class → add students → download password CSV → upload 2–3 Shared Assets → add 1–2 snippets or a flat template → share editor URL
+- What you need before class (admin URL, password, roster)
+- Day-one checklist: create team or class → add team members or students → download password CSV → upload 2–3 Shared Assets → add 1–2 snippets or a flat template → share editor URL
 - What students do (sign in, build 360° or flat page, submit)
 - What you do (Submissions inbox, download or review)
-- One screenshot callout per admin page (Submissions, Assets, Editor Settings, Templates, Users)
+- One screenshot callout per admin page (Overview, Submissions, Assets, Editor Settings, Templates, Users)
 
 **Why first:** Gets a class running without reading the full user guide or README.
 
@@ -56,11 +69,12 @@ This document tracks **what is documented today**, **what was updated recently**
 
 **Outline:**
 - When to use Flat Web Page vs Spherical Content
-- File tabs (index.html, style.css, script.js)
+- File tabs (index.html, style.css, script.js, config.json on starters)
+- Visual vs Code editing for `config.json`
 - Snippets workflow (Editor Settings → student insert)
-- Starter templates (Templates admin → student gallery)
+- Starter templates (Templates admin → student gallery; immersive museum)
 - Online Assets → Insert Into Page
-- Enabling Ridey (`OPENAI_API_KEY`, Editor Settings toggle, classroom norms)
+- Enabling Ridey — **1.0 vs 2.0**, `OPENAI_API_KEY`, Editor Settings version picker, classroom norms, rollback to 1.0
 - Cloud save vs Submit vs Publish
 - Embedding a student’s 360° tour in a flat page
 
@@ -72,10 +86,10 @@ This document tracks **what is documented today**, **what was updated recently**
 **Audience:** Teachers reviewing student VR projects  
 
 **Outline:**
-- Submissions inbox filters (class, student, notes)
+- Submissions inbox filters (team or class, team member or student, notes)
 - Reading student notes
 - Download vs Host vs Review in Editor — when to use each
-- **Save and Send to Student** workflow and what students see
+- **Save and Send to Team Member or Student** workflow and what students see
 - Version history (submitted vs draft vs teacher feedback)
 - Import Project ZIP (recovering lost submissions, manual uploads)
 - Delete version — cautions
@@ -95,21 +109,22 @@ This document tracks **what is documented today**, **what was updated recently**
 - Using the filter bar (chips, recent tags, Show All Tags)
 - Preview modal and Copy URL
 - Insert Into Page for flat page assignments
+- **Review All Content** hub — when to use vs Assets browse
 - Signed URL fallback — when links expire and how refresh works
 - B2 public vs signed bucket (plain language)
 
 ---
 
-### 5. Teacher Guide: Users & Classes *(High)*
+### 5. Teacher Guide: Users & Teams/Classes *(High)*
 
 **File:** `TEACHER_GUIDE_USERS.md`  
 **Audience:** Teachers managing rosters  
 
 **Outline:**
-- Creating and naming classes
-- Adding students one-by-one vs bulk (if bulk is added later — note current limitation)
+- Creating and naming teams or classes
+- Adding team members or students one-by-one vs bulk (if bulk is added later — note current limitation)
 - Password CSV export and secure handout practices
-- Reset Password workflow
+- Set Password workflow
 - When to use **Peek** vs Submissions inbox
 - `STUDENT_AUTH_REQUIRED` — what happens when sign-in is off vs on
 
@@ -151,9 +166,9 @@ This document tracks **what is documented today**, **what was updated recently**
 **Length:** 1 page  
 
 **Outline:**
-- Sign-in steps
+- Sign-in steps (team or class → name → password you were given)
 - Spherical: Edit Mode vs Navigation Mode (one sentence each)
-- Flat page: file tabs, Snippets, Templates, Submit
+- Flat page: file tabs, config.json visual mode, Snippets, Templates, Submit
 - Browse Online Assets → Select or Insert Into Page
 - Submit to Admin + optional note
 - My Submissions / teacher feedback
@@ -177,6 +192,9 @@ This document tracks **what is documented today**, **what was updated recently**
 - How do tags work (upload vs search bar)?
 - Why is Ask Ridey missing?
 - Where does Ridey put CSS and JavaScript?
+- **What is the difference between Ridey 1.0 and Ridey 2.0?**
+- **Why did Ridey 2.0 reject my JSON change?**
+- **What is config.json and when do I use Visual vs Code mode?**
 
 ---
 
@@ -187,8 +205,8 @@ This document tracks **what is documented today**, **what was updated recently**
 
 **Outline:**
 - All admin URLs and API routes (read-only list)
-- Environment variables (extend RENDER_DEPLOY)
-- Database tables overview (classes, students, submissions, asset_tags, snippets, project_templates, app_settings)
+- Environment variables (extend RENDER_DEPLOY — incl. `RIDEY_VERSION`, `RIDEY_STRICT_VALIDATION`)
+- Database tables overview (classes, students, submissions, asset_tags, snippets, project_templates, app_settings incl. `ridey_version`)
 - B2 bucket layout (common-assets, student paths)
 - Flat editor build (`npm run build:flat-editor`)
 - Backup and restore notes
@@ -204,8 +222,9 @@ This document tracks **what is documented today**, **what was updated recently**
 |--------|----------|---------|
 | Student intro (360°) | 5 min | Sign in, one hotspot, submit |
 | Student intro (flat page) | 5 min | Switch mode, edit HTML/CSS, snippet, submit |
-| Teacher admin tour | 10 min | Users, Assets, Editor Settings, Templates, Submissions, Peek |
+| Teacher admin tour | 10 min | Overview, Users, Assets, Editor Settings (Ridey version), Templates, Submissions, Peek |
 | Review & feedback | 5 min | Review in Editor → Save and Send |
+| Ridey 2.0 demo | 5 min | Enable 2.0, holistic edit on immersive museum template, rollback to 1.0 |
 
 ---
 
@@ -214,7 +233,7 @@ This document tracks **what is documented today**, **what was updated recently**
 Keep **USER_GUIDE.md** as the single comprehensive reference. Teacher guides should:
 
 - Link back to USER_GUIDE sections instead of copying full editor tutorials
-- Focus on **classroom workflow** and **decision trees** (“use Host when…”, “use Review when…”)
+- Focus on **classroom workflow** and **decision trees** (“use Host when…”, “use Review when…”, “use Ridey 2.0 when…”)
 - Include **screenshots** when written (not yet in repo)
 
 Keep **README.md** developer-focused; don’t move teacher content there.
@@ -228,9 +247,9 @@ Keep **RENDER_DEPLOY.md** ops-focused; billing and OpenAI env vars stay there, c
 | # | Document | Effort | Depends on |
 |---|----------|--------|------------|
 | 1 | TEACHER_QUICKSTART.md | ~2 hrs | USER_GUIDE (done) |
-| 2 | TEACHER_GUIDE_FLAT_PAGES.md | ~3 hrs | USER_GUIDE flat section |
+| 2 | TEACHER_GUIDE_FLAT_PAGES.md | ~3 hrs | USER_GUIDE flat section + Ridey 2.0 |
 | 3 | TEACHER_GUIDE_GRADING.md | ~3 hrs | Screenshots from Submissions |
-| 4 | TEACHER_GUIDE_ASSETS.md | ~2 hrs | Screenshots from Assets |
+| 4 | TEACHER_GUIDE_ASSETS.md | ~2 hrs | Screenshots from Assets + content hub |
 | 5 | TEACHER_GUIDE_USERS.md | ~2 hrs | Screenshots from Users |
 | 6 | STUDENT_HANDOUT.md | ~1 hr | USER_GUIDE student sections |
 | 7 | FAQ.md | ~2 hrs | Support questions from classes |
@@ -247,12 +266,13 @@ Keep **RENDER_DEPLOY.md** ops-focused; billing and OpenAI env vars stay there, c
 
 Update docs when shipping:
 
-- [ ] New admin page or nav label
-- [ ] Flat page editor UX change (toolbar, tabs, Ridey, templates)
+- [x] New admin page or nav label (Overview, Review All Content — 2.8)
+- [x] Flat page editor UX change (config.json visual editor, Ridey 2.0 — 2.8)
 - [ ] Asset library UX change (filter bar, tabs, buttons)
 - [ ] Submission/version workflow change
-- [ ] New env vars or deploy steps
+- [x] New env vars or deploy steps (`RIDEY_VERSION`, `RIDEY_STRICT_VALIDATION` — 2.8)
 - [ ] Billing tier or quota change
+- [x] Terminology pass (teams/classes — 2.8)
 
 After each release, skim USER_GUIDE + TEACHER_QUICKSTART against the changelog.
 

@@ -1,6 +1,8 @@
 # VR Hotspots Educational Edition
 
-A comprehensive VR Hotspot Editor with built-in student submission system for educational environments. Students can build **interactive 360° VR tours** and **flat web pages** in one project. New to the tool? Start with the **[User Guide](USER_GUIDE.md)** for step-by-step instructions, watch this **[editing tool walkthrough](https://www.youtube.com/watch?v=Uo-bHKdDRKg)**, browse **[live examples of finished tours](USER_GUIDE.md#live-examples)** built by students, or watch this **[video example of a finished 360 tour](https://www.youtube.com/watch?v=23lqPjQc_IE)**. Teachers: see **[Documentation Plan](DOCS_PLAN.md)** for upcoming classroom guides.
+A comprehensive VR Hotspot Editor with built-in student submission system for educational environments. Students and team members can build **interactive 360° VR tours** and **flat web pages** in one project. New to the tool? Start with the **[User Guide](USER_GUIDE.md)** for step-by-step instructions, watch this **[editing tool walkthrough](https://www.youtube.com/watch?v=Uo-bHKdDRKg)**, browse **[live examples of finished tours](USER_GUIDE.md#live-examples)** built by students, or watch this **[video example of a finished 360 tour](https://www.youtube.com/watch?v=23lqPjQc_IE)**. Teachers: see **[Documentation Plan](DOCS_PLAN.md)** for upcoming classroom guides.
+
+**Current release:** `2.8` (`main` and `2.8` branches on GitHub are aligned).
 
 ## 🎓 Educational Features
 
@@ -8,21 +10,22 @@ A comprehensive VR Hotspot Editor with built-in student submission system for ed
 
 - **Full VR Editor**: Create immersive 360° experiences with hotspots
 - **Flat Web Page Editor**: Build HTML/CSS/JS pages with live preview, code snippets, templates, and optional AI help
-- **Student accounts**: Class-based sign-in with teacher-managed passwords
+- **Student accounts**: Team or class sign-in with admin-managed passwords
 - **Personal asset library**: Upload and tag files in **My Assets**; browse teacher **Shared Assets**
 - **Easy Submission**: One-click project submission with version history and teacher notes
 - **Professional Export**: Generate standalone VR experiences and hosted flat pages
 
 ### For Admins / Teachers:
 
-- **Submissions inbox**: Filter by class, student, and notes; version history per project
-- **Review in Editor**: Load a student project, edit, and **Save and Send** feedback
+- **Submissions inbox**: Filter by team or class, team member or student, and notes; version history per project
+- **Review in Editor**: Load a project, edit, and **Save and Send to Team Member or Student**
 - **Host projects**: Publish live preview URLs for sharing
 - **Online Assets library**: Upload shared media to Backblaze B2 with tags and stable URLs
-- **Editor Settings**: Manage code snippets, enable Ridey AI, and block risky file extensions
-- **Starter templates**: Create and publish flat-page templates students can load from the editor
-- **Student Peek**: Browse a student’s uploads and submission history from Users or Assets
-- **Users & Classes**: Roster management, password CSV export, reset password
+- **Editor Settings**: Manage code snippets, enable Ridey AI (**1.0** or **2.0 beta**), and block risky file extensions
+- **Starter templates**: Create and publish flat-page templates (including immersive museum starters with visual **config.json** editing)
+- **Team member or student Peek**: Browse uploads and submission history from Users or Assets
+- **Users & Teams/Classes**: Roster management, password CSV export, reset password
+- **Review All Content**: Site-wide content hub for projects, uploads, tours, and orphaned files
 - **Optional Stripe billing**: Class plan upgrades with usage quotas (when enabled)
 
 ## 🚀 Quick Start
@@ -55,7 +58,8 @@ npm run build:flat-editor
 
 ### 3. Access Points
 
-- **Students**: http://localhost:3000 or open `index.html` directly
+- **Students / team members**: http://localhost:3000 or open `index.html` directly
+- **Admin overview**: http://localhost:3000/admin
 - **Admin Submissions**: http://localhost:3000/admin-submissions.html
 - **Admin Assets (Online Assets)**: http://localhost:3000/admin-common-assets.html
 - **Admin Editor Settings**: http://localhost:3000/admin-snippets.html
@@ -76,7 +80,7 @@ LOCAL_TEST_USER_ENABLED=true
 Then run `npm run dev` and open the editor. You will see an entry gate:
 
 - **Continue as Guest** — build 360° tours and flat pages locally, pick **local files** (preview + ZIP export), browse **Shared Online Assets**, load a ZIP template, and **Save Template**. No cloud save or submit to admin.
-- **Sign in with class account** — full student features if you have a class password from your teacher.
+- **Sign in to a team or class account** — full student features if you have a password from your team leader or teacher.
 
 Test User mode is off on production by default. For a **demo/staging** deploy on Render, set both:
 
@@ -99,10 +103,10 @@ Direct link: `/?playground=your-template-slug`
 
 ### 4. Workflow
 
-1. Admin creates classes and students in **Users & Classes**
+1. Admin creates teams or classes and team members or students in **Users**
 2. Students sign in and create VR projects or flat web pages in the editor
 3. Students click **📤 Submit to Admin** when ready (optional note for teacher)
-4. Admin reviews in **Submissions** — download, host, or **Review in Editor** → **Save and Send to Student**
+4. Admin reviews in **Submissions** — download, host, or **Review in Editor** → **Save and Send to Team Member or Student**
 
 ## Flat Web Page Editor (2.5+)
 
@@ -112,16 +116,17 @@ Students switch **Editing Tools → 📄 Flat Web Page** to open a full code edi
 
 | Feature | Description |
 |---------|-------------|
-| **Multi-file tabs** | `index.html`, `style.css`, `script.js`, plus optional custom files |
-| **Live preview** | Split view with **Editor**, **50/50**, and **Preview** layout presets |
+| **Multi-file tabs** | `index.html`, `style.css`, `script.js`, `config.json` (on starter templates), plus optional custom files |
+| **Visual / Code config** | When a template includes a config schema, edit `config.json` in a visual form or raw JSON (Code mode) |
+| **Live preview** | Split view with **Editor**, **50/50**, and **Preview** layout presets; optional auto-reload (off by default) |
 | **Copy / Format** | Copy the active file; auto-format HTML, CSS, or JavaScript |
 | **Snippets** | Insert admin-curated code blocks at the cursor |
-| **Templates** | Load public starter templates from the gallery |
+| **Templates** | Load public starter templates from the gallery (e.g. immersive museum) |
 | **Online Assets** | Browse shared or personal media; **Insert Into Page** at the cursor |
 | **360° embed** | Generate and embed a hosted copy of the student’s VR tour in flat HTML |
 | **Saved pages** | Reload cloud-saved flat pages from **My Assets** |
 | **Cloud save & publish** | Save drafts or publish a hosted flat page URL (when signed in) |
-| **Ask Ridey** | Optional AI assistant (server-configured OpenAI key) — CSS goes in `style.css`, JS in `script.js` |
+| **Ask Ridey / Ask Ridey 2.0** | Optional AI assistant — **1.0** (default) or **2.0 beta** (holistic multi-file editing incl. `config.json`) |
 
 See **[USER_GUIDE.md — Flat Web Page mode](USER_GUIDE.md#flat-web-page-mode)** for the full walkthrough.
 
@@ -129,8 +134,9 @@ See **[USER_GUIDE.md — Flat Web Page mode](USER_GUIDE.md#flat-web-page-mode)**
 
 | Page | Purpose |
 |------|---------|
-| **Editor Settings** | CRUD for snippets; toggle Ridey; manage blocked upload extensions |
-| **Templates** | List, create, and edit public/default flat-page starter templates in a full editor with Online Assets |
+| **Editor Settings** | CRUD for snippets; enable Ridey and choose **1.0** or **2.0 (beta)**; manage blocked upload extensions |
+| **Templates** | List, create, and edit public/default flat-page starter templates with full editor, Online Assets, and visual **config.json** editing |
+| **Overview** (`/admin`) | Links to all admin sections including **Review All Content** |
 
 Requires **PostgreSQL** (`DATABASE_URL`) for snippets, templates, and editor settings persistence on hosted deployments.
 
@@ -154,6 +160,8 @@ ADMIN_SESSION_SECRET=random_long_secret_string
 # Optional Ridey AI (flat page editor)
 # OPENAI_API_KEY=sk-...
 # RIDEY_ENABLED=true
+# RIDEY_VERSION=1.0          # or 2.0 for holistic multi-file editing (beta)
+# RIDEY_STRICT_VALIDATION=false  # when true + Ridey 2.0, reject invalid JSON server-side
 
 # Optional: public bucket for common assets (auto-created as {B2_BUCKET_NAME}-public)
 # B2_PUBLIC_BUCKET_NAME=your-bucket-public
@@ -171,7 +179,8 @@ Run `npm run setup-b2-cors` manually if you need to refresh CORS rules.
 1. Open `/admin-common-assets.html` and sign in with `ADMIN_PASSWORD`
 2. Click **Upload Online Assets**, choose category, optionally add tags, and upload
 3. Use the tag filter bar to find assets; **Preview**, **Copy URL**, or **Edit Tags**
-4. Use **Peek Into Student Assets** to review individual student libraries
+4. Use **Peek Into Team Member or Student Assets** to review individual libraries
+5. Open **Review & Manage All Content** for a site-wide view of projects, uploads, and orphaned files
 
 ### Student workflow
 
@@ -193,12 +202,16 @@ vr_hotspots/
 ├── index.html                      # Main editor (360° + flat page modes)
 ├── script.js                       # Spherical editor + CommonAssetsPicker + submissions UI
 ├── flat-editor/                    # Flat page editor source (React + CodeMirror)
+├── flat-editor/configForm/         # Visual config.json editor (ConfigFormPanel, schema helpers)
+├── starter-templates/              # Disk-based starter templates (immersive museum, scrollytelling, …)
 ├── flat-editor.bundle.js           # Built flat editor bundle (commit after npm run build:flat-editor)
 ├── vr-hotspots-educational.css     # Flat editor styles (built)
 ├── asset-tags-ui.js / .css         # Tag chips, filter bar, Edit Tags modal
 ├── asset-preview-modal.js / .css   # Shared asset preview modal
+├── admin.html                    # Admin overview (entry hub)
 ├── admin-submissions.html/js       # Submissions inbox (primary admin)
-├── admin-common-assets.html/js     # Online Assets (admin upload + peek)
+├── admin-common-assets.html/js     # Online Assets (admin upload + peek + content hub)
+├── admin-content-hub.js            # Review All Content (embedded in Assets)
 ├── admin-snippets.html/js          # Editor Settings (snippets, Ridey, blocked extensions)
 ├── admin-templates.html/js         # Flat page template list
 ├── admin-template-editor.html/js   # Full template editor for admins
@@ -232,8 +245,9 @@ vr_hotspots/
 - **CodeMirror editing** with syntax highlighting for HTML, CSS, and JavaScript
 - **Snippets, templates, formatting, and clipboard tools**
 - **Asset insertion** from Online Assets directly into page markup
-- **Optional Ridey AI** with multi-file awareness (CSS/JS routed to the correct files)
-- **Admin-managed** snippets, templates, blocked extensions, and Ridey toggle
+- **Optional Ridey AI** — admin selects **1.0** (default) or **2.0 beta** (holistic HTML/CSS/JS/`config.json` editing)
+- **Visual config editor** for template `config.json` when `config.ui.json` schema is present
+- **Admin-managed** snippets, templates, blocked extensions, and Ridey version
 
 ### Educational Backend (2.0+):
 
@@ -277,7 +291,7 @@ vr_hotspots/
 
 ### Student Workflow:
 
-1. Open http://localhost:3000 and sign in (class → name → password)
+1. Open http://localhost:3000 and sign in (team or class → name → password)
 2. Build a **360° tour** (hotspots, scenes, audio) or switch to **Flat Web Page** for HTML/CSS/JS
 3. Use **Browse Online Assets** for shared media; use **Snippets** or **Templates** to get started on flat pages
 4. Click **📤 Submit to Admin** with project name and optional note for your teacher
@@ -285,7 +299,7 @@ vr_hotspots/
 ### Admin Workflow:
 
 1. Open **Submissions** (`/admin-submissions.html`)
-2. Filter by class, student, or notes
+2. Filter by team or class, team member or student, or notes
 3. **Download**, **Host**, **Review in Editor**, or manage version history
 4. Upload shared media on **Assets**, manage rosters on **Users**, configure **Editor Settings** and **Templates**
 
@@ -312,7 +326,8 @@ vr_hotspots/
 - **Submissions not working**: Check server console for errors
 - **Large files failing**: Increase multer file size limits
 - **Dashboard not updating**: Refresh browser or check network
-- **Ask Ridey missing**: Admin must enable Ridey and set `OPENAI_API_KEY` on the server (see [RENDER_DEPLOY.md](RENDER_DEPLOY.md))
+- **Ask Ridey missing**: Admin must enable Ridey, set `OPENAI_API_KEY`, and choose version under **Editor Settings** (see [RENDER_DEPLOY.md](RENDER_DEPLOY.md))
+- **Ridey 2.0 issues**: Switch back to **Ridey 1.0** in **Editor Settings** for legacy behavior
 - **Snippets/templates empty on Render**: Run database migration (`npm run db:migrate`) and ensure `DATABASE_URL` is set
 
 ### Support:
@@ -324,6 +339,16 @@ vr_hotspots/
 
 ## 🔮 Roadmap
 
+### Shipped in 2.8
+
+- **Inclusive UI terminology** — teams or classes; team members or students (throughout admin and sign-in)
+- **Ridey 2.0 (beta)** — admin-selectable; holistic multi-file editing including `config.json`, multi-file preview diffs, JSON apply validation
+- **Visual config editor** — Visual/Code toggle for `config.json` on templates with `config.ui.json` schema; live preview updates for transforms
+- **Immersive museum starter templates** — `immersive-museum` and `new-immersive-museum` with config-driven exhibits
+- **Admin overview** (`/admin`) and **Review All Content** hub on Assets
+- **Welcome screen** polish — sample projects grid, MIT license footer, sign-in copy updates
+- **`main` branch** aligned with `2.8` for production deploys
+
 ### Shipped in 2.5
 
 - **Flat Web Page editor** with live preview and multi-file tabs (HTML, CSS, JS + custom files)
@@ -332,7 +357,7 @@ vr_hotspots/
 - **Cloud save & publish** for student flat pages
 - **Admin Editor Settings**: Snippets CRUD, Ridey toggle, blocked file extensions
 - **Admin template gallery**: Create/edit public starter templates with full editor + Online Assets
-- **Ridey AI assistant** (optional OpenAI) with multi-file CSS/JS routing
+- **Ridey 1.0 AI assistant** (optional OpenAI) with multi-file CSS/JS routing
 
 ### Shipped in 2.0
 

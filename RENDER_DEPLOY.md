@@ -53,10 +53,12 @@ Optional:
 | `B2_PUBLIC_BUCKET_ID` | Public bucket ID after first deploy |
 | `OPENAI_API_KEY` | OpenAI secret key for **Ridey** AI in the flat page editor |
 | `RIDEY_ENABLED` | Set `true` to enable Ridey by default (admin can override in Editor Settings when DB is available) |
+| `RIDEY_VERSION` | Default Ridey version before DB override: `1.0` (default) or `2.0` (beta holistic multi-file editing) |
+| `RIDEY_STRICT_VALIDATION` | When `true` and Ridey **2.0** is active, reject invalid JSON from the model server-side (default `false`) |
 | `OPENAI_MODEL` | Model for Ridey (default `gpt-4o-mini`) |
 | `OPENAI_MAX_TOKENS` | Max tokens per Ridey response (default `1500`) |
 | `OPENAI_TEMPERATURE` | Ridey temperature (default `0.2`) |
-| `RIDEY_RATE_LIMIT_PER_HOUR` | Per-student/IP hourly limit (default `20`) |
+| `RIDEY_RATE_LIMIT_PER_HOUR` | Per team member/student/IP hourly limit (default `20`) |
 | `RIDEY_PERSONA` | Optional extra system prompt text for Ridey |
 | `STRIPE_ENABLED` | Set `true` to enable class billing upgrades |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
@@ -73,34 +75,37 @@ Minimum to enable AI help in the flat page editor:
 ```bash
 OPENAI_API_KEY=sk-your-key-here
 RIDEY_ENABLED=true
+RIDEY_VERSION=1.0          # optional; use 2.0 for beta holistic editing
+RIDEY_STRICT_VALIDATION=false
 ```
 
-Mark `OPENAI_API_KEY` as a **Secret** in Render. After deploy, confirm in **Editor Settings** that Ridey is enabled. Students must be signed in to use **Ask Ridey**.
+Mark `OPENAI_API_KEY` as a **Secret** in Render. After deploy, confirm in **Editor Settings** that Ridey is enabled and choose **1.0** or **2.0 (beta)**. Team members or students must be signed in to use **Ask Ridey** (or **Ask Ridey 2.0**). To roll back from **2.0**, switch the version to **1.0** in Editor Settings — no redeploy required.
 
 ## 4. After deploy
 
 Your app will be at `https://YOUR-SERVICE.onrender.com`:
 
 - **Editor:** `/index.html` or `/`
+- **Admin overview:** `/admin`
 - **Admin submissions:** `/admin-submissions.html` (primary admin inbox)
-- **Admin assets (Online Assets):** `/admin-common-assets.html`
-- **Admin editor settings:** `/admin-snippets.html` (snippets, Ridey, blocked extensions)
+- **Admin assets (Online Assets):** `/admin-common-assets.html` (includes **Review All Content** hub)
+- **Admin editor settings:** `/admin-snippets.html` (snippets, Ridey version, blocked extensions)
 - **Admin templates:** `/admin-templates.html` (flat page starter templates)
-- **Users & classes:** `/admin-users.html`
+- **Users & teams/classes:** `/admin-users.html`
 - **Billing (if Stripe enabled):** `/admin-billing.html`
 
 > `/admin-dashboard.html` redirects to Submissions.
 
 On first deploy, check **Logs** for PostgreSQL migration, B2 authorization, and CORS messages. If logs show `Database schema already applied`, run migrations locally against the Render database or trigger a deploy after ensuring `db/migrate.js` includes the latest migrations (`editor_features_v1` for snippets, templates, and app settings).
 
-### Student & class setup
+### Team member, student & class setup
 
-1. Sign in to **Users & Classes** (`/admin-users.html`) as admin
-2. Create classes and add students (passwords are shown once — use **Download All Passwords (CSV)**)
-3. Students sign in at the editor: choose class → name → password
-4. Upload shared media on **Assets** (`/admin-common-assets.html`); optional tags help students find files
-5. Optional: add **code snippets** and **flat page templates** under **Editor Settings** and **Templates**
-6. Optional: set `OPENAI_API_KEY` and enable **Ridey** under **Editor Settings**
+1. Sign in to **Users** (`/admin-users.html`) as admin
+2. Create teams or classes and add team members or students (passwords are shown once — use **Download All Passwords (CSV)**)
+3. Team members or students sign in at the editor: welcome screen → **Sign in to a team or class account** → choose team or class → name → password you were given
+4. Upload shared media on **Assets** (`/admin-common-assets.html`); optional tags help students find files; use **Review All Content** for site-wide cleanup
+5. Optional: add **code snippets** and **flat page templates** under **Editor Settings** and **Templates** (templates with `config.ui.json` support visual **config.json** editing)
+6. Optional: set `OPENAI_API_KEY`, enable **Ridey**, and choose **1.0** or **2.0 (beta)** under **Editor Settings**
 
 ### Welcome-screen sample projects (optional)
 
@@ -125,7 +130,7 @@ For classroom workflows (grading, peek, asset tagging, flat page editor), see [U
 ## 5. Notes
 
 - **Free tier** services spin down after inactivity; the first request may take ~30s.
-- **PostgreSQL** stores classes, students, submissions metadata, billing, snippets, templates, and editor settings — survives redeploys.
+- **PostgreSQL** stores teams/classes, team members/students, submissions metadata, billing, snippets, templates, and editor settings (including `ridey_version`) — survives redeploys.
 - **Ephemeral disk:** Local `hosted-projects/` resets on redeploy; **re-host** student projects from Submissions after redeploy if you use **Host**. Student ZIPs in B2 and PostgreSQL data persist.
 - **Flat editor bundle:** `flat-editor.bundle.js` is committed to the repo. Rebuild with `npm run build:flat-editor` after editing `flat-editor/` sources.
 - **HTTPS:** Render provides TLS automatically — use `https://` URLs when sharing links.

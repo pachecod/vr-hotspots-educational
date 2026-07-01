@@ -35,15 +35,16 @@ Your instructor or admin will give you a URL. Common examples:
 
 | Role | Page |
 |------|------|
-| **Student (editor)** | `/` or `/index.html` |
+| **Student / team member (editor)** | `/` or `/index.html` |
+| **Admin (overview)** | `/admin` |
 | **Admin (submissions)** | `/admin-submissions.html` |
 | **Admin (online assets)** | `/admin-common-assets.html` |
 | **Admin (editor settings)** | `/admin-snippets.html` |
 | **Admin (flat page templates)** | `/admin-templates.html` |
-| **Admin (users & classes)** | `/admin-users.html` |
+| **Admin (users & teams/classes)** | `/admin-users.html` |
 | **Admin (billing)** | `/admin-billing.html` (when Stripe is enabled) |
 
-All admin pages share a top nav: **Overview · Submissions · Assets · Editor Settings · Templates · Users · Logout** (Billing appears when Stripe is enabled).
+All admin pages share a top nav: **Overview · Submissions · Assets · Editor Settings · Templates · Users · Logout** (Billing & Limits appears when Stripe is enabled).
 
 If you are running locally, that is usually `http://localhost:3000` (or `http://localhost:5174` when using the Vite dev server with `npm run dev`).
 
@@ -51,16 +52,17 @@ If you are running locally, that is usually `http://localhost:3000` (or `http://
 
 ---
 
-## Signing in as a student
+## Signing in as a team member or student
 
-When your instructor has enabled student accounts:
+When your instructor has enabled accounts:
 
-1. Open the editor — a sign-in screen appears
-2. **Choose your class** from the list
-3. **Choose your name** from that class
-4. Enter the **password** your teacher gave you
+1. Open the editor — a welcome screen appears
+2. Click **Sign in to a team or class account** (or use guest mode if your site allows it)
+3. **Choose your team or class** from the list
+4. **Choose your name** from that team or class
+5. Enter the **password you were given**
 
-After sign-in, a **session bar** at the top of the editor tools panel shows your name and class, with **Logout** and **My Submissions**.
+After sign-in, a **session bar** at the top of the editor tools panel shows your name and team or class, with **Logout** and **My Submissions**.
 
 You can:
 
@@ -69,7 +71,7 @@ You can:
 - Open **My Submissions** to see version history, teacher feedback, and unread return badges
 - **Save to Cloud** drafts without notifying the teacher (submit when ready)
 
-Ask your teacher to reset your password from **Users & Classes** if you forget it.
+Ask your team leader or teacher to reset your password from **Users** if you forget it.
 
 ---
 
@@ -187,13 +189,16 @@ Switch to **📄 Flat Web Page** in **Editing Tools** to open the code editor. Y
 
 ### File tabs
 
-Every flat page includes three core files:
+Every flat page includes core files:
 
 | Tab | Purpose |
 |-----|---------|
 | **index.html** | Page structure and content |
 | **style.css** | Styles (linked from HTML) |
 | **script.js** | JavaScript (linked from HTML) |
+| **config.json** | Template settings (on starter templates such as immersive museum) |
+
+Some templates also support a **Visual / Code** toggle on the `config.json` tab — use the visual form for positions, labels, and assets, or switch to **Code** for raw JSON. Students do not see the admin-only `config.ui.json` schema file; the visual form still works when the template embeds that schema.
 
 Click **+** to add custom files (for example `extra.css` or `utils.js`). Core files cannot be removed. Your instructor may block certain file extensions (such as `.exe`) from uploads and custom files.
 
@@ -207,7 +212,7 @@ Above the code area:
 | **Snippets** | Open the snippet library and insert code at the cursor |
 | **Format** | Auto-format the active HTML, CSS, or JavaScript file |
 | **Templates** | Browse and load admin-published starter templates |
-| **Ask Ridey** | Open the AI assistant (only when enabled by your instructor) |
+| **Ask Ridey** / **Ask Ridey 2.0** | Open the AI assistant (only when enabled by your instructor; **2.0** label when beta is on) |
 
 ### Live preview layout
 
@@ -219,7 +224,7 @@ The preview pane shows your page as you edit. Use the layout buttons:
 | **50/50** | Balanced split (default) |
 | **Preview** | Mostly preview, small code |
 
-Click **↻ Refresh** if the preview looks out of date.
+Click **↻ Refresh** if the preview looks out of date. By default the preview does **not** auto-reload on every keystroke — enable **Reload preview automatically** in the preview toolbar if you want live updates while typing.
 
 ### Snippets
 
@@ -265,12 +270,16 @@ Saved pages appear under **My Assets → My Saved Pages** in the asset library.
 
 When your instructor enables Ridey and the server is configured:
 
-1. Click **Ask Ridey** in the toolbar
+1. Click **Ask Ridey** (or **Ask Ridey 2.0** when beta is enabled) in the toolbar
 2. Type a question or use a quick prompt (**Find bugs**, **Optimize**, **Add features**, **Improve quality**)
 3. Review Ridey’s explanation and **Preview Changes**
 4. **Apply Changes** to update your project files
 
-Ridey sees your **full project** (HTML, CSS, and JS). Styling changes go into **style.css**; script changes go into **script.js**; HTML stays structural. You must be **signed in** as a student to use Ridey. Requests are rate-limited per hour.
+**Ridey 1.0 (default)** sees your full project (HTML, CSS, JS). Styling changes go into **style.css**; script changes go into **script.js**; HTML stays structural.
+
+**Ridey 2.0 (beta)** adds holistic editing across all project files, including **config.json** on starter templates. The preview modal can show diffs for each changed file. Your instructor can switch back to **1.0** anytime under **Editor Settings** if **2.0** is not working well for your class.
+
+You must be **signed in** to use Ridey. Requests are rate-limited per hour.
 
 If **Ask Ridey** does not appear, your instructor has not enabled it or the server API key is not configured.
 
@@ -384,13 +393,27 @@ Open **My Submissions** from the session bar to:
 
 ---
 
+## Admin: overview
+
+Open **Overview** (`/admin`) after signing in with your admin password. This page links to every admin section:
+
+- **Submissions** — inbox and grading
+- **Assets** — shared Online Assets and **Review All Content**
+- **Editor Settings** — snippets, Ridey version, blocked extensions
+- **Templates** — flat page starter templates
+- **Users** — teams or classes and rosters
+
+Use **Review All Content** (also linked from the Assets page) to search, filter, and manage all site content in one place.
+
+---
+
 ## Admin: review submissions
 
 Sign in at `/admin-submissions.html` (or any admin page — same password).
 
 ### Submissions inbox
 
-1. Filter by **class**, **student**, or whether the student left a **note**
+1. Filter by **team or class**, **team member or student**, or whether they left a **note**
 2. For each submission:
    - **Download** — get the ZIP
    - **🌐 Host** — publish a live preview URL (re-host after server redeploy if using ephemeral disk — see [RENDER_DEPLOY.md](RENDER_DEPLOY.md))
@@ -405,11 +428,11 @@ Use **Import Project ZIP** at the top to upload a backup or locally exported pro
 ### Review in Editor and return feedback
 
 1. Click **Review in Editor** (from Submissions or from **Peek** — see below)
-2. The student’s project loads; an **Admin Review** bar shows student info and any student note
+2. The team member’s or student’s project loads; an **Admin Review** bar shows their info and any note they left
 3. Make edits as needed
-4. Click **Save and Send to Student**, add an optional feedback note, and confirm
+4. Click **Save and Send to Team Member or Student**, add an optional feedback note, and confirm
 
-This creates a new **admin return** version. The student’s original ZIP is never overwritten. The student sees the feedback in **My Submissions** and can open your returned version in the editor.
+This creates a new **admin return** version. The original submission ZIP is never overwritten. They see the feedback in **My Submissions** and can open your returned version in the editor.
 
 ---
 
@@ -434,9 +457,17 @@ Upload limits: Flat images 10MB, 360 photos 50MB, 360 videos 200MB, Audio 50MB, 
 
 Use the same **tag filter bar** as students: filename text, tag chips, **Recent** pills, and **Show All Tags**.
 
-### Peek into a student’s library
+### Peek into a team member’s or student’s library
 
-Use the **Peek Into Student Assets and Submissions** dropdown to open a student’s assets, submissions, and version history without leaving the Assets page. **Back to Online Assets** returns you here; from **Users**, peek opens with **Back to Users**.
+Use **Peek Into Team Member or Student Assets and Submissions** to open their assets, submissions, and version history without leaving the Assets page. **Back to Online Assets** returns you here; from **Users**, peek opens with **Back to Users**.
+
+### Review All Content
+
+Click **Review & Manage All Content** on the Assets page (or open **Overview → Review All Content**) for a site-wide hub:
+
+- Filter by team or class, team member or student, content type, orphaned files, or search
+- View VR projects, flat pages, hosted tours, uploads, shared assets, and legacy submissions in one place
+- Delete or inspect content with unified storage cleanup
 
 ---
 
@@ -447,14 +478,19 @@ Open **Editor Settings** (`/admin-snippets.html`).
 ### Ridey AI assistant
 
 1. Ensure `OPENAI_API_KEY` is set in your server environment (see [RENDER_DEPLOY.md](RENDER_DEPLOY.md))
-2. Toggle **Enable Ridey for students**
-3. Students see **Ask Ridey** in the flat page toolbar when enabled and the API key is present
+2. Toggle **Enable Ridey for team members or students**
+3. Choose **Ridey version**:
+   - **1.0** — current behavior (default)
+   - **2.0 (beta)** — holistic multi-file editing including `config.json`, multi-file preview diffs, JSON validation on apply
+4. Team members or students see **Ask Ridey** (or **Ask Ridey 2.0**) in the flat page toolbar when enabled and the API key is present
 
-Optional environment variables: `OPENAI_MODEL`, `OPENAI_MAX_TOKENS`, `OPENAI_TEMPERATURE`, `RIDEY_RATE_LIMIT_PER_HOUR`, `RIDEY_PERSONA`.
+To roll back from **2.0**, switch the version to **1.0** — no redeploy required.
+
+Optional environment variables: `OPENAI_MODEL`, `OPENAI_MAX_TOKENS`, `OPENAI_TEMPERATURE`, `RIDEY_VERSION` (env default before DB value), `RIDEY_STRICT_VALIDATION`, `RIDEY_RATE_LIMIT_PER_HOUR`, `RIDEY_PERSONA`.
 
 ### Blocked file extensions
 
-Add extensions (without the dot) that students cannot upload or add as custom flat-page files — for example `exe`, `bat`, `sh`. Click **Save Blocked Extensions**.
+Add extensions (without the dot) that team members or students cannot upload or add as custom flat-page files — for example `exe`, `bat`, `sh`. Click **Save Blocked Extensions**.
 
 ### Code snippets
 
@@ -471,35 +507,38 @@ Snippets appear in the student flat editor **Snippets** modal. Requires PostgreS
 Open **Templates** (`/admin-templates.html`).
 
 1. Click **+ Create with Editor** or **Edit in Editor** on an existing template
-2. Use the full flat page editor (HTML/CSS/JS tabs, live preview, **Editing Tools → Browse Online Assets**)
-3. Set **title**, **description**, **Public**, and optional **Default starter**
-4. Click **Save Template**
+2. Use the full flat page editor (HTML/CSS/JS/`config.json` tabs, live preview, **Editing Tools → Browse Online Assets**)
+3. On templates with a config schema, use **Visual / Code** on the `config.json` tab to edit settings visually or as raw JSON
+4. Set **title**, **description**, **Public**, and optional **Default starter**
+5. Click **Save Template**
 
-Students load public templates from **Templates** in the flat editor toolbar. Mark one template as **Default starter** for new empty projects when configured.
+Disk **starter templates** (e.g. `immersive-museum`, `new-immersive-museum`, `3d-model-scrollytelling`) live under `starter-templates/` and can be loaded in the admin template editor.
+
+Team members or students load public templates from **Templates** in the flat editor toolbar. Mark one template as **Default starter** for new empty projects when configured.
 
 Requires PostgreSQL (`DATABASE_URL`) on hosted deployments.
 
 ---
 
-## Admin: users & classes
+## Admin: users & teams/classes
 
 Open **Users** (`/admin-users.html`).
 
-1. Create **classes** and add **students** (username and password are generated)
+1. Create **teams or classes** and add **team members or students** (username and password are generated)
 2. **Download All Passwords (CSV)** — passwords are stored on the server for later export
-3. **Reset Password** — for individual students
-4. **Peek** — view that student’s assets and submission history
+3. **Set Password** — for individual accounts
+4. **Peek** — view that person’s assets and submission history
 
-When Stripe billing is enabled, a link to **Class billing & usage** appears on this page.
+When Stripe billing is enabled, a link to **Billing & Limits** appears on this page.
 
 ---
 
-## Admin: student Peek
+## Admin: team member or student Peek
 
-From **Users → Peek** or **Assets → student dropdown**, you can:
+From **Users → Peek** or **Assets → team member or student dropdown**, you can:
 
-- Browse the student’s uploaded assets by category (with tag/filename search)
-- **Preview**, **Copy URL**, or **Delete** student files
+- Browse their uploaded assets by category (with tag/filename search)
+- **Preview**, **Copy URL**, or **Delete** files
 - View **Projects & saves** — version table with Submitted / Draft / Teacher feedback badges
 - **Download** or **Review** any version in the editor
 
@@ -532,7 +571,9 @@ If media was exported as **online URLs**, stay connected to the internet. If med
 | **Hosted project link dead after redeploy** | Admin must **Host** again — hosted URLs on ephemeral disk do not survive redeploy. |
 | **Lost work** | Use **Save Template** often. Avoid **Clear Data** unless you mean to reset. |
 | **Ask Ridey missing** | Instructor must enable Ridey under **Editor Settings** and set `OPENAI_API_KEY` on the server. |
-| **Ridey put CSS inline** | Update to latest version — Ridey routes CSS to `style.css` and JS to `script.js`. |
+| **Ridey put CSS inline** | Use **Ridey 1.0** or ensure **2.0** is enabled — both route CSS to `style.css` and JS to `script.js`. |
+| **Ridey 2.0 JSON error** | Fix invalid JSON in the suggestion, or ask admin to switch to **Ridey 1.0** under Editor Settings. |
+| **config.json visual tab missing** | Template may not include a config schema; use Code mode or ask admin to add `config.ui.json`. |
 | **Snippets or templates empty** | Admin needs PostgreSQL and `npm run db:migrate` on the server. |
 
 ---

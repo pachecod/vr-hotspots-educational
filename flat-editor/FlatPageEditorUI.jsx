@@ -48,6 +48,7 @@ export default function FlatPageEditorUI({ bridge }) {
   const [previewKey, setPreviewKey] = useState(0);
   const [autoReloadPreview, setAutoReloadPreview] = useState(AUTO_RELOAD_PREVIEW_DEFAULT);
   const wasVisibleRef = useRef(false);
+  const previewRef = useRef(null);
   const [showSnippets, setShowSnippets] = useState(false);
   const [showRidey, setShowRidey] = useState(false);
   const [showAddFile, setShowAddFile] = useState(false);
@@ -63,6 +64,9 @@ export default function FlatPageEditorUI({ bridge }) {
   const requestPreviewReload = useCallback(() => {
     if (autoReloadPreview) setPreviewKey((k) => k + 1);
   }, [autoReloadPreview]);
+  const handleConfigLiveUpdate = useCallback((path, value) => {
+    previewRef.current?.postConfigLive(path, value);
+  }, []);
 
   useEffect(
     () =>
@@ -74,7 +78,9 @@ export default function FlatPageEditorUI({ bridge }) {
         }
         wasVisibleRef.current = visible;
         bump((n) => n + 1);
-        if (bridge.consumePendingPreviewReload()) forcePreviewReload();
+        if (bridge.consumeLiveConfigUpdate()) {
+          /* visual config transform — live patch already sent to preview iframe */
+        } else if (bridge.consumePendingPreviewReload()) forcePreviewReload();
         else requestPreviewReload();
         if (bridge.consumePendingConfigVisual()) {
           setConfigEditorMode('visual');
@@ -269,7 +275,11 @@ export default function FlatPageEditorUI({ bridge }) {
             </div>
           </div>
           {showConfigVisual ? (
-            <ConfigFormPanel bridge={bridge} onUpdated={requestPreviewReload} />
+            <ConfigFormPanel
+              bridge={bridge}
+              onUpdated={requestPreviewReload}
+              onLiveUpdate={handleConfigLiveUpdate}
+            />
           ) : (
             <Editor
               key={activeFileId}
@@ -324,7 +334,7 @@ export default function FlatPageEditorUI({ bridge }) {
               </label>
             </div>
           </div>
-          <Preview page={page} refreshKey={previewKey} />
+          <Preview ref={previewRef} page={page} refreshKey={previewKey} />
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 /** Inject parsed config.json for live preview (fetch does not work in srcdoc). */
 import { resolveConfigAssetUrls } from './resolveConfigAssetUrls.js';
+import { PREVIEW_LIVE_CONFIG_BRIDGE } from './previewLiveConfigBridge.js';
 
 export function injectPreviewConfig(html, configJsonRaw, options = {}) {
   const trimmed = String(configJsonRaw || '').trim();
@@ -17,7 +18,7 @@ export function injectPreviewConfig(html, configJsonRaw, options = {}) {
       ? window.location.origin
       : '');
   const forPreview = origin ? resolveConfigAssetUrls(parsed, origin) : parsed;
-  const bootstrap = `<script>window.__FLAT_PAGE_CONFIG__=${JSON.stringify(forPreview)};</script>`;
+  const bootstrap = `<script>window.__FLAT_PAGE_CONFIG__=${JSON.stringify(forPreview)};</script>\n${PREVIEW_LIVE_CONFIG_BRIDGE}`;
   if (/<\/body>/i.test(html)) {
     return html.replace(/<\/body>/i, `${bootstrap}\n</body>`);
   }

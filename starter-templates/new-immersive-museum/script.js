@@ -286,7 +286,64 @@ class MuseumRuntime {
     this.createExhibits();
     this.setupSlideshow();
     this.setupVR();
+    this.setupLiveConfig();
     this.trackLoading();
+  }
+
+  setupLiveConfig() {
+    if (this._liveConfigBound) return;
+    window.addEventListener('flat-page-config-live', (e) => {
+      this.applyLiveConfigPatch(e.detail?.path, e.detail?.value);
+    });
+    this._liveConfigBound = true;
+  }
+
+  applyLiveConfigPatch(path, value) {
+    if (!path || value == null || value === '') return;
+    const str = String(value);
+
+    const staticTargets = {
+      'infoDisplay.position': '#info-display',
+      'infoDisplay.panel.position': '#image-panel-container',
+      'infoDisplay.text.position': '#info-text',
+      'infoDisplay.navigation.left.position': '#nav-left',
+      'infoDisplay.navigation.right.position': '#nav-right',
+      'environment.lighting.directional.position': '#museum-sun',
+    };
+
+    let el = null;
+    let attr = null;
+
+    if (staticTargets[path]) {
+      el = document.querySelector(staticTargets[path]);
+      attr = 'position';
+    } else {
+      let match = path.match(/^exhibits\.(\d+)\.(position|rotation|scale)$/);
+      if (match) {
+        const exhibit = this.config.exhibits?.[parseInt(match[1], 10)];
+        el = exhibit?.id ? document.getElementById(exhibit.id) : null;
+        attr = match[2];
+      }
+      if (!el) {
+        match = path.match(/^exhibits\.(\d+)\.model\.(position|rotation|scale)$/);
+        if (match) {
+          const exhibit = this.config.exhibits?.[parseInt(match[1], 10)];
+          el = exhibit?.model?.id ? document.getElementById(exhibit.model.id) : null;
+          attr = match[2];
+        }
+      }
+      if (!el) {
+        match = path.match(/^exhibits\.(\d+)\.hotspot\.position$/);
+        if (match) {
+          const exhibit = this.config.exhibits?.[parseInt(match[1], 10)];
+          el = exhibit?.hotspot?.id ? document.getElementById(exhibit.hotspot.id) : null;
+          attr = 'position';
+        }
+      }
+    }
+
+    if (!el || !attr) return;
+    el.setAttribute(attr, str);
   }
 
   createAssets() {
@@ -337,6 +394,7 @@ class MuseumRuntime {
     scene.appendChild(amb);
 
     const sun = document.createElement('a-entity');
+    sun.id = 'museum-sun';
     sun.setAttribute('light', {
       type: 'directional',
       color: lighting.directional?.color || '#FFF',

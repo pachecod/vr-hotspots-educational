@@ -44,6 +44,7 @@ export class FlatPageEditorBridge {
     this._rideyStatus = { enabled: false, hasApiKey: false };
     this._pendingConfigVisual = false;
     this._pendingPreviewReload = false;
+    this._liveConfigUpdate = false;
     this._embeddedConfigUiSchema = '';
     this._loadFromStorage();
     this._focusConfigEditorIfConfigured({ preferVisual: true });
@@ -274,8 +275,25 @@ export class FlatPageEditorBridge {
     }
   }
 
-  setConfigObject(obj) {
-    this.setFileContent('config.json', JSON.stringify(obj, null, 2));
+  setConfigObject(obj, options = {}) {
+    const content = JSON.stringify(obj, null, 2);
+    if (options.live) {
+      const page = this.getActivePage();
+      const file = (page.files || []).find((f) => f.id === 'config.json');
+      if (!file) return false;
+      file.content = content;
+      try {
+        localStorage.setItem(this._storageKey, JSON.stringify(this.project));
+      } catch (err) {
+        console.warn('[FlatPage] Failed to persist flat pages:', err);
+      }
+      this._syncScenesData();
+      this._liveConfigUpdate = true;
+      this._notify();
+      return true;
+    }
+    this.setFileContent('config.json', content);
+    return true;
   }
 
   hasConfigUiSchema() {
@@ -336,6 +354,12 @@ export class FlatPageEditorBridge {
 
   _markPreviewReloadRequired() {
     this._pendingPreviewReload = true;
+  }
+
+  consumeLiveConfigUpdate() {
+    const pending = this._liveConfigUpdate;
+    this._liveConfigUpdate = false;
+    return pending;
   }
 
   setFileContent(fileId, content) {

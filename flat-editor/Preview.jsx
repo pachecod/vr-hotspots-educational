@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useImperativeHandle, forwardRef } from 'react';
 import { buildPreviewDocument } from './buildPreview.js';
 
-export default function Preview({ page, refreshKey }) {
+const Preview = forwardRef(function Preview({ page, refreshKey }, ref) {
+  const iframeRef = useRef(null);
   const pageId = page?.id || 'main';
   const baseHref =
     typeof window !== 'undefined' && window.location?.origin
@@ -13,8 +14,21 @@ export default function Preview({ page, refreshKey }) {
     [page, refreshKey, baseHref]
   );
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      postConfigLive(path, value) {
+        const win = iframeRef.current?.contentWindow;
+        if (!win) return;
+        win.postMessage({ type: 'flat-config-live', path, value }, '*');
+      },
+    }),
+    []
+  );
+
   return (
     <iframe
+      ref={iframeRef}
       key={refreshKey}
       title="Flat page live preview"
       className="flat-preview-frame"
@@ -22,4 +36,6 @@ export default function Preview({ page, refreshKey }) {
       srcDoc={srcdoc}
     />
   );
-}
+});
+
+export default Preview;

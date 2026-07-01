@@ -153,6 +153,8 @@
         { "path": "infoDisplay.navigation.right.size", "label": "Right arrow size (W × H)", "type": "vec2" }
       ]
     },
+    {
+      "title": "Info panel text",
       "fields": [
         {
           "path": "infoDisplay.text.content.slide1",

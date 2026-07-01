@@ -5,6 +5,7 @@ import { loadUiSchema } from './loadUiSchema.js';
 import { assetUrlForConfig, normalizeConfigAssetUrl } from '../resolveConfigAssetUrls.js';
 import NumberStepper, { inferNumberStep } from './NumberStepper.jsx';
 import VectorField from './VectorField.jsx';
+import { isLiveTransformPath } from './liveConfigPaths.js';
 import './config-form.css';
 
 function browseAsset(category, onUrl) {
@@ -205,7 +206,7 @@ function ConfigSection({ section, config, onFieldChange }) {
   );
 }
 
-export default function ConfigFormPanel({ bridge, onUpdated }) {
+export default function ConfigFormPanel({ bridge, onUpdated, onLiveUpdate }) {
   const state = bridge.getState();
   const configJsonRaw = bridge.getFileContent('config.json');
   const configUiRaw = bridge.getConfigUiSchemaRaw?.() || bridge.getFileContent('config.ui.json');
@@ -222,10 +223,15 @@ export default function ConfigFormPanel({ bridge, onUpdated }) {
           ? normalizeConfigAssetUrl(value)
           : value;
       setPath(next, path, normalized);
-      bridge.setConfigObject(next);
-      onUpdated?.();
+      const liveTransform = isLiveTransformPath(path);
+      bridge.setConfigObject(next, { live: liveTransform });
+      if (liveTransform) {
+        onLiveUpdate?.(path, normalized);
+      } else {
+        onUpdated?.();
+      }
     },
-    [bridge, onUpdated]
+    [bridge, onUpdated, onLiveUpdate]
   );
 
   if (!configResult.ok) {

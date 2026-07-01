@@ -17,6 +17,7 @@ import {
   inferFileType,
   sanitizeFilename,
   getExtension,
+  isAdminOnlyFile,
 } from './file-utils.js';
 import {
   buildProjectVrInsertHtml,
@@ -41,6 +42,7 @@ export class FlatPageEditorBridge {
     this._blockedExtensions = [];
     this._rideyStatus = { enabled: false, hasApiKey: false };
     this._pendingConfigVisual = false;
+    this._embeddedConfigUiSchema = '';
     this._loadFromStorage();
     this._focusConfigEditorIfConfigured({ preferVisual: true });
     this._loadEditorSettings();
@@ -196,11 +198,21 @@ export class FlatPageEditorBridge {
       cloudStatus: this._cloudStatus,
       cloudStatusError: this._cloudStatusError,
       showCloudActions: caps.canUseCloudSave,
-      files: page.files || [],
+      files: this._visiblePageFiles(page),
       rideyEnabled: caps.canUseRidey && this._rideyStatus.enabled && this._rideyStatus.hasApiKey,
       blockedExtensions: this._blockedExtensions,
       adminTemplateMode: this._adminTemplateMode,
     };
+  }
+
+  _visiblePageFiles(page) {
+    const files = page?.files || [];
+    if (this._adminTemplateMode) return files;
+    return files.filter((f) => !isAdminOnlyFile(f.id));
+  }
+
+  _exportablePageFiles(page) {
+    return this._visiblePageFiles(page);
   }
 
   getTemplateFilesManifest() {
@@ -251,7 +263,7 @@ export class FlatPageEditorBridge {
   }
 
   hasConfigUiSchema() {
-    const raw = String(this.getFileContent('config.ui.json') || '').trim();
+    const raw = this.getConfigUiSchemaRaw();
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw);
@@ -259,6 +271,27 @@ export class FlatPageEditorBridge {
     } catch (_) {
       return false;
     }
+  }
+
+  /** Raw config.ui.json content — from file (admin) or embedded schema (students). */
+  getConfigUiSchemaRaw() {
+    if (this._adminTemplateMode) {
+      return String(this.getFileContent('config.ui.json') || '').trim();
+    }
+    return String(this._embeddedConfigUiSchema || '').trim();
+  }
+
+  _extractConfigUiForStudent(byId, template = {}) {
+    const fromManifest = byId['config.ui.json'];
+    const fromField = template.config_ui_schema;
+    const raw =
+      fromField != null && String(fromField).trim()
+        ? String(fromField)
+        : fromManifest != null
+          ? String(fromManifest)
+          : '';
+    delete byId['config.ui.json'];
+    this._embeddedConfigUiSchema = raw;
   }
 
   /** Open config.json in visual mode when config.ui.json defines a form schema. */
@@ -406,6 +439,9 @@ export class FlatPageEditorBridge {
   addFile(name) {
     const safe = sanitizeFilename(name);
     if (!safe) return { ok: false, error: 'Invalid file name' };
+    if (!this._adminTemplateMode && isAdminOnlyFile(safe)) {
+      return { ok: false, error: 'That file is reserved for administrators.' };
+    }
     const ext = getExtension(safe);
     if (ext && this._blockedExtensions.includes(ext)) {
       return { ok: false, error: `File type ".${ext}" is not allowed.` };
@@ -440,6 +476,11 @@ export class FlatPageEditorBridge {
     template.files_manifest.forEach((f) => {
       if (f && f.name) byId[f.name] = f.content || '';
     });
+    if (this._adminTemplateMode) {
+      this._embeddedConfigUiSchema = '';
+    } else {
+      this._extractConfigUiForStudent(byId, template);
+    }
     const page = this.getActivePage();
     page.name = template.title || page.name;
     page.files = this._mergePageFiles(byId);
@@ -514,6 +555,7 @@ export class FlatPageEditorBridge {
         files: [],
       };
       (page.files || []).forEach((file) => {
+        if (!this._adminTemplateMode && isAdminOnlyFile(file.id)) return;
         let content = file.content || '';
         if (file.id === 'index.html' && hostedUrl) {
           content = rewriteVrTourEmbedsInHtml(content, { hostedUrl, useOnlineUrl });
@@ -644,9 +686,18 @@ export class FlatPageEditorBridge {
       type: typeByName[f.name] || 'html',
       content: f.content || '',
     }));
-    if (!files.some((f) => f.name === 'index.html')) {
+    if (!this._adminTemplateMode) {
+      const configUi = files.find((f) => f.name === 'config.ui.json');
+      if (configUi) {
+        this._embeddedConfigUiSchema = configUi.content || this._embeddedConfigUiSchema;
+      }
+    }
+    const visibleFiles = this._adminTemplateMode
+      ? files
+      : files.filter((f) => !isAdminOnlyFile(f.id));
+    if (!visibleFiles.some((f) => f.name === 'index.html')) {
       const defaults = defaultFilesContent();
-      files.unshift({
+      visibleFiles.unshift({
         id: 'index.html',
         name: 'index.html',
         type: 'html',
@@ -657,10 +708,12 @@ export class FlatPageEditorBridge {
       id: pageId,
       name: page.name || 'Flat Web Page',
       framework: 'html',
-      files,
+      files: visibleFiles,
     };
     this.project.activePageId = pageId;
-    this.activeFileId = 'index.html';
+    if (!this._focusConfigEditorIfConfigured({ preferVisual: true })) {
+      this.activeFileId = 'index.html';
+    }
     this.save();
     this._visible = true;
     this._notify();
@@ -688,7 +741,7 @@ export class FlatPageEditorBridge {
     return {
       name,
       framework: page.framework,
-      files: (page.files || []).map((f) => ({
+      files: this._exportablePageFiles(page).map((f) => ({
         name: f.name,
         type: f.type,
         content: f.content || '',
@@ -768,6 +821,7 @@ export class FlatPageEditorBridge {
   reset() {
     this.project = createDefaultProject();
     this.activeFileId = 'index.html';
+    this._embeddedConfigUiSchema = '';
     this.save();
   }
 }

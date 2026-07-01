@@ -3,6 +3,7 @@ const { isDbEnabled } = require('../services/db-service');
 const templatesDb = require('../lib/templates');
 const { getBlockedExtensions } = require('../lib/app-settings');
 const { refreshPlaygroundThumbnail } = require('../lib/playground-thumbnail');
+const { templateForStudent } = require('../lib/template-manifest');
 const {
   listStarterTemplates,
   loadStarterTemplate,
@@ -38,7 +39,10 @@ function registerTemplateRoutes(app) {
   app.get('/api/templates/default', async (_req, res) => {
     try {
       const template = await templatesDb.getDefaultTemplate();
-      res.json({ success: true, template });
+      res.json({
+        success: true,
+        template: template ? templateForStudent(template) : null,
+      });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -50,7 +54,7 @@ function registerTemplateRoutes(app) {
       if (!template || (!template.is_public && !req.adminSession)) {
         return res.status(404).json({ success: false, message: 'Template not found' });
       }
-      res.json({ success: true, template });
+      res.json({ success: true, template: templateForStudent(template) });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }

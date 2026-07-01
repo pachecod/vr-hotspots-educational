@@ -1,5 +1,10 @@
 export const CORE_FILE_IDS = ['index.html', 'style.css', 'script.js', 'config.json'];
+export const ADMIN_ONLY_FILE_IDS = ['config.ui.json'];
 export const MAX_FILES_PER_PAGE = 20;
+
+export function isAdminOnlyFile(fileId) {
+  return ADMIN_ONLY_FILE_IDS.includes(fileId);
+}
 
 export function inferFileType(filename) {
   const ext = String(filename || '').split('.').pop()?.toLowerCase();

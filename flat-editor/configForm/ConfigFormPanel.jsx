@@ -191,8 +191,9 @@ function ConfigSection({ section, config, onFieldChange }) {
 }
 
 export default function ConfigFormPanel({ bridge, onUpdated }) {
+  const state = bridge.getState();
   const configJsonRaw = bridge.getFileContent('config.json');
-  const configUiRaw = bridge.getFileContent('config.ui.json');
+  const configUiRaw = bridge.getConfigUiSchemaRaw?.() || bridge.getFileContent('config.ui.json');
   const configResult = useMemo(() => bridge.getConfigObject(), [bridge, configJsonRaw]);
   const schema = useMemo(() => loadUiSchema(bridge), [bridge, configJsonRaw, configUiRaw]);
 
@@ -226,8 +227,14 @@ export default function ConfigFormPanel({ bridge, onUpdated }) {
       <div className="cfg-panel cfg-panel-empty">
         <p>No visual editor schema found.</p>
         <p className="cfg-help">
-          Add a <code>config.ui.json</code> file to this template, or use Code mode to edit{' '}
-          <code>config.json</code> directly.
+          {state.adminTemplateMode ? (
+            <>
+              Add a <code>config.ui.json</code> file to this template, or use Code mode to edit{' '}
+              <code>config.json</code> directly.
+            </>
+          ) : (
+            <>Use Code mode to edit <code>config.json</code> directly.</>
+          )}
         </p>
       </div>
     );

@@ -111,7 +111,11 @@ export function buildGenericSchema(config) {
 }
 
 export function loadUiSchema(bridge) {
-  const explicit = parseUiSchema(bridge.getFileContent('config.ui.json'));
+  const raw =
+    typeof bridge.getConfigUiSchemaRaw === 'function'
+      ? bridge.getConfigUiSchemaRaw()
+      : bridge.getFileContent('config.ui.json');
+  const explicit = parseUiSchema(raw);
   if (explicit) return explicit;
 
   const configResult = bridge.getConfigObject();

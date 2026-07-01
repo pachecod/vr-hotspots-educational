@@ -8,6 +8,7 @@ const templatesDb = require('../lib/templates');
 const { isPublicPlaygroundEnabled } = require('../lib/playground-config');
 const b2Service = require('../services/b2-service');
 const { refreshPlaygroundThumbnail, resolvePlaygroundThumbnailUrl, playgroundThumbLookupPaths, contentTypeForThumbPath, generatePlaygroundThumbnail } = require('../lib/playground-thumbnail');
+const { templateForStudent } = require('../lib/template-manifest');
 
 const upload = multer({ dest: 'temp-uploads/' });
 
@@ -75,7 +76,7 @@ function registerPlaygroundRoutes(app) {
       }
       res.json({
         success: true,
-        template: {
+        template: templateForStudent({
           id: template.id,
           title: template.title,
           slug: template.slug,
@@ -84,7 +85,7 @@ function registerPlaygroundRoutes(app) {
           thumbnail_url: resolvePlaygroundThumbnailUrl(template),
           has_bundle: !!template.bundle_b2_key,
           files_manifest: template.scope === 'flat' ? template.files_manifest : undefined,
-        },
+        }),
       });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });

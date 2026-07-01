@@ -173,6 +173,7 @@ async function runPendingPlaygroundLoad() {
         slug: template.slug,
         description: template.description,
         files_manifest: template.files_manifest,
+        config_ui_schema: template.config_ui_schema,
       });
     }
     window.hotspotEditor.setContentMode('flat');

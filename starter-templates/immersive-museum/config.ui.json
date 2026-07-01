@@ -83,6 +83,40 @@
       ]
     },
     {
+      "title": "Lighting",
+      "fields": [
+        {
+          "path": "environment.lighting.ambient.intensity",
+          "label": "Ambient light intensity",
+          "type": "number",
+          "step": 0.1,
+          "min": 0,
+          "max": 2
+        },
+        {
+          "path": "environment.lighting.directional.intensity",
+          "label": "Sun light intensity",
+          "type": "number",
+          "step": 0.1,
+          "min": 0,
+          "max": 2
+        }
+      ]
+    },
+    {
+      "title": "Movement",
+      "fields": [
+        {
+          "path": "mobileControls.speed",
+          "label": "Mobile walk speed",
+          "type": "number",
+          "step": 0.5,
+          "min": 0.5,
+          "max": 10
+        }
+      ]
+    },
+    {
       "title": "Welcome slides",
       "fields": [
         {
@@ -99,6 +133,67 @@
           "path": "infoDisplay.text.content.slide3",
           "label": "Slide 3 text",
           "type": "text"
+        }
+      ]
+    },
+    {
+      "title": "Slideshow arrows",
+      "fields": [
+        {
+          "path": "infoDisplay.navigation.left.visible",
+          "label": "Show left arrow",
+          "type": "boolean"
+        },
+        {
+          "path": "infoDisplay.navigation.left.label",
+          "label": "Left arrow label",
+          "type": "text",
+          "help": "Text shown on the button when no custom image is set (default ‹)."
+        },
+        {
+          "path": "infoDisplay.navigation.left.image",
+          "label": "Left arrow image (optional)",
+          "type": "url",
+          "assetCategory": "images",
+          "help": "Optional PNG/JPG icon. Leave empty to use the text label above."
+        },
+        {
+          "path": "infoDisplay.navigation.left.color",
+          "label": "Left arrow button color",
+          "type": "color"
+        },
+        {
+          "path": "infoDisplay.navigation.left.labelColor",
+          "label": "Left arrow text color",
+          "type": "color"
+        },
+        {
+          "path": "infoDisplay.navigation.right.visible",
+          "label": "Show right arrow",
+          "type": "boolean"
+        },
+        {
+          "path": "infoDisplay.navigation.right.label",
+          "label": "Right arrow label",
+          "type": "text",
+          "help": "Text shown on the button when no custom image is set (default ›)."
+        },
+        {
+          "path": "infoDisplay.navigation.right.image",
+          "label": "Right arrow image (optional)",
+          "type": "url",
+          "assetCategory": "images",
+          "help": "Optional PNG/JPG icon. Leave empty to use the text label above."
+        },
+        {
+          "path": "infoDisplay.navigation.right.color",
+          "label": "Right arrow button color",
+          "type": "color"
+        },
+        {
+          "path": "infoDisplay.navigation.right.labelColor",
+          "label": "Right arrow text color",
+          "type": "color"
         }
       ]
     },

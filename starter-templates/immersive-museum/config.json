@@ -42,8 +42,24 @@
       "images": ["#image1", "#image2", "#image3"]
     },
     "navigation": {
-      "left": { "position": "-1.9 0 0.02", "size": "0.55 0.55" },
-      "right": { "position": "1.9 0 0.02", "size": "0.55 0.55" }
+      "left": {
+        "position": "-1.9 0 0.02",
+        "size": "0.55 0.55",
+        "label": "‹",
+        "color": "#333333",
+        "labelColor": "#FFFFFF",
+        "image": "",
+        "visible": true
+      },
+      "right": {
+        "position": "1.9 0 0.02",
+        "size": "0.55 0.55",
+        "label": "›",
+        "color": "#333333",
+        "labelColor": "#FFFFFF",
+        "image": "",
+        "visible": true
+      }
     },
     "text": {
       "position": "0 -1.35 0.02",

@@ -1,5 +1,31 @@
 const URL_KEY = /url|src|href|sky|image|model|audio|video|glb|texture/i;
 const COLOR_KEY = /color/i;
+const NUMERIC_KEY = /intensity|speed|count|opacity|radius|brightness|renderorder|tiling|order/i;
+
+export function isNumericString(value) {
+  if (typeof value !== 'string') return false;
+  const v = value.trim();
+  return v !== '' && /^-?\d+(\.\d+)?$/.test(v);
+}
+
+export function inferFieldType(key, value, path = '') {
+  if (typeof value === 'boolean') return 'boolean';
+  if (typeof value === 'number') return 'number';
+  if (
+    NUMERIC_KEY.test(key) &&
+    (typeof value === 'number' || isNumericString(value))
+  ) {
+    return 'number';
+  }
+  if (COLOR_KEY.test(key) && typeof value === 'string' && /^#[0-9a-f]{3,8}$/i.test(value.trim())) {
+    return 'color';
+  }
+  if (URL_KEY.test(key) || isUrlValue(value)) {
+    return 'url';
+  }
+  if (typeof value === 'string' && value.length > 120) return 'textarea';
+  return 'text';
+}
 
 export function isUrlValue(value) {
   if (typeof value !== 'string') return false;
@@ -15,19 +41,6 @@ export function inferAssetCategory(key, path) {
   if (/model|glb|gltf|3d/.test(hay)) return '3d';
   if (/video/.test(hay)) return 'videos';
   return 'images';
-}
-
-export function inferFieldType(key, value, path = '') {
-  if (typeof value === 'boolean') return 'boolean';
-  if (typeof value === 'number') return 'number';
-  if (COLOR_KEY.test(key) && typeof value === 'string' && /^#[0-9a-f]{3,8}$/i.test(value.trim())) {
-    return 'color';
-  }
-  if (URL_KEY.test(key) || isUrlValue(value)) {
-    return 'url';
-  }
-  if (typeof value === 'string' && value.length > 120) return 'textarea';
-  return 'text';
 }
 
 export function fieldAssetCategory(field) {

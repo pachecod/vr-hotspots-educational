@@ -2,7 +2,8 @@ import React, { useCallback, useMemo } from 'react';
 import { getPath, setPath, joinPath } from './configPathUtils.js';
 import { fieldAssetCategory } from './inferFieldType.js';
 import { loadUiSchema } from './loadUiSchema.js';
-import { assetUrlForPreview } from '../resolveConfigAssetUrls.js';
+import { assetUrlForConfig, normalizeConfigAssetUrl } from '../resolveConfigAssetUrls.js';
+import NumberStepper, { inferNumberStep } from './NumberStepper.jsx';
 import './config-form.css';
 
 function browseAsset(category, onUrl) {
@@ -13,7 +14,7 @@ function browseAsset(category, onUrl) {
   window.CommonAssetsPicker.openFor({
     category: category || 'images',
     onSelect: (asset) => {
-      const url = assetUrlForPreview(asset);
+      const url = assetUrlForConfig(asset);
       if (url) onUrl(url);
     },
   });
@@ -66,16 +67,16 @@ function ConfigField({ field, fullPath, value, onChange }) {
 
   if (field.type === 'number') {
     return (
-      <div className="cfg-form-group">
-        <label htmlFor={id}>{field.label}</label>
-        <input
-          id={id}
-          type="number"
-          className="cfg-input"
-          value={value ?? ''}
-          onChange={(e) => handleChange(e.target.value === '' ? '' : Number(e.target.value))}
-        />
-      </div>
+      <NumberStepper
+        id={id}
+        label={field.label}
+        value={value}
+        step={inferNumberStep(field, value)}
+        min={field.min}
+        max={field.max}
+        help={field.help}
+        onChange={handleChange}
+      />
     );
   }
 
@@ -200,7 +201,11 @@ export default function ConfigFormPanel({ bridge, onUpdated }) {
       const current = bridge.getConfigObject();
       if (!current.ok || !current.data) return;
       const next = JSON.parse(JSON.stringify(current.data));
-      setPath(next, path, value);
+      const normalized =
+        typeof value === 'string' && /assets\.|audio|\.url$|\.src$|sky|image|model/i.test(path)
+          ? normalizeConfigAssetUrl(value)
+          : value;
+      setPath(next, path, normalized);
       bridge.setConfigObject(next);
       onUpdated?.();
     },

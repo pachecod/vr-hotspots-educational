@@ -40,6 +40,15 @@ function setAssetCors(el, src) {
   }
 }
 
+function resolveImageSrc(src) {
+  if (!src || !src.startsWith('#')) return src;
+  const assetId = src.slice(1);
+  const fromConfig = museumConfig?.assets?.images?.[assetId];
+  if (fromConfig) return fromConfig;
+  const assetEl = document.querySelector('#' + assetId);
+  return assetEl && assetEl.getAttribute('src') ? assetEl.getAttribute('src') : src;
+}
+
 function resolveModelSrc(src) {
   if (!src || !src.startsWith('#')) return src;
   const assetId = src.slice(1);
@@ -359,25 +368,40 @@ class MuseumRuntime {
   }
 
   createNavArrow(container, dir, cfg) {
+    if (cfg && cfg.visible === false) return;
+
     const wrap = document.createElement('a-entity');
     wrap.id = 'nav-' + dir;
     wrap.setAttribute('position', cfg.position);
     wrap.classList.add('clickable');
+
     const bg = document.createElement('a-plane');
-    const size = cfg.size.split(' ');
+    const size = (cfg.size || '0.55 0.55').split(' ');
     bg.setAttribute('width', size[0]);
-    bg.setAttribute('height', size[1]);
-    bg.setAttribute('color', '#333');
+    bg.setAttribute('height', size[1] || size[0]);
     bg.setAttribute('opacity', '0.8');
     bg.setAttribute('material', 'shader: flat');
-    const label = document.createElement('a-text');
-    label.setAttribute('value', dir === 'left' ? '‹' : '›');
-    label.setAttribute('align', 'center');
-    label.setAttribute('color', '#FFF');
-    label.setAttribute('width', '8');
-    label.setAttribute('position', '0 0 0.02');
+
+    const imageSrc = resolveImageSrc((cfg.image || '').trim());
+    if (imageSrc) {
+      bg.setAttribute('material', 'src: ' + imageSrc + '; shader: flat; transparent: true');
+      bg.setAttribute('color', '#FFFFFF');
+    } else {
+      bg.setAttribute('color', cfg.color || '#333');
+    }
+
     wrap.appendChild(bg);
-    wrap.appendChild(label);
+
+    if (!imageSrc) {
+      const label = document.createElement('a-text');
+      label.setAttribute('value', cfg.label || (dir === 'left' ? '‹' : '›'));
+      label.setAttribute('align', 'center');
+      label.setAttribute('color', cfg.labelColor || '#FFF');
+      label.setAttribute('width', String(parseFloat(size[0]) * 0.9));
+      label.setAttribute('position', '0 0 0.02');
+      wrap.appendChild(label);
+    }
+
     container.appendChild(wrap);
   }
 

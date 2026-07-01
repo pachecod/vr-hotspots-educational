@@ -160,6 +160,74 @@
   line-height: 1.4;
 }
 
+.cfg-number-stepper {
+  display: flex;
+  align-items: stretch;
+}
+
+.cfg-number-input {
+  flex: 1;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-right: 6px;
+}
+
+.cfg-number-input::-webkit-outer-spin-button,
+.cfg-number-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.cfg-number-input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.cfg-number-arrows {
+  display: flex;
+  flex-direction: column;
+  width: 24px;
+  flex-shrink: 0;
+}
+
+.cfg-number-arrow {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #555;
+  background: #3a3a3a;
+  color: #bbb;
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  min-height: 18px;
+}
+
+.cfg-number-arrow-up {
+  border-left: none;
+  border-radius: 0 4px 0 0;
+}
+
+.cfg-number-arrow-down {
+  border-left: none;
+  border-top: none;
+  border-radius: 0 0 4px 0;
+}
+
+.cfg-number-arrow:hover {
+  background: #4caf50;
+  color: #fff;
+  border-color: #4caf50;
+}
+
+.cfg-number-arrow:active {
+  background: #3d8b40;
+}
+
 .flat-config-mode-toggle {
   display: inline-flex;
   border: 1px solid #555;

@@ -46,6 +46,13 @@
           "type": "url",
           "assetCategory": "3d",
           "help": "Used by Exhibit Two (#model2 reference in config)."
+        },
+        {
+          "path": "assets.models.model3",
+          "label": "Exhibit 3 model (GLB)",
+          "type": "url",
+          "assetCategory": "3d",
+          "help": "Used by Exhibit Three (#model3 reference in config)."
         }
       ]
     },
@@ -61,6 +68,12 @@
         {
           "path": "assets.audio.audio2",
           "label": "Shared audio slot 2",
+          "type": "url",
+          "assetCategory": "audio"
+        },
+        {
+          "path": "assets.audio.audio3",
+          "label": "Shared audio slot 3",
           "type": "url",
           "assetCategory": "audio"
         }

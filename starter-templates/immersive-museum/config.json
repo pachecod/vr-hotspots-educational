@@ -9,11 +9,13 @@
     },
     "models": {
       "model1": "https://modelviewer.dev/shared-assets/models/Astronaut.glb",
-      "model2": "https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb"
+      "model2": "https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb",
+      "model3": "https://modelviewer.dev/shared-assets/models/RobotExpressive.glb"
     },
     "audio": {
       "audio1": "",
-      "audio2": ""
+      "audio2": "",
+      "audio3": ""
     }
   },
   "environment": {
@@ -121,6 +123,32 @@
         "audio": "",
         "info": "Put GLB URLs in assets.models and reference them with #modelId in exhibits.",
         "exhibitModel": "exhibit-2-model",
+        "revealAnimation": true
+      }
+    },
+    {
+      "id": "exhibit-3",
+      "name": "Exhibit Three",
+      "position": "0 0 16",
+      "model": {
+        "id": "exhibit-3-model",
+        "src": "#model3",
+        "position": "0 0.8 0",
+        "scale": "1 1 1",
+        "rotation": "0 -25 0"
+      },
+      "environment": {
+        "geometry": "primitive: cylinder; radius: 4; height: 0.12",
+        "position": "0 0 0",
+        "material": "color: #4A5568; roughness: 0.9"
+      },
+      "hotspot": {
+        "id": "exhibit-3-hotspot",
+        "position": "2.5 1.4 0",
+        "label": "Exhibit Three",
+        "audio": "",
+        "info": "Add a third story here — swap the model in assets.models.model3 or pick one from Online Assets.",
+        "exhibitModel": "exhibit-3-model",
         "revealAnimation": true
       }
     }

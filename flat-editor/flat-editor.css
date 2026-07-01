@@ -120,8 +120,23 @@
   color: #aaa;
 }
 
-.flat-btn-refresh {
+.flat-preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-left: auto;
+}
+
+.flat-preview-auto-reload {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+  color: #ccc;
+}
+
+.flat-btn-refresh {
   padding: 4px 10px;
   border: none;
   border-radius: 4px;

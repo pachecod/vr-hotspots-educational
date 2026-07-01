@@ -93,37 +93,69 @@ export function resolveConfigAssetUrls(config, origin) {
   }
 }
 
-/** Normalize a stored config string to a portable same-origin proxy path when possible. */
-export function normalizeConfigAssetUrl(value) {
-  if (value == null || value === '') return value;
-  const proxy = toProxyAssetPath(String(value));
-  return proxy || value;
+function editorOrigin() {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin.replace(/\/$/, '');
+  }
+  return '';
 }
 
-/** Portable path for storing in config.json (same-origin proxy paths, full URL for remote). */
+/** Turn same-origin asset paths into absolute URLs for config.json storage. */
+function toAbsoluteConfigUrl(value) {
+  if (value == null || value === '') return value;
+  const trimmed = String(value).trim();
+  if (!trimmed) return trimmed;
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    const proxy = toProxyAssetPath(trimmed);
+    const origin = editorOrigin();
+    if (proxy && origin) return `${origin}${proxy}`;
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.search && /authorization=/i.test(parsed.search)) {
+        return `${parsed.origin}${parsed.pathname}`;
+      }
+    } catch (_) {}
+    return trimmed;
+  }
+
+  const proxy = toProxyAssetPath(trimmed);
+  const origin = editorOrigin();
+  if (proxy && origin) return `${origin}${proxy}`;
+
+  return trimmed;
+}
+
+export function normalizeConfigAssetUrl(value) {
+  return toAbsoluteConfigUrl(value);
+}
+
+/** URL for storing in config.json (absolute same-origin URLs for common/student assets). */
 export function assetUrlForConfig(asset) {
   if (!asset) return '';
 
   if (typeof asset.proxyUrl === 'string' && asset.proxyUrl.trim()) {
     const fromProxy = toProxyAssetPath(asset.proxyUrl);
-    if (fromProxy) return fromProxy;
+    if (fromProxy) return toAbsoluteConfigUrl(fromProxy);
   }
 
   if (typeof asset.url === 'string' && asset.url.startsWith('/student-assets/')) {
-    return asset.url.split(/[?#]/)[0];
+    return toAbsoluteConfigUrl(asset.url.split(/[?#]/)[0]);
   }
 
   if (asset.category && asset.name) {
-    return `/common-assets/${encodeURIComponent(asset.category)}/${encodeURIComponent(asset.name)}`;
+    return toAbsoluteConfigUrl(
+      `/common-assets/${encodeURIComponent(asset.category)}/${encodeURIComponent(asset.name)}`
+    );
   }
 
   const raw = asset.url || '';
   if (!raw) return '';
 
   const fromUrl = toProxyAssetPath(raw);
-  if (fromUrl) return fromUrl;
+  if (fromUrl) return toAbsoluteConfigUrl(fromUrl);
 
-  if (raw.startsWith('/')) return raw.split(/[?#]/)[0];
+  if (raw.startsWith('/')) return toAbsoluteConfigUrl(raw.split(/[?#]/)[0]);
 
   try {
     const base =
@@ -133,17 +165,17 @@ export function assetUrlForConfig(asset) {
     const parsed = new URL(raw, base);
     const pathOnly = parsed.pathname;
     if (pathOnly.startsWith('/common-assets/') || pathOnly.startsWith('/student-assets/')) {
-      return pathOnly;
+      return toAbsoluteConfigUrl(pathOnly);
     }
     const fromB2Path = toCommonAssetProxyPath(parsed.href);
-    if (fromB2Path) return fromB2Path;
+    if (fromB2Path) return toAbsoluteConfigUrl(fromB2Path);
     // External URLs (Unsplash, modelviewer.dev, etc.) — keep without auth noise
     if (parsed.search && /authorization=/i.test(parsed.search)) {
       return `${parsed.origin}${parsed.pathname}`;
     }
     return parsed.href;
   } catch (_) {
-    return raw;
+    return toAbsoluteConfigUrl(raw);
   }
 }
 

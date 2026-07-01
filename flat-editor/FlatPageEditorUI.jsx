@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Editor from './Editor.jsx';
 import Preview from './Preview.jsx';
 import FileTabs from './FileTabs.jsx';
@@ -19,6 +19,7 @@ const SPLIT_PRESETS = {
 
 const SPLIT_STORAGE_KEY = 'flat-editor-split-preset';
 const CONFIG_MODE_STORAGE_KEY = 'flat-editor-config-mode';
+const AUTO_RELOAD_PREVIEW_DEFAULT = false;
 
 function initialConfigMode(bridge) {
   try {
@@ -45,6 +46,8 @@ function fileTypeForId(fileId) {
 export default function FlatPageEditorUI({ bridge }) {
   const [, bump] = useState(0);
   const [previewKey, setPreviewKey] = useState(0);
+  const [autoReloadPreview, setAutoReloadPreview] = useState(AUTO_RELOAD_PREVIEW_DEFAULT);
+  const wasVisibleRef = useRef(false);
   const [showSnippets, setShowSnippets] = useState(false);
   const [showRidey, setShowRidey] = useState(false);
   const [showAddFile, setShowAddFile] = useState(false);
@@ -55,16 +58,27 @@ export default function FlatPageEditorUI({ bridge }) {
   );
   const [configMode, setConfigMode] = useState(() => initialConfigMode(bridge));
 
+  const forcePreviewReload = useCallback(() => setPreviewKey((k) => k + 1), []);
+  const requestPreviewReload = useCallback(() => {
+    if (autoReloadPreview) setPreviewKey((k) => k + 1);
+  }, [autoReloadPreview]);
+
   useEffect(
     () =>
       bridge.subscribe(() => {
+        const visible = bridge.getState().visible;
+        if (visible && !wasVisibleRef.current) {
+          setAutoReloadPreview(AUTO_RELOAD_PREVIEW_DEFAULT);
+          forcePreviewReload();
+        }
+        wasVisibleRef.current = visible;
         bump((n) => n + 1);
-        setPreviewKey((k) => k + 1);
+        requestPreviewReload();
         if (bridge.consumePendingConfigVisual()) {
           setConfigEditorMode('visual');
         }
       }),
-    [bridge]
+    [bridge, forcePreviewReload, requestPreviewReload]
   );
 
   useEffect(() => {
@@ -91,9 +105,9 @@ export default function FlatPageEditorUI({ bridge }) {
   const handleContentChange = useCallback(
     (value) => {
       bridge.setFileContent(activeFileId, value);
-      setPreviewKey((k) => k + 1);
+      requestPreviewReload();
     },
-    [bridge, activeFileId]
+    [bridge, activeFileId, requestPreviewReload]
   );
 
   const handleCopy = async () => {
@@ -109,7 +123,7 @@ export default function FlatPageEditorUI({ bridge }) {
   const handleFormat = () => {
     const formatted = formatCode(fileContent, activeFileId);
     bridge.setFileContent(activeFileId, formatted);
-    setPreviewKey((k) => k + 1);
+    requestPreviewReload();
   };
 
   const changeSplit = (preset) => {
@@ -228,7 +242,7 @@ export default function FlatPageEditorUI({ bridge }) {
             </div>
           </div>
           {showConfigVisual ? (
-            <ConfigFormPanel bridge={bridge} onUpdated={() => setPreviewKey((k) => k + 1)} />
+            <ConfigFormPanel bridge={bridge} onUpdated={requestPreviewReload} />
           ) : (
             <Editor
               key={activeFileId}
@@ -269,9 +283,19 @@ export default function FlatPageEditorUI({ bridge }) {
                 Preview
               </button>
             </div>
-            <button type="button" className="flat-btn-refresh" onClick={() => setPreviewKey((k) => k + 1)}>
-              ↻ Refresh
-            </button>
+            <div className="flat-preview-controls">
+              <button type="button" className="flat-btn-refresh" onClick={forcePreviewReload}>
+                ↻ Refresh
+              </button>
+              <label className="flat-preview-auto-reload">
+                <input
+                  type="checkbox"
+                  checked={autoReloadPreview}
+                  onChange={(e) => setAutoReloadPreview(e.target.checked)}
+                />
+                automatically
+              </label>
+            </div>
           </div>
           <Preview page={page} refreshKey={previewKey} />
         </div>
@@ -300,7 +324,7 @@ export default function FlatPageEditorUI({ bridge }) {
               bridge.setFileContent(update.fileName, update.suggestion);
             }
           });
-          setPreviewKey((k) => k + 1);
+          requestPreviewReload();
         }}
       />
 
@@ -322,7 +346,7 @@ export default function FlatPageEditorUI({ bridge }) {
               new CustomEvent('admin-starter-template-loaded', { detail: { title: template.title } })
             );
           }
-          setPreviewKey((k) => k + 1);
+          requestPreviewReload();
         }}
       />
     </div>

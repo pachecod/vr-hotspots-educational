@@ -121,6 +121,7 @@ button:hover { background: #1d4ed8; }`;
       this._mounted = false;
       this._visible = false;
       this._previewTimer = null;
+      this._autoReloadPreview = false;
       this._els = {};
       this._loadFromStorage();
     }
@@ -301,6 +302,7 @@ button:hover { background: #1d4ed8; }`;
     }
 
     _schedulePreview() {
+      if (!this._autoReloadPreview) return;
       if (this._previewTimer) clearTimeout(this._previewTimer);
       this._previewTimer = setTimeout(() => this.refreshPreview(), 350);
     }
@@ -456,14 +458,31 @@ button:hover { background: #1d4ed8; }`;
         'display:flex;align-items:center;gap:8px;padding:6px 10px;background:#252526;border-bottom:1px solid #3a3a3a;font-size:12px;color:#aaa;';
       const previewLabel = document.createElement('span');
       previewLabel.textContent = 'Live Preview';
+      const previewControls = document.createElement('div');
+      previewControls.style.cssText =
+        'display:flex;align-items:center;gap:10px;margin-left:auto;';
       const refreshBtn = document.createElement('button');
       refreshBtn.type = 'button';
       refreshBtn.textContent = '↻ Refresh';
       refreshBtn.style.cssText =
-        'margin-left:auto;padding:4px 10px;border:none;border-radius:4px;background:#3a3a3a;color:#fff;cursor:pointer;font-size:12px;';
+        'padding:4px 10px;border:none;border-radius:4px;background:#3a3a3a;color:#fff;cursor:pointer;font-size:12px;';
       refreshBtn.addEventListener('click', () => this.refreshPreview());
+      const autoReloadLabel = document.createElement('label');
+      autoReloadLabel.style.cssText =
+        'display:flex;align-items:center;gap:5px;cursor:pointer;color:#ccc;user-select:none;';
+      const autoReloadCb = document.createElement('input');
+      autoReloadCb.type = 'checkbox';
+      autoReloadCb.checked = false;
+      autoReloadCb.addEventListener('change', () => {
+        this._autoReloadPreview = autoReloadCb.checked;
+      });
+      autoReloadLabel.appendChild(autoReloadCb);
+      autoReloadLabel.appendChild(document.createTextNode('automatically'));
+      this._els.autoReloadCb = autoReloadCb;
+      previewControls.appendChild(refreshBtn);
+      previewControls.appendChild(autoReloadLabel);
       previewBar.appendChild(previewLabel);
-      previewBar.appendChild(refreshBtn);
+      previewBar.appendChild(previewControls);
 
       const iframe = document.createElement('iframe');
       iframe.id = 'flat-editor-preview';
@@ -511,6 +530,8 @@ button:hover { background: #1d4ed8; }`;
     show() {
       this.ensureMounted();
       this._visible = true;
+      this._autoReloadPreview = false;
+      if (this._els.autoReloadCb) this._els.autoReloadCb.checked = false;
       if (this._els.root) this._els.root.style.display = 'flex';
       // Refresh content from current state in case it was imported while hidden.
       if (this._els.nameInput) this._els.nameInput.value = this.getActivePage().name;

@@ -65,6 +65,11 @@ function welcomeGithubFooterHtml() {
   return `<p class="welcome-github-footer">
     Available for free for education use under the MIT License.
     <a href="https://github.com/pachecod/vr-hotspots-educational" target="_blank" rel="noopener noreferrer" style="color: #fff; text-decoration: underline;">See our Github</a>.
+    <span class="welcome-legal-links">
+      <a href="/terms.html" style="color: #fff; text-decoration: underline;">Terms of Use</a>
+      <span aria-hidden="true"> · </span>
+      <a href="/privacy-policy.html" style="color: #fff; text-decoration: underline;">Privacy Policy</a>
+    </span>
   </p>`;
 }
 

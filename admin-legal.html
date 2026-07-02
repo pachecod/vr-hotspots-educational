@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Legal Pages — WebXRIDE Admin</title>
+    <link rel="stylesheet" href="admin-nav.css" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        color: #333;
+        max-width: 1100px;
+      }
+      h1 { margin-bottom: 4px; }
+      .hint { color: #666; font-size: 14px; margin-bottom: 16px; }
+      .warn {
+        color: #856404;
+        background: #fff3cd;
+        padding: 10px 12px;
+        border-radius: 4px;
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+      .tab-btn {
+        padding: 8px 14px;
+        border: 1px solid #dee2e6;
+        background: #fff;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .tab-btn.active {
+        background: #007bff;
+        color: #fff;
+        border-color: #007bff;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 900px) {
+        .layout { grid-template-columns: 1fr; }
+      }
+      .panel {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background: #f8f9fa;
+        padding: 16px;
+      }
+      .panel h2 { margin: 0 0 12px; font-size: 1.05rem; }
+      .form-row { margin-bottom: 12px; }
+      .form-row label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 13px; }
+      .form-row input,
+      .form-row textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-family: inherit;
+      }
+      .form-row textarea { min-height: 220px; font-family: monospace; font-size: 13px; }
+      .form-row textarea.css-area { min-height: 120px; }
+      .btn {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .btn-primary { background: #28a745; color: #fff; }
+      .btn-secondary { background: #6c757d; color: #fff; margin-left: 8px; }
+      .actions { margin-top: 12px; }
+      .preview-frame {
+        width: 100%;
+        min-height: 480px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+      }
+      .status { font-size: 13px; margin-top: 8px; }
+      .status.ok { color: #28a745; }
+      .status.err { color: #dc3545; }
+      .view-links { margin-top: 8px; font-size: 13px; }
+      .view-links a { margin-right: 12px; }
+      #toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #28a745;
+        color: #fff;
+        padding: 12px 18px;
+        border-radius: 6px;
+        display: none;
+        z-index: 10001;
+      }
+    </style>
+    <script src="admin-auth-ui.js"></script>
+    <script src="admin-nav.js"></script>
+  </head>
+  <body>
+    <div id="app-root">
+      <div id="login-root"></div>
+      <div id="main-content" style="display: none">
+        <nav id="admin-nav" data-active="legal"></nav>
+
+        <h1>Legal Pages</h1>
+        <p class="hint">
+          Edit the Terms of Use and Privacy Policy shown on public pages and linked from the welcome screen.
+        </p>
+        <p class="warn">
+          <strong>Important:</strong> Legal copy is not stored in the repository. Prepare HTML locally, paste it here, and save. Have qualified legal counsel review before production use.
+        </p>
+
+        <div class="tabs">
+          <button type="button" class="tab-btn active" data-slug="terms">Terms of Use</button>
+          <button type="button" class="tab-btn" data-slug="privacy">Privacy Policy</button>
+        </div>
+
+        <div class="layout">
+          <div class="panel">
+            <h2>Edit content</h2>
+            <div class="form-row">
+              <label for="legal-title">Page title</label>
+              <input type="text" id="legal-title" />
+            </div>
+            <div class="form-row">
+              <label for="legal-content">HTML content</label>
+              <textarea id="legal-content" spellcheck="false"></textarea>
+            </div>
+            <div class="form-row">
+              <label for="legal-css">CSS (optional)</label>
+              <textarea id="legal-css" class="css-area" spellcheck="false"></textarea>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn btn-primary" id="save-legal-btn">Save</button>
+              <button type="button" class="btn btn-secondary" id="preview-legal-btn">Refresh preview</button>
+            </div>
+            <div id="legal-status" class="status"></div>
+            <div class="view-links">
+              <a id="public-link" href="/terms.html" target="_blank" rel="noopener noreferrer">View public page</a>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2>Preview</h2>
+            <iframe id="legal-preview" class="preview-frame" title="Legal page preview"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="toast"></div>
+    <script src="admin-legal.js"></script>
+  </body>
+</html>

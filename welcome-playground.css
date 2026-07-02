@@ -37,6 +37,15 @@ body.entry-gate-active > :not(#student-login-gate) {
   line-height: 1.5;
 }
 
+.welcome-legal-links {
+  display: block;
+  margin-top: 8px;
+}
+
+.welcome-legal-links a:hover {
+  opacity: 0.9;
+}
+
 .welcome-news-section {
   margin-top: 24px;
   padding-top: 20px;

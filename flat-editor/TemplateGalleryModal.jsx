@@ -97,6 +97,9 @@ export default function TemplateGalleryModal({ open, onClose, onLoad, mode = 'st
                         <strong>{t.title}</strong>
                         {isAdmin && <span className="flat-badge">Starter</span>}
                         {!isAdmin && t.is_default && <span className="flat-badge">Default</span>}
+                        {!isAdmin && t.scope === 'combined' && (
+                          <span className="flat-badge">360° + Flat</span>
+                        )}
                         {!isAdmin && t.description && <p className="flat-muted">{t.description}</p>}
                       </div>
                       <button

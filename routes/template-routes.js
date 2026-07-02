@@ -45,10 +45,16 @@ function registerTemplateRoutes(app) {
   app.get('/api/templates/default', async (_req, res) => {
     try {
       const template = await templatesDb.getDefaultTemplate();
-      res.json({
-        success: true,
-        template: template ? templateForStudent(template) : null,
-      });
+      if (!template) {
+        return res.json({ success: true, template: null });
+      }
+      const student = templateForStudent(template);
+      student.scope = template.scope || 'flat';
+      student.has_bundle = !!template.bundle_b2_key;
+      if (template.scope === 'combined' && template.bundle_b2_key) {
+        delete student.files_manifest;
+      }
+      res.json({ success: true, template: student });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -60,9 +66,36 @@ function registerTemplateRoutes(app) {
       if (!template || (!template.is_public && !req.adminSession)) {
         return res.status(404).json({ success: false, message: 'Template not found' });
       }
-      res.json({ success: true, template: templateForStudent(template) });
+      const student = templateForStudent(template);
+      student.scope = template.scope || 'flat';
+      student.has_bundle = !!template.bundle_b2_key;
+      if (template.scope === 'combined' && template.bundle_b2_key) {
+        delete student.files_manifest;
+      }
+      res.json({ success: true, template: student });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/api/templates/:slug/bundle', async (req, res) => {
+    try {
+      const template = await templatesDb.getTemplateBySlug(req.params.slug);
+      if (!template || !template.is_public || !template.bundle_b2_key) {
+        return res.status(404).json({ success: false, message: 'Bundle not found' });
+      }
+      await b2Service.ensureCommonAssetsBucket();
+      if (b2Service.commonAssetsPublicAccess) {
+        const url = b2Service.getCommonAssetPublicUrl(template.bundle_b2_key);
+        return res.redirect(302, url);
+      }
+      const streamResult = await b2Service.downloadCommonAssetStream(template.bundle_b2_key);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${template.slug}.zip"`);
+      streamResult.stream.pipe(res);
+    } catch (err) {
+      console.error('Template bundle download error:', err);
+      res.status(500).json({ success: false, message: 'Could not download bundle' });
     }
   });
 

@@ -10,6 +10,7 @@ import RideyIcon from './RideyIcon.jsx';
 import { FileType } from './types.js';
 import { formatCode } from './formatCode.js';
 import ConfigFormPanel from './configForm/ConfigFormPanel.jsx';
+import { loadCombinedTemplateIntoEditor } from './templates-api.js';
 
 const SPLIT_PRESETS = {
   editor: { editor: 80, preview: 20 },
@@ -394,14 +395,26 @@ export default function FlatPageEditorUI({ bridge }) {
         open={showTemplates}
         onClose={() => setShowTemplates(false)}
         mode={state.adminTemplateMode ? 'admin' : 'student'}
-        onLoad={(template) => {
-          bridge.loadTemplate(template);
-          if (state.adminTemplateMode && template?.title) {
-            window.dispatchEvent(
-              new CustomEvent('admin-starter-template-loaded', { detail: { title: template.title } })
-            );
+        onLoad={async (template) => {
+          try {
+            if (template?.scope === 'combined' && template?.has_bundle) {
+              await loadCombinedTemplateIntoEditor(template.slug, {
+                initialContentMode: bridge.isVisible() ? 'flat' : 'spherical',
+              });
+            } else if (!bridge.loadTemplate(template)) {
+              throw new Error('This template has no loadable flat page files.');
+            }
+            if (state.adminTemplateMode && template?.title) {
+              window.dispatchEvent(
+                new CustomEvent('admin-starter-template-loaded', { detail: { title: template.title } })
+              );
+            }
+            setShowTemplates(false);
+            bump((n) => n + 1);
+            requestPreviewReload();
+          } catch (err) {
+            alert(err.message || 'Could not load template');
           }
-          setShowTemplates(false);
         }}
       />
     </div>

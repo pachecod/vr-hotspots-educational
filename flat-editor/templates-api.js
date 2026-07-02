@@ -12,6 +12,29 @@ export async function fetchTemplateBySlug(slug) {
   return data.template;
 }
 
+export async function fetchTemplateBundle(slug) {
+  const res = await fetch(`/api/templates/${encodeURIComponent(slug)}/bundle`, {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || 'Could not download project bundle');
+  }
+  return res.blob();
+}
+
+/** Load a combined (360° + flat) welcome/admin template from its stored bundle ZIP. */
+export async function loadCombinedTemplateIntoEditor(slug, options = {}) {
+  const blob = await fetchTemplateBundle(slug);
+  if (!window.hotspotEditor?.loadZIPTemplate) {
+    throw new Error('360° editor is not ready. Please reload the page.');
+  }
+  await window.hotspotEditor.loadZIPTemplate(blob, {
+    silent: true,
+    initialContentMode: options.initialContentMode || 'spherical',
+  });
+}
+
 export async function fetchDefaultTemplate() {
   const res = await fetch('/api/templates/default');
   const data = await res.json();

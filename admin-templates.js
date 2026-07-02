@@ -1,4 +1,6 @@
 let templates = [];
+let dragId = null;
+let savingOrder = false;
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -21,6 +23,21 @@ function scopeLabel(scope) {
   return scope === 'combined' ? '360° + Web' : 'Flat page';
 }
 
+function renderOrderControls(t, index) {
+  const isFirst = index === 0;
+  const isLast = index === templates.length - 1;
+  return `
+    <div class="template-order-row">
+      <span class="template-order-handle" draggable="true" data-id="${t.id}" title="Drag to reorder">⋮⋮</span>
+      <span class="template-order-num">#${index + 1}</span>
+      <div class="template-order-btns">
+        <button type="button" class="btn-order btn-order-up" data-id="${t.id}" title="Move up" ${isFirst ? 'disabled' : ''}>↑</button>
+        <button type="button" class="btn-order btn-order-down" data-id="${t.id}" title="Move down" ${isLast ? 'disabled' : ''}>↓</button>
+      </div>
+    </div>
+  `;
+}
+
 function render() {
   const el = document.getElementById('template-list');
   if (!templates.length) {
@@ -29,8 +46,9 @@ function render() {
   }
   el.innerHTML = templates
     .map(
-      (t) => `
+      (t, index) => `
     <div class="template-card" data-id="${t.id}">
+      ${renderOrderControls(t, index)}
       <strong>${escapeHtml(t.title)}</strong>
       ${t.is_default ? '<span style="background:#ffc107;padding:2px 6px;border-radius:4px;font-size:11px;margin-left:8px">Default</span>' : ''}
       <div class="template-meta">${t.is_public ? 'Public' : 'Private'} · ${escapeHtml(t.slug)} · ${scopeLabel(t.scope)}</div>
@@ -88,6 +106,49 @@ function render() {
     .join('');
 }
 
+function moveTemplate(id, direction) {
+  const idx = templates.findIndex((t) => String(t.id) === String(id));
+  if (idx < 0) return;
+  const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (newIdx < 0 || newIdx >= templates.length) return;
+  const [item] = templates.splice(idx, 1);
+  templates.splice(newIdx, 0, item);
+  render();
+  saveOrder();
+}
+
+function moveTemplateBefore(draggedId, targetId) {
+  if (!draggedId || !targetId || String(draggedId) === String(targetId)) return;
+  const fromIdx = templates.findIndex((t) => String(t.id) === String(draggedId));
+  const toIdx = templates.findIndex((t) => String(t.id) === String(targetId));
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [item] = templates.splice(fromIdx, 1);
+  templates.splice(toIdx, 0, item);
+  render();
+  saveOrder();
+}
+
+async function saveOrder() {
+  if (savingOrder) return;
+  savingOrder = true;
+  try {
+    const res = await adminFetch('/admin/templates/reorder', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order: templates.map((t) => t.id) }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Could not save order');
+    templates = data.templates || templates;
+    showToast('Order saved');
+  } catch (err) {
+    alert(err.message || 'Could not save template order');
+    await loadTemplates();
+  } finally {
+    savingOrder = false;
+  }
+}
+
 function escapeHtml(s) {
   return String(s || '')
     .replace(/&/g, '&amp;')
@@ -129,11 +190,20 @@ async function uploadBundle(id) {
   await loadTemplates();
 }
 
-document.getElementById('template-list').addEventListener('click', async (e) => {
+const templateListEl = document.getElementById('template-list');
+
+templateListEl.addEventListener('click', async (e) => {
+  const orderBtn = e.target.closest('.btn-order');
+  if (orderBtn && orderBtn.dataset.id) {
+    if (orderBtn.classList.contains('btn-order-up')) moveTemplate(orderBtn.dataset.id, 'up');
+    if (orderBtn.classList.contains('btn-order-down')) moveTemplate(orderBtn.dataset.id, 'down');
+    return;
+  }
+
   const btn = e.target.closest('button[data-id]');
   if (!btn || !btn.dataset.id) return;
   const id = btn.dataset.id;
-  const tpl = templates.find((t) => t.id === id);
+  const tpl = templates.find((t) => String(t.id) === String(id));
   if (!tpl) return;
 
   try {
@@ -227,6 +297,50 @@ document.getElementById('template-list').addEventListener('click', async (e) => 
   } catch (err) {
     alert(err.message || 'Action failed');
   }
+});
+
+templateListEl.addEventListener('dragstart', (e) => {
+  const handle = e.target.closest('.template-order-handle');
+  if (!handle) return;
+  dragId = handle.dataset.id;
+  const card = handle.closest('.template-card');
+  if (card) card.classList.add('template-dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', dragId);
+});
+
+templateListEl.addEventListener('dragend', () => {
+  dragId = null;
+  templateListEl.querySelectorAll('.template-card').forEach((card) => {
+    card.classList.remove('template-dragging', 'template-drag-over');
+  });
+});
+
+templateListEl.addEventListener('dragover', (e) => {
+  const card = e.target.closest('.template-card');
+  if (!card || !dragId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  templateListEl.querySelectorAll('.template-card').forEach((el) => el.classList.remove('template-drag-over'));
+  card.classList.add('template-drag-over');
+});
+
+templateListEl.addEventListener('dragleave', (e) => {
+  const card = e.target.closest('.template-card');
+  if (card && !card.contains(e.relatedTarget)) {
+    card.classList.remove('template-drag-over');
+  }
+});
+
+templateListEl.addEventListener('drop', (e) => {
+  const card = e.target.closest('.template-card');
+  if (!card || !dragId) return;
+  e.preventDefault();
+  moveTemplateBefore(dragId, card.dataset.id);
+  dragId = null;
+  templateListEl.querySelectorAll('.template-card').forEach((el) => {
+    el.classList.remove('template-dragging', 'template-drag-over');
+  });
 });
 
 document.getElementById('create-combined-form').addEventListener('submit', async (e) => {

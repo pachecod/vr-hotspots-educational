@@ -89,6 +89,23 @@ function registerTemplateRoutes(app) {
     }
   });
 
+  app.put('/admin/templates/reorder', requireAdmin, async (req, res) => {
+    try {
+      if (!isDbEnabled()) {
+        return res.status(503).json({ success: false, message: 'Database not configured' });
+      }
+      const order = Array.isArray(req.body?.order) ? req.body.order : null;
+      if (!order || !order.length) {
+        return res.status(400).json({ success: false, message: 'order array is required' });
+      }
+      await templatesDb.reorderTemplates(order);
+      const templates = await templatesDb.listAllTemplates();
+      res.json({ success: true, templates });
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  });
+
   app.get('/admin/templates/:id', requireAdmin, async (req, res) => {
     try {
       if (!isDbEnabled()) {

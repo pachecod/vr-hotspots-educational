@@ -150,6 +150,22 @@ CREATE TABLE IF NOT EXISTS asset_tags (
 CREATE INDEX IF NOT EXISTS idx_asset_tags_asset_key ON asset_tags(asset_key);
 CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag);
 
+CREATE TABLE IF NOT EXISTS site_assets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  b2_path TEXT NOT NULL UNIQUE,
+  category TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  visibility TEXT NOT NULL DEFAULT 'admin' CHECK (visibility IN ('admin', 'shared')),
+  source TEXT NOT NULL DEFAULT 'upload' CHECK (source IN ('upload', 'template_thumb', 'promoted')),
+  size BIGINT NOT NULL DEFAULT 0,
+  content_type TEXT,
+  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  shared_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_assets_visibility ON site_assets(visibility);
+CREATE INDEX IF NOT EXISTS idx_site_assets_category_filename ON site_assets(category, filename);
+
 CREATE TABLE IF NOT EXISTS billing_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   scope_type TEXT NOT NULL CHECK (scope_type IN ('class', 'student', 'site')),

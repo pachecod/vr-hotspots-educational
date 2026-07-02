@@ -33,6 +33,7 @@ const ContentHub = {
       legacy_submission: 'Legacy B2',
       hosted_submission: 'Hosted',
       common_asset: 'Shared Online Asset',
+      admin_asset: 'Admin library',
     };
     return labels[type] || type;
   },
@@ -97,6 +98,7 @@ const ContentHub = {
       `<span class="chip">${s.flat_page || 0} flat pages</span>`,
       `<span class="chip">${s.vr_tour || 0} VR tours</span>`,
       `<span class="chip">${s.asset || 0} team member or student assets</span>`,
+      `<span class="chip">${s.admin_asset || 0} admin library</span>`,
       `<span class="chip">${s.common_asset || 0} shared assets</span>`,
       `<span class="chip">${s.orphan_asset || 0} orphaned</span>`,
       `<span class="chip">${s.legacy_submission || 0} legacy B2</span>`,
@@ -130,6 +132,10 @@ const ContentHub = {
             item.type === 'project'
               ? `<button type="button" class="btn-secondary btn-sm" onclick="ContentHub.toggleVersions('${item.id}')">${this.expandedProjects.has(item.id) ? '▼' : '▶'} ${item.versionCount || 0} versions</button>`
               : '';
+          const shareBtn =
+            item.type === 'admin_asset'
+              ? `<button type="button" class="btn-secondary btn-sm" onclick="ContentHub.shareAdminAssetByIndex(${idx})">Share with students</button>`
+              : '';
           const deleteBtn = `<button type="button" class="btn-danger btn-sm" onclick="ContentHub.confirmDeleteByIndex(${idx})">Delete</button>`;
           const updated = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '—';
           return `<tr>
@@ -138,7 +144,7 @@ const ContentHub = {
           <td>${this.escapeHtml(item.title)}</td>
           <td>${this.formatLinks(item.links)}</td>
           <td>${this.escapeHtml(updated)}</td>
-          <td>${expandBtn} ${deleteBtn}</td>
+          <td>${expandBtn} ${shareBtn} ${deleteBtn}</td>
         </tr>
         ${item.type === 'project' && this.expandedProjects.has(item.id) ? `<tr class="version-row" id="ch-versions-${this.escapeHtml(item.id)}"><td colspan="6">Loading versions…</td></tr>` : ''}`;
         })
@@ -233,6 +239,38 @@ const ContentHub = {
 
   confirmDeleteByIndex(idx) {
     this.confirmDelete(this.contentItems[idx]);
+  },
+
+  async shareAdminAsset(item) {
+    if (!item || item.type !== 'admin_asset') return;
+    if (
+      !confirm(
+        `Share "${item.title}" with students? It will appear in Shared Online Assets for team members and students.`
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await adminFetch(`/admin/content/admin_asset/${encodeURIComponent(item.id)}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: item.category,
+          filename: item.filename,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Share failed');
+      await this.loadContent();
+      alert('Asset is now available in Shared Online Assets.');
+    } catch (err) {
+      if (err.code === 'AUTH_REQUIRED') location.reload();
+      else alert(err.message || 'Could not share asset');
+    }
+  },
+
+  shareAdminAssetByIndex(idx) {
+    this.shareAdminAsset(this.contentItems[idx]);
   },
 
   async executeDelete() {

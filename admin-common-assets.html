@@ -429,10 +429,10 @@
 
         <h1>Assets</h1>
         <p style="color: #666">
-          Upload online flat images, 360° photos/videos, audio, and 3D models. Team members or students can copy
-          stable URLs into hotspot fields or use 360° assets for scenes. The online assets below are
-          available to all team members or students. To see assets a team member or student has uploaded, select their
-          name in the pulldown.
+          Upload online flat images, 360° photos/videos, audio, and 3D models. New uploads go to your
+          <strong>admin library</strong> (Review All Content). Check <strong>Share with students immediately</strong>
+          to add them to Shared Online Assets below, or share later from Review All Content. To see assets a team member
+          or student has uploaded, select their name in the pulldown.
         </p>
 
         <div id="assets-library-view">
@@ -461,6 +461,10 @@
           </p>
           <input type="file" id="file-input" multiple style="display: none" />
           <input type="text" id="upload-tags-input" placeholder="Tags (optional, comma-separated)" style="width:100%;max-width:400px;margin-top:8px;padding:8px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;" />
+          <label style="display:block;margin-top:8px;font-size:14px;">
+            <input type="checkbox" id="upload-share-with-students" />
+            Share with students immediately (add to Shared Online Assets)
+          </label>
           <button type="button" id="browse-btn" style="margin-top: 8px; padding: 8px 16px">
             Browse Files
           </button>
@@ -506,7 +510,7 @@
         <div id="content-hub-view" style="display: none">
           <button type="button" id="content-hub-back-btn" class="assets-action-btn" style="background:#6c757d;margin-bottom:16px;">← Back to Assets</button>
           <h2 style="margin-top:0;">Review &amp; Manage All Content</h2>
-          <p style="color:#555;margin-top:0;">Team member or student projects, uploads, published tours, shared online assets, and orphaned files.</p>
+          <p style="color:#555;margin-top:0;">Team member or student projects, uploads, published tours, admin library assets, shared online assets, and orphaned files.</p>
           <div id="ch-summary-chips" class="content-hub-chips"></div>
           <div class="content-hub-filters">
             <label>Team or Class: <select id="ch-filter-class"><option value="">All teams or classes</option></select></label>
@@ -518,6 +522,7 @@
                 <option value="flat_page">Flat Pages</option>
                 <option value="vr_tour">VR Tour Publishes</option>
                 <option value="asset">Team member or student assets</option>
+                <option value="admin_asset">Admin library</option>
                 <option value="common_asset">Shared Online Assets</option>
                 <option value="orphan_asset">Orphaned Assets</option>
                 <option value="legacy_submission">Legacy B2</option>

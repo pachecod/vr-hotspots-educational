@@ -203,6 +203,8 @@
         fd.append('file', file);
         fd.append('category', activeCategory);
         if (uploadTags) fd.append('tags', uploadTags);
+        const shareCheckbox = document.getElementById('upload-share-with-students');
+        if (shareCheckbox?.checked) fd.append('shareWithStudents', 'true');
 
         try {
           const { data } = await postFormWithUploadProgress(

@@ -3,6 +3,7 @@ const b2Service = require('../services/b2-service');
 const {
   COMMON_ASSET_CATEGORIES,
   buildRemotePath,
+  buildAdminRemotePath,
   getContentType,
   isValidCategory,
   sanitizeFilename,
@@ -18,14 +19,18 @@ const {
 } = require('../admin-auth');
 const {
   buildCommonAssetKey,
+  buildAdminAssetKey,
   COMMON_SCOPE_PREFIX,
+  ADMIN_SCOPE_PREFIX,
   parseTagsFromBody,
   attachTagsToCommonAssets,
+  attachTagsToAdminAssets,
   setTagsForKey,
   deleteTagsForKey,
   listTagsForScope,
   parseTagSortParam,
 } = require('../lib/asset-tags');
+const { registerSiteAsset } = require('../lib/site-assets');
 const { prepareVideoForStorage, cleanupTempFiles, VIDEO_CATEGORY } = require('../lib/video-pipeline');
 const { isTranscodeEnabledFor } = require('../lib/video-config');
 const { isFfmpegAvailable } = require('../lib/video-transcode');
@@ -59,8 +64,11 @@ function buildProxyAssetUrl(req, category, filename) {
   return `${getServerBaseUrl(req)}/common-assets/${category}/${encodeURIComponent(filename)}`;
 }
 
-async function buildPublicAssetUrl(category, filename) {
-  const remotePath = buildRemotePath(category, filename);
+async function buildPublicAssetUrl(category, filename, options = {}) {
+  const shared = options.shared !== false;
+  const remotePath = shared
+    ? buildRemotePath(category, filename)
+    : buildAdminRemotePath(category, filename);
   return b2Service.getCommonAssetAccessUrl(remotePath);
 }
 
@@ -131,6 +139,12 @@ function shouldAsyncTranscodeCommonVideo(category) {
   );
 }
 
+function parseShareWithStudents(body) {
+  if (!body) return false;
+  const raw = body.shareWithStudents;
+  return raw === true || raw === 'true' || raw === '1' || raw === 'on';
+}
+
 async function finalizeCommonAssetUpload({
   tempPath,
   originalName,
@@ -140,6 +154,8 @@ async function finalizeCommonAssetUpload({
   cleanupPaths,
   onProgress,
   onPhase,
+  visibility = 'admin',
+  source = 'upload',
 }) {
   const paths = [...(cleanupPaths || [tempPath])];
 
@@ -161,14 +177,30 @@ async function finalizeCommonAssetUpload({
 
   if (onPhase) onPhase('storing');
 
-  const remotePath = buildRemotePath(category, storedFilename);
+  const shared = visibility === 'shared';
+  const remotePath = shared
+    ? buildRemotePath(category, storedFilename)
+    : buildAdminRemotePath(category, storedFilename);
   const uploadContentType = prepared.contentType || getContentType(originalName);
   await b2Service.uploadCommonAsset(prepared.path, remotePath, uploadContentType);
   invalidateCommonAssetsListCache();
 
+  await registerSiteAsset({
+    b2_path: remotePath,
+    category,
+    filename: storedFilename,
+    visibility: shared ? 'shared' : 'admin',
+    source,
+    size: prepared.size,
+    content_type: uploadContentType,
+  });
+
   let savedTags = [];
   if (tags.length) {
-    savedTags = await setTagsForKey(buildCommonAssetKey(category, storedFilename), tags);
+    const assetKey = shared
+      ? buildCommonAssetKey(category, storedFilename)
+      : buildAdminAssetKey(category, storedFilename);
+    savedTags = await setTagsForKey(assetKey, tags);
     invalidateCommonAssetsListCache();
   }
 
@@ -177,18 +209,22 @@ async function finalizeCommonAssetUpload({
     category,
     size: prepared.size,
     uploadedAt: new Date().toISOString(),
-    url: await buildPublicAssetUrl(category, storedFilename),
+    url: await buildPublicAssetUrl(category, storedFilename, { shared }),
+    proxyUrl: shared
+      ? null
+      : `/admin/admin-assets/${encodeURIComponent(category)}/${encodeURIComponent(storedFilename)}`,
     contentType: uploadContentType,
     tags: savedTags,
     transcoded: Boolean(prepared.transcoded),
     originalSize: prepared.originalSize || originalSize,
+    visibility: shared ? 'shared' : 'admin',
   };
 
   cleanupTempFiles(paths);
   return asset;
 }
 
-async function runAsyncCommonAssetVideoJob(jobId, { tempPath, originalName, originalSize, category, tags }) {
+async function runAsyncCommonAssetVideoJob(jobId, { tempPath, originalName, originalSize, category, tags, visibility = 'admin' }) {
   const cleanupPaths = [tempPath];
   try {
     updateUploadJob(jobId, {
@@ -204,6 +240,7 @@ async function runAsyncCommonAssetVideoJob(jobId, { tempPath, originalName, orig
       category,
       tags,
       cleanupPaths,
+      visibility,
       onProgress: (pct) => {
         updateUploadJob(jobId, {
           phase: 'transcoding',
@@ -346,6 +383,8 @@ function registerCommonAssetRoutes(app, upload) {
       }
 
       const tags = parseTagsFromBody(req.body);
+      const shareWithStudents = parseShareWithStudents(req.body);
+      const visibility = shareWithStudents ? 'shared' : 'admin';
 
       if (shouldAsyncTranscodeCommonVideo(validation.category)) {
         const job = createUploadJob({
@@ -361,6 +400,7 @@ function registerCommonAssetRoutes(app, upload) {
             originalSize: diskSize,
             category: validation.category,
             tags,
+            visibility,
           });
         });
         return res.json({
@@ -378,6 +418,7 @@ function registerCommonAssetRoutes(app, upload) {
         category: validation.category,
         tags,
         cleanupPaths,
+        visibility,
       });
       cleanupPaths.length = 0;
 
@@ -421,11 +462,34 @@ function registerCommonAssetRoutes(app, upload) {
       const remotePath = buildRemotePath(category, filename);
       await b2Service.deleteCommonAsset(remotePath);
       await deleteTagsForKey(buildCommonAssetKey(category, filename));
+      const { deleteSiteAssetRecord } = require('../lib/site-assets');
+      await deleteSiteAssetRecord(remotePath);
       invalidateCommonAssetsListCache();
       res.json({ success: true, message: 'Asset deleted' });
     } catch (err) {
       console.error('Common asset delete error:', err);
       res.status(500).json({ success: false, message: err.message || 'Delete failed' });
+    }
+  });
+
+  app.get('/admin/admin-assets/:category/:filename', requireAdmin, async (req, res) => {
+    try {
+      const category = req.params.category;
+      const filename = sanitizeAssetFilenameParam(req.params.filename);
+      if (!isValidCategory(category) || !filename) {
+        return res.status(400).send('Invalid asset path');
+      }
+
+      const remotePath = buildAdminRemotePath(category, filename);
+      const contentType = getContentType(filename);
+      const { stream, statusCode } = await b2Service.downloadCommonAssetStream(remotePath);
+      if (statusCode === 404) return res.status(404).send('Asset not found');
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      return stream.pipe(res);
+    } catch (err) {
+      console.error('Admin asset stream error:', err);
+      res.status(500).send('Could not load asset');
     }
   });
 

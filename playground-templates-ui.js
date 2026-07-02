@@ -165,7 +165,10 @@ async function runPendingPlaygroundLoad() {
     });
     if (!bundleRes.ok) throw new Error('Could not download project bundle');
     const blob = await bundleRes.blob();
-    await window.hotspotEditor.loadZIPTemplate(blob, { silent: true });
+    await window.hotspotEditor.loadZIPTemplate(blob, {
+      silent: true,
+      initialContentMode: 'spherical',
+    });
   } else if (template.files_manifest && template.files_manifest.length) {
     if (window.flatPageEditor && typeof window.flatPageEditor.loadTemplate === 'function') {
       window.flatPageEditor.loadTemplate({

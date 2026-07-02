@@ -8,6 +8,11 @@ const {
   listStarterTemplates,
   loadStarterTemplate,
 } = require('../lib/starter-templates');
+const {
+  listCombinedStarterTemplates,
+  buildCombinedStarterZipBuffer,
+} = require('../lib/combined-starter-bundle');
+const b2Service = require('../services/b2-service');
 
 async function maybeRefreshPlaygroundThumbnail(template, body = {}) {
   if (!template?.is_playground) return template;
@@ -69,12 +74,58 @@ function registerTemplateRoutes(app) {
     }
   });
 
+  app.get('/admin/starter-templates/combined/list', requireAdmin, (_req, res) => {
+    try {
+      res.json({ success: true, templates: listCombinedStarterTemplates() });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/admin/starter-templates/:slug/combined-bundle', requireAdmin, (req, res) => {
+    try {
+      const buffer = buildCombinedStarterZipBuffer(req.params.slug);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${req.params.slug}-starter.zip"`
+      );
+      res.send(buffer);
+    } catch (err) {
+      res.status(404).json({ success: false, message: err.message });
+    }
+  });
+
   app.get('/admin/starter-templates/:slug', requireAdmin, (req, res) => {
     try {
       const template = loadStarterTemplate(req.params.slug);
       res.json({ success: true, template });
     } catch (err) {
       res.status(404).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/admin/templates/:id/bundle', requireAdmin, async (req, res) => {
+    try {
+      if (!isDbEnabled()) {
+        return res.status(503).json({ success: false, message: 'Database not configured' });
+      }
+      const template = await templatesDb.getTemplateById(req.params.id);
+      if (!template || !template.bundle_b2_key) {
+        return res.status(404).json({ success: false, message: 'Bundle not found' });
+      }
+      await b2Service.ensureCommonAssetsBucket();
+      if (b2Service.commonAssetsPublicAccess) {
+        const url = b2Service.getCommonAssetPublicUrl(template.bundle_b2_key);
+        return res.redirect(302, url);
+      }
+      const streamResult = await b2Service.downloadCommonAssetStream(template.bundle_b2_key);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${template.slug}.zip"`);
+      streamResult.stream.pipe(res);
+    } catch (err) {
+      console.error('Admin bundle download error:', err);
+      res.status(500).json({ success: false, message: 'Could not download bundle' });
     }
   });
 

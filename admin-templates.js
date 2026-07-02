@@ -73,7 +73,7 @@ function render() {
         ${
           t.scope === 'flat'
             ? `<a href="admin-template-editor.html?edit=${t.id}" class="btn btn-primary">Edit in Editor</a>`
-            : ''
+            : `<a href="index.html?adminTemplate=${t.id}" class="btn btn-primary">Edit in Editor</a>`
         }
         <button class="btn btn-secondary btn-toggle-public" data-id="${t.id}">${t.is_public ? 'Make Private' : 'Make Public'}</button>
         <button class="btn btn-secondary btn-toggle-playground" data-id="${t.id}">${t.is_playground ? 'Remove from Welcome' : 'Show on Welcome'}</button>
@@ -84,7 +84,8 @@ function render() {
         t.scope === 'combined'
           ? `
       <div class="bundle-row">
-        <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:6px">Project bundle ZIP</label>
+        <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:6px">Project bundle ZIP (optional)</label>
+        <p style="font-size:12px;color:#666;margin:0 0 8px">Usually not needed — use <strong>Edit in Editor</strong> and <strong>Save to Welcome Sample</strong>. Upload here only to replace the bundle manually.</p>
         <input type="file" accept=".zip,application/zip" class="bundle-file-input" data-id="${t.id}" />
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
           <button type="button" class="btn btn-primary btn-upload-bundle" data-id="${t.id}">Upload bundle</button>
@@ -94,7 +95,6 @@ function render() {
               : ''
           }
         </div>
-        <p style="font-size:12px;color:#666;margin:8px 0 0">Export from the main editor: Save Template → bundle mode, then upload here.</p>
       </div>
       `
           : ''
@@ -293,7 +293,7 @@ templateListEl.addEventListener('click', async (e) => {
       const data = await res.json();
       if (!data.success) throw new Error(data.message || 'Update failed');
       if (enabling && tpl.scope === 'combined' && !tpl.bundle_b2_key) {
-        showToast('On welcome screen — upload a bundle ZIP to open this sample');
+        showToast('On welcome screen — open Edit in Editor and Save to Welcome Sample');
       } else {
         showToast(enabling ? 'Now on welcome screen' : 'Removed from welcome screen');
       }
@@ -413,6 +413,7 @@ document.getElementById('create-combined-form').addEventListener('submit', async
   e.preventDefault();
   const title = document.getElementById('combined-title').value.trim();
   if (!title) return;
+  const starter = document.getElementById('combined-starter')?.value || 'newhouse60th';
   try {
     const res = await adminFetch('/admin/templates', {
       method: 'POST',
@@ -428,20 +429,35 @@ document.getElementById('create-combined-form').addEventListener('submit', async
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.message || 'Create failed');
-    showToast('Combined sample created — upload a bundle ZIP next');
-    e.target.reset();
-    document.getElementById('combined-public').checked = true;
-    document.getElementById('combined-playground').checked = true;
-    await loadTemplates();
+    const id = data.template?.id;
+    if (!id) throw new Error('Template id missing');
+    window.location.href = `index.html?adminTemplate=${encodeURIComponent(id)}&starter=${encodeURIComponent(starter)}`;
   } catch (err) {
     alert(err.message || 'Could not create template');
   }
 });
 
+async function loadCombinedStarters() {
+  const select = document.getElementById('combined-starter');
+  if (!select) return;
+  try {
+    const res = await adminFetch('/admin/starter-templates/combined/list');
+    const data = await res.json();
+    if (!data.success || !Array.isArray(data.templates) || !data.templates.length) return;
+    select.innerHTML = data.templates
+      .map(
+        (t) =>
+          `<option value="${escapeAttr(t.slug)}">${escapeHtml(t.title || t.slug)}</option>`
+      )
+      .join('');
+  } catch (_) {}
+}
+
 function initMainApp() {
   document.getElementById('login-root').innerHTML = '';
   document.getElementById('main-content').style.display = 'block';
   renderAdminNav('templates');
+  loadCombinedStarters();
   loadTemplates().catch((err) => {
     if (err.code === 'AUTH_REQUIRED') location.reload();
     else alert(err.message || 'Failed to load templates');

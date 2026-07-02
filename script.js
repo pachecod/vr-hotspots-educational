@@ -8703,6 +8703,10 @@ class HotspotEditor {
   }
 
   async saveTemplate() {
+    if (window.AdminCombinedTemplateMode?.templateId) {
+      return window.AdminCombinedTemplateMode.saveToWelcomeSample();
+    }
+
     const templateName =
       document.getElementById('template-name').value || `hotspot-project-${Date.now()}`;
 
@@ -21028,6 +21032,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   const adminReview = urlParams.get('adminReview') === '1';
   const reviewVersionId = urlParams.get('versionId');
+  const adminTemplateId = urlParams.get('adminTemplate');
+  const adminStarter = urlParams.get('starter') || '';
   const playgroundSlug = urlParams.get('playground');
   if (playgroundSlug) {
     window.__pendingPlaygroundSlug = playgroundSlug;
@@ -21058,6 +21064,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (adminReview) {
     AdminReviewMode.checkAdminAndStart(startEditor);
+    return;
+  }
+
+  if (adminTemplateId && window.AdminCombinedTemplateMode) {
+    AdminCombinedTemplateMode.checkAdminAndStart(() => {
+      setTimeout(async () => {
+        window.hotspotEditor = new HotspotEditor();
+        await AdminCombinedTemplateMode.init(adminTemplateId, adminStarter);
+      }, 150);
+    });
     return;
   }
 

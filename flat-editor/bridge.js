@@ -626,8 +626,12 @@ export class FlatPageEditorBridge {
       (page.files || []).forEach((file) => {
         if (!this._adminTemplateMode && isAdminOnlyFile(file.id)) return;
         let content = file.content || '';
-        if (file.id === 'index.html' && hostedUrl) {
-          content = rewriteVrTourEmbedsInHtml(content, { hostedUrl, useOnlineUrl });
+        if (file.id === 'index.html') {
+          const useOnlineUrl = exportMode === 'urls' && !!hostedUrl;
+          content = rewriteVrTourEmbedsInHtml(content, {
+            hostedUrl: hostedUrl || '',
+            useOnlineUrl,
+          });
         }
         pageFolder.file(file.name, content);
         pageManifest.files.push({ id: file.id, name: file.name, type: file.type });

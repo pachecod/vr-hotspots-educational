@@ -56,8 +56,8 @@
       <nav id="admin-nav" data-active="templates"></nav>
       <h1>Project Templates</h1>
       <p style="color: #666">
-        Build templates in the editor, then use <strong>Show on Welcome</strong> so guest visitors can open them from the editor welcome screen.
-        Flat templates open directly; full 360° tours need a bundle ZIP upload after enabling welcome.
+        Build templates in the editor, then use <strong>Show on Welcome</strong> so guest visitors can open them from the welcome screen.
+        <strong>Flat</strong> templates use the flat editor; <strong>combined</strong> 360° + flat samples open in the main editor with one-click save.
         Edit each template’s <strong>title and description</strong> on its card (shown on the welcome screen).
       </p>
 
@@ -74,19 +74,24 @@
       </div>
 
       <div class="section">
-        <h2>Create Combined Playground Sample</h2>
+        <h2>Create Combined Welcome Sample (360° + Flat)</h2>
         <p style="color: #666; font-size: 14px; margin-top: 0">
-          For welcome-screen samples: build a full project in the main editor, export a <strong>bundle ZIP</strong>, then upload it below after creating the entry.
+          Opens the <strong>main editor</strong> with a starter project. Edit the spherical tour and flat page, then click
+          <strong>Save to Welcome Sample</strong> — no manual ZIP upload.
         </p>
         <form id="create-combined-form" class="create-form">
-          <label>Title<input type="text" id="combined-title" required placeholder="e.g. Farm Tour Demo" /></label>
+          <label>Title<input type="text" id="combined-title" required placeholder="e.g. Newhouse 60th Anniversary" /></label>
           <label>Description<textarea id="combined-desc" placeholder="Shown on the welcome screen"></textarea></label>
-          <p style="font-size:13px;color:#666;margin:0">Thumbnail is captured from a live page preview (360° samples use the bundle scene image).</p>
+          <label>Start from starter
+            <select id="combined-starter">
+              <option value="newhouse60th">Newhouse 60th Anniversary</option>
+            </select>
+          </label>
           <div class="flags">
             <label><input type="checkbox" id="combined-public" checked /> Public</label>
             <label><input type="checkbox" id="combined-playground" checked /> Show on welcome screen</label>
           </div>
-          <button type="submit" class="btn btn-primary">Create combined sample entry</button>
+          <button type="submit" class="btn btn-primary">Create &amp; open in editor</button>
         </form>
       </div>
 

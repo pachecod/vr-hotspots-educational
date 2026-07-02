@@ -39,6 +39,8 @@
         }
       })();
     </script>
+    <script src="admin-auth-ui.js"></script>
+    <script src="admin-combined-template.js"></script>
     <script src="script.js"></script>
     <style>
       a-text {
@@ -625,6 +627,46 @@
         font-weight: bold;
       }
 
+      #admin-combined-bar {
+        display: none;
+        background: #1565c0;
+        color: #fff;
+        padding: 10px 14px;
+        margin: 12px 16px 0;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+
+      #admin-combined-bar.visible {
+        display: block;
+      }
+
+      #admin-combined-bar .review-actions {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      #admin-combined-bar button {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+
+      #admin-combined-save-btn {
+        background: #4caf50;
+        color: #fff;
+      }
+
+      #admin-combined-back-btn {
+        background: rgba(255, 255, 255, 0.2);
+        color: #fff;
+      }
+
       #admin-save-send-btn {
         background: #4caf50;
         color: #fff;
@@ -1166,6 +1208,14 @@
         <div class="review-actions">
           <button type="button" id="admin-save-send-btn">💾 Save and Send to Team Member or Student</button>
           <button type="button" id="admin-review-close-btn">Close</button>
+        </div>
+      </div>
+      <div id="admin-combined-bar" aria-live="polite">
+        <div><strong>Welcome Sample Editor</strong> — <span id="admin-combined-meta"></span></div>
+        <div id="admin-combined-status" style="margin-top:6px;font-size:12px;"></div>
+        <div class="review-actions">
+          <button type="button" id="admin-combined-save-btn">💾 Save to Welcome Sample</button>
+          <button type="button" id="admin-combined-back-btn">← Back to Templates</button>
         </div>
       </div>
       <div class="panel-header">

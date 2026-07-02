@@ -405,7 +405,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
         position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:100000;
         display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;">
         <div style="background:#2a2a2a;color:#fff;border-radius:12px;padding:32px;max-width:420px;width:90%;border:2px solid #4caf50;">
-          <h2 style="margin:0 0 8px;color:#4caf50;">VR Hotspots</h2>
+          <h2 style="margin:0 0 8px;color:#4caf50;">WebXRIDE Immersive Storytelling Tool</h2>
           <p id="student-login-subtitle" style="color:#ccc;margin:0 0 20px;">Choose your team or class</p>
           <div id="student-login-step"></div>
           <div id="student-login-error" style="color:#f44336;margin-top:12px;display:none;"></div>

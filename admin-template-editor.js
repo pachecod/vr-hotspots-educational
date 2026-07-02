@@ -130,7 +130,7 @@ async function loadTemplateForEdit(id) {
   document.getElementById('tpl-playground').checked = !!tpl.is_playground;
   updateThumbDisplay(tpl.thumbnail_url, tpl.slug, tpl.updated_at ? new Date(tpl.updated_at).getTime() : undefined);
   setThumbControlsVisible(true);
-  document.title = `Edit: ${tpl.title} — VR Hotspots Admin`;
+  document.title = `Edit: ${tpl.title} — WebXRIDE Admin`;
 
   const bridge = await waitForFlatEditor();
   bridge.loadTemplate(tpl);

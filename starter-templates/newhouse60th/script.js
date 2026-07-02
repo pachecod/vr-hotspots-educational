@@ -1,5 +1,5 @@
-// VR Hotspot Project - Standalone Version
-// Generated from VR Hotspot Editor
+// WebXRIDE project — standalone viewer
+// Generated from WebXRIDE Immersive Storytelling Tool
 
 // Custom Styles Configuration
 const CUSTOM_STYLES = {

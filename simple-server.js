@@ -626,7 +626,7 @@ async function ensureRepoInitialized(owner, repo, token) {
     }
   }
 
-  const readme = `# ${repo}\n\nInitialized by VR Hotspot Editor.\n`;
+  const readme = `# ${repo}\n\nInitialized by WebXRIDE Immersive Storytelling Tool.\n`;
   const contentB64 = Buffer.from(readme, 'utf8').toString('base64');
 
   await githubApiRequest(

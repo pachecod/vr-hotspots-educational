@@ -399,7 +399,7 @@ export default function FlatPageEditorUI({ bridge }) {
           try {
             if (template?.scope === 'combined' && template?.has_bundle) {
               await loadCombinedTemplateIntoEditor(template.slug, {
-                initialContentMode: bridge.isVisible() ? 'flat' : 'spherical',
+                initialContentMode: 'spherical',
               });
             } else if (!bridge.loadTemplate(template)) {
               throw new Error('This template has no loadable flat page files.');

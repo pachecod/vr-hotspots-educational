@@ -38,10 +38,10 @@ function resolveThumbPreviewUrl(url, slug, version) {
   if (!url) return '';
   const value = String(url);
   let base = '';
-  if (/^https?:\/\//i.test(value)) base = value;
-  else if (value.startsWith('/api/playground/thumbnails/')) base = value;
+  if (/^https?:\/\//i.test(value)) base = value.split('?')[0];
+  else if (value.startsWith('/api/playground/thumbnails/')) base = value.split('?')[0];
   else if (slug) base = `/api/playground/thumbnails/${encodeURIComponent(slug)}`;
-  else base = value;
+  else base = value.split('?')[0];
   return withCacheBust(base, version);
 }
 

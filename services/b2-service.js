@@ -861,6 +861,17 @@ class B2Service {
     return this._deleteFileInBucket(this.commonAssetsBucketId, remotePath);
   }
 
+  async deleteCommonAssetEverywhere(remotePath) {
+    await this.ensureCommonAssetsBucket();
+    this.invalidateCommonAssetsCaches();
+    if (this.commonAssetsBucketId) {
+      await this._deleteFileInBucket(this.commonAssetsBucketId, remotePath);
+    }
+    if (this.bucketId && this.bucketId !== this.commonAssetsBucketId) {
+      await this._deleteFileInBucket(this.bucketId, remotePath);
+    }
+  }
+
   async downloadCommonAssetStream(remotePath, options = {}) {
     await this.ensureCommonAssetsBucket();
     if (!this.commonAssetsPublicAccess) {

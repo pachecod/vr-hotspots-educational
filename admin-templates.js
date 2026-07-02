@@ -94,7 +94,7 @@ function render() {
             ? `<img class="thumb-preview" src="${escapeAttr(displayThumbnailUrl(t))}" alt="Thumbnail preview for ${escapeAttr(t.title)}" />`
             : ''
         }
-        <p style="font-size:12px;color:#666;margin:0 0 6px">Upload a custom image, paste an external URL, or auto-generate. A-Frame templates often need a custom upload or regenerate after the sky-image fix.</p>
+        <p style="font-size:12px;color:#666;margin:0 0 6px">Upload a custom image, paste an external URL, or auto-generate. The thumbnail URL stays under <code>/api/playground/thumbnails/&lt;slug&gt;</code> (the file extension may change after upload).</p>
         <div class="thumb-upload-row">
           <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" class="thumb-file-input" data-id="${t.id}" />
           <button type="button" class="btn btn-primary btn-upload-thumb" data-id="${t.id}">Upload image</button>
@@ -172,9 +172,9 @@ function displayThumbnailUrl(t) {
   if (!t?.thumbnail_url) return '';
   const url = String(t.thumbnail_url);
   let base = '';
-  if (url.startsWith('/api/playground/thumbnails/')) base = url;
+  if (url.startsWith('/api/playground/thumbnails/')) base = url.split('?')[0];
   else if (t.slug) base = `/api/playground/thumbnails/${encodeURIComponent(t.slug)}`;
-  else base = url;
+  else base = url.split('?')[0];
   if (!base.startsWith('/api/playground/thumbnails/')) return base;
   const stamp = t.updated_at ? new Date(t.updated_at).getTime() : Date.now();
   return `${base}?v=${stamp}`;

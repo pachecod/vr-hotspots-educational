@@ -7,7 +7,7 @@ const { isDbEnabled } = require('../services/db-service');
 const templatesDb = require('../lib/templates');
 const { isPublicPlaygroundEnabled } = require('../lib/playground-config');
 const b2Service = require('../services/b2-service');
-const { refreshPlaygroundThumbnail, resolvePlaygroundThumbnailUrl, playgroundThumbLookupPaths, contentTypeForThumbPath, generatePlaygroundThumbnail, uploadCustomTemplateThumbnail } = require('../lib/playground-thumbnail');
+const { refreshPlaygroundThumbnail, resolvePlaygroundThumbnailUrl, playgroundThumbLookupPaths, contentTypeForThumbPath, generatePlaygroundThumbnail, uploadCustomTemplateThumbnail, parsePlaygroundThumbnailSlug, getCanonicalPlaygroundThumbPath } = require('../lib/playground-thumbnail');
 const { templateForStudent } = require('../lib/template-manifest');
 
 const upload = multer({ dest: 'temp-uploads/' });
@@ -47,20 +47,27 @@ function registerPlaygroundRoutes(app) {
   });
 
   app.get('/api/playground/thumbnails/:slug', async (req, res) => {
-    const slug = String(req.params.slug || '')
-      .replace(/\.(jpe?g|png|webp|svg)$/i, '')
-      .trim();
+    const { slug, preferredExt } = parsePlaygroundThumbnailSlug(req.params.slug);
     if (!slug) {
       return res.status(400).send('Invalid thumbnail slug');
     }
     try {
       await b2Service.ensureCommonAssetsBucket();
-      for (const remotePath of playgroundThumbLookupPaths(slug)) {
+      const lookupPaths = [];
+      const canonicalPath = await getCanonicalPlaygroundThumbPath(slug);
+      if (canonicalPath) lookupPaths.push(canonicalPath);
+      for (const remotePath of playgroundThumbLookupPaths(slug, preferredExt)) {
+        if (!lookupPaths.includes(remotePath)) lookupPaths.push(remotePath);
+      }
+      for (const remotePath of lookupPaths) {
         try {
           const { stream, statusCode, headers } = await b2Service.downloadCommonAssetStream(remotePath);
           if (statusCode === 404) continue;
           res.setHeader('Content-Type', headers['content-type'] || contentTypeForThumbPath(remotePath));
-          res.setHeader('Cache-Control', 'public, max-age=3600');
+          res.setHeader(
+            'Cache-Control',
+            req.query.v ? 'private, max-age=0, must-revalidate' : 'public, max-age=300, must-revalidate'
+          );
           res.setHeader('Access-Control-Allow-Origin', '*');
           if (statusCode === 206) res.status(206);
           return stream.pipe(res);

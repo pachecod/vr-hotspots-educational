@@ -15,7 +15,7 @@ const thumbUpload = multer({
   dest: 'temp-uploads/',
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const ok = /^image\/(jpeg|png|webp|gif|svg\+xml)$/i.test(file.mimetype || '');
+    const ok = /^image\/(jpeg|png|x-png|webp|gif|svg\+xml)$/i.test(file.mimetype || '');
     cb(ok ? null : new Error('Thumbnail must be an image (JPEG, PNG, WebP, GIF, or SVG)'), ok);
   },
 });
@@ -240,7 +240,8 @@ function registerPlaygroundRoutes(app) {
         const thumbnail_url = await uploadCustomTemplateThumbnail(
           template,
           localPath,
-          req.file.mimetype
+          req.file.mimetype,
+          req.file.originalname
         );
         const updated = await templatesDb.updateTemplate(template.id, { thumbnail_url });
         res.json({ success: true, template: updated });

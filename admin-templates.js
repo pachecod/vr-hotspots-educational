@@ -90,11 +90,16 @@ function render() {
       <div class="bundle-row" style="margin-top:10px">
         <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:4px">Thumbnail</label>
         ${
-          t.thumbnail_url
-            ? `<p style="font-size:12px;color:#666;margin:0 0 6px;word-break:break-all">${escapeHtml(displayThumbnailUrl(t))}</p>`
-            : '<p style="font-size:12px;color:#666;margin:0 0 6px">Auto-generated from a page screenshot. Use Regenerate below, or enable Show on Welcome to publish on the guest screen.</p>'
+          displayThumbnailUrl(t)
+            ? `<img class="thumb-preview" src="${escapeAttr(displayThumbnailUrl(t))}" alt="Thumbnail preview for ${escapeAttr(t.title)}" />`
+            : ''
         }
-        <input type="text" class="thumb-url-input" data-id="${t.id}" value="${escapeAttr(t.thumbnail_url || '')}" placeholder="Optional custom URL override" style="width:100%;max-width:480px;padding:6px;border:1px solid #ccc;border-radius:4px" />
+        <p style="font-size:12px;color:#666;margin:0 0 6px">Upload a custom image, paste an external URL, or auto-generate. A-Frame templates often need a custom upload or regenerate after the sky-image fix.</p>
+        <div class="thumb-upload-row">
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" class="thumb-file-input" data-id="${t.id}" />
+          <button type="button" class="btn btn-primary btn-upload-thumb" data-id="${t.id}">Upload image</button>
+        </div>
+        <input type="text" class="thumb-url-input" data-id="${t.id}" value="${escapeAttr(t.thumbnail_url || '')}" placeholder="Or paste a custom image URL" style="width:100%;max-width:480px;padding:6px;border:1px solid #ccc;border-radius:4px;margin-top:8px" />
         <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
           <button type="button" class="btn btn-secondary btn-regen-thumb" data-id="${t.id}">Regenerate thumbnail</button>
           <button type="button" class="btn btn-secondary btn-save-thumb" data-id="${t.id}">Save custom URL</button>
@@ -169,6 +174,25 @@ function displayThumbnailUrl(t) {
   if (url.startsWith('/api/playground/thumbnails/')) return url;
   if (t.slug) return `/api/playground/thumbnails/${encodeURIComponent(t.slug)}`;
   return url;
+}
+
+async function uploadThumbnail(id) {
+  const input = document.querySelector(`.thumb-file-input[data-id="${id}"]`);
+  if (!input || !input.files || !input.files[0]) {
+    alert('Choose an image file first.');
+    return;
+  }
+  const formData = new FormData();
+  formData.append('thumbnail', input.files[0]);
+  const res = await adminFetch(`/admin/templates/${id}/thumbnail`, {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Upload failed');
+  showToast('Thumbnail uploaded');
+  input.value = '';
+  await loadTemplates();
 }
 
 async function uploadBundle(id) {
@@ -270,6 +294,10 @@ templateListEl.addEventListener('click', async (e) => {
       if (!data.success) throw new Error(data.message || 'Remove failed');
       showToast('Bundle removed');
       await loadTemplates();
+      return;
+    }
+    if (btn.classList.contains('btn-upload-thumb')) {
+      await uploadThumbnail(id);
       return;
     }
     if (btn.classList.contains('btn-save-thumb')) {

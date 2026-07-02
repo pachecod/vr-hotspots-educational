@@ -7,10 +7,18 @@ const { isDbEnabled } = require('../services/db-service');
 const templatesDb = require('../lib/templates');
 const { isPublicPlaygroundEnabled } = require('../lib/playground-config');
 const b2Service = require('../services/b2-service');
-const { refreshPlaygroundThumbnail, resolvePlaygroundThumbnailUrl, playgroundThumbLookupPaths, contentTypeForThumbPath, generatePlaygroundThumbnail } = require('../lib/playground-thumbnail');
+const { refreshPlaygroundThumbnail, resolvePlaygroundThumbnailUrl, playgroundThumbLookupPaths, contentTypeForThumbPath, generatePlaygroundThumbnail, uploadCustomTemplateThumbnail } = require('../lib/playground-thumbnail');
 const { templateForStudent } = require('../lib/template-manifest');
 
 const upload = multer({ dest: 'temp-uploads/' });
+const thumbUpload = multer({
+  dest: 'temp-uploads/',
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\/(jpeg|png|webp|gif|svg\+xml)$/i.test(file.mimetype || '');
+    cb(ok ? null : new Error('Thumbnail must be an image (JPEG, PNG, WebP, GIF, or SVG)'), ok);
+  },
+});
 
 function playgroundBundleKey(slug) {
   return `playground-tours/${slug}.zip`;
@@ -210,6 +218,41 @@ function registerPlaygroundRoutes(app) {
       console.error('Generate thumbnail error:', err);
       res.status(500).json({ success: false, message: err.message || 'Thumbnail generation failed' });
     }
+  });
+
+  app.post('/admin/templates/:id/thumbnail', requireAdmin, (req, res) => {
+    thumbUpload.single('thumbnail')(req, res, async (uploadErr) => {
+      if (!isDbEnabled()) {
+        return res.status(503).json({ success: false, message: 'Database not configured' });
+      }
+      if (uploadErr) {
+        return res.status(400).json({ success: false, message: uploadErr.message || 'Invalid thumbnail file' });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'Image file required' });
+      }
+      const localPath = req.file.path;
+      try {
+        const template = await templatesDb.getTemplateById(req.params.id);
+        if (!template) {
+          return res.status(404).json({ success: false, message: 'Template not found' });
+        }
+        const thumbnail_url = await uploadCustomTemplateThumbnail(
+          template,
+          localPath,
+          req.file.mimetype
+        );
+        const updated = await templatesDb.updateTemplate(template.id, { thumbnail_url });
+        res.json({ success: true, template: updated });
+      } catch (err) {
+        console.error('Thumbnail upload error:', err);
+        res.status(500).json({ success: false, message: err.message || 'Thumbnail upload failed' });
+      } finally {
+        try {
+          fs.unlinkSync(localPath);
+        } catch (_) {}
+      }
+    });
   });
 }
 

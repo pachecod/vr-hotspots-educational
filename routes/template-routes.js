@@ -14,7 +14,8 @@ async function maybeRefreshPlaygroundThumbnail(template, body = {}) {
   const manualThumb =
     body.thumbnail_url !== undefined && String(body.thumbnail_url || '').trim() !== '';
   if (manualThumb) return template;
-  return (await refreshPlaygroundThumbnail(template)) || template;
+  if (template.thumbnail_url && !body.forceThumbnailRefresh) return template;
+  return (await refreshPlaygroundThumbnail(template, { force: !!body.forceThumbnailRefresh })) || template;
 }
 
 function registerTemplateRoutes(app) {

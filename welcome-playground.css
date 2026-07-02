@@ -1,11 +1,18 @@
+:root {
+  --welcome-shell-max-width: 1100px;
+}
+
 #student-login-shell {
   position: fixed;
   inset: 0;
   background: #000;
   z-index: 100000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding: 28px 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
   font-family: Arial, sans-serif;
   animation: fadeIn 0.3s ease-in;
 }
@@ -138,24 +145,19 @@ body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay)
   padding: 40px 36px;
   border-radius: 16px;
   color: white;
-  width: 80vw;
-  height: 80vh;
-  max-width: 80vw;
-  max-height: 80vh;
+  width: min(100%, var(--welcome-shell-max-width));
+  max-width: var(--welcome-shell-max-width);
   box-sizing: border-box;
-  overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   text-align: center;
   position: relative;
 }
 
 .integrated-welcome-layout {
-  height: 100%;
-  min-height: 100%;
+  display: block;
 }
 
 .integrated-welcome-auth {
-  height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -167,14 +169,12 @@ body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay)
 
 #integrated-welcome-inner.integrated-welcome-with-playground {
   padding: 0;
-  overflow: hidden;
   text-align: left;
 }
 
 /* Sign-in steps injected without the layout wrapper still need side padding. */
 #integrated-welcome-inner.integrated-welcome-with-playground:not(:has(.integrated-welcome-layout)) {
   padding: 28px 32px;
-  overflow-y: auto;
 }
 
 .student-login-step .student-class-btn,
@@ -186,36 +186,26 @@ body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay)
 #integrated-welcome-inner.integrated-welcome-with-playground .integrated-welcome-layout {
   display: grid;
   grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 1.05fr);
-  height: 100%;
-  min-height: 100%;
 }
 
 #integrated-welcome-inner.integrated-welcome-with-playground .integrated-welcome-auth {
   padding: 28px 32px;
   border-right: 1px solid rgba(255, 255, 255, 0.22);
-  overflow-y: auto;
   text-align: center;
 }
 
 #integrated-welcome-inner.integrated-welcome-with-playground .integrated-welcome-samples {
   display: flex;
   flex-direction: column;
-  min-height: 0;
   padding: 28px 24px;
-  overflow: hidden;
 }
 
 #integrated-welcome-inner.integrated-welcome-with-playground .welcome-playground-section {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
 #integrated-welcome-inner.integrated-welcome-with-playground .welcome-playground-grid-wrap {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
   padding-right: 4px;
 }
 
@@ -348,23 +338,17 @@ body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay)
 @media (max-width: 900px) {
   #integrated-welcome-inner.integrated-welcome-with-playground .integrated-welcome-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto;
   }
 
   #integrated-welcome-inner.integrated-welcome-with-playground .integrated-welcome-auth {
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.22);
     padding: 28px 24px;
-    height: auto;
     flex-shrink: 0;
   }
 
-  #integrated-welcome-inner.integrated-welcome-with-playground {
-    overflow-y: auto;
-  }
-
   #integrated-welcome-inner.integrated-welcome-with-playground .integrated-welcome-samples {
-    min-height: 280px;
     padding: 24px 20px 28px;
   }
 }

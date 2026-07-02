@@ -6,21 +6,19 @@
 }
 
 .about-webxride-shell {
-  min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 28px 16px;
   box-sizing: border-box;
 }
 
 .about-webxride-card {
-  width: min(100%, 720px);
-  max-height: min(92vh, 900px);
-  overflow-y: auto;
+  width: min(100%, var(--welcome-shell-max-width));
+  max-width: var(--welcome-shell-max-width);
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 16px;
-  padding: 32px 28px 36px;
+  padding: 40px 36px;
   box-sizing: border-box;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   color: #fff;
@@ -67,4 +65,10 @@
 
 .about-webxride-card .welcome-news-error {
   color: #ffcdd2;
+}
+
+@media (max-width: 640px) {
+  .about-webxride-card {
+    padding: 28px 20px;
+  }
 }

@@ -27,20 +27,29 @@ function waitForFlatEditor() {
   });
 }
 
-function resolveThumbPreviewUrl(url, slug) {
+function withCacheBust(url, version) {
   if (!url) return '';
-  const value = String(url);
-  if (/^https?:\/\//i.test(value)) return value;
-  if (value.startsWith('/api/playground/thumbnails/')) return value;
-  if (slug) return `/api/playground/thumbnails/${encodeURIComponent(slug)}`;
-  return value;
+  const stamp = version || Date.now();
+  const sep = String(url).includes('?') ? '&' : '?';
+  return `${url}${sep}v=${stamp}`;
 }
 
-function updateThumbDisplay(url, slug) {
+function resolveThumbPreviewUrl(url, slug, version) {
+  if (!url) return '';
+  const value = String(url);
+  let base = '';
+  if (/^https?:\/\//i.test(value)) base = value;
+  else if (value.startsWith('/api/playground/thumbnails/')) base = value;
+  else if (slug) base = `/api/playground/thumbnails/${encodeURIComponent(slug)}`;
+  else base = value;
+  return withCacheBust(base, version);
+}
+
+function updateThumbDisplay(url, slug, version) {
   const el = document.getElementById('tpl-thumb-display');
   const img = document.getElementById('tpl-thumb-preview');
   const hint = document.getElementById('tpl-thumb-summary-hint');
-  const previewUrl = resolveThumbPreviewUrl(url, slug);
+  const previewUrl = resolveThumbPreviewUrl(url, slug, version);
   if (el) {
     el.textContent =
       url ||
@@ -89,7 +98,7 @@ async function uploadTemplateThumbnail() {
   const data = await res.json();
   if (!data.success) throw new Error(data.message || 'Upload failed');
   input.value = '';
-  updateThumbDisplay(data.template.thumbnail_url, data.template.slug);
+  updateThumbDisplay(data.template.thumbnail_url, data.template.slug, Date.now());
   showToast('Thumbnail uploaded');
   openThumbPanel();
 }
@@ -102,7 +111,7 @@ async function regenerateTemplateThumbnail() {
   const res = await adminFetch(`/admin/templates/${editingId}/generate-thumbnail`, { method: 'POST' });
   const data = await res.json();
   if (!data.success) throw new Error(data.message || 'Regenerate failed');
-  updateThumbDisplay(data.template.thumbnail_url, data.template.slug);
+  updateThumbDisplay(data.template.thumbnail_url, data.template.slug, Date.now());
   showToast('Thumbnail regenerated');
   openThumbPanel();
 }
@@ -119,7 +128,7 @@ async function loadTemplateForEdit(id) {
   document.getElementById('tpl-public').checked = !!tpl.is_public;
   document.getElementById('tpl-default').checked = !!tpl.is_default;
   document.getElementById('tpl-playground').checked = !!tpl.is_playground;
-  updateThumbDisplay(tpl.thumbnail_url, tpl.slug);
+  updateThumbDisplay(tpl.thumbnail_url, tpl.slug, tpl.updated_at ? new Date(tpl.updated_at).getTime() : undefined);
   setThumbControlsVisible(true);
   document.title = `Edit: ${tpl.title} — VR Hotspots Admin`;
 
@@ -191,7 +200,7 @@ async function saveTemplate() {
 
     document.getElementById('save-status').textContent = 'Saved.';
     if (data.template) {
-      updateThumbDisplay(data.template.thumbnail_url, data.template.slug);
+      updateThumbDisplay(data.template.thumbnail_url, data.template.slug, Date.now());
       setThumbControlsVisible(true);
     }
     showToast('Template saved');

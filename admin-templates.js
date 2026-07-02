@@ -171,9 +171,13 @@ function escapeAttr(s) {
 function displayThumbnailUrl(t) {
   if (!t?.thumbnail_url) return '';
   const url = String(t.thumbnail_url);
-  if (url.startsWith('/api/playground/thumbnails/')) return url;
-  if (t.slug) return `/api/playground/thumbnails/${encodeURIComponent(t.slug)}`;
-  return url;
+  let base = '';
+  if (url.startsWith('/api/playground/thumbnails/')) base = url;
+  else if (t.slug) base = `/api/playground/thumbnails/${encodeURIComponent(t.slug)}`;
+  else base = url;
+  if (!base.startsWith('/api/playground/thumbnails/')) return base;
+  const stamp = t.updated_at ? new Date(t.updated_at).getTime() : Date.now();
+  return `${base}?v=${stamp}`;
 }
 
 async function uploadThumbnail(id) {

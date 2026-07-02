@@ -71,13 +71,13 @@ function renderPreview() {
   const page = getFormData();
   const guestShell =
     activeSlug === 'guest-agreement'
-      ? `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.12);padding:16px;box-sizing:border-box;">
-<div style="width:min(100%,460px);max-height:82vh;background:#fff;border-radius:12px;box-shadow:0 18px 48px rgba(15,23,42,0.18);display:flex;flex-direction:column;overflow:hidden;">
-<div style="padding:18px 20px 10px;font:600 1.125rem/1.3 system-ui,sans-serif;color:#111827;">${page.title || 'Guest sample project'}</div>
-<div style="padding:0 20px 16px;overflow:auto;font:14px/1.55 system-ui,sans-serif;color:#374151;">${page.content || ''}</div>
-<div style="display:flex;gap:10px;justify-content:flex-end;padding:14px 20px 18px;border-top:1px solid #e5e7eb;background:#f9fafb;">
-<span style="padding:9px 16px;border:1px solid #d1d5db;border-radius:8px;color:#374151;">Cancel</span>
-<span style="padding:9px 16px;border-radius:8px;background:#2563eb;color:#fff;">I Agree</span>
+      ? `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#000;padding:16px;box-sizing:border-box;font-family:Arial,sans-serif;">
+<div style="width:min(100%,460px);max-height:82vh;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.5);display:flex;flex-direction:column;overflow:hidden;color:#fff;">
+<div style="padding:18px 20px 10px;font:700 1.125rem/1.3 Arial,sans-serif;color:#fff;">${page.title || 'Guest sample project'}</div>
+<div style="padding:0 20px 16px;overflow:auto;font:14px/1.55 Arial,sans-serif;color:#f0f0f0;text-align:left;">${page.content || ''}</div>
+<div style="display:flex;gap:10px;justify-content:flex-end;padding:14px 20px 18px;border-top:1px solid rgba(255,255,255,0.22);background:rgba(0,0,0,0.12);">
+<span style="padding:9px 16px;border:1px solid rgba(255,255,255,0.45);border-radius:8px;color:#fff;">Cancel</span>
+<span style="padding:9px 16px;border-radius:8px;background:#fff;color:#667eea;font-weight:bold;">I Agree</span>
 </div>
 </div>
 </div>`

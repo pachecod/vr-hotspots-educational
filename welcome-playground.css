@@ -375,12 +375,13 @@ body.guest-agreement-open {
   align-items: center;
   justify-content: center;
   padding: 16px;
+  font-family: Arial, sans-serif;
 }
 
 .guest-agreement-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.62);
+  background: rgba(0, 0, 0, 0.82);
 }
 
 .guest-agreement-dialog {
@@ -388,12 +389,13 @@ body.guest-agreement-open {
   z-index: 1;
   width: min(100%, 460px);
   max-height: min(82vh, 520px);
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  color: #fff;
 }
 
 .guest-agreement-title {
@@ -401,7 +403,8 @@ body.guest-agreement-open {
   padding: 18px 20px 10px;
   font-size: 1.125rem;
   line-height: 1.3;
-  color: #111827;
+  color: #fff;
+  font-weight: bold;
 }
 
 .guest-agreement-content {
@@ -409,7 +412,23 @@ body.guest-agreement-open {
   overflow-y: auto;
   font-size: 14px;
   line-height: 1.55;
-  color: #374151;
+  color: #f0f0f0;
+  text-align: left;
+}
+
+.guest-agreement-content p,
+.guest-agreement-content li {
+  color: #f0f0f0;
+}
+
+.guest-agreement-content a {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.guest-agreement-content a:hover {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .guest-agreement-content p:last-child {
@@ -421,36 +440,37 @@ body.guest-agreement-open {
   gap: 10px;
   justify-content: flex-end;
   padding: 14px 20px 18px;
-  border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .guest-agreement-btn {
   padding: 9px 16px;
   border-radius: 8px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: bold;
   cursor: pointer;
   border: 1px solid transparent;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .guest-agreement-cancel {
-  background: #fff;
-  border-color: #d1d5db;
-  color: #374151;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #fff;
 }
 
 .guest-agreement-cancel:hover {
-  background: #f3f4f6;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .guest-agreement-agree {
-  background: #2563eb;
-  color: #fff;
-  border-color: #2563eb;
+  background: #fff;
+  color: #667eea;
+  border-color: #fff;
 }
 
 .guest-agreement-agree:hover {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.92);
 }

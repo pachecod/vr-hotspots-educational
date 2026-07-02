@@ -21204,6 +21204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           await window.runPendingPlaygroundLoad();
         } catch (err) {
+          if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') return;
           console.error('Playground load failed:', err);
           alert(err.message || 'Could not open sample project');
         }

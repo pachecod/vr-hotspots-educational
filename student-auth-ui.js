@@ -290,6 +290,10 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
     guestBtn.addEventListener('click', async () => {
       errorEl.style.display = 'none';
       try {
+        if (typeof window.promptGuestAgreementIfNeeded === 'function') {
+          const agreed = await window.promptGuestAgreementIfNeeded();
+          if (!agreed) return;
+        }
         await startLocalTestUser();
         window.editorAccessMode = 'local_test';
         window.currentStudent = null;
@@ -321,6 +325,8 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
 }
 
 function renderEntryGate(containerId, onAuthenticated) {
+  window.__welcomeOnAuthenticated = onAuthenticated;
+  window.__integratedWelcomeContainerId = containerId;
   renderIntegratedAuthStep(containerId, onAuthenticated, { showGuest: true });
   const slug = window.__pendingPlaygroundSlug;
   if (slug && typeof window.openPlaygroundTemplate === 'function') {
@@ -331,6 +337,29 @@ function renderEntryGate(containerId, onAuthenticated) {
       });
     }, 0);
   }
+}
+
+async function returnToWelcomeScreen() {
+  if (typeof window.closeGuestAgreementOverlay === 'function') {
+    window.closeGuestAgreementOverlay();
+  }
+  try {
+    await endLocalTestUser();
+  } catch (_) {}
+  window.editorAccessMode = 'none';
+  window.currentStudent = null;
+  window.__pendingPlaygroundSlug = null;
+  window.__integratedWelcomePending = false;
+  hideTestUserEditorSession();
+  hideStudentEditorSession();
+  const containerId = window.__integratedWelcomeContainerId || 'student-login-gate';
+  const onAuthenticated = window.__welcomeOnAuthenticated;
+  setEntryGateActive(true);
+  if (typeof onAuthenticated === 'function') {
+    renderIntegratedAuthStep(containerId, onAuthenticated, { showGuest: true });
+    return;
+  }
+  window.location.reload();
 }
 
 function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
@@ -586,6 +615,8 @@ function escapeHtml(str) {
 }
 
 async function requireStudentSession(containerId, onAuthenticated) {
+  window.__welcomeOnAuthenticated = onAuthenticated;
+  window.__integratedWelcomeContainerId = containerId;
   const status = await checkStudentSession();
 
   if (status.authenticated && status.student) {
@@ -631,3 +662,5 @@ window.showStudentEditorSession = showStudentEditorSession;
 window.showTestUserEditorSession = showTestUserEditorSession;
 window.clearEntryGateOverlay = clearEntryGateOverlay;
 window.setEntryGateActive = setEntryGateActive;
+window.returnToWelcomeScreen = returnToWelcomeScreen;
+window.renderIntegratedAuthStep = renderIntegratedAuthStep;

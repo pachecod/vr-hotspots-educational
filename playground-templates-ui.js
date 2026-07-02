@@ -97,12 +97,10 @@ async function mountPlaygroundTemplatesSection(innerEl, { containerId, onAuthent
       if (!btn || loadingSlug) return;
       const slug = btn.dataset.slug;
       if (!slug) return;
+      loadingSlug = slug;
+      gridWrap.innerHTML = renderPlaygroundCards(data.templates || [], loadingSlug);
       try {
-        const agreed = await promptGuestAgreementIfNeeded();
-        if (!agreed) return;
-        loadingSlug = slug;
-        gridWrap.innerHTML = renderPlaygroundCards(data.templates || [], loadingSlug);
-        await openPlaygroundTemplate(slug, { containerId, onAuthenticated, skipAgreement: true });
+        await openPlaygroundTemplate(slug, { containerId, onAuthenticated });
       } catch (err) {
         if (!err || err.code !== 'GUEST_AGREEMENT_CANCELLED') {
           alert(err.message || 'Could not open sample project');
@@ -187,10 +185,14 @@ function showGuestAgreementOverlay(page) {
   });
 }
 
-async function promptGuestAgreementIfNeeded() {
+async function promptGuestAgreementIfNeeded(options = {}) {
   if (!shouldPromptGuestAgreement()) return true;
   const page = await fetchGuestAgreementPage();
-  return showGuestAgreementOverlay(page);
+  const agreed = await showGuestAgreementOverlay(page);
+  if (!agreed && options.onDeclineReturnToWelcome && typeof window.returnToWelcomeScreen === 'function') {
+    await window.returnToWelcomeScreen();
+  }
+  return agreed;
 }
 
 async function ensureGuestSessionForPlayground() {
@@ -204,17 +206,8 @@ async function ensureGuestSessionForPlayground() {
   window.currentStudent = null;
 }
 
-async function openPlaygroundTemplate(slug, { containerId, onAuthenticated, skipAgreement = false } = {}) {
+async function openPlaygroundTemplate(slug, { containerId, onAuthenticated } = {}) {
   if (!slug) return;
-
-  if (!skipAgreement) {
-    const agreed = await promptGuestAgreementIfNeeded();
-    if (!agreed) {
-      const err = new Error('Guest agreement cancelled');
-      err.code = 'GUEST_AGREEMENT_CANCELLED';
-      throw err;
-    }
-  }
 
   window.__pendingPlaygroundSlug = slug;
   try {
@@ -276,6 +269,15 @@ async function runPendingPlaygroundLoad() {
   }
 
   if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
+
+  if (shouldPromptGuestAgreement()) {
+    const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
+    if (!agreed) {
+      const err = new Error('Guest agreement cancelled');
+      err.code = 'GUEST_AGREEMENT_CANCELLED';
+      throw err;
+    }
+  }
 }
 
 window.fetchPlaygroundTemplates = fetchPlaygroundTemplates;

@@ -46,6 +46,12 @@ async function endLocalTestUser() {
   await fetch('/api/local/test-user/end', { method: 'POST', credentials: 'include' });
 }
 
+function setEntryGateActive(active) {
+  if (document.body) {
+    document.body.classList.toggle('entry-gate-active', !!active);
+  }
+}
+
 function hideSceneLoadingOverlay() {
   const overlay = document.getElementById('scene-loading-overlay');
   if (overlay) {
@@ -93,6 +99,7 @@ function ensureIntegratedWelcomeShell(container) {
 function clearEntryGateOverlay() {
   const container = document.getElementById('student-login-gate');
   if (container) container.innerHTML = '';
+  setEntryGateActive(false);
 }
 
 function showIntegratedWelcomeLoading(containerId) {
@@ -219,6 +226,7 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  setEntryGateActive(true);
   hideSceneLoadingOverlay();
   hideStudentEditorSession();
   hideTestUserEditorSession();
@@ -330,6 +338,9 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   let stepEl;
   let errorEl;
   let subtitleEl;
+
+  setEntryGateActive(true);
+  hideSceneLoadingOverlay();
 
   if (useWelcomeShell) {
     const { inner } = ensureIntegratedWelcomeShell(container);
@@ -566,6 +577,7 @@ async function requireStudentSession(containerId, onAuthenticated) {
   const status = await checkStudentSession();
 
   if (status.authenticated && status.student) {
+    setEntryGateActive(false);
     window.editorAccessMode = 'student';
     showStudentEditorSession(status.student);
     onAuthenticated(status.student);
@@ -573,6 +585,7 @@ async function requireStudentSession(containerId, onAuthenticated) {
   }
 
   if (status.localTestUser || status.mode === 'local_test') {
+    setEntryGateActive(false);
     window.editorAccessMode = 'local_test';
     window.currentStudent = null;
     showTestUserEditorSession();
@@ -593,6 +606,7 @@ async function requireStudentSession(containerId, onAuthenticated) {
   }
 
   window.editorAccessMode = 'anonymous';
+  setEntryGateActive(false);
   hideStudentEditorSession();
   hideTestUserEditorSession();
   onAuthenticated(null);
@@ -604,3 +618,4 @@ window.studentLogout = studentLogout;
 window.showStudentEditorSession = showStudentEditorSession;
 window.showTestUserEditorSession = showTestUserEditorSession;
 window.clearEntryGateOverlay = clearEntryGateOverlay;
+window.setEntryGateActive = setEntryGateActive;

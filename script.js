@@ -17157,7 +17157,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dialog = document.createElement('div');
     dialog.style.cssText = `
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85); z-index: ${EDITOR_LAYER.dialog}; display: flex;
+        background: #000; z-index: ${EDITOR_LAYER.dialog}; display: flex;
         align-items: center; justify-content: center; font-family: Arial;
         animation: fadeIn 0.3s ease-in;
       `;
@@ -17173,7 +17173,12 @@ document.addEventListener('DOMContentLoaded', () => {
     this._markWelcomeSeen();
     const gate = document.getElementById('student-login-gate');
     if (gate && (dialog === gate.querySelector('#student-login-shell') || gate.contains(dialog))) {
-      gate.innerHTML = '';
+      if (typeof window.clearEntryGateOverlay === 'function') {
+        window.clearEntryGateOverlay();
+      } else {
+        gate.innerHTML = '';
+        if (typeof window.setEntryGateActive === 'function') window.setEntryGateActive(false);
+      }
     } else if (dialog && dialog.parentNode) {
       dialog.parentNode.removeChild(dialog);
     }
@@ -19505,6 +19510,7 @@ const AdminReviewMode = {
     const submitSection = document.getElementById('submit-to-professor')?.closest('.panel-section');
     const loginGate = document.getElementById('student-login-gate');
     if (loginGate) loginGate.style.display = 'none';
+    if (typeof window.setEntryGateActive === 'function') window.setEntryGateActive(false);
     if (submitSection) submitSection.style.display = 'none';
     if (bar) bar.classList.add('visible');
 

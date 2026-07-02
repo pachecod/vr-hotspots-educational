@@ -1,7 +1,7 @@
 #student-login-shell {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: #000;
   z-index: 100000;
   display: flex;
   align-items: center;
@@ -17,6 +17,16 @@
   to {
     opacity: 1;
   }
+}
+
+/* Hide the editor DOM until the welcome / sign-in gate is dismissed. */
+body.entry-gate-active {
+  background: #000;
+  overflow: hidden;
+}
+
+body.entry-gate-active > :not(#student-login-gate) {
+  display: none !important;
 }
 
 .welcome-github-footer {

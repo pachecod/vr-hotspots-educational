@@ -1,6 +1,24 @@
 /** Relative path from flat-pages/<id>/index.html to the exported VR viewer at project root. */
 export const LOCAL_VR_TOUR_EMBED_PATH = '../../index.html';
 
+/** Same-origin viewer URL when flat preview runs inside the live editor (not a bundle ZIP). */
+export const EDITOR_PREVIEW_VR_TOUR_EMBED_PATH = '/index.html?embed=1';
+
+export function getEditorPreviewVrTourEmbedUrl() {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}${EDITOR_PREVIEW_VR_TOUR_EMBED_PATH}`;
+  }
+  return EDITOR_PREVIEW_VR_TOUR_EMBED_PATH;
+}
+
+/** Rewrite flat-page VR embeds for in-editor live preview (avoid loading the full editor UI). */
+export function rewriteVrTourEmbedsForEditorPreview(html) {
+  return rewriteVrTourEmbedsInHtml(html, {
+    hostedUrl: getEditorPreviewVrTourEmbedUrl(),
+    useOnlineUrl: true,
+  });
+}
+
 export function resolveAbsoluteUrl(url) {
   if (!url) return '';
   if (/^https?:\/\//i.test(url)) return url;

@@ -1051,6 +1051,29 @@ class HotspotEditor {
 
     // Initialize editor sound controls
     this.updateEditorSoundButton();
+
+    if (window.__vrTourEmbedMode) {
+      this.applyEmbedViewerMode();
+    }
+  }
+
+  /** Read-only viewer chrome when embedded in a flat web page iframe (?embed=1). */
+  applyEmbedViewerMode() {
+    this.navigationMode = true;
+    this.editMode = false;
+    const toggle = document.getElementById('edit-mode-toggle');
+    if (toggle) {
+      toggle.checked = false;
+      toggle.disabled = true;
+    }
+    this.setContentMode('spherical');
+    this.updateModeIndicator();
+    if (typeof this._updateAddHotspotButtonState === 'function') {
+      this._updateAddHotspotButtonState();
+    }
+    if (typeof this._syncEditModeToggleUI === 'function') {
+      this._syncEditModeToggleUI();
+    }
   }
 
   // ===== IndexedDB asset storage helpers (videos + images) =====
@@ -21030,6 +21053,7 @@ window.CommonAssetsPicker = CommonAssetsPicker;
 document.addEventListener('DOMContentLoaded', () => {
   CommonAssetsPicker.init();
   const urlParams = new URLSearchParams(window.location.search);
+  const embedMode = urlParams.get('embed') === '1';
   const adminReview = urlParams.get('adminReview') === '1';
   const reviewVersionId = urlParams.get('versionId');
   const adminTemplateId = urlParams.get('adminTemplate');
@@ -21061,6 +21085,27 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }, delay);
   };
+
+  if (embedMode) {
+    window.__vrTourEmbedMode = true;
+    document.documentElement.classList.add('vr-tour-embed-mode');
+    if (typeof setEntryGateActive === 'function') {
+      setEntryGateActive(false);
+    } else {
+      document.body.classList.remove('entry-gate-active');
+    }
+    const gate = document.getElementById('student-login-gate');
+    if (gate) gate.innerHTML = '';
+    try {
+      localStorage.setItem('vr-hotspot-welcome-seen', '1');
+    } catch (_) {}
+    window.editorAccessMode = 'anonymous';
+    if (typeof window.applyEditorCapabilities === 'function') {
+      window.applyEditorCapabilities();
+    }
+    startEditor();
+    return;
+  }
 
   if (adminReview) {
     AdminReviewMode.checkAdminAndStart(startEditor);

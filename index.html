@@ -42,7 +42,40 @@
     <script src="admin-auth-ui.js"></script>
     <script src="admin-combined-template.js"></script>
     <script src="script.js"></script>
+    <script>
+      (function () {
+        if (new URLSearchParams(location.search).get('embed') === '1') {
+          document.documentElement.classList.add('vr-tour-embed-mode');
+        }
+      })();
+    </script>
     <style>
+      html.vr-tour-embed-mode body.entry-gate-active::before {
+        display: none !important;
+      }
+
+      html.vr-tour-embed-mode #student-login-gate,
+      html.vr-tour-embed-mode #hotspot-editor,
+      html.vr-tour-embed-mode #edit-mode-bar,
+      html.vr-tour-embed-mode #edit-indicator,
+      html.vr-tour-embed-mode #admin-combined-bar,
+      html.vr-tour-embed-mode #admin-review-bar,
+      html.vr-tour-embed-mode #flat-page-editor,
+      html.vr-tour-embed-mode #flat-page-editor-mount {
+        display: none !important;
+      }
+
+      html.vr-tour-embed-mode body {
+        margin: 0;
+        overflow: hidden;
+      }
+
+      html.vr-tour-embed-mode a-scene {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+      }
       a-text {
         font-family: Arial;
         font-weight: bold;
@@ -1037,6 +1070,11 @@
   </head>
 
   <body class="entry-gate-active">
+    <script>
+      if (new URLSearchParams(location.search).get('embed') === '1') {
+        document.body.classList.remove('entry-gate-active');
+      }
+    </script>
     <div id="student-login-gate"></div>
     <!-- Scene Loading Overlay -->
     <div

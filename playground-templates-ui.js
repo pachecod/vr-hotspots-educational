@@ -134,6 +134,14 @@ function closeGuestAgreementOverlay() {
   document.body.classList.remove('guest-agreement-open');
 }
 
+function getGuestAgreementMountNode() {
+  if (document.body.classList.contains('entry-gate-active')) {
+    const gate = document.getElementById('student-login-gate');
+    if (gate) return gate;
+  }
+  return document.body;
+}
+
 function showGuestAgreementOverlay(page) {
   return new Promise((resolve) => {
     closeGuestAgreementOverlay();
@@ -179,7 +187,7 @@ function showGuestAgreementOverlay(page) {
     });
 
     document.addEventListener('keydown', onKeyDown);
-    document.body.appendChild(overlay);
+    getGuestAgreementMountNode().appendChild(overlay);
     document.body.classList.add('guest-agreement-open');
     overlay.querySelector('.guest-agreement-agree')?.focus();
   });
@@ -210,9 +218,6 @@ async function openPlaygroundTemplate(slug, { containerId, onAuthenticated } = {
   if (!slug) return;
 
   window.__pendingPlaygroundSlug = slug;
-  try {
-    localStorage.setItem('vr-hotspot-welcome-seen', '1');
-  } catch (_) {}
 
   await ensureGuestSessionForPlayground();
 
@@ -229,6 +234,20 @@ async function openPlaygroundTemplate(slug, { containerId, onAuthenticated } = {
   } else if (typeof onAuthenticated === 'function') {
     onAuthenticated(window.currentStudent || null);
   }
+}
+
+async function promptGuestAgreementAfterPlaygroundLoad() {
+  if (!shouldPromptGuestAgreement()) return true;
+  const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
+  if (!agreed) {
+    const err = new Error('Guest agreement cancelled');
+    err.code = 'GUEST_AGREEMENT_CANCELLED';
+    throw err;
+  }
+  try {
+    localStorage.setItem('vr-hotspot-welcome-seen', '1');
+  } catch (_) {}
+  return true;
 }
 
 async function runPendingPlaygroundLoad() {
@@ -270,14 +289,7 @@ async function runPendingPlaygroundLoad() {
 
   if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
 
-  if (shouldPromptGuestAgreement()) {
-    const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
-    if (!agreed) {
-      const err = new Error('Guest agreement cancelled');
-      err.code = 'GUEST_AGREEMENT_CANCELLED';
-      throw err;
-    }
-  }
+  await promptGuestAgreementAfterPlaygroundLoad();
 }
 
 window.fetchPlaygroundTemplates = fetchPlaygroundTemplates;
@@ -285,4 +297,5 @@ window.mountPlaygroundTemplatesSection = mountPlaygroundTemplatesSection;
 window.openPlaygroundTemplate = openPlaygroundTemplate;
 window.runPendingPlaygroundLoad = runPendingPlaygroundLoad;
 window.promptGuestAgreementIfNeeded = promptGuestAgreementIfNeeded;
+window.promptGuestAgreementAfterPlaygroundLoad = promptGuestAgreementAfterPlaygroundLoad;
 window.closeGuestAgreementOverlay = closeGuestAgreementOverlay;

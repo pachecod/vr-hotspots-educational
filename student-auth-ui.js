@@ -290,10 +290,8 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
     guestBtn.addEventListener('click', async () => {
       errorEl.style.display = 'none';
       try {
-        if (typeof window.promptGuestAgreementIfNeeded === 'function') {
-          const agreed = await window.promptGuestAgreementIfNeeded();
-          if (!agreed) return;
-        }
+        const agreed = await window.promptGuestAgreementIfNeeded();
+        if (!agreed) return;
         await startLocalTestUser();
         window.editorAccessMode = 'local_test';
         window.currentStudent = null;

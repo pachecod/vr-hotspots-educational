@@ -179,7 +179,7 @@ async function runPendingPlaygroundLoad() {
         config_ui_schema: template.config_ui_schema,
       });
     }
-    window.hotspotEditor.setContentMode('flat');
+    window.hotspotEditor.setContentMode('flat', { skipVrGenerate: true });
   } else {
     throw new Error('This sample is not ready yet (no bundle or flat files).');
   }

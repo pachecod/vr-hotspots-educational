@@ -440,6 +440,29 @@ export class FlatPageEditorBridge {
     return true;
   }
 
+  /** Insert or refresh the VR tour block on the flat page (used when switching from 360° mode). */
+  syncVrTourEmbedToFlatPage(vrTourEmbed = {}) {
+    const embedUrl = resolveAbsoluteUrl(vrTourEmbed.hostedUrl || '');
+    if (!embedUrl) return false;
+    const qrUrl =
+      resolveAbsoluteUrl(vrTourEmbed.qrUrl || '') || deriveQrUrlFromTourUrl(embedUrl);
+    const name =
+      (window.hotspotEditor &&
+        typeof window.hotspotEditor.getProjectVrEmbedInfo === 'function' &&
+        window.hotspotEditor.getProjectVrEmbedInfo().name) ||
+      '360° VR Tour';
+
+    let html = this.getFileContent('index.html');
+    html = stripExistingVrTourEmbeds(html);
+    const snippet = buildProjectVrInsertHtml(name, embedUrl, qrUrl);
+    const insertAt = defaultHtmlInsertPos(html);
+    html = `${html.slice(0, insertAt)}\n${snippet}\n${html.slice(insertAt)}`;
+    this.setFileContent('index.html', html);
+    this._syncScenesData();
+    this._notify();
+    return true;
+  }
+
   /** Insert HTML from an online asset at the last HTML cursor position (flat page mode). */
   insertAsset(category, asset) {
     if (!this._visible) return false;

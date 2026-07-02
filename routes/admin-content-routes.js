@@ -16,7 +16,7 @@ const {
   purgeHostedSubmission,
   parseCommonAssetId,
 } = require('../lib/student-content/purge');
-const { promoteAdminAssetToShared } = require('../lib/site-assets');
+const { promoteAdminAssetToShared, demoteSharedAssetToAdmin } = require('../lib/site-assets');
 
 function registerAdminContentRoutes(app, { requireAdmin }) {
   function requireDb(req, res, next) {
@@ -105,6 +105,28 @@ function registerAdminContentRoutes(app, { requireAdmin }) {
     } catch (err) {
       console.error('Share admin asset error:', err);
       res.status(500).json({ success: false, message: err.message || 'Share failed' });
+    }
+  });
+
+  app.post('/admin/content/common_asset/:id/unshare', requireAdmin, async (req, res) => {
+    try {
+      const parsed = parseCommonAssetId(
+        req.params.id,
+        req.body?.category || req.query.category,
+        req.body?.filename || req.query.filename
+      );
+      if (!parsed.category || !parsed.filename) {
+        return res.status(400).json({ success: false, message: 'Invalid shared asset id' });
+      }
+      const asset = await demoteSharedAssetToAdmin(parsed.category, parsed.filename);
+      try {
+        const { invalidateCommonAssetsListCache } = require('./common-assets-routes');
+        invalidateCommonAssetsListCache();
+      } catch (_) {}
+      res.json({ success: true, asset });
+    } catch (err) {
+      console.error('Unshare common asset error:', err);
+      res.status(500).json({ success: false, message: err.message || 'Unshare failed' });
     }
   });
 

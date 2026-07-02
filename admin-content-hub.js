@@ -136,6 +136,10 @@ const ContentHub = {
             item.type === 'admin_asset'
               ? `<button type="button" class="btn-secondary btn-sm" onclick="ContentHub.shareAdminAssetByIndex(${idx})">Share with students</button>`
               : '';
+          const unshareBtn =
+            item.type === 'common_asset'
+              ? `<button type="button" class="btn-secondary btn-sm" onclick="ContentHub.unshareCommonAssetByIndex(${idx})">Move to admin library</button>`
+              : '';
           const deleteBtn = `<button type="button" class="btn-danger btn-sm" onclick="ContentHub.confirmDeleteByIndex(${idx})">Delete</button>`;
           const updated = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '—';
           return `<tr>
@@ -144,7 +148,7 @@ const ContentHub = {
           <td>${this.escapeHtml(item.title)}</td>
           <td>${this.formatLinks(item.links)}</td>
           <td>${this.escapeHtml(updated)}</td>
-          <td>${expandBtn} ${shareBtn} ${deleteBtn}</td>
+          <td>${expandBtn} ${shareBtn} ${unshareBtn} ${deleteBtn}</td>
         </tr>
         ${item.type === 'project' && this.expandedProjects.has(item.id) ? `<tr class="version-row" id="ch-versions-${this.escapeHtml(item.id)}"><td colspan="6">Loading versions…</td></tr>` : ''}`;
         })
@@ -271,6 +275,38 @@ const ContentHub = {
 
   shareAdminAssetByIndex(idx) {
     this.shareAdminAsset(this.contentItems[idx]);
+  },
+
+  async unshareCommonAsset(item) {
+    if (!item || item.type !== 'common_asset') return;
+    if (
+      !confirm(
+        `Move "${item.title}" to the admin library? Students will no longer see it in Shared Online Assets. Welcome-screen template thumbnails will still work for admins.`
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await adminFetch(`/admin/content/common_asset/${encodeURIComponent(item.id)}/unshare`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: item.category,
+          filename: item.filename,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Move failed');
+      await this.loadContent();
+      alert('Asset moved to admin library. It no longer appears in Shared Online Assets for students.');
+    } catch (err) {
+      if (err.code === 'AUTH_REQUIRED') location.reload();
+      else alert(err.message || 'Could not move asset');
+    }
+  },
+
+  unshareCommonAssetByIndex(idx) {
+    this.unshareCommonAsset(this.contentItems[idx]);
   },
 
   async executeDelete() {

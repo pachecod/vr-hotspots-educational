@@ -31,11 +31,15 @@
    ./package-playground-bundle.sh
    ```
 
+   This runs sync + validation (fails if any `/hosted/` or absolute tour URLs are present), then zips the package.
+
    Or manually:
 
    ```bash
+   node sync-flat-pages-into-config.js
+   node validate-playground-bundle.js
    zip -r newhouse60th-playground-bundle.zip . \
-     -x "*.DS_Store" -x "README.md" -x "sync-*" -x "package-*"
+     -x "*.DS_Store" -x "README.md" -x "sync-*" -x "package-*" -x "validate-*"
    ```
 
 ## Upload to Admin → Templates

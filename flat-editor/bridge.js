@@ -399,6 +399,18 @@ export class FlatPageEditorBridge {
   }
 
   /** Upgrade legacy iframe-only embeds to include the QR block (e.g. after Generate for Embed). */
+  /** Force flat-page VR iframe back to the in-package viewer (playground / bundle ZIP). */
+  ensureBundleRelativeVrEmbeds() {
+    let html = this.getFileContent('index.html');
+    if (!html || !hasVrTourEmbed(html)) return false;
+    const next = rewriteVrTourEmbedsInHtml(html, { hostedUrl: '', useOnlineUrl: false });
+    if (next === html) return false;
+    this.setFileContent('index.html', next);
+    this._syncScenesData();
+    this._notify();
+    return true;
+  }
+
   upgradeVrTourEmbeds(vrTourEmbed = {}) {
     const embedUrl = resolveAbsoluteUrl(vrTourEmbed.hostedUrl || '');
     if (!embedUrl) return false;

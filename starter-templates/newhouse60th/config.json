@@ -249,7 +249,7 @@
             "id": "index.html",
             "name": "index.html",
             "type": "html",
-            "content": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Newhouse 60th Anniversary</title>\n    <link rel=\"stylesheet\" href=\"style.css\" />\n  </head>\n  <body>\n    <main>\n      <h1>Newhouse School — 60th Anniversary</h1>\n      <p>\n        Walk through 360° video scenes from the celebration. Open the immersive viewer below, or\n        switch to <strong>Spherical</strong> in the editor to edit scenes and hotspots.\n      </p>\n\n      <img\n        class=\"featured-photo\"\n        src=\"../../images/test_1781807245534.png\"\n        alt=\"Donald Newhouse with student Nada Merghani at the 60th anniversary celebration\"\n      />\n\n      <!-- 360° VR tour from this project (Spherical Content) -->\n      <style>\n        .vr-tour-embed {\n          margin: 1.5rem auto;\n          max-width: 100%;\n          text-align: center;\n        }\n        .vr-tour-embed iframe {\n          width: 100%;\n          min-height: 480px;\n          height: 70vh;\n          border: 0;\n          display: block;\n          border-radius: 8px;\n          background: #111;\n        }\n      </style>\n      <div class=\"vr-tour-embed\" data-vr-tour-embed=\"1\" data-vr-tour-url=\"../../index.html\">\n        <iframe\n          src=\"../../index.html\"\n          title=\"Newhouse 60th Anniversary 360° Tour\"\n          allow=\"fullscreen; vr; accelerometer; gyroscope\"\n        ></iframe>\n      </div>\n    </main>\n  </body>\n</html>\n"
+            "content": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Newhouse 60th Anniversary</title>\n    <link rel=\"stylesheet\" href=\"style.css\" />\n  </head>\n  <body>\n    <main>\n      <h1>Newhouse School — 60th Anniversary</h1>\n      <p>\n        Walk through 360° video scenes from the celebration. Open the immersive viewer below, or\n        switch to <strong>Spherical</strong> in the editor to edit scenes and hotspots.\n      </p>\n\n      <img\n        class=\"featured-photo\"\n        src=\"../../images/test_1781807245534.png\"\n        alt=\"Donald Newhouse with student Nada Merghani at the 60th anniversary celebration\"\n      />\n\n      <!-- 360° VR tour from this project (Spherical Content) -->\n      <style>\n        .vr-tour-embed {\n          margin: 1.5rem auto;\n          max-width: 100%;\n          text-align: center;\n        }\n        .vr-tour-embed iframe {\n          width: 100%;\n          min-height: 480px;\n          height: 70vh;\n          border: 0;\n          display: block;\n          border-radius: 8px;\n          background: #111;\n        }\n      </style>\n      <div class=\"vr-tour-embed\" data-vr-tour-embed=\"1\" data-vr-tour-url=\"../../index.html\">\n        <iframe src=\"../../index.html\" title=\"Newhouse 60th Anniversary 360° Tour\"\n          allow=\"fullscreen; vr; accelerometer; gyroscope\"></iframe>\n      </div>\n    </main>\n  </body>\n</html>\n"
           },
           {
             "id": "style.css",
@@ -266,5 +266,11 @@
         ]
       }
     }
+  },
+  "vrTourEmbed": {
+    "hostedUrl": null,
+    "hostedPath": null,
+    "qrUrl": null,
+    "publishedAt": null
   }
 }

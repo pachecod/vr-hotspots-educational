@@ -107,6 +107,70 @@
       .btn-primary { background: #28a745; color: #fff; }
       .btn-secondary { background: #6c757d; color: #fff; }
       #save-status { font-size: 13px; color: #666; }
+      .tpl-thumb-details {
+        margin: 0 0 4px;
+        font-size: 13px;
+      }
+      .tpl-thumb-details summary {
+        cursor: pointer;
+        color: #495057;
+        font-weight: 600;
+        padding: 4px 0;
+        user-select: none;
+        list-style: none;
+      }
+      .tpl-thumb-details summary::-webkit-details-marker {
+        display: none;
+      }
+      .tpl-thumb-details summary::before {
+        content: '▸ ';
+        display: inline-block;
+        transition: transform 0.15s ease;
+      }
+      .tpl-thumb-details[open] summary::before {
+        transform: rotate(90deg);
+      }
+      .tpl-thumb-summary-hint {
+        font-weight: normal;
+        color: #888;
+        margin-left: 6px;
+      }
+      .tpl-thumb-panel {
+        margin-top: 8px;
+        padding: 10px 12px;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        max-width: 480px;
+      }
+      .tpl-thumb-panel img {
+        display: block;
+        max-width: 200px;
+        max-height: 112px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        margin: 0 0 8px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+      }
+      .tpl-thumb-panel p {
+        margin: 0 0 6px;
+        font-size: 12px;
+        color: #666;
+        word-break: break-all;
+      }
+      .tpl-thumb-panel .tpl-thumb-help {
+        font-size: 11px;
+        color: #888;
+        margin: 0 0 8px;
+      }
+      #tpl-thumb-controls {
+        display: none;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
       #admin-template-editor-slot {
         position: relative;
         background: #1e1e1e;
@@ -160,18 +224,23 @@
               <label for="tpl-desc">Description</label>
               <textarea id="tpl-desc" rows="1" placeholder="Short description for team members or students"></textarea>
             </div>
-            <div class="field field-grow">
-              <label>Welcome thumbnail</label>
-              <img id="tpl-thumb-preview" alt="" style="display:none;max-width:240px;margin:6px 0;border-radius:6px;border:1px solid #ccc" />
-              <p id="tpl-thumb-display" style="font-size:12px;color:#666;margin:4px 0 0;word-break:break-all"></p>
-              <p style="font-size:11px;color:#888;margin:4px 0 0">Upload a custom image for A-Frame templates, or auto-generate from preview.</p>
-              <div id="tpl-thumb-controls" style="display:none;margin-top:6px;gap:8px;flex-wrap:wrap;align-items:center">
+          </div>
+          <details class="tpl-thumb-details" id="tpl-thumb-details">
+            <summary>
+              Welcome thumbnail
+              <span id="tpl-thumb-summary-hint" class="tpl-thumb-summary-hint"></span>
+            </summary>
+            <div class="tpl-thumb-panel">
+              <img id="tpl-thumb-preview" alt="" style="display: none" />
+              <p id="tpl-thumb-display" class="tpl-thumb-help"></p>
+              <p class="tpl-thumb-help">Upload a custom image for A-Frame templates, or auto-generate from preview.</p>
+              <div id="tpl-thumb-controls">
                 <input type="file" id="tpl-thumb-file" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" />
                 <button type="button" class="btn btn-secondary" id="tpl-thumb-upload-btn">Upload image</button>
                 <button type="button" class="btn btn-secondary" id="tpl-thumb-regen-btn">Regenerate</button>
               </div>
             </div>
-          </div>
+          </details>
           <div class="admin-template-meta-row">
             <div class="admin-template-flags">
               <label><input type="checkbox" id="tpl-public" checked /> Public</label>

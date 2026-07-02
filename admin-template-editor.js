@@ -39,9 +39,15 @@ function resolveThumbPreviewUrl(url, slug) {
 function updateThumbDisplay(url, slug) {
   const el = document.getElementById('tpl-thumb-display');
   const img = document.getElementById('tpl-thumb-preview');
+  const hint = document.getElementById('tpl-thumb-summary-hint');
   const previewUrl = resolveThumbPreviewUrl(url, slug);
   if (el) {
-    el.textContent = url || 'Will be generated when you enable Show on welcome screen (or upload a custom image).';
+    el.textContent =
+      url ||
+      'Will be generated when you enable Show on welcome screen (or upload a custom image).';
+  }
+  if (hint) {
+    hint.textContent = previewUrl ? '— preview available' : '— not set yet';
   }
   if (img) {
     if (previewUrl) {
@@ -57,6 +63,11 @@ function updateThumbDisplay(url, slug) {
 function setThumbControlsVisible(visible) {
   const controls = document.getElementById('tpl-thumb-controls');
   if (controls) controls.style.display = visible ? 'flex' : 'none';
+}
+
+function openThumbPanel() {
+  const details = document.getElementById('tpl-thumb-details');
+  if (details) details.open = true;
 }
 
 async function uploadTemplateThumbnail() {
@@ -80,6 +91,7 @@ async function uploadTemplateThumbnail() {
   input.value = '';
   updateThumbDisplay(data.template.thumbnail_url, data.template.slug);
   showToast('Thumbnail uploaded');
+  openThumbPanel();
 }
 
 async function regenerateTemplateThumbnail() {
@@ -92,6 +104,7 @@ async function regenerateTemplateThumbnail() {
   if (!data.success) throw new Error(data.message || 'Regenerate failed');
   updateThumbDisplay(data.template.thumbnail_url, data.template.slug);
   showToast('Thumbnail regenerated');
+  openThumbPanel();
 }
 
 async function loadTemplateForEdit(id) {

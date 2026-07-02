@@ -36,6 +36,7 @@ const { registerLocalTestUserRoutes } = require('./routes/local-test-user-routes
 const { rejectLocalTestUserWrites } = require('./lib/local-test-user');
 const { registerTemplateRoutes } = require('./routes/template-routes');
 const { registerPlaygroundRoutes } = require('./routes/playground-routes');
+const { registerWelcomeNewsRoutes } = require('./routes/welcome-news-routes');
 const { runMigrations, importSubmissionsFromJson } = require('./db/migrate');
 const { isDbEnabled } = require('./services/db-service');
 const {
@@ -357,6 +358,7 @@ registerSnippetRoutes(app);
 registerRideyRoutes(app);
 registerTemplateRoutes(app);
 registerPlaygroundRoutes(app);
+registerWelcomeNewsRoutes(app);
 
 if (process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_BUCKET_NAME) {
   b2Service

@@ -271,6 +271,7 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
           box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         ">Sign in to a team or class account</button>
         <div id="student-login-error" style="color: #ffcdd2; margin-top: 14px; display: none; font-size: 14px;"></div>
+        <div id="welcome-news-feed"></div>
         ${welcomeGithubFooterHtml()}
       </div>
       <div class="integrated-welcome-samples" id="integrated-welcome-samples"></div>
@@ -306,6 +307,11 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
   const samplesEl = container.querySelector('#integrated-welcome-samples');
   if (welcomeInner && samplesEl && typeof window.mountPlaygroundTemplatesSection === 'function') {
     window.mountPlaygroundTemplatesSection(samplesEl, { containerId, onAuthenticated, welcomeInner });
+  }
+
+  const newsEl = container.querySelector('#welcome-news-feed');
+  if (newsEl && typeof window.mountWelcomeNewsFeed === 'function') {
+    window.mountWelcomeNewsFeed(newsEl);
   }
 }
 

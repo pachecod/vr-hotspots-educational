@@ -326,6 +326,7 @@ function renderEntryGate(containerId, onAuthenticated) {
   if (slug && typeof window.openPlaygroundTemplate === 'function') {
     setTimeout(() => {
       window.openPlaygroundTemplate(slug, { containerId, onAuthenticated }).catch((err) => {
+        if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') return;
         alert(err.message || 'Could not open sample project');
       });
     }, 0);

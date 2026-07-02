@@ -4,6 +4,13 @@ let dbEnabled = true;
 const PUBLIC_LINKS = {
   terms: '/terms.html',
   privacy: '/privacy-policy.html',
+  'guest-agreement': null,
+};
+
+const PUBLIC_LINK_LABELS = {
+  terms: 'View Terms of Use page',
+  privacy: 'View Privacy Policy page',
+  'guest-agreement': 'Shown when guests open a sample project (no public page)',
 };
 
 function showToast(msg) {
@@ -42,9 +49,19 @@ function updateTabUi() {
   });
   const link = document.getElementById('public-link');
   if (link) {
-    link.href = PUBLIC_LINKS[activeSlug] || '/terms.html';
-    link.textContent =
-      activeSlug === 'privacy' ? 'View Privacy Policy page' : 'View Terms of Use page';
+    const publicHref = PUBLIC_LINKS[activeSlug];
+    link.textContent = PUBLIC_LINK_LABELS[activeSlug] || 'View public page';
+    if (publicHref) {
+      link.href = publicHref;
+      link.removeAttribute('aria-disabled');
+      link.style.pointerEvents = '';
+      link.style.color = '';
+    } else {
+      link.removeAttribute('href');
+      link.setAttribute('aria-disabled', 'true');
+      link.style.pointerEvents = 'none';
+      link.style.color = '#6c757d';
+    }
   }
 }
 
@@ -52,6 +69,20 @@ function renderPreview() {
   const iframe = document.getElementById('legal-preview');
   if (!iframe) return;
   const page = getFormData();
+  const guestShell =
+    activeSlug === 'guest-agreement'
+      ? `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.12);padding:16px;box-sizing:border-box;">
+<div style="width:min(100%,460px);max-height:82vh;background:#fff;border-radius:12px;box-shadow:0 18px 48px rgba(15,23,42,0.18);display:flex;flex-direction:column;overflow:hidden;">
+<div style="padding:18px 20px 10px;font:600 1.125rem/1.3 system-ui,sans-serif;color:#111827;">${page.title || 'Guest sample project'}</div>
+<div style="padding:0 20px 16px;overflow:auto;font:14px/1.55 system-ui,sans-serif;color:#374151;">${page.content || ''}</div>
+<div style="display:flex;gap:10px;justify-content:flex-end;padding:14px 20px 18px;border-top:1px solid #e5e7eb;background:#f9fafb;">
+<span style="padding:9px 16px;border:1px solid #d1d5db;border-radius:8px;color:#374151;">Cancel</span>
+<span style="padding:9px 16px;border-radius:8px;background:#2563eb;color:#fff;">I Agree</span>
+</div>
+</div>
+</div>`
+      : page.content || '';
+  const bodyContent = activeSlug === 'guest-agreement' ? guestShell : page.content || '';
   const srcdoc = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -63,7 +94,7 @@ body { margin: 0; padding: 16px; font-family: system-ui, sans-serif; color: #111
 ${page.css_content || ''}
 </style>
 </head>
-<body>${page.content || ''}</body>
+<body>${bodyContent}</body>
 </html>`;
   iframe.srcdoc = srcdoc;
 }

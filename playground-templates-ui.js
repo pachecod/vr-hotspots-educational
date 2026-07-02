@@ -97,19 +97,100 @@ async function mountPlaygroundTemplatesSection(innerEl, { containerId, onAuthent
       if (!btn || loadingSlug) return;
       const slug = btn.dataset.slug;
       if (!slug) return;
-      loadingSlug = slug;
-      gridWrap.innerHTML = renderPlaygroundCards(data.templates || [], loadingSlug);
       try {
-        await openPlaygroundTemplate(slug, { containerId, onAuthenticated });
+        const agreed = await promptGuestAgreementIfNeeded();
+        if (!agreed) return;
+        loadingSlug = slug;
+        gridWrap.innerHTML = renderPlaygroundCards(data.templates || [], loadingSlug);
+        await openPlaygroundTemplate(slug, { containerId, onAuthenticated, skipAgreement: true });
       } catch (err) {
+        if (!err || err.code !== 'GUEST_AGREEMENT_CANCELLED') {
+          alert(err.message || 'Could not open sample project');
+        }
+      } finally {
         loadingSlug = null;
         gridWrap.innerHTML = renderPlaygroundCards(data.templates || [], loadingSlug);
-        alert(err.message || 'Could not open sample project');
       }
     });
   } catch (err) {
     section.innerHTML = `<p class="welcome-playground-error">${escapeHtml(err.message || 'Failed to load templates.')}</p>`;
   }
+}
+
+async function fetchGuestAgreementPage() {
+  const res = await fetch('/api/legal/guest-agreement');
+  const data = await res.json();
+  if (!res.ok || !data.success || !data.page) {
+    throw new Error(data.message || 'Could not load guest agreement');
+  }
+  return data.page;
+}
+
+function shouldPromptGuestAgreement() {
+  return window.editorAccessMode !== 'student';
+}
+
+function closeGuestAgreementOverlay() {
+  const overlay = document.getElementById('guest-agreement-overlay');
+  if (overlay) overlay.remove();
+  document.body.classList.remove('guest-agreement-open');
+}
+
+function showGuestAgreementOverlay(page) {
+  return new Promise((resolve) => {
+    closeGuestAgreementOverlay();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'guest-agreement-overlay';
+    overlay.className = 'guest-agreement-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'guest-agreement-title');
+
+    const styleBlock = page.css_content
+      ? `<style>${page.css_content}</style>`
+      : '';
+
+    overlay.innerHTML = `
+      <div class="guest-agreement-backdrop" data-action="cancel"></div>
+      <div class="guest-agreement-dialog">
+        <h2 id="guest-agreement-title" class="guest-agreement-title">${escapeHtml(page.title)}</h2>
+        <div class="guest-agreement-content">${page.content}</div>
+        <div class="guest-agreement-actions">
+          <button type="button" class="guest-agreement-btn guest-agreement-cancel" data-action="cancel">Cancel</button>
+          <button type="button" class="guest-agreement-btn guest-agreement-agree" data-action="agree">I Agree</button>
+        </div>
+      </div>
+      ${styleBlock}
+    `;
+
+    const finish = (agreed) => {
+      closeGuestAgreementOverlay();
+      document.removeEventListener('keydown', onKeyDown);
+      resolve(agreed);
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') finish(false);
+    };
+
+    overlay.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-action]')?.dataset.action;
+      if (action === 'agree') finish(true);
+      if (action === 'cancel') finish(false);
+    });
+
+    document.addEventListener('keydown', onKeyDown);
+    document.body.appendChild(overlay);
+    document.body.classList.add('guest-agreement-open');
+    overlay.querySelector('.guest-agreement-agree')?.focus();
+  });
+}
+
+async function promptGuestAgreementIfNeeded() {
+  if (!shouldPromptGuestAgreement()) return true;
+  const page = await fetchGuestAgreementPage();
+  return showGuestAgreementOverlay(page);
 }
 
 async function ensureGuestSessionForPlayground() {
@@ -123,8 +204,18 @@ async function ensureGuestSessionForPlayground() {
   window.currentStudent = null;
 }
 
-async function openPlaygroundTemplate(slug, { containerId, onAuthenticated }) {
+async function openPlaygroundTemplate(slug, { containerId, onAuthenticated, skipAgreement = false } = {}) {
   if (!slug) return;
+
+  if (!skipAgreement) {
+    const agreed = await promptGuestAgreementIfNeeded();
+    if (!agreed) {
+      const err = new Error('Guest agreement cancelled');
+      err.code = 'GUEST_AGREEMENT_CANCELLED';
+      throw err;
+    }
+  }
+
   window.__pendingPlaygroundSlug = slug;
   try {
     localStorage.setItem('vr-hotspot-welcome-seen', '1');
@@ -191,3 +282,5 @@ window.fetchPlaygroundTemplates = fetchPlaygroundTemplates;
 window.mountPlaygroundTemplatesSection = mountPlaygroundTemplatesSection;
 window.openPlaygroundTemplate = openPlaygroundTemplate;
 window.runPendingPlaygroundLoad = runPendingPlaygroundLoad;
+window.promptGuestAgreementIfNeeded = promptGuestAgreementIfNeeded;
+window.closeGuestAgreementOverlay = closeGuestAgreementOverlay;

@@ -1,0 +1,22 @@
+{
+  "id": "main",
+  "name": "Newhouse 60th Landing Page",
+  "framework": "html",
+  "files": [
+    {
+      "id": "index.html",
+      "name": "index.html",
+      "type": "html"
+    },
+    {
+      "id": "style.css",
+      "name": "style.css",
+      "type": "css"
+    },
+    {
+      "id": "script.js",
+      "name": "script.js",
+      "type": "javascript"
+    }
+  ]
+}

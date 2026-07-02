@@ -35,6 +35,9 @@ Thumbs.db
 *.temp
 temp-uploads/
 
+# Packaged playground sample bundles (build locally with package-playground-bundle.sh)
+starter-templates/*-playground-bundle.zip
+
 # Ignore mkcert executable
 mkcert.exe
 

@@ -333,7 +333,8 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
 
   if (useWelcomeShell) {
     const { inner } = ensureIntegratedWelcomeShell(container);
-    inner.innerHTML = `
+    const showPlayground = inner.classList.contains('integrated-welcome-with-playground');
+    const authMarkup = `
       <button type="button" id="student-back-entry" style="
         position: absolute; top: 12px; left: 12px;
         background: none; border: none; color: rgba(255,255,255,0.85);
@@ -341,9 +342,29 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
       <div style="font-size: 40px; margin-bottom: 12px;">🎓</div>
       <h2 style="margin: 0 0 8px; font-size: 24px; font-weight: bold;">Sign in</h2>
       <p id="student-login-subtitle" style="color: #f0f0f0; margin: 0 0 20px; font-size: 15px;">Choose your team or class</p>
-      <div id="student-login-step" style="text-align: left;"></div>
+      <div id="student-login-step" class="student-login-step" style="text-align: left;"></div>
       <div id="student-login-error" style="color: #ffcdd2; margin-top: 12px; display: none; font-size: 14px;"></div>
     `;
+    if (showPlayground) {
+      inner.innerHTML = `
+        <div class="integrated-welcome-layout">
+          <div class="integrated-welcome-auth student-login-auth-panel">
+            ${authMarkup}
+          </div>
+          <div class="integrated-welcome-samples" id="integrated-welcome-samples"></div>
+        </div>
+      `;
+      const samplesEl = document.getElementById('integrated-welcome-samples');
+      if (samplesEl && typeof window.mountPlaygroundTemplatesSection === 'function') {
+        window.mountPlaygroundTemplatesSection(samplesEl, {
+          containerId,
+          onAuthenticated,
+          welcomeInner: inner,
+        });
+      }
+    } else {
+      inner.innerHTML = authMarkup;
+    }
     stepEl = document.getElementById('student-login-step');
     errorEl = document.getElementById('student-login-error');
     subtitleEl = document.getElementById('student-login-subtitle');

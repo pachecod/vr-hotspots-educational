@@ -65,6 +65,18 @@
   text-align: left;
 }
 
+/* Sign-in steps injected without the layout wrapper still need side padding. */
+#integrated-welcome-inner.integrated-welcome-with-playground:not(:has(.integrated-welcome-layout)) {
+  padding: 28px 32px;
+  overflow-y: auto;
+}
+
+.student-login-step .student-class-btn,
+.student-login-step .student-name-btn {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 #integrated-welcome-inner.integrated-welcome-with-playground .integrated-welcome-layout {
   display: grid;
   grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 1.05fr);

@@ -49,14 +49,26 @@ function render() {
       (t, index) => `
     <div class="template-card" data-id="${t.id}">
       ${renderOrderControls(t, index)}
-      <strong>${escapeHtml(t.title)}</strong>
-      ${t.is_default ? '<span style="background:#ffc107;padding:2px 6px;border-radius:4px;font-size:11px;margin-left:8px">Default</span>' : ''}
+      <div class="template-details">
+        <p class="template-details-hint">Title and description appear on the welcome screen and in the template list.</p>
+        <label>
+          Title
+          <input type="text" class="tpl-title-input" data-id="${t.id}" value="${escapeAttr(t.title)}" placeholder="Template title" />
+        </label>
+        <label>
+          Description
+          <textarea class="tpl-desc-input" data-id="${t.id}" placeholder="Short description for the welcome screen">${escapeHtml(t.description || '')}</textarea>
+        </label>
+        <div>
+          <button type="button" class="btn btn-primary btn-save-details" data-id="${t.id}">Save title &amp; description</button>
+        </div>
+      </div>
+      ${t.is_default ? '<span style="background:#ffc107;padding:2px 6px;border-radius:4px;font-size:11px;margin:8px 0 0;display:inline-block">Default</span>' : ''}
       <div class="template-meta">${t.is_public ? 'Public' : 'Private'} · ${escapeHtml(t.slug)} · ${scopeLabel(t.scope)}</div>
       <div class="template-badges">
         ${t.is_playground ? '<span class="badge badge-playground">Welcome screen</span>' : ''}
         ${t.bundle_b2_key ? '<span class="badge badge-bundle">Bundle uploaded</span>' : ''}
       </div>
-      ${t.description ? `<p style="font-size:13px;margin:8px 0 0">${escapeHtml(t.description)}</p>` : ''}
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${
           t.scope === 'flat'
@@ -235,6 +247,28 @@ templateListEl.addEventListener('click', async (e) => {
   if (!tpl) return;
 
   try {
+    if (btn.classList.contains('btn-save-details')) {
+      const titleInput = document.querySelector(`.tpl-title-input[data-id="${id}"]`);
+      const descInput = document.querySelector(`.tpl-desc-input[data-id="${id}"]`);
+      const title = titleInput ? titleInput.value.trim() : '';
+      if (!title) {
+        alert('Title is required.');
+        return;
+      }
+      const res = await adminFetch(`/admin/templates/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          description: descInput ? descInput.value.trim() : '',
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Update failed');
+      showToast('Title and description saved');
+      await loadTemplates();
+      return;
+    }
     if (btn.classList.contains('btn-toggle-public')) {
       const res = await adminFetch(`/admin/templates/${id}`, {
         method: 'PUT',

@@ -11,6 +11,10 @@ const { refreshPlaygroundThumbnail, resolvePlaygroundThumbnailUrl, playgroundThu
 const { templateForStudent } = require('../lib/template-manifest');
 
 const upload = multer({ dest: 'temp-uploads/' });
+const bundleUpload = multer({
+  dest: 'temp-uploads/',
+  limits: { fileSize: 120 * 1024 * 1024 },
+});
 const thumbUpload = multer({
   dest: 'temp-uploads/',
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -131,7 +135,7 @@ function registerPlaygroundRoutes(app) {
     }
   });
 
-  app.post('/admin/templates/:id/bundle', requireAdmin, upload.single('bundle'), async (req, res) => {
+  app.post('/admin/templates/:id/bundle', requireAdmin, bundleUpload.single('bundle'), async (req, res) => {
     if (!isDbEnabled()) {
       return res.status(503).json({ success: false, message: 'Database not configured' });
     }

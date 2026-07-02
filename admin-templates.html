@@ -39,6 +39,12 @@
       .bundle-row input[type='file'] { font-size: 12px; }
       .thumb-preview { margin: 8px 0; max-width: 320px; border-radius: 6px; border: 1px solid #dee2e6; display: block; background: #f8f9fa; }
       .thumb-upload-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+      .template-details { margin: 10px 0 0; padding: 12px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; display: grid; gap: 10px; }
+      .template-details label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: bold; color: #495057; }
+      .template-details input[type='text'],
+      .template-details textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font: inherit; font-weight: normal; }
+      .template-details textarea { min-height: 64px; resize: vertical; }
+      .template-details-hint { margin: 0; font-size: 12px; color: #666; font-weight: normal; }
       #toast { position: fixed; bottom: 20px; right: 20px; background: #28a745; color: #fff; padding: 12px 18px; border-radius: 6px; display: none; z-index: 10001; }
     </style>
     <script src="admin-auth-ui.js"></script>
@@ -52,6 +58,7 @@
       <p style="color: #666">
         Build templates in the editor, then use <strong>Show on Welcome</strong> so guest visitors can open them from the editor welcome screen.
         Flat templates open directly; full 360° tours need a bundle ZIP upload after enabling welcome.
+        Edit each template’s <strong>title and description</strong> on its card (shown on the welcome screen).
       </p>
 
       <div class="section">

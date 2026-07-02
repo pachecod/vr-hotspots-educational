@@ -1,0 +1,270 @@
+{
+  "name": "Newhouse 60th Anniversary Tour",
+  "created": "2026-06-27T13:28:13.830Z",
+  "scenes": {
+    "scene1": {
+      "name": "Scene 1",
+      "type": "video",
+      "image": "./images/scene1.jpg",
+      "videoSrc": "./videos/scene1.mp4",
+      "videoVolume": 0.5,
+      "hotspots": [
+        {
+          "id": 2,
+          "type": "navigation",
+          "position": "-0.90 2.80 -7.35",
+          "text": "",
+          "scene": "scene1",
+          "navigationTarget": "scene_1782565850112",
+          "audio": null,
+          "audioLoop": true
+        },
+        {
+          "id": 11,
+          "type": "navigation",
+          "position": "7.41 2.21 -1.01",
+          "text": "",
+          "scene": "scene1",
+          "navigationTarget": "scene_1782566024390",
+          "audio": null,
+          "audioLoop": true
+        }
+      ],
+      "startingPoint": {
+        "rotation": {
+          "x": 0.9167324722093175,
+          "y": 16.615776058793866,
+          "z": 0
+        }
+      },
+      "globalSound": null,
+      "ground": null
+    },
+    "scene_1782565850112": {
+      "name": "Scene 2",
+      "type": "video",
+      "image": "./images/scene1.jpg",
+      "videoSrc": "./videos/scene_1782565850112.mp4",
+      "videoVolume": 0.5,
+      "hotspots": [
+        {
+          "id": 1,
+          "type": "navigation",
+          "position": "-6.25 1.63 4.14",
+          "text": "",
+          "scene": "scene_1782565850112",
+          "navigationTarget": "scene1",
+          "audio": null,
+          "audioLoop": true
+        },
+        {
+          "id": 4,
+          "type": "navigation",
+          "position": "4.43 1.91 6.05",
+          "text": "",
+          "scene": "scene_1782565850112",
+          "navigationTarget": "scene_1782565999223",
+          "audio": null,
+          "audioLoop": true
+        }
+      ],
+      "startingPoint": {
+        "rotation": {
+          "x": -3.8961130068895966,
+          "y": -201.4519607679972,
+          "z": 0
+        }
+      },
+      "globalSound": null,
+      "ground": null
+    },
+    "scene_1782565999223": {
+      "name": "N1 patio",
+      "type": "video",
+      "image": "./images/scene1.jpg",
+      "videoSrc": "./videos/scene_1782565999223.mp4",
+      "videoVolume": 0.5,
+      "hotspots": [
+        {
+          "id": 5,
+          "type": "image",
+          "position": "2.67 1.95 7.00",
+          "text": "",
+          "scene": "scene_1782565999223",
+          "navigationTarget": null,
+          "audio": null,
+          "audioLoop": true,
+          "mediaKind": "photo",
+          "videoLoop": true,
+          "videoMuted": true,
+          "imageScale": 5,
+          "imageAspectRatio": 0.6977730646871686,
+          "image": "./images/test_1781807245534.png"
+        },
+        {
+          "id": 6,
+          "type": "text",
+          "position": "-0.58 3.43 7.25",
+          "text": "In 2024, the Newhouse School celebrated its 60th anniversary, attended by special guest Donald Newhouse. Here, student Nada Merghani met Mr. Newhouse and thanked him for creating the minority scholarship that allowed her to get a Master's degree.",
+          "scene": "scene_1782565999223",
+          "navigationTarget": null,
+          "audio": null,
+          "audioLoop": true,
+          "popupWidth": 4,
+          "popupHeight": 2.5
+        },
+        {
+          "id": 7,
+          "type": "navigation",
+          "position": "-7.46 2.39 0.02",
+          "text": "",
+          "scene": "scene_1782565999223",
+          "navigationTarget": "scene_1782565850112",
+          "audio": null,
+          "audioLoop": true
+        },
+        {
+          "id": 8,
+          "type": "navigation",
+          "position": "5.86 1.65 4.68",
+          "text": "",
+          "scene": "scene_1782565999223",
+          "navigationTarget": "scene_1782566024390",
+          "audio": null,
+          "audioLoop": true
+        }
+      ],
+      "startingPoint": {
+        "rotation": {
+          "x": -5.500394833255903,
+          "y": 179.33578987594734,
+          "z": 0
+        }
+      },
+      "globalSound": null,
+      "ground": null
+    },
+    "scene_1782566024390": {
+      "name": "N3 outside freedom of speech",
+      "type": "video",
+      "image": "./images/scene1.jpg",
+      "videoSrc": "./videos/scene_1782566024390.mp4",
+      "videoVolume": 0.5,
+      "hotspots": [
+        {
+          "id": 9,
+          "type": "navigation",
+          "position": "-5.79 2.03 4.74",
+          "text": "",
+          "scene": "scene_1782566024390",
+          "navigationTarget": "scene_1782565999223",
+          "audio": null,
+          "audioLoop": true
+        },
+        {
+          "id": 10,
+          "type": "navigation",
+          "position": "6.52 2.88 3.48",
+          "text": "",
+          "scene": "scene_1782566024390",
+          "navigationTarget": "scene1",
+          "audio": null,
+          "audioLoop": true
+        }
+      ],
+      "startingPoint": {
+        "rotation": {
+          "x": 1.9480565034447992,
+          "y": 128.57172922735668,
+          "z": 0
+        }
+      },
+      "globalSound": null,
+      "ground": null
+    }
+  },
+  "currentScene": "scene1",
+  "customStyles": {
+    "hotspot": {
+      "infoButton": {
+        "backgroundColor": "#4A90E2",
+        "textColor": "#FFFFFF",
+        "fontSize": 12,
+        "opacity": 0.9,
+        "size": 0.4
+      },
+      "popup": {
+        "backgroundColor": "#333333",
+        "textColor": "#FFFFFF",
+        "borderColor": "#555555",
+        "borderWidth": 0,
+        "borderRadius": 0,
+        "opacity": 0.95,
+        "fontSize": 1,
+        "padding": 0.2
+      },
+      "closeButton": {
+        "size": 0.4,
+        "opacity": 1
+      }
+    },
+    "audio": {
+      "buttonColor": "#FFFFFF",
+      "buttonOpacity": 1
+    },
+    "buttonImages": {
+      "play": "images/play.png",
+      "pause": "images/pause.png"
+    },
+    "navigation": {
+      "ringColor": "#005500",
+      "ringOuterRadius": 0.6,
+      "ringThickness": 0.02,
+      "weblinkRingColor": "#001f5b",
+      "labelColor": "#FFFFFF",
+      "labelBackgroundColor": "#000000",
+      "labelOpacity": 0.8
+    },
+    "image": {
+      "borderColor": "#FFFFFF",
+      "borderWidth": 0.02,
+      "borderRadius": 0.05,
+      "opacity": 1
+    },
+    "gaze": {
+      "duration": 2
+    }
+  },
+  "version": "1.0",
+  "flatPages": {
+    "version": "2.5",
+    "activePageId": "main",
+    "pages": {
+      "main": {
+        "id": "main",
+        "name": "Newhouse 60th Landing Page",
+        "framework": "html",
+        "files": [
+          {
+            "id": "index.html",
+            "name": "index.html",
+            "type": "html",
+            "content": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Newhouse 60th Anniversary</title>\n    <link rel=\"stylesheet\" href=\"style.css\" />\n  </head>\n  <body>\n    <main>\n      <h1>Newhouse School — 60th Anniversary</h1>\n      <p>\n        Walk through 360° video scenes from the celebration. Open the immersive viewer below, or\n        switch to <strong>Spherical</strong> in the editor to edit scenes and hotspots.\n      </p>\n\n      <img\n        class=\"featured-photo\"\n        src=\"../../images/test_1781807245534.png\"\n        alt=\"Donald Newhouse with student Nada Merghani at the 60th anniversary celebration\"\n      />\n\n      <!-- 360° VR tour from this project (Spherical Content) -->\n      <style>\n        .vr-tour-embed {\n          margin: 1.5rem auto;\n          max-width: 100%;\n          text-align: center;\n        }\n        .vr-tour-embed iframe {\n          width: 100%;\n          min-height: 480px;\n          height: 70vh;\n          border: 0;\n          display: block;\n          border-radius: 8px;\n          background: #111;\n        }\n      </style>\n      <div class=\"vr-tour-embed\" data-vr-tour-embed=\"1\" data-vr-tour-url=\"../../index.html\">\n        <iframe\n          src=\"../../index.html\"\n          title=\"Newhouse 60th Anniversary 360° Tour\"\n          allow=\"fullscreen; vr; accelerometer; gyroscope\"\n        ></iframe>\n      </div>\n    </main>\n  </body>\n</html>\n"
+          },
+          {
+            "id": "style.css",
+            "name": "style.css",
+            "type": "css",
+            "content": "body {\n  font-family: 'Courier New', Courier, monospace;\n  background: #d44500;\n  color: #ffffff;\n  margin: 0;\n}\n\nmain {\n  max-width: 720px;\n  margin: 0 auto;\n  padding: 3rem 1.5rem;\n  text-align: center;\n  border: 5px solid #d44500;\n  background: #ffffff;\n}\n\nh1 {\n  color: #d44500;\n  font-size: 2.2rem;\n  line-height: 1.2;\n  text-shadow: 2px 2px #ffb300;\n}\n\np {\n  font-size: 1.1rem;\n  color: #000000;\n  line-height: 1.5;\n}\n\n.featured-photo {\n  display: block;\n  width: min(100%, 420px);\n  margin: 1.5rem auto;\n  border: 5px solid #d44500;\n}\n"
+          },
+          {
+            "id": "script.js",
+            "name": "script.js",
+            "type": "javascript",
+            "content": "// Optional flat-page interactions for the Newhouse 60th landing page.\n"
+          }
+        ]
+      }
+    }
+  }
+}

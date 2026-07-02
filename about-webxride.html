@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>More about WebXRIDE — WebXRIDE Immersive Storytelling Tool</title>
+    <link rel="stylesheet" href="welcome-playground.css" />
+    <link rel="stylesheet" href="about-webxride.css" />
+  </head>
+  <body class="about-webxride-page">
+    <main class="about-webxride-shell">
+      <article class="about-webxride-card">
+        <a class="about-webxride-back" href="/index.html">&larr; Back to editor</a>
+        <h1 class="about-webxride-title">More about WebXRIDE</h1>
+        <p class="about-webxride-intro">
+          WebXRIDE is an immersive storytelling tool for 360&deg; tours, flat web pages, and classroom projects.
+          Read the latest development updates below.
+        </p>
+        <div id="about-webxride-news"></div>
+      </article>
+    </main>
+    <script src="welcome-news-feed.js"></script>
+    <script>
+      mountWelcomeNewsFeed(document.getElementById('about-webxride-news'), { pageMode: true });
+    </script>
+  </body>
+</html>

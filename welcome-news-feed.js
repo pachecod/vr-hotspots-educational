@@ -10,6 +10,9 @@ function escapeAttr(str) {
   return escapeHtml(str);
 }
 
+const NEWS_SOURCE_URL = 'https://danpacheco.com/category/webxride/';
+const NEWS_HEADING = 'Latest WebXRIDE Development News';
+
 function renderWelcomeNewsItems(items) {
   if (!items.length) {
     return '<p class="welcome-news-empty">No posts available right now.</p>';
@@ -28,12 +31,28 @@ function renderWelcomeNewsItems(items) {
     .join('')}</ul>`;
 }
 
-async function mountWelcomeNewsFeed(containerEl) {
+function renderNewsSourceLink() {
+  return `<p class="welcome-news-source">
+    <a href="${NEWS_SOURCE_URL}" target="_blank" rel="noopener noreferrer">More on DanPacheco.com</a>
+  </p>`;
+}
+
+function renderNewsSectionContent(items, { headingTag = 'h2' } = {}) {
+  return `
+    <${headingTag} class="welcome-news-title">${NEWS_HEADING}</${headingTag}>
+    ${renderWelcomeNewsItems(items)}
+    ${renderNewsSourceLink()}
+  `;
+}
+
+async function mountWelcomeNewsFeed(containerEl, options = {}) {
   if (!containerEl) return;
+
+  const pageMode = options.pageMode === true;
+  const headingTag = pageMode ? 'h2' : 'h2';
 
   containerEl.innerHTML = `
     <section class="welcome-news-section" aria-label="WebXRIDE news">
-      <h2 class="welcome-news-title">Latest WebXRIDE Development News</h2>
       <p class="welcome-news-loading">Loading updates…</p>
     </section>
   `;
@@ -48,20 +67,23 @@ async function mountWelcomeNewsFeed(containerEl) {
       throw new Error(data.message || 'Failed to load news');
     }
 
-    if (!data.items.length) {
+    if (!data.items.length && !pageMode) {
+      containerEl.innerHTML = '';
+      return;
+    }
+
+    section.innerHTML = renderNewsSectionContent(data.items, { headingTag });
+  } catch (_) {
+    if (!pageMode) {
       containerEl.innerHTML = '';
       return;
     }
 
     section.innerHTML = `
-      <h1 class="welcome-news-title">Latest WebXRIDE Development News</h1>
-      ${renderWelcomeNewsItems(data.items)}
-      <p class="welcome-news-source">
-        <a href="https://danpacheco.com/category/webxride/" target="_blank" rel="noopener noreferrer">More on DanPacheco.com</a>
-      </p>
+      <h2 class="welcome-news-title">${NEWS_HEADING}</h2>
+      <p class="welcome-news-empty welcome-news-error">Could not load updates right now. Please try again later.</p>
+      ${renderNewsSourceLink()}
     `;
-  } catch (_) {
-    containerEl.innerHTML = '';
   }
 }
 

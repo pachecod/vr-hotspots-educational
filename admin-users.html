@@ -27,7 +27,16 @@
         align-items: center; justify-content: center; z-index: 1000;
       }
       #password-modal.open { display: flex; }
+      #class-password-modal {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+        align-items: center; justify-content: center; z-index: 1000;
+      }
+      #class-password-modal.open { display: flex; }
       #password-modal .password-dialog {
+        background: #fff; border-radius: 8px; padding: 24px; width: min(420px, 92vw);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      }
+      #class-password-modal .password-dialog {
         background: #fff; border-radius: 8px; padding: 24px; width: min(420px, 92vw);
         box-shadow: 0 8px 32px rgba(0,0,0,0.2);
       }
@@ -66,8 +75,16 @@
           <div style="margin-bottom:12px;">
             <input type="text" id="new-class-name" placeholder="Team or Class name" />
             <input type="text" id="new-class-desc" placeholder="Team or Class description (optional)" />
+            <div class="password-field-row">
+              <input type="text" id="new-class-password" placeholder="Class sign-in password (optional — auto-generated if blank)" />
+              <button type="button" class="btn-secondary" id="generate-new-class-password-btn">Generate</button>
+            </div>
             <button class="btn-primary" id="add-class-btn">Add Team or Class</button>
           </div>
+          <p style="color:#666;font-size:13px;margin:0 0 12px;">
+            The class sign-in password is required before students can see the roster on the sign-in page.
+            Leave blank to auto-generate, or type your own.
+          </p>
           <div id="classes-list"></div>
         </div>
 
@@ -140,6 +157,20 @@
     </div>
 
     <div id="peek-toast">Copied!</div>
+
+    <div id="class-password-modal" role="dialog" aria-modal="true" aria-labelledby="class-password-modal-title">
+      <div class="password-dialog">
+        <h3 id="class-password-modal-title">Set Class Sign-In Password</h3>
+        <p id="class-password-modal-class"></p>
+        <input type="text" id="class-password-modal-input" placeholder="Type a password, or generate one below" autocomplete="off" />
+        <div class="password-actions">
+          <button type="button" class="btn-secondary" id="class-password-modal-generate-btn">Generate</button>
+          <button type="button" class="btn-primary" id="class-password-modal-save-btn">Save Password</button>
+          <button type="button" class="btn-secondary" id="class-password-modal-cancel-btn">Cancel</button>
+        </div>
+        <div id="class-password-modal-msg" class="error" style="display:none;margin-top:12px;"></div>
+      </div>
+    </div>
 
     <div id="password-modal" role="dialog" aria-modal="true" aria-labelledby="password-modal-title">
       <div class="password-dialog">

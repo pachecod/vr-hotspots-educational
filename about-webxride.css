@@ -1,0 +1,70 @@
+.about-webxride-page {
+  margin: 0;
+  min-height: 100vh;
+  background: #000;
+  font-family: Arial, sans-serif;
+}
+
+.about-webxride-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px;
+  box-sizing: border-box;
+}
+
+.about-webxride-card {
+  width: min(100%, 720px);
+  max-height: min(92vh, 900px);
+  overflow-y: auto;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 32px 28px 36px;
+  box-sizing: border-box;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  color: #fff;
+  text-align: left;
+}
+
+.about-webxride-back {
+  display: inline-block;
+  margin-bottom: 20px;
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.about-webxride-back:hover {
+  color: #fff;
+}
+
+.about-webxride-title {
+  margin: 0 0 12px;
+  font-size: 28px;
+  line-height: 1.25;
+}
+
+.about-webxride-intro {
+  margin: 0 0 24px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #f0f0f0;
+}
+
+.about-webxride-card .welcome-news-section {
+  margin-top: 0;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.about-webxride-card .welcome-news-title {
+  font-size: 20px;
+  margin-bottom: 14px;
+}
+
+.about-webxride-card .welcome-news-error {
+  color: #ffcdd2;
+}

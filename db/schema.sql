@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS classes (
   name TEXT NOT NULL UNIQUE,
   description TEXT,
   slug TEXT NOT NULL UNIQUE,
+  password_hash TEXT,
+  password_encrypted TEXT,
+  password_set_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

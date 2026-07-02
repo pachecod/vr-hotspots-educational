@@ -183,6 +183,14 @@ async function applyIncrementalMigrations(pool) {
         CREATE INDEX IF NOT EXISTS idx_site_assets_category_filename ON site_assets(category, filename);
       `,
     },
+    {
+      name: 'classes_sign_in_password_v1',
+      sql: `
+        ALTER TABLE classes ADD COLUMN IF NOT EXISTS password_hash TEXT;
+        ALTER TABLE classes ADD COLUMN IF NOT EXISTS password_encrypted TEXT;
+        ALTER TABLE classes ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ;
+      `,
+    },
   ];
 
   for (const migration of migrations) {

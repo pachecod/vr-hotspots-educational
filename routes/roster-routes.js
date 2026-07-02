@@ -5,11 +5,18 @@ const {
   generateRandomPassword,
   isDbEnabled,
 } = require('../services/db-service');
-const { hashPassword } = require('../student-auth');
+const { hashPassword, loginRateLimiter } = require('../student-auth');
+const { getAdminSession } = require('../admin-auth');
 const {
   encryptAdminPassword,
   decryptAdminPassword,
 } = require('../lib/admin-password-store');
+const {
+  verifyClassPassword,
+  hasClassRosterAccess,
+  grantClassRosterAccess,
+  isClassSignInConfigured,
+} = require('../lib/class-roster-gate');
 
 async function ensureClassBillingAccount(classId) {
   const existing = await query(
@@ -47,7 +54,8 @@ async function listPublicStudentsInClass(classId) {
 
 async function listClassesAdmin() {
   const { rows } = await query(
-    `SELECT c.*,
+    `SELECT c.id, c.name, c.description, c.slug, c.created_at, c.updated_at, c.password_set_at,
+            (c.password_hash IS NOT NULL) AS has_sign_in_password,
             (SELECT COUNT(*)::int FROM students s WHERE s.class_id = c.id) AS student_count,
             ba.plan_tier, ba.status AS billing_status
      FROM classes c
@@ -57,14 +65,36 @@ async function listClassesAdmin() {
   return rows;
 }
 
-async function createClass({ name, description }) {
+async function createClass({ name, description, password }) {
   const slug = slugify(name);
+  const plainPassword = password || generateRandomPassword();
+  const passwordHash = await hashPassword(plainPassword);
+  const passwordEncrypted = encryptAdminPassword(plainPassword);
   const { rows } = await query(
-    `INSERT INTO classes (name, description, slug) VALUES ($1, $2, $3) RETURNING *`,
-    [name.trim(), description || null, slug]
+    `INSERT INTO classes (name, description, slug, password_hash, password_encrypted, password_set_at)
+     VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
+    [name.trim(), description || null, slug, passwordHash, passwordEncrypted]
   );
   await ensureClassBillingAccount(rows[0].id);
-  return rows[0];
+  return { class: rows[0], plainPassword };
+}
+
+async function setClassSignInPassword(classId, password) {
+  const plainPassword = password || generateRandomPassword();
+  const passwordHash = await hashPassword(plainPassword);
+  const passwordEncrypted = encryptAdminPassword(plainPassword);
+  const { rows } = await query(
+    `UPDATE classes SET password_hash = $1, password_encrypted = $2, password_set_at = NOW(), updated_at = NOW()
+     WHERE id = $3 RETURNING id, name, password_set_at`,
+    [passwordHash, passwordEncrypted, classId]
+  );
+  return { class: rows[0] || null, plainPassword };
+}
+
+async function getClassSignInPassword(classId) {
+  const { rows } = await query(`SELECT password_encrypted FROM classes WHERE id = $1`, [classId]);
+  if (!rows.length) return null;
+  return decryptAdminPassword(rows[0].password_encrypted);
 }
 
 async function updateClass(id, { name, description }) {
@@ -210,11 +240,55 @@ function registerRosterRoutes(app, { requireAdmin }) {
   app.get('/api/classes/:classId/students', async (req, res) => {
     if (!isDbEnabled()) return res.json([]);
     try {
-      const students = await listPublicStudentsInClass(req.params.classId);
+      const classId = req.params.classId;
+      const isAdmin = !!getAdminSession(req);
+      if (!isAdmin) {
+        if (!(await isClassSignInConfigured(classId))) {
+          return res.status(403).json({
+            success: false,
+            message: 'Team or class sign-in is not set up yet. Ask your team leader or teacher.',
+          });
+        }
+        if (!hasClassRosterAccess(req, classId)) {
+          return res.status(401).json({
+            success: false,
+            message: 'Team or class password required',
+          });
+        }
+      }
+      const students = await listPublicStudentsInClass(classId);
       res.json(students.map((s) => ({ id: s.id, display_name: s.display_name })));
     } catch (err) {
       console.error('List students error:', err);
       res.status(500).json({ success: false, message: 'Failed to load students' });
+    }
+  });
+
+  app.post('/api/classes/:classId/verify-password', loginRateLimiter, async (req, res) => {
+    if (!isDbEnabled()) {
+      return res.status(503).json({ success: false, message: 'Database not configured' });
+    }
+    const classId = req.params.classId;
+    const password = req.body && req.body.password;
+    if (!password) {
+      return res.status(400).json({ success: false, message: 'Password is required' });
+    }
+    try {
+      const verification = await verifyClassPassword(classId, password);
+      if (verification.reason === 'not_configured') {
+        return res.status(403).json({
+          success: false,
+          message: 'Team or class sign-in is not set up yet. Ask your team leader or teacher.',
+        });
+      }
+      if (!verification.ok) {
+        return res.status(401).json({ success: false, message: 'Incorrect team or class password' });
+      }
+      grantClassRosterAccess(res, classId);
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('Verify class password error:', err);
+      return res.status(500).json({ success: false, message: 'Could not verify password' });
     }
   });
 
@@ -228,12 +302,23 @@ function registerRosterRoutes(app, { requireAdmin }) {
 
   app.post('/admin/classes', requireAdmin, requireDb, async (req, res) => {
     try {
-      const { name, description } = req.body || {};
+      const { name, description, password } = req.body || {};
       if (!name || !name.trim()) {
         return res.status(400).json({ success: false, message: 'Team or class name is required' });
       }
-      const created = await createClass({ name, description });
-      res.json({ success: true, class: created });
+      const result = await createClass({ name, description, password });
+      res.json({
+        success: true,
+        class: {
+          id: result.class.id,
+          name: result.class.name,
+          description: result.class.description,
+          slug: result.class.slug,
+          has_sign_in_password: true,
+          password_set_at: result.class.password_set_at,
+        },
+        signInPassword: result.plainPassword,
+      });
     } catch (err) {
       const msg = err.code === '23505' ? 'Team or class name already exists' : err.message;
       res.status(400).json({ success: false, message: msg });
@@ -256,6 +341,31 @@ function registerRosterRoutes(app, { requireAdmin }) {
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/admin/classes/:id/sign-in-password', requireAdmin, requireDb, async (req, res) => {
+    try {
+      const { rows } = await query(`SELECT id FROM classes WHERE id = $1`, [req.params.id]);
+      if (!rows.length) {
+        return res.status(404).json({ success: false, message: 'Team or class not found' });
+      }
+      const password = await getClassSignInPassword(req.params.id);
+      res.json({ success: true, password });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/admin/classes/:id/sign-in-password', requireAdmin, requireDb, async (req, res) => {
+    try {
+      const result = await setClassSignInPassword(req.params.id, req.body && req.body.password);
+      if (!result.class) {
+        return res.status(404).json({ success: false, message: 'Team or class not found' });
+      }
+      res.json({ success: true, class: result.class, signInPassword: result.plainPassword });
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
     }
   });
 

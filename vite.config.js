@@ -41,6 +41,7 @@ export default defineConfig({
         adminLegal: resolve(__dirname, 'admin-legal.html'),
         terms: resolve(__dirname, 'terms.html'),
         privacyPolicy: resolve(__dirname, 'privacy-policy.html'),
+        aboutWebxride: resolve(__dirname, 'about-webxride.html'),
         styleEditor: resolve(__dirname, 'style-editor.html'),
       },
     },

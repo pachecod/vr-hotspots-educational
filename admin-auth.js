@@ -79,9 +79,13 @@ function clearSessionCookie(res) {
   res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
 }
 
-function requireAdmin(req, res, next) {
+function getAdminSession(req) {
   const cookies = parseCookies(req);
-  const session = verifySession(cookies[COOKIE_NAME]);
+  return verifySession(cookies[COOKIE_NAME]);
+}
+
+function requireAdmin(req, res, next) {
+  const session = getAdminSession(req);
   if (!session) {
     return res.status(401).json({ success: false, message: 'Admin authentication required' });
   }
@@ -112,6 +116,7 @@ function handleAdminSessionStatus(req, res) {
 
 module.exports = {
   requireAdmin,
+  getAdminSession,
   loginRateLimiter,
   handleAdminLogin,
   handleAdminLogout,

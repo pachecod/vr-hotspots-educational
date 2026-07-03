@@ -383,7 +383,7 @@ Special thanks to Syracuse University graduate [Sagar Gada](https://github.com/s
 
 This material is based upon work supported by the National Science Foundation under Award No. (NSF award number). Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation.
 
-Special shoutout of thanks to Syracuse University School of Education Professor Silvie Huang (PI); and co-PIs Professor Sharon Dotger, of the School of Education; Professor Brice Nordquist of the College of Arts and Sciences; Professors Nicholas Bowman and Daniel Pacheco of the S.I. Newhouse School of Public Communications; and Professors Matthew Potteiger and Stewart Diemontof the SUNY College of Environmental Science and Forestry. Finally, thanks to all participants in that project, especially other faculty, students, community volunteers, and especially the youth who used the early tools and provided feedback.
+Special shoutout of thanks to Syracuse University School of Education Professor Silvie Huang (PI); and co-PIs Professor Sharon Dotger, of the School of Education; Professor Brice Nordquist of the College of Arts and Sciences; Professors Nicholas Bowman and Daniel Pacheco of the S.I. Newhouse School of Public Communications; and Professors Matthew Potteiger and Stewart Diemont of the SUNY College of Environmental Science and Forestry. Finally, thanks to all participants in that project, especially other faculty, students, community volunteers, and especially the youth who used the early tools and provided feedback.
 
 ## 📜 License
 

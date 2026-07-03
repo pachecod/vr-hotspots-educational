@@ -61,6 +61,28 @@ function hideSceneLoadingOverlay() {
   }
 }
 
+const DEFAULT_WELCOME_SCREEN_HTML = `<h2>Welcome to the WebXRIDE<br/>Immersive Storytelling Tool</h2>
+<p>Create 360° tours that work on desktop and mobile browsers and Quest headsets, along with traditional web pages that highlight your immersive content. You can also make storytelling worlds users can move through using WASD keys or thumbs (on mobile).</p>
+<p>Choose how you'd like to get started.</p>`;
+
+let welcomeSystemTextCache = null;
+
+async function fetchWelcomeSystemText() {
+  if (welcomeSystemTextCache) return welcomeSystemTextCache;
+  try {
+    const res = await fetch('/api/system-text/welcome-screen');
+    const data = await res.json();
+    if (data.success && data.text?.content_html) {
+      welcomeSystemTextCache = data.text.content_html;
+      return welcomeSystemTextCache;
+    }
+  } catch (_) {
+    /* use default */
+  }
+  welcomeSystemTextCache = DEFAULT_WELCOME_SCREEN_HTML;
+  return welcomeSystemTextCache;
+}
+
 function welcomeGithubFooterHtml() {
   return `<p class="welcome-github-footer">
     Available for free for education use under the MIT License.
@@ -227,7 +249,7 @@ function bindStudentEditorLogout() {
   });
 }
 
-function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
+async function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -238,17 +260,12 @@ function renderIntegratedAuthStep(containerId, onAuthenticated, options = {}) {
 
   const { inner } = ensureIntegratedWelcomeShell(container);
   const showGuest = options.showGuest !== false;
+  const welcomeHtml = await fetchWelcomeSystemText();
 
   inner.innerHTML = `
     <div class="integrated-welcome-layout">
       <div class="integrated-welcome-auth">
-        <h2 style="margin: 0 0 12px; font-size: 28px; font-weight: bold;">Welcome to the WebXR<i>IDE</i><br/>Immersive Storytelling Tool</h2>
-        <p style="color: #f0f0f0; margin: 0 0 28px; font-size: 16px; line-height: 1.6;">
-          Create 360° tours that work on desktop and mobile browsers and Quest headsets, along with traditional web pages that highlight your immersive content. You can also make storytelling worlds users can move through using WASD keys or thumbs (on mobile).</p>
-          
-          <p style="color: #f0f0f0; margin: 0 0 28px; font-size: 16px; line-height: 1.6;">
-          Choose how you'd like to get started.
-        </p>
+        <div class="welcome-system-text">${welcomeHtml}</div>
         ${
           showGuest
             ? `

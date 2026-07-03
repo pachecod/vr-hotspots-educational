@@ -592,6 +592,66 @@ function mergeAImageMaterial(aImgEl, patch) {
   );
 }
 
+function normalizeImageFadeDurationMs(value, fallbackMs = 5000) {
+  const n = Number(value);
+  if (!isFinite(n) || n <= 0) return fallbackMs;
+  return Math.min(60000, Math.max(500, Math.round(n)));
+}
+
+function getImageHotspotMaxOpacity(imgEl) {
+  try {
+    const mat = imgEl && imgEl.getAttribute && imgEl.getAttribute('material');
+    if (mat && typeof mat === 'object' && typeof mat.opacity === 'number' && isFinite(mat.opacity)) {
+      return Math.min(1, Math.max(0, mat.opacity));
+    }
+    const editor = window.hotspotEditor;
+    const istyle = editor && editor.customStyles && editor.customStyles.image;
+    if (istyle && typeof istyle.opacity === 'number' && isFinite(istyle.opacity)) {
+      return Math.min(1, Math.max(0, istyle.opacity));
+    }
+    if (typeof CUSTOM_STYLES !== 'undefined' && CUSTOM_STYLES.image && typeof CUSTOM_STYLES.image.opacity === 'number') {
+      return Math.min(1, Math.max(0, CUSTOM_STYLES.image.opacity));
+    }
+  } catch (_) {}
+  return 1;
+}
+
+function applyImageHotspotFadePulse(imgEl, options = {}) {
+  if (!imgEl) return;
+  const enabled = !!options.enabled;
+  const durationMs = normalizeImageFadeDurationMs(options.durationMs, 5000);
+  const maxOpacity =
+    typeof options.maxOpacity === 'number' && isFinite(options.maxOpacity)
+      ? Math.min(1, Math.max(0, options.maxOpacity))
+      : getImageHotspotMaxOpacity(imgEl);
+
+  imgEl.removeAttribute('animation__imagefade');
+
+  if (!enabled) {
+    imgEl.setAttribute('material', {
+      opacity: maxOpacity,
+      transparent: maxOpacity < 1,
+      side: 'double',
+    });
+    return;
+  }
+
+  imgEl.setAttribute('material', {
+    opacity: 0,
+    transparent: true,
+    side: 'double',
+  });
+  imgEl.setAttribute('animation__imagefade', {
+    property: 'material.opacity',
+    from: 0,
+    to: maxOpacity,
+    dur: durationMs,
+    dir: 'alternate',
+    loop: true,
+    easing: 'easeInOutSine',
+  });
+}
+
 // A-Frame's <a-image> texture system silently fails to bind `blob:` URLs
 // (no `materialtextureloaded` event fires, material.map stays null), while it
 // binds `data:` and `http(s):` URLs fine. Flat image hotspots loaded from
@@ -1658,6 +1718,8 @@ class HotspotEditor {
     if (vidFile) vidFile.style.display = isVideo ? 'block' : 'none';
     if (vidUrl) vidUrl.style.display = isVideo ? 'block' : 'none';
     if (vidOpts) vidOpts.style.display = isVideo ? 'block' : 'none';
+    const fadeGrp = document.getElementById('image-fade-group');
+    if (fadeGrp) fadeGrp.style.display = isVideo ? 'none' : 'block';
   }
 
   registerHotspotVideoAsset(assetId, videoSrc, options) {
@@ -4400,9 +4462,11 @@ class HotspotEditor {
     const imgFileGrpReset = document.getElementById('image-file-group');
     const imgUrlGrpReset = document.getElementById('image-url-group');
     const imgSizeGrpReset = document.getElementById('image-size-group');
+    const imgFadeGrpReset = document.getElementById('image-fade-group');
     if (imgFileGrpReset) imgFileGrpReset.style.display = 'none';
     if (imgUrlGrpReset) imgUrlGrpReset.style.display = 'none';
     if (imgSizeGrpReset) imgSizeGrpReset.style.display = 'none';
+    if (imgFadeGrpReset) imgFadeGrpReset.style.display = 'none';
     const imgMediaKindReset = document.getElementById('image-media-kind-group');
     const vidFileGrpReset = document.getElementById('video-file-group');
     const vidUrlGrpReset = document.getElementById('video-url-group');
@@ -4601,6 +4665,14 @@ class HotspotEditor {
         if (typeof hotspotData.image === 'string') {
           this.applyCommonAssetFromDataset(hotspotData, imgUrlEl);
         }
+        hotspotData.imageFadePulse =
+          document.getElementById('hotspot-image-fade-pulse')?.checked === true;
+        const fadeSec = parseFloat(
+          document.getElementById('hotspot-image-fade-duration')?.value || '5'
+        );
+        hotspotData.imageFadeDuration = normalizeImageFadeDurationMs(
+          (isFinite(fadeSec) ? fadeSec : 5) * 1000
+        );
       }
     }
     if (this.selectedHotspotType === 'model') {
@@ -5351,6 +5423,11 @@ class HotspotEditor {
           : 0;
       spotConfig +=
         `;imageSrc:${encodedImgSrc};imageScale:${scale}` + (ar ? `;imageAspectRatio:${ar}` : '');
+      if (data.imageFadePulse) {
+        spotConfig += `;imageFadePulse:true;imageFadeDuration:${normalizeImageFadeDurationMs(
+          data.imageFadeDuration
+        )}`;
+      }
       try {
         console.log(
           `[ImageHotspot][Create] id=${data.id} scale=${scale} ar=${ar} src=${encodedImgSrc?.slice(
@@ -7302,6 +7379,21 @@ class HotspotEditor {
             </label>
           </div>
           <div id="edit-photo-section" style="display:${hotspot.mediaKind === 'video' ? 'none' : 'block'};">
+            <div id="edit-image-fade-group" style="margin-bottom:12px;">
+              <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:#ccc; cursor:pointer;">
+                <input id="edit-image-fade-pulse" type="checkbox" ${
+                  hotspot.imageFadePulse ? 'checked' : ''
+                } style="width:16px; height:16px; cursor:pointer;" />
+                <span>Fade photo in and out</span>
+              </label>
+              <label style="display:block; font-size:12px; color:#ccc; margin-top:10px;">
+                Fade duration (seconds)
+                <input id="edit-image-fade-duration" type="number" min="0.5" max="60" step="0.5" value="${
+                  normalizeImageFadeDurationMs(hotspot.imageFadeDuration || 5000) / 1000
+                }" style="width:100%; padding:8px; border-radius:6px; border:1px solid #555; background:#1f1f1f; color:#fff; margin-top:4px;" />
+              </label>
+              <div style="font-size:10px; color:#777; margin-top:4px;">Loops between hidden and fully visible, like a historical photo overlay.</div>
+            </div>
             <div id="edit-image-current" style="margin:8px 0 14px; padding:8px; background:#1d1d1d; border:1px solid #444; border-radius:6px;">
               <div style="font-size:11px; color:#999; margin-bottom:6px;">Current Image</div>
               <div style="display:flex; align-items:center; gap:10px;">
@@ -7831,6 +7923,10 @@ class HotspotEditor {
       const prevVideoRef = isImageEdit ? hotspot.video : null;
       const prevMediaKind = isImageEdit ? hotspot.mediaKind || 'photo' : 'photo';
       const prevScale = isImageEdit ? hotspot.imageScale : null;
+      const prevImageFadePulse = isImageEdit ? !!hotspot.imageFadePulse : false;
+      const prevImageFadeDuration = isImageEdit
+        ? normalizeImageFadeDurationMs(hotspot.imageFadeDuration || 5000)
+        : 5000;
       // Collect values
       const newText = isTextType
         ? (dialog.querySelector('#edit-text')?.value || '').trim()
@@ -7876,6 +7972,8 @@ class HotspotEditor {
       let newMediaKind = hotspot.mediaKind || 'photo';
       let newVideoLoop = hotspot.videoLoop !== false;
       let newVideoMuted = hotspot.videoMuted !== false;
+      let newImageFadePulse = !!hotspot.imageFadePulse;
+      let newImageFadeDuration = normalizeImageFadeDurationMs(hotspot.imageFadeDuration || 5000);
       if (isImageType) {
         const sVal = parseFloat(dialog.querySelector('#edit-image-scale')?.value || '');
         newImageScale = isNaN(sVal) ? hotspot.imageScale || 1 : Math.min(10, Math.max(0.1, sVal));
@@ -7897,6 +7995,11 @@ class HotspotEditor {
           const url = u ? u.value.trim() : '';
           if (url) newImage = url;
           else if (file) newImage = file;
+          newImageFadePulse = dialog.querySelector('#edit-image-fade-pulse')?.checked === true;
+          const fadeSec = parseFloat(dialog.querySelector('#edit-image-fade-duration')?.value || '5');
+          newImageFadeDuration = normalizeImageFadeDurationMs(
+            (isFinite(fadeSec) ? fadeSec : 5) * 1000
+          );
         }
       }
 
@@ -7996,6 +8099,8 @@ class HotspotEditor {
         hotspot.imageScale = newImageScale;
         hotspot.videoLoop = newVideoLoop;
         hotspot.videoMuted = newVideoMuted;
+        hotspot.imageFadePulse = newMediaKind === 'video' ? false : newImageFadePulse;
+        hotspot.imageFadeDuration = newImageFadeDuration;
         delete hotspot.imageWidth;
         delete hotspot.imageHeight;
 
@@ -8149,6 +8254,8 @@ class HotspotEditor {
           sceneHotspot.videoLoop = hotspot.videoLoop;
           sceneHotspot.videoMuted = hotspot.videoMuted;
           sceneHotspot.imageScale = hotspot.imageScale;
+          sceneHotspot.imageFadePulse = hotspot.imageFadePulse;
+          sceneHotspot.imageFadeDuration = hotspot.imageFadeDuration;
           if (hotspot.mediaKind === 'video') {
             if (!(newVideo instanceof File)) {
               sceneHotspot.video = hotspot.video;
@@ -8186,11 +8293,17 @@ class HotspotEditor {
         const imageChanged = hotspot.image !== prevImageRef;
         const videoChanged = hotspot.video !== prevVideoRef;
         const scaleChanged = hotspot.imageScale !== prevScale;
+        const fadeChanged =
+          !!hotspot.imageFadePulse !== prevImageFadePulse ||
+          normalizeImageFadeDurationMs(hotspot.imageFadeDuration || 5000) !== prevImageFadeDuration;
         const mediaChanged = mediaKindChanged || imageChanged || videoChanged;
-        if (!mediaChanged && scaleChanged) {
+        if (!mediaChanged && scaleChanged && !fadeChanged) {
           this._applyImageScaleInPlace(hotspot);
           needsRebuild = false;
-        } else if (!mediaChanged && !scaleChanged) {
+        } else if (!mediaChanged && !scaleChanged && fadeChanged) {
+          this._applyImageFadeInPlace(hotspot);
+          needsRebuild = false;
+        } else if (!mediaChanged && !scaleChanged && !fadeChanged) {
           needsRebuild = false;
         }
       }
@@ -8334,6 +8447,22 @@ class HotspotEditor {
       if (el._repositionEditButtons) setTimeout(() => el._repositionEditButtons(), 20);
     } catch (e) {
       console.warn('[ImageHotspot] apply scale in place failed, falling back to rebuild', e);
+      this._refreshHotspotEntity(hotspot);
+    }
+  }
+
+  _applyImageFadeInPlace(hotspot) {
+    try {
+      const el = document.getElementById(`hotspot-${hotspot.id}`);
+      if (!el) return;
+      const img = el.querySelector('.static-image-hotspot');
+      if (!img) return;
+      applyImageHotspotFadePulse(img, {
+        enabled: !!hotspot.imageFadePulse,
+        durationMs: hotspot.imageFadeDuration,
+      });
+    } catch (e) {
+      console.warn('[ImageHotspot] apply fade in place failed, falling back to rebuild', e);
       this._refreshHotspotEntity(hotspot);
     }
   }
@@ -12684,6 +12813,48 @@ function setAImageHotspotSrc(imgEl, src) {
     return new Promise(function(resolve, reject){ var fr=new FileReader(); fr.onload=function(){ resolve(fr.result); }; fr.onerror=reject; fr.readAsDataURL(blob); });
   }).then(function(dataUrl){ if (document.body.contains(imgEl)) imgEl.setAttribute('src', dataUrl); }).catch(function(){ imgEl.setAttribute('src', src); });
 }
+function normalizeImageFadeDurationMs(value, fallbackMs) {
+  fallbackMs = fallbackMs || 5000;
+  var n = Number(value);
+  if (!isFinite(n) || n <= 0) return fallbackMs;
+  return Math.min(60000, Math.max(500, Math.round(n)));
+}
+function getImageHotspotMaxOpacity(imgEl) {
+  try {
+    var mat = imgEl && imgEl.getAttribute && imgEl.getAttribute('material');
+    if (mat && typeof mat === 'object' && typeof mat.opacity === 'number' && isFinite(mat.opacity)) {
+      return Math.min(1, Math.max(0, mat.opacity));
+    }
+    if (typeof CUSTOM_STYLES !== 'undefined' && CUSTOM_STYLES.image && typeof CUSTOM_STYLES.image.opacity === 'number') {
+      return Math.min(1, Math.max(0, CUSTOM_STYLES.image.opacity));
+    }
+  } catch (_) {}
+  return 1;
+}
+function applyImageHotspotFadePulse(imgEl, options) {
+  options = options || {};
+  if (!imgEl) return;
+  var enabled = !!options.enabled;
+  var durationMs = normalizeImageFadeDurationMs(options.durationMs, 5000);
+  var maxOpacity = (typeof options.maxOpacity === 'number' && isFinite(options.maxOpacity))
+    ? Math.min(1, Math.max(0, options.maxOpacity))
+    : getImageHotspotMaxOpacity(imgEl);
+  imgEl.removeAttribute('animation__imagefade');
+  if (!enabled) {
+    imgEl.setAttribute('material', { opacity: maxOpacity, transparent: maxOpacity < 1, side: 'double' });
+    return;
+  }
+  imgEl.setAttribute('material', { opacity: 0, transparent: true, side: 'double' });
+  imgEl.setAttribute('animation__imagefade', {
+    property: 'material.opacity',
+    from: 0,
+    to: maxOpacity,
+    dur: durationMs,
+    dir: 'alternate',
+    loop: true,
+    easing: 'easeInOutSine'
+  });
+}
 function applyRoundedMaskToAImage(aImgEl, styleCfg) {
   return new Promise(resolve => {
     try {
@@ -13027,6 +13198,8 @@ AFRAME.registerComponent("hotspot", {
     imageSrc: { type: "string", default: "" },
     imageScale: { type: "number", default: 5 },
     imageAspectRatio: { type: "number", default: 0 },
+    imageFadePulse: { type: "boolean", default: false },
+    imageFadeDuration: { type: "number", default: 5000 },
     mediaKind: { type: "string", default: "photo" },
     videoSrc: { type: "string", default: "" },
     videoLoop: { type: "boolean", default: true },
@@ -13249,6 +13422,14 @@ AFRAME.registerComponent("hotspot", {
           }
         } catch(e) { /* ignore */ }
       });
+      if (data.imageFadePulse) {
+        var syncImageFade = function() {
+          applyImageHotspotFadePulse(img, { enabled: true, durationMs: data.imageFadeDuration });
+        };
+        syncImageFade();
+        img.addEventListener('load', syncImageFade, { once: true });
+        img.addEventListener('materialtextureloaded', syncImageFade, { once: true });
+      }
       this.el.appendChild(img);
     }
 
@@ -14591,6 +14772,9 @@ class HotspotProject {
           let src = (typeof hotspot.image === 'string' && !hotspot.image.startsWith('FILE:')) ? hotspot.image : '';
           if (src && src.includes(';')) src = encodeURIComponent(src);
           config += ';imageSrc:' + src + ';imageScale:' + scale;
+          if (hotspot.imageFadePulse) {
+            config += ';imageFadePulse:true;imageFadeDuration:' + normalizeImageFadeDurationMs(hotspot.imageFadeDuration);
+          }
         }
         if (ar && ar > 0) config += ';imageAspectRatio:' + ar;
       }
@@ -18816,6 +19000,8 @@ AFRAME.registerComponent('editor-spot', {
     imageSrc: { type: 'string', default: '' },
     imageScale: { type: 'number', default: 5 },
     imageAspectRatio: { type: 'number', default: 0 },
+    imageFadePulse: { type: 'boolean', default: false },
+    imageFadeDuration: { type: 'number', default: 5000 },
     mediaKind: { type: 'string', default: 'photo' },
     videoSrc: { type: 'string', default: '' },
     videoLoop: { type: 'boolean', default: true },
@@ -19061,6 +19247,18 @@ AFRAME.registerComponent('editor-spot', {
           onTex();
         } catch (_) {}
       }, 800);
+      const syncImageFade = () => {
+        if (!data.imageFadePulse) return;
+        applyImageHotspotFadePulse(img, {
+          enabled: true,
+          durationMs: data.imageFadeDuration,
+        });
+      };
+      if (data.imageFadePulse) {
+        syncImageFade();
+        img.addEventListener('load', syncImageFade, { once: true });
+        img.addEventListener('materialtextureloaded', syncImageFade, { once: true });
+      }
       el.appendChild(img);
       try {
         const ed = window.hotspotEditor;

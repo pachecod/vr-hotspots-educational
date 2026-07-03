@@ -38,6 +38,7 @@ const { registerTemplateRoutes } = require('./routes/template-routes');
 const { registerPlaygroundRoutes } = require('./routes/playground-routes');
 const { registerWelcomeNewsRoutes } = require('./routes/welcome-news-routes');
 const { registerLegalRoutes } = require('./routes/legal-routes');
+const { registerSystemTextRoutes } = require('./routes/system-text-routes');
 const { runMigrations, importSubmissionsFromJson } = require('./db/migrate');
 const { isDbEnabled } = require('./services/db-service');
 const {
@@ -361,6 +362,7 @@ registerTemplateRoutes(app);
 registerPlaygroundRoutes(app);
 registerWelcomeNewsRoutes(app);
 registerLegalRoutes(app);
+registerSystemTextRoutes(app);
 
 if (process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_BUCKET_NAME) {
   b2Service

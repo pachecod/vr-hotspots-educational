@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>System Text — WebXRIDE Admin</title>
+    <link rel="stylesheet" href="admin-nav.css" />
+    <link rel="stylesheet" href="welcome-playground.css" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        color: #333;
+        max-width: 1100px;
+      }
+      h1 { margin-bottom: 4px; }
+      .hint { color: #666; font-size: 14px; margin-bottom: 16px; }
+      .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+      .tab-btn {
+        padding: 8px 14px;
+        border: 1px solid #dee2e6;
+        background: #fff;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .tab-btn.active {
+        background: #007bff;
+        color: #fff;
+        border-color: #007bff;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 900px) {
+        .layout { grid-template-columns: 1fr; }
+      }
+      .panel {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background: #f8f9fa;
+        padding: 16px;
+      }
+      .panel h2 { margin: 0 0 12px; font-size: 1.05rem; }
+      .form-row { margin-bottom: 12px; }
+      .form-row label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 13px; }
+      .form-row textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 13px;
+        min-height: 280px;
+      }
+      .btn {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .btn-primary { background: #28a745; color: #fff; }
+      .btn-secondary { background: #6c757d; color: #fff; margin-left: 8px; }
+      .actions { margin-top: 12px; }
+      .status { font-size: 13px; margin-top: 8px; }
+      .status.ok { color: #28a745; }
+      .status.err { color: #dc3545; }
+      .preview-shell {
+        background: #000;
+        padding: 20px 16px;
+        border-radius: 8px;
+      }
+      .preview-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 28px 32px;
+        color: #fff;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      }
+      .preview-card .welcome-system-text {
+        text-align: center;
+      }
+      #toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #28a745;
+        color: #fff;
+        padding: 12px 18px;
+        border-radius: 6px;
+        display: none;
+        z-index: 10001;
+      }
+    </style>
+    <script src="admin-auth-ui.js"></script>
+    <script src="admin-nav.js"></script>
+  </head>
+  <body>
+    <div id="app-root">
+      <div id="login-root"></div>
+      <div id="main-content" style="display: none">
+        <nav id="admin-nav" data-active="system-text"></nav>
+
+        <h1>System Text</h1>
+        <p class="hint">
+          Edit user-facing copy for this instance. HTML is allowed; use <code>&lt;h2&gt;</code> for headings and
+          <code>&lt;p&gt;</code> for paragraphs.
+        </p>
+
+        <div class="tabs">
+          <button type="button" class="tab-btn active" data-key="welcome-screen">Welcome Screen</button>
+        </div>
+
+        <div class="layout">
+          <div class="panel">
+            <h2 id="system-text-panel-title">Welcome screen</h2>
+            <div class="form-row">
+              <label for="system-text-content">Content HTML</label>
+              <textarea id="system-text-content" spellcheck="true"></textarea>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn btn-primary" id="save-system-text-btn">Save</button>
+              <button type="button" class="btn btn-secondary" id="preview-system-text-btn">Refresh preview</button>
+            </div>
+            <div id="system-text-status" class="status"></div>
+          </div>
+
+          <div class="panel">
+            <h2>Preview</h2>
+            <div class="preview-shell">
+              <div class="preview-card">
+                <div id="system-text-preview" class="welcome-system-text"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="toast"></div>
+    <script src="admin-system-text.js"></script>
+  </body>
+</html>

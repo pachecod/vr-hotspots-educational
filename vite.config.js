@@ -39,6 +39,7 @@ export default defineConfig({
         adminTemplates: resolve(__dirname, 'admin-templates.html'),
         adminTemplateEditor: resolve(__dirname, 'admin-template-editor.html'),
         adminLegal: resolve(__dirname, 'admin-legal.html'),
+        adminSystemText: resolve(__dirname, 'admin-system-text.html'),
         terms: resolve(__dirname, 'terms.html'),
         privacyPolicy: resolve(__dirname, 'privacy-policy.html'),
         aboutWebxride: resolve(__dirname, 'about-webxride.html'),

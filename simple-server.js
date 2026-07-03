@@ -16,6 +16,7 @@ const archiver = require('archiver');
 const AdmZip = require('adm-zip');
 const b2Service = require('./services/b2-service');
 const { resolveHostedProjectUrls } = require('./services/hosted-project-urls');
+const { createAnalyticsHtmlMiddleware } = require('./lib/analytics-html-inject');
 const os = require('os');
 const { requireAdmin } = require('./admin-auth');
 const { registerCommonAssetRoutes } = require('./routes/common-assets-routes');
@@ -321,6 +322,7 @@ app.use(
   requireAdmin,
   express.static(path.join(__dirname, 'starter-templates'), staticNoStaleOptions)
 );
+app.use(createAnalyticsHtmlMiddleware());
 app.use(express.static('.', staticNoStaleOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(rejectLocalTestUserWrites);

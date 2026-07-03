@@ -35,6 +35,38 @@ function setSelectedRideyVersion(version) {
   if (input) input.checked = true;
 }
 
+async function saveAnalyticsSettings({ enabled } = {}) {
+  const checkbox = document.getElementById('analytics-enabled');
+  const body = {
+    enabled: enabled !== undefined ? enabled : checkbox.checked,
+  };
+  const res = await adminFetch('/admin/editor-settings/analytics', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message);
+  checkbox.checked = !!data.analyticsEnabled;
+  updateAnalyticsStatus(data.analyticsEnabled, data.analyticsConfigured);
+  showToast('Analytics settings saved');
+}
+
+function updateAnalyticsStatus(enabled, configured) {
+  document.getElementById('analytics-warn').style.display = configured ? 'none' : 'block';
+  const checkbox = document.getElementById('analytics-enabled');
+  checkbox.disabled = !configured;
+  let msg = '';
+  if (!configured) {
+    msg = 'Analytics unavailable until a measurement ID is set in the server environment.';
+  } else if (enabled) {
+    msg = 'Google Analytics enabled.';
+  } else {
+    msg = 'Google Analytics disabled.';
+  }
+  setStatus('analytics-status', msg);
+}
+
 async function saveRideySettings({ enabled, version } = {}) {
   const checkbox = document.getElementById('ridey-enabled');
   const body = {
@@ -68,6 +100,9 @@ async function loadSettings() {
   setSelectedRideyVersion(data.rideyVersion);
   updateRideyVersionRowVisibility();
   document.getElementById('ridey-warn').style.display = data.hasApiKey ? 'none' : 'block';
+
+  document.getElementById('analytics-enabled').checked = !!data.analyticsEnabled;
+  updateAnalyticsStatus(!!data.analyticsEnabled, !!data.analyticsConfigured);
 
   blockedExtensions = data.blockedExtensions || [];
   renderExtChips();
@@ -146,6 +181,15 @@ document.getElementById('ridey-enabled').addEventListener('change', async (e) =>
     setStatus('ridey-status', err.message, true);
     e.target.checked = !e.target.checked;
     updateRideyVersionRowVisibility();
+  }
+});
+
+document.getElementById('analytics-enabled').addEventListener('change', async (e) => {
+  try {
+    await saveAnalyticsSettings({ enabled: e.target.checked });
+  } catch (err) {
+    setStatus('analytics-status', err.message, true);
+    e.target.checked = !e.target.checked;
   }
 });
 

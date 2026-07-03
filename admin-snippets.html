@@ -121,7 +121,7 @@
 
         <h1>Editor Settings</h1>
         <p class="hint">
-          Manage code snippets, Ridey AI, and blocked file extensions for the flat web page editor.
+          Manage code snippets, Ridey AI, Google Analytics, and blocked file extensions for the flat web page editor.
         </p>
 
         <div class="section" id="ridey-section">
@@ -151,6 +151,22 @@
             </div>
           </div>
           <div id="ridey-status" class="status"></div>
+        </div>
+
+        <div class="section" id="analytics-section">
+          <h2>Google Analytics</h2>
+          <p class="hint">
+            Track aggregated usage on the editor, admin, legal pages, and hosted student projects.
+            Set <code>GOOGLE_ANALYTICS_MEASUREMENT_ID</code> (e.g. <code>G-XXXXXXXXXX</code>) in the server environment — not in git.
+          </p>
+          <div id="analytics-warn" class="warn" style="display: none">
+            No measurement ID is configured. Set <code>GOOGLE_ANALYTICS_MEASUREMENT_ID</code> in Render or your local <code>.env</code> file.
+          </div>
+          <div class="toggle-row">
+            <input type="checkbox" id="analytics-enabled" />
+            <label for="analytics-enabled">Enable Google Analytics</label>
+          </div>
+          <div id="analytics-status" class="status"></div>
         </div>
 
         <div class="section" id="blocked-section">

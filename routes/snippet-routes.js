@@ -2,6 +2,11 @@ const { requireAdmin } = require('../admin-auth');
 const { isDbEnabled } = require('../services/db-service');
 const snippetsDb = require('../lib/snippets');
 const { getRideyEnabled, setRideyEnabled, getRideyVersion, setRideyVersion, getBlockedExtensions, setBlockedExtensions } = require('../lib/app-settings');
+const {
+  getAnalyticsEnabledFlag,
+  setAnalyticsEnabled,
+  getEnvMeasurementId,
+} = require('../lib/analytics-config');
 
 function registerSnippetRoutes(app) {
   app.get('/api/snippets', async (_req, res) => {
@@ -74,12 +79,16 @@ function registerSnippetRoutes(app) {
       const rideyVersion = await getRideyVersion();
       const blockedExtensions = await getBlockedExtensions();
       const hasApiKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim());
+      const analyticsEnabled = await getAnalyticsEnabledFlag();
+      const analyticsConfigured = !!getEnvMeasurementId();
       res.json({
         success: true,
         rideyEnabled,
         rideyVersion,
         blockedExtensions,
         hasApiKey,
+        analyticsEnabled,
+        analyticsConfigured,
         dbEnabled: isDbEnabled(),
       });
     } catch (err) {
@@ -113,6 +122,22 @@ function registerSnippetRoutes(app) {
       }
       await setBlockedExtensions(req.body?.extensions || []);
       res.json({ success: true, blockedExtensions: await getBlockedExtensions() });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.put('/admin/editor-settings/analytics', requireAdmin, async (req, res) => {
+    try {
+      if (!isDbEnabled()) {
+        return res.status(503).json({ success: false, message: 'Database not configured' });
+      }
+      await setAnalyticsEnabled(!!req.body?.enabled);
+      res.json({
+        success: true,
+        analyticsEnabled: await getAnalyticsEnabledFlag(),
+        analyticsConfigured: !!getEnvMeasurementId(),
+      });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }

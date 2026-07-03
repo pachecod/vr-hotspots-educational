@@ -11,6 +11,7 @@ const {
 } = require('../lib/common-assets');
 const { assertCanUploadAsset } = require('../services/usage-quota');
 const { getVideoPipelineConfig } = require('../lib/video-config');
+const { getAnalyticsConfig } = require('../lib/analytics-config');
 const { prepareVideoForStorage, cleanupTempFiles, VIDEO_CATEGORY } = require('../lib/video-pipeline');
 const { buildStudentAssetPath } = require('./student-assets-routes');
 const { isTranscodeEnabledFor } = require('../lib/video-config');
@@ -112,8 +113,9 @@ async function runEditorLocalVideoCompressionJob(jobId, { tempPath, originalName
 }
 
 function registerSceneVideoRoutes(app, upload) {
-  app.get('/api/app-config', (req, res) => {
+  app.get('/api/app-config', async (req, res) => {
     const videoPipeline = getVideoPipelineConfig();
+    const analytics = await getAnalyticsConfig(req);
     res.json({
       success: true,
       videoPipeline: {
@@ -121,6 +123,10 @@ function registerSceneVideoRoutes(app, upload) {
         videoExportUrlMode: videoPipeline.exportUrlMode,
         transcodeEnabled: videoPipeline.transcodeEnabled,
         editorLocalVideoCompression: canCompressEditorLocalVideo(),
+      },
+      analytics: {
+        enabled: analytics.enabled,
+        measurementId: analytics.measurementId,
       },
     });
   });

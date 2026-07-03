@@ -16,6 +16,57 @@ AFRAME.registerComponent('face-camera', {
   },
 });
 
+// Pulse image hotspot billboard opacity (survives texture load / style material resets)
+AFRAME.registerComponent('image-fade-pulse', {
+  schema: {
+    enabled: { type: 'boolean', default: false },
+    duration: { type: 'number', default: 5000 },
+    maxOpacity: { type: 'number', default: 1 },
+  },
+  init() {
+    this._onObject3dSet = () => this._ensureTransparentMaterial();
+    this.el.addEventListener('object3dset', this._onObject3dSet);
+    this.el.addEventListener('materialtextureloaded', this._onObject3dSet);
+    this._ensureTransparentMaterial();
+  },
+  remove() {
+    this.el.removeEventListener('object3dset', this._onObject3dSet);
+    this.el.removeEventListener('materialtextureloaded', this._onObject3dSet);
+    try {
+      const mesh = this.el.getObject3D('mesh');
+      if (mesh && mesh.material) {
+        const maxO = Math.min(1, Math.max(0, Number(this.data.maxOpacity) || 1));
+        mesh.material.opacity = maxO;
+        mesh.material.transparent = maxO < 1;
+        mesh.material.needsUpdate = true;
+      }
+    } catch (_) {}
+  },
+  _ensureTransparentMaterial() {
+    try {
+      const mesh = this.el.getObject3D('mesh');
+      if (mesh && mesh.material) {
+        mesh.material.transparent = true;
+        mesh.material.needsUpdate = true;
+      }
+    } catch (_) {}
+  },
+  tick(time) {
+    if (!this.data.enabled) return;
+    const mesh = this.el.getObject3D('mesh');
+    if (!mesh || !mesh.material) return;
+    const mat = mesh.material;
+    const dur = Math.max(500, Number(this.data.duration) || 5000);
+    const maxO = Math.min(1, Math.max(0, Number(this.data.maxOpacity)));
+    const cycle = dur * 2;
+    const t = time % cycle;
+    const eased = 0.5 - 0.5 * Math.cos(Math.PI * (t / dur));
+    mat.transparent = true;
+    mat.opacity = maxO * eased;
+    mat.needsUpdate = true;
+  },
+});
+
 let _flatVideoScene360PauseCount = 0;
 
 function prepareFlatVideoHotspotElement(video, muted) {
@@ -600,6 +651,15 @@ function normalizeImageFadeDurationMs(value, fallbackMs = 5000) {
 
 function getImageHotspotMaxOpacity(imgEl) {
   try {
+    const fadeComp = imgEl && imgEl.components && imgEl.components['image-fade-pulse'];
+    if (
+      fadeComp &&
+      fadeComp.data &&
+      typeof fadeComp.data.maxOpacity === 'number' &&
+      isFinite(fadeComp.data.maxOpacity)
+    ) {
+      return Math.min(1, Math.max(0, fadeComp.data.maxOpacity));
+    }
     const mat = imgEl && imgEl.getAttribute && imgEl.getAttribute('material');
     if (mat && typeof mat === 'object' && typeof mat.opacity === 'number' && isFinite(mat.opacity)) {
       return Math.min(1, Math.max(0, mat.opacity));
@@ -628,7 +688,8 @@ function applyImageHotspotFadePulse(imgEl, options = {}) {
   imgEl.removeAttribute('animation__imagefade');
 
   if (!enabled) {
-    imgEl.setAttribute('material', {
+    imgEl.removeAttribute('image-fade-pulse');
+    mergeAImageMaterial(imgEl, {
       opacity: maxOpacity,
       transparent: maxOpacity < 1,
       side: 'double',
@@ -636,19 +697,27 @@ function applyImageHotspotFadePulse(imgEl, options = {}) {
     return;
   }
 
-  imgEl.setAttribute('material', {
+  mergeAImageMaterial(imgEl, {
     opacity: 0,
     transparent: true,
+    shader: 'flat',
     side: 'double',
   });
-  imgEl.setAttribute('animation__imagefade', {
-    property: 'material.opacity',
-    from: 0,
-    to: maxOpacity,
-    dur: durationMs,
-    dir: 'alternate',
-    loop: true,
-    easing: 'easeInOutSine',
+  imgEl.setAttribute('image-fade-pulse', {
+    enabled: true,
+    duration: durationMs,
+    maxOpacity,
+  });
+}
+
+function scheduleImageHotspotFadePulse(imgEl, options = {}) {
+  if (!imgEl || !options.enabled) return;
+  applyImageHotspotFadePulse(imgEl, options);
+  [50, 200, 600, 1500].forEach((delay) => {
+    setTimeout(() => {
+      if (!document.body.contains(imgEl) || !options.enabled) return;
+      applyImageHotspotFadePulse(imgEl, options);
+    }, delay);
   });
 }
 
@@ -1720,6 +1789,31 @@ class HotspotEditor {
     if (vidOpts) vidOpts.style.display = isVideo ? 'block' : 'none';
     const fadeGrp = document.getElementById('image-fade-group');
     if (fadeGrp) fadeGrp.style.display = isVideo ? 'none' : 'block';
+  }
+
+  ensureImageHotspotTypeSelected({ scrollToFade = false } = {}) {
+    const imageTypeEl = document.querySelector('.hotspot-type[data-type="image"]');
+    const imageRadio = imageTypeEl?.querySelector('input[type="radio"]');
+    if (imageRadio && !imageRadio.checked) {
+      document.querySelectorAll('.hotspot-type').forEach((el) => el.classList.remove('selected'));
+      if (imageTypeEl) imageTypeEl.classList.add('selected');
+      imageRadio.checked = true;
+      this.selectedHotspotType = 'image';
+      this.updateFieldRequirements();
+    } else if (this.selectedHotspotType === 'image') {
+      this.syncImageMediaFieldsVisibility();
+    }
+    const photoRadio = document.getElementById('hotspot-media-kind-photo');
+    if (photoRadio && this.getImageMediaKind() !== 'photo') {
+      photoRadio.checked = true;
+      this.syncImageMediaFieldsVisibility();
+    }
+    if (scrollToFade) {
+      const fadeGrp = document.getElementById('image-fade-group');
+      if (fadeGrp && fadeGrp.style.display !== 'none') {
+        fadeGrp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
   }
 
   registerHotspotVideoAsset(assetId, videoSrc, options) {
@@ -5822,6 +5916,12 @@ class HotspotEditor {
                 setAImageHotspotSrc(imgEnt, url);
                 // mark into data so subsequent saves can strip the blob (storageKey persisted separately)
                 data.image = url;
+                if (data.imageFadePulse) {
+                  scheduleImageHotspotFadePulse(imgEnt, {
+                    enabled: true,
+                    durationMs: data.imageFadeDuration,
+                  });
+                }
                 // If rounded corners are enabled, re-apply mask now that real image is in place
                 try {
                   const istyleNow = this.customStyles && this.customStyles.image;
@@ -8457,10 +8557,15 @@ class HotspotEditor {
       if (!el) return;
       const img = el.querySelector('.static-image-hotspot');
       if (!img) return;
-      applyImageHotspotFadePulse(img, {
+      const fadeOptions = {
         enabled: !!hotspot.imageFadePulse,
         durationMs: hotspot.imageFadeDuration,
-      });
+      };
+      if (hotspot.imageFadePulse) {
+        scheduleImageHotspotFadePulse(img, fadeOptions);
+      } else {
+        applyImageHotspotFadePulse(img, fadeOptions);
+      }
     } catch (e) {
       console.warn('[ImageHotspot] apply fade in place failed, falling back to rebuild', e);
       this._refreshHotspotEntity(hotspot);
@@ -10918,6 +11023,20 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
             }
             delete imgEl.dataset.roundedAppliedRadius;
           }
+
+          const hostIdStr = parent && parent.id ? parent.id : '';
+          const hostId = hostIdStr.startsWith('hotspot-')
+            ? parseInt(hostIdStr.slice(8), 10)
+            : NaN;
+          if (!isNaN(hostId)) {
+            const hs = this.hotspots.find((h) => h && h.id === hostId && h.type === 'image');
+            if (hs && hs.imageFadePulse && hs.mediaKind !== 'video') {
+              scheduleImageHotspotFadePulse(imgEl, {
+                enabled: true,
+                durationMs: hs.imageFadeDuration,
+              });
+            }
+          }
         } catch (e) {
           /* ignore individual failures */
         }
@@ -12821,6 +12940,10 @@ function normalizeImageFadeDurationMs(value, fallbackMs) {
 }
 function getImageHotspotMaxOpacity(imgEl) {
   try {
+    var fadeComp = imgEl && imgEl.components && imgEl.components['image-fade-pulse'];
+    if (fadeComp && fadeComp.data && typeof fadeComp.data.maxOpacity === 'number' && isFinite(fadeComp.data.maxOpacity)) {
+      return Math.min(1, Math.max(0, fadeComp.data.maxOpacity));
+    }
     var mat = imgEl && imgEl.getAttribute && imgEl.getAttribute('material');
     if (mat && typeof mat === 'object' && typeof mat.opacity === 'number' && isFinite(mat.opacity)) {
       return Math.min(1, Math.max(0, mat.opacity));
@@ -12841,18 +12964,26 @@ function applyImageHotspotFadePulse(imgEl, options) {
     : getImageHotspotMaxOpacity(imgEl);
   imgEl.removeAttribute('animation__imagefade');
   if (!enabled) {
-    imgEl.setAttribute('material', { opacity: maxOpacity, transparent: maxOpacity < 1, side: 'double' });
+    imgEl.removeAttribute('image-fade-pulse');
+    mergeAImageMaterial(imgEl, { opacity: maxOpacity, transparent: maxOpacity < 1, side: 'double' });
     return;
   }
-  imgEl.setAttribute('material', { opacity: 0, transparent: true, side: 'double' });
-  imgEl.setAttribute('animation__imagefade', {
-    property: 'material.opacity',
-    from: 0,
-    to: maxOpacity,
-    dur: durationMs,
-    dir: 'alternate',
-    loop: true,
-    easing: 'easeInOutSine'
+  mergeAImageMaterial(imgEl, { opacity: 0, transparent: true, shader: 'flat', side: 'double' });
+  imgEl.setAttribute('image-fade-pulse', {
+    enabled: true,
+    duration: durationMs,
+    maxOpacity: maxOpacity
+  });
+}
+function scheduleImageHotspotFadePulse(imgEl, options) {
+  options = options || {};
+  if (!imgEl || !options.enabled) return;
+  applyImageHotspotFadePulse(imgEl, options);
+  [50, 200, 600, 1500].forEach(function(delay) {
+    setTimeout(function() {
+      if (!document.body.contains(imgEl) || !options.enabled) return;
+      applyImageHotspotFadePulse(imgEl, options);
+    }, delay);
   });
 }
 function applyRoundedMaskToAImage(aImgEl, styleCfg) {
@@ -13185,6 +13316,57 @@ AFRAME.registerComponent("face-camera", {
   },
 });
 
+AFRAME.registerComponent('image-fade-pulse', {
+  schema: {
+    enabled: { type: 'boolean', default: false },
+    duration: { type: 'number', default: 5000 },
+    maxOpacity: { type: 'number', default: 1 },
+  },
+  init: function () {
+    var self = this;
+    this._onObject3dSet = function () { self._ensureTransparentMaterial(); };
+    this.el.addEventListener('object3dset', this._onObject3dSet);
+    this.el.addEventListener('materialtextureloaded', this._onObject3dSet);
+    this._ensureTransparentMaterial();
+  },
+  remove: function () {
+    this.el.removeEventListener('object3dset', this._onObject3dSet);
+    this.el.removeEventListener('materialtextureloaded', this._onObject3dSet);
+    try {
+      var mesh = this.el.getObject3D('mesh');
+      if (mesh && mesh.material) {
+        var maxO = Math.min(1, Math.max(0, Number(this.data.maxOpacity) || 1));
+        mesh.material.opacity = maxO;
+        mesh.material.transparent = maxO < 1;
+        mesh.material.needsUpdate = true;
+      }
+    } catch (_) {}
+  },
+  _ensureTransparentMaterial: function () {
+    try {
+      var mesh = this.el.getObject3D('mesh');
+      if (mesh && mesh.material) {
+        mesh.material.transparent = true;
+        mesh.material.needsUpdate = true;
+      }
+    } catch (_) {}
+  },
+  tick: function (time) {
+    if (!this.data.enabled) return;
+    var mesh = this.el.getObject3D('mesh');
+    if (!mesh || !mesh.material) return;
+    var mat = mesh.material;
+    var dur = Math.max(500, Number(this.data.duration) || 5000);
+    var maxO = Math.min(1, Math.max(0, Number(this.data.maxOpacity)));
+    var cycle = dur * 2;
+    var t = time % cycle;
+    var eased = 0.5 - 0.5 * Math.cos(Math.PI * (t / dur));
+    mat.transparent = true;
+    mat.opacity = maxO * eased;
+    mat.needsUpdate = true;
+  },
+});
+
 // Hotspot component for standalone projects
 AFRAME.registerComponent("hotspot", {
   schema: {
@@ -13424,7 +13606,7 @@ AFRAME.registerComponent("hotspot", {
       });
       if (data.imageFadePulse) {
         var syncImageFade = function() {
-          applyImageHotspotFadePulse(img, { enabled: true, durationMs: data.imageFadeDuration });
+          scheduleImageHotspotFadePulse(img, { enabled: true, durationMs: data.imageFadeDuration });
         };
         syncImageFade();
         img.addEventListener('load', syncImageFade, { once: true });
@@ -19249,7 +19431,7 @@ AFRAME.registerComponent('editor-spot', {
       }, 800);
       const syncImageFade = () => {
         if (!data.imageFadePulse) return;
-        applyImageHotspotFadePulse(img, {
+        scheduleImageHotspotFadePulse(img, {
           enabled: true,
           durationMs: data.imageFadeDuration,
         });
@@ -20495,6 +20677,11 @@ const CommonAssetsPicker = {
     'weblink-image-url': 'images',
   },
 
+  FIELD_COMPATIBLE_CATEGORIES: {
+    'hotspot-image-url': ['images', '360-images'],
+    'weblink-image-url': ['images', '360-images'],
+  },
+
   updateSourceUi() {
     const uploadEl = document.getElementById('my-assets-upload');
     const introEl = document.getElementById('shared-assets-intro');
@@ -21290,8 +21477,14 @@ const CommonAssetsPicker = {
   },
 
   applyToField(targetId, asset) {
+    const compatible = this.FIELD_COMPATIBLE_CATEGORIES[targetId];
     const expectedCategory = this.FIELD_CATEGORY_MAP[targetId];
-    if (expectedCategory && asset.category !== expectedCategory) {
+    if (compatible) {
+      if (!compatible.includes(asset.category)) {
+        alert(`That asset is not compatible with this field. Choose a ${compatible.join(' or ')} file.`);
+        return false;
+      }
+    } else if (expectedCategory && asset.category !== expectedCategory) {
       alert(`That asset is not compatible with this field. Choose a ${expectedCategory} file.`);
       return false;
     }
@@ -21307,6 +21500,10 @@ const CommonAssetsPicker = {
     }
     el.dispatchEvent(new Event('input', { bubbles: true }));
     if (editor) editor._skipClearCommonAssetDataset = false;
+
+    if (targetId === 'hotspot-image-url' && editor) {
+      editor.ensureImageHotspotTypeSelected({ scrollToFade: true });
+    }
 
     const fileInputId = this.FIELD_FILE_MAP[targetId];
     if (fileInputId) {
@@ -21327,7 +21524,7 @@ const CommonAssetsPicker = {
       if (type === 'text' || type === 'navigation' || type === 'weblink') return 'global-sound-url';
       return 'hotspot-audio-url';
     }
-    if (asset.category === 'images') {
+    if (asset.category === 'images' || asset.category === '360-images') {
       if (type === 'weblink') return 'weblink-image-url';
       return 'hotspot-image-url';
     }

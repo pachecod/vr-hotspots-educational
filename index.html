@@ -1538,6 +1538,40 @@
               Browse Online Assets
             </button>
           </div>
+          <div class="form-group" id="image-fade-group" style="display: none">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+              <input
+                type="checkbox"
+                id="hotspot-image-fade-pulse"
+                style="width: 16px; height: 16px; cursor: pointer"
+              />
+              <span>Fade photo in and out</span>
+            </label>
+            <label style="display: block; font-size: 12px; color: #ccc; margin-top: 10px">
+              Fade duration (seconds)
+              <input
+                type="number"
+                id="hotspot-image-fade-duration"
+                min="0.5"
+                max="60"
+                step="0.5"
+                value="5"
+                style="
+                  width: 100%;
+                  padding: 8px;
+                  border-radius: 4px;
+                  border: 1px solid #555;
+                  background: #333;
+                  color: #fff;
+                  margin-top: 4px;
+                  box-sizing: border-box;
+                "
+              />
+            </label>
+            <small style="color: #888; font-size: 11px; display: block; margin-top: 6px"
+              >Loops the photo between hidden and fully visible. The 360° scene stays steady.</small
+            >
+          </div>
           <div class="form-group" id="video-file-group" style="display: none">
             <label for="hotspot-video-file">Video File:</label>
             <input type="file" id="hotspot-video-file" accept="video/mp4,video/webm" />
@@ -1717,41 +1751,6 @@
             </label>
             <small style="color: #888; font-size: 11px"
               >Scales the image or video uniformly. Aspect ratio preserved from original media.</small
-            >
-          </div>
-
-          <div class="form-group" id="image-fade-group" style="display: none">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-              <input
-                type="checkbox"
-                id="hotspot-image-fade-pulse"
-                style="width: 16px; height: 16px; cursor: pointer"
-              />
-              <span>Fade photo in and out</span>
-            </label>
-            <label style="display: block; font-size: 12px; color: #ccc; margin-top: 10px">
-              Fade duration (seconds)
-              <input
-                type="number"
-                id="hotspot-image-fade-duration"
-                min="0.5"
-                max="60"
-                step="0.5"
-                value="5"
-                style="
-                  width: 100%;
-                  padding: 8px;
-                  border-radius: 4px;
-                  border: 1px solid #555;
-                  background: #333;
-                  color: #fff;
-                  margin-top: 4px;
-                  box-sizing: border-box;
-                "
-              />
-            </label>
-            <small style="color: #888; font-size: 11px; display: block; margin-top: 6px"
-              >Loops the photo between hidden and fully visible. The 360° scene stays steady.</small
             >
           </div>
 

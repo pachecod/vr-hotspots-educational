@@ -4,6 +4,7 @@ const {
   requireStudentStrict,
   isStudentAuthRequired,
 } = require('../student-auth');
+const { getAdminSession } = require('../admin-auth');
 const { isDbEnabled } = require('../services/db-service');
 const { getRideyEnabled, getRideyVersion } = require('../lib/app-settings');
 const { analyzeCodeWithAI } = require('../services/ridey-service');
@@ -15,12 +16,22 @@ function requireRideyStudent(req, res, next) {
   return requireStudent(req, res, next);
 }
 
+function requireRideyUser(req, res, next) {
+  const adminSession = getAdminSession(req);
+  if (adminSession) {
+    req.adminSession = adminSession;
+    return next();
+  }
+  return requireRideyStudent(req, res, next);
+}
+
 const rideyRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: parseInt(process.env.RIDEY_RATE_LIMIT_PER_HOUR || '20', 10),
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req, res) => {
+    if (req.adminSession) return 'admin:session';
     if (req.studentSession?.studentId) return `student:${req.studentSession.studentId}`;
     return rateLimit.ipKeyGenerator(req.ip);
   },
@@ -39,7 +50,7 @@ function registerRideyRoutes(app) {
     }
   });
 
-  app.post('/api/ridey/analyze', requireRideyStudent, rideyRateLimiter, async (req, res) => {
+  app.post('/api/ridey/analyze', requireRideyUser, rideyRateLimiter, async (req, res) => {
     try {
       const enabled = await getRideyEnabled();
       if (!enabled) {

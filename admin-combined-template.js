@@ -12,6 +12,7 @@ const AdminCombinedTemplateMode = {
         window.location.href = '/admin-templates.html';
         return;
       }
+      if (typeof setAdminAuthenticated === 'function') setAdminAuthenticated(true);
       startEditor();
     } catch (_) {
       window.location.href = '/admin-templates.html';

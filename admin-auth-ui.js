@@ -1,3 +1,13 @@
+function setAdminAuthenticated(active = true) {
+  window.adminAuthenticated = !!active;
+  if (typeof window.applyEditorCapabilities === 'function') {
+    window.applyEditorCapabilities();
+  }
+  if (window.flatPageEditor && typeof window.flatPageEditor.onCapabilitiesChange === 'function') {
+    window.flatPageEditor.onCapabilitiesChange();
+  }
+}
+
 async function checkAdminSession() {
   try {
     const res = await fetch('/admin/session', { credentials: 'include' });
@@ -44,6 +54,7 @@ async function adminLogin(password) {
   if (!res.ok || !data.success) {
     throw new Error(data.message || 'Login failed');
   }
+  setAdminAuthenticated(true);
   return true;
 }
 
@@ -53,6 +64,7 @@ async function adminLogout() {
     credentials: 'include',
     headers: { 'X-Requested-With': 'XMLHttpRequest' },
   });
+  setAdminAuthenticated(false);
 }
 
 async function adminFetch(url, options = {}) {
@@ -137,8 +149,19 @@ async function requireAdminSession(containerId, onAuthenticated) {
   }
   const authed = await checkAdminSession();
   if (authed) {
+    setAdminAuthenticated(true);
     onAuthenticated();
     return;
   }
   renderAdminLoginGate(containerId, onAuthenticated);
 }
+
+(async function initAdminEditorRideyAccess() {
+  try {
+    if (window.adminAuthenticated) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('adminReview') !== '1' && !params.get('adminTemplate')) return;
+    if (!(await checkAdminSession())) return;
+    setAdminAuthenticated(true);
+  } catch (_) {}
+})();

@@ -1,9 +1,11 @@
 function getEditorCapabilities() {
   const isTest = window.editorAccessMode === 'local_test';
   const isStudent = !!window.currentStudent;
+  const isAdmin = !!window.adminAuthenticated;
   return {
     isTestUser: isTest,
     isStudent,
+    isAdmin,
     /** Pick files from disk → IndexedDB/blob URLs for preview and ZIP export */
     canPickLocalFiles: true,
     /** Legacy alias — local file pickers */
@@ -13,7 +15,7 @@ function getEditorCapabilities() {
     canUseCloudSave: isStudent,
     canSubmit: isStudent,
     canUseMyAssets: isStudent,
-    canUseRidey: isStudent,
+    canUseRidey: isStudent || isAdmin,
     canPublishVrTour: isStudent,
     canExport: true,
     canLoadZip: true,

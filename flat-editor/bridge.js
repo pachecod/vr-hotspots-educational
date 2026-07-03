@@ -189,15 +189,18 @@ export class FlatPageEditorBridge {
     if (typeof window !== 'undefined' && typeof window.getEditorCapabilities === 'function') {
       return window.getEditorCapabilities();
     }
+    const isStudent = !!window.currentStudent;
+    const isAdmin = !!window.adminAuthenticated || this._adminTemplateMode;
     return {
-      canUseCloudSave: !!window.currentStudent,
-      canUseRidey: !!window.currentStudent,
+      canUseCloudSave: isStudent,
+      canUseRidey: isStudent || isAdmin,
     };
   }
 
   getState() {
     const page = this.getActivePage();
     const caps = this._capabilities();
+    const canUseRidey = caps.canUseRidey || this._adminTemplateMode;
     return {
       project: this.project,
       activeFileId: this.activeFileId,
@@ -206,7 +209,7 @@ export class FlatPageEditorBridge {
       cloudStatusError: this._cloudStatusError,
       showCloudActions: caps.canUseCloudSave,
       files: this._visiblePageFiles(page),
-      rideyEnabled: caps.canUseRidey && this._rideyStatus.enabled && this._rideyStatus.hasApiKey,
+      rideyEnabled: canUseRidey && this._rideyStatus.enabled && this._rideyStatus.hasApiKey,
       rideyVersion: this._rideyStatus.version === '2.0' ? '2.0' : '1.0',
       blockedExtensions: this._blockedExtensions,
       adminTemplateMode: this._adminTemplateMode,

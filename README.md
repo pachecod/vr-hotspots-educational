@@ -2,6 +2,7 @@
 
 A comprehensive VR Hotspot Editor with built-in student submission system for educational environments. Students and team members can build **interactive 360° VR tours** and **flat web pages** in one project. New to the tool? Start with the **[User Guide](USER_GUIDE.md)** for step-by-step instructions, watch this **[editing tool walkthrough](https://www.youtube.com/watch?v=Uo-bHKdDRKg)**, browse **[live examples of finished tours](USER_GUIDE.md#live-examples)** built by students, or watch this **[video example of a finished 360 tour](https://www.youtube.com/watch?v=23lqPjQc_IE)**. Teachers: see **[Documentation Plan](DOCS_PLAN.md)** for upcoming classroom guides.
 
+
 **Current release:** `2.8` (`main` and `2.8` branches on GitHub are aligned).
 
 ## 🎓 Educational Features
@@ -378,7 +379,11 @@ vr_hotspots/
 
 ## 🙏 Acknowledgements
 
-Special thanks to Syracuse University graduate [Sagar Gada](https://github.com/sagargada73), who created the first version of this application as a graduate student assistant for Professor Daniel Pacheco, and later as a part-time employee under the National Science Foundation grant for the Innovative Technology Experiences for Students and Teachers (ITEST) project. ([Learn more about that grant here.](https://soe.syr.edu/professor-huangs-nsf-grant/)). Special shoutout of thanks to Syracuse University School of Education Professor Silvie Huang (PI); and co-PIs Professor Sharon Dotger, of the School of Education; Professor Brice Nordquist of the College of Arts and Sciences; Professors Nicholas Bowman and Daniel Pacheco of the S.I. Newhouse School of Public Communications; and Professors Matthew Potteiger and Stewart Diemontof the SUNY College of Environmental Science and Forestry. Finally, thanks to all participants in that project, especially other faculty, students, community volunteers, and especially the youth who used the early tools and provided feedback.
+Special thanks to Syracuse University graduate [Sagar Gada](https://github.com/sagargada73), who created the first version of this application as a graduate student assistant for Professor Daniel Pacheco, and later as a part-time employee under the National Science Foundation grant for the Innovative Technology Experiences for Students and Teachers (ITEST) project.
+
+This material is based upon work supported by the National Science Foundation under Award No. (NSF award number). Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation.
+
+Special shoutout of thanks to Syracuse University School of Education Professor Silvie Huang (PI); and co-PIs Professor Sharon Dotger, of the School of Education; Professor Brice Nordquist of the College of Arts and Sciences; Professors Nicholas Bowman and Daniel Pacheco of the S.I. Newhouse School of Public Communications; and Professors Matthew Potteiger and Stewart Diemont of the SUNY College of Environmental Science and Forestry. Finally, thanks to all participants in that project, especially other faculty, students, community volunteers, and especially the youth who used the early tools and provided feedback.
 
 ## 📜 License
 

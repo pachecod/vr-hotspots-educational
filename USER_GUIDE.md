@@ -17,15 +17,15 @@ The editor lets you create **interactive 360° VR stories** and **flat web pages
 
 ### Live examples
 
-Browse these finished tours for inspiration:
+Browse these finished tours for inspiration. They work in a desktop browser, on phones and tablets, and in VR headsets that support WebXR:
 
 | Tour | Description |
 |------|-------------|
 | [Agriquest Seeds of Story Tour #1](https://agriquest.org/tours/student5/) | Sample tour from the Agriquest Seeds of Story program that this tool was originally created to support. The tour was built by a youth participant of project. |
-| [Agriquest Seeds of Story Tour #2](https://agriquest.org/tours/student7/) | Another student tour of the Salt City Harvest Farm project. |
 | [Video example of a finished 360 tour](https://www.youtube.com/watch?v=23lqPjQc_IE) | YouTube walkthrough showing what a completed 360 tour experience can look like. |
 
-Works in a desktop browser, on phones and tablets, and in VR headsets that support WebXR.
+The works above are based upon work supported by the National Science Foundation under Award No 2342763. Any opinions, findings and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation.
+
 
 ---
 

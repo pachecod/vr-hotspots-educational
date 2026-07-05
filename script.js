@@ -1940,7 +1940,7 @@ class HotspotEditor {
           if (Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD_PX) return;
 
           if (this.navigationMode && !this.repositioningHotspotId) {
-            this._tryActivateNavigationPortal({
+            this._tryActivateNavigationPortalForMouse({
               clientX: touch.clientX,
               clientY: touch.clientY,
             });
@@ -1956,11 +1956,59 @@ class HotspotEditor {
       );
     }
 
-    ['mouse-cursor', 'gaze-cursor'].forEach((id) => {
-      document.getElementById(id)?.addEventListener('click', (evt) => {
+    if (!this._isTouchDevice()) {
+      let mousePress = null;
+      const MOUSE_DRAG_THRESHOLD_PX = 8;
+
+      canvas.addEventListener(
+        'pointerdown',
+        (evt) => {
+          if (evt.pointerType === 'mouse' || evt.pointerType === 'pen') {
+            mousePress = { x: evt.clientX, y: evt.clientY, id: evt.pointerId };
+          }
+        },
+        { passive: true }
+      );
+
+      canvas.addEventListener(
+        'pointerup',
+        (evt) => {
+          if (evt.pointerType === 'touch') return;
+          if (!this.navigationMode || this.editMode || this.repositioningHotspotId) return;
+          if (evt.button !== 0) return;
+          if (!mousePress || mousePress.id !== evt.pointerId) return;
+          const moved = Math.hypot(evt.clientX - mousePress.x, evt.clientY - mousePress.y);
+          mousePress = null;
+          if (moved > MOUSE_DRAG_THRESHOLD_PX) return;
+          this._tryActivateNavigationPortalForMouse(evt);
+        },
+        { passive: true }
+      );
+    }
+
+    const mouseCursor = document.getElementById('mouse-cursor');
+    if (mouseCursor) {
+      mouseCursor.addEventListener('click', (evt) => {
+        if (this.repositioningHotspotId) {
+          this._handleScenePlacementClick(evt);
+          return;
+        }
+        if (this.navigationMode && !this.editMode) {
+          this._tryActivateNavigationPortalForMouse(evt);
+          return;
+        }
         this._handleScenePlacementClick(evt);
       });
-    });
+    }
+
+    const gazeCursor = document.getElementById('gaze-cursor');
+    if (gazeCursor) {
+      gazeCursor.addEventListener('click', (evt) => {
+        // Gaze navigation is handled by fuse clicks on portal colliders — do not reroute here.
+        if (this.navigationMode) return;
+        this._handleScenePlacementClick(evt);
+      });
+    }
 
     this._configureTouchCursors();
   }
@@ -2032,7 +2080,7 @@ class HotspotEditor {
     }
     if (!this.editMode) {
       if (this.navigationMode) {
-        this._tryActivateNavigationPortal(evt);
+        this._tryActivateNavigationPortalForMouse(evt);
       }
       return;
     }
@@ -2104,7 +2152,30 @@ class HotspotEditor {
     return true;
   }
 
-  _findPortalHotspotDataAtViewCenter() {
+  _collectPortalRaycastMeshes(options = {}) {
+    const { collidersOnly = false } = options;
+    const entries = [];
+    document.querySelectorAll("#hotspot-container [id^='hotspot-']").forEach((hotspotEl) => {
+      const hs = this._getPortalHotspotDataById(
+        parseInt(String(hotspotEl.id || '').slice(8), 10)
+      );
+      if (!hs) return;
+      const children = collidersOnly
+        ? Array.from(hotspotEl.querySelectorAll('.clickable')).filter(
+            (child) => !child.classList.contains('nav-ring')
+          )
+        : Array.from(hotspotEl.querySelectorAll('.clickable, .nav-ring'));
+      children.forEach((child) => {
+        const mesh = child.getObject3D && child.getObject3D('mesh');
+        if (!mesh) return;
+        if (child.object3D) child.object3D.updateMatrixWorld(true);
+        entries.push({ mesh, hs });
+      });
+    });
+    return entries;
+  }
+
+  _portalRaycastFromNdc(ndc, options = {}) {
     const sceneEl = document.querySelector('a-scene');
     const camEl = document.getElementById('cam');
     const camera = camEl?.getObject3D?.('camera') || sceneEl?.camera;
@@ -2113,43 +2184,55 @@ class HotspotEditor {
     sceneEl?.object3D?.updateMatrixWorld(true);
     camEl?.object3D?.updateMatrixWorld(true);
 
+    const entries = this._collectPortalRaycastMeshes(options);
+    if (!entries.length) return null;
+
     const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-
-    const roots = [];
-    document.querySelectorAll("#hotspot-container [id^='hotspot-']").forEach((hotspotEl) => {
-      const hs = this._getPortalHotspotDataById(
-        parseInt(String(hotspotEl.id || '').slice(8), 10)
-      );
-      if (!hs) return;
-      const root = hotspotEl.object3D;
-      if (root) roots.push({ root, hs });
-    });
-    if (!roots.length) return null;
-
+    raycaster.setFromCamera(ndc, camera);
     const hits = raycaster.intersectObjects(
-      roots.map((entry) => entry.root),
-      true
+      entries.map((entry) => entry.mesh),
+      false
     );
     if (!hits.length) return null;
+    const hitMesh = hits[0].object;
+    return entries.find((entry) => entry.mesh === hitMesh)?.hs || null;
+  }
 
-    const hitObject = hits[0].object;
-    for (const entry of roots) {
-      let obj = hitObject;
-      while (obj) {
-        if (obj === entry.root) return entry.hs;
-        obj = obj.parent;
-      }
-    }
-    return null;
+  _findPortalHotspotDataAtViewCenter() {
+    // Solid collider disks cover the ring hole — prefer them for center-view aiming.
+    return (
+      this._portalRaycastFromNdc(new THREE.Vector2(0, 0), { collidersOnly: true }) ||
+      this._portalRaycastFromNdc(new THREE.Vector2(0, 0))
+    );
+  }
+
+  _findPortalHotspotDataAtPointer(sourceEvent) {
+    const sceneEl = document.querySelector('a-scene');
+    const canvas = sceneEl?.canvas;
+    if (!canvas || sourceEvent?.clientX == null) return null;
+    const rect = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((sourceEvent.clientX - rect.left) / rect.width) * 2 - 1,
+      -((sourceEvent.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    return (
+      this._portalRaycastFromNdc(ndc, { collidersOnly: true }) || this._portalRaycastFromNdc(ndc)
+    );
+  }
+
+  _tryActivateNavigationPortalForMouse(evt) {
+    if (!this.navigationMode) return false;
+    // In 360° view, mouse clicks should activate what you are looking at (center), not
+    // where the pointer happens to be. Fall back to pointer raycast for direct ring hits.
+    const data =
+      this._findPortalHotspotDataAtViewCenter() ||
+      this._findPortalHotspotDataAtPointer(evt);
+    if (!data) return false;
+    return this._activateEditorPortalHotspot(data, evt);
   }
 
   _tryActivateNavigationPortal(evt) {
-    if (!this.navigationMode) return false;
-    const data =
-      this._resolvePortalHotspotDataFromEvent(evt) || this._findPortalHotspotDataAtViewCenter();
-    if (!data) return false;
-    return this._activateEditorPortalHotspot(data, evt);
+    return this._tryActivateNavigationPortalForMouse(evt);
   }
 
   _bindEditorPortalActivation(hotspotEl, data) {

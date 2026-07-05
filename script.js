@@ -1866,9 +1866,178 @@ class HotspotEditor {
   }
 
   _configureTouchCursors() {
-    if (!this._isTouchDevice()) return;
+    this._configurePlatformCursors();
+  }
+
+  _configurePlatformCursors() {
     const mouseCursor = document.getElementById('mouse-cursor');
-    if (mouseCursor) mouseCursor.setAttribute('visible', 'false');
+    const gazeCursor = document.getElementById('gaze-cursor');
+    if (this._isTouchDevice()) {
+      if (mouseCursor) mouseCursor.setAttribute('visible', 'false');
+      return;
+    }
+    // Desktop: one active cursor avoids duplicate raycasts that block edit clicks.
+    if (gazeCursor) gazeCursor.setAttribute('visible', 'false');
+    if (mouseCursor) mouseCursor.setAttribute('visible', 'true');
+  }
+
+  _pointerEventToNdc(sourceEvent) {
+    if (typeof THREE === 'undefined') return null;
+    const sceneEl = document.querySelector('a-scene');
+    const canvas = sceneEl?.canvas;
+    if (!canvas || sourceEvent?.clientX == null) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    return new THREE.Vector2(
+      ((sourceEvent.clientX - rect.left) / rect.width) * 2 - 1,
+      -((sourceEvent.clientY - rect.top) / rect.height) * 2 + 1
+    );
+  }
+
+  _resolveAFrameElFromObject3D(object) {
+    let node = object;
+    while (node) {
+      if (node.el) return node.el;
+      node = node.parent;
+    }
+    return null;
+  }
+
+  _collectEditModeInteractionEntries() {
+    const entries = [];
+    const pushEl = (el) => {
+      if (!el) return;
+      if (el.getAttribute && el.getAttribute('visible') === 'false') return;
+      const mesh = el.getObject3D && el.getObject3D('mesh');
+      if (!mesh) return;
+      if (el.object3D && el.object3D.visible === false) return;
+      el.object3D?.updateMatrixWorld(true);
+      entries.push({ mesh, el });
+    };
+
+    document.querySelectorAll('#hotspot-container .clickable:not(.nav-ring)').forEach((el) => {
+      if (el.closest('.in-scene-edit-controls') || el.closest('.in-scene-edit-hint')) {
+        pushEl(el);
+        return;
+      }
+      const hotspotEl = el.closest("[id^='hotspot-']");
+      if (!hotspotEl) {
+        pushEl(el);
+        return;
+      }
+      const id = parseInt(String(hotspotEl.id || '').slice(8), 10);
+      if (this._getPortalHotspotDataById(id)) return;
+      pushEl(el);
+    });
+
+    document.querySelectorAll('#hotspot-container .model-transform-handle').forEach(pushEl);
+
+    return entries;
+  }
+
+  _dispatchEditModeInteraction(hitEl, sourceEvent) {
+    if (!hitEl) return false;
+
+    const classes = hitEl.classList;
+    const hotspotEl = hitEl.closest?.("[id^='hotspot-']");
+    const hotspotId = hotspotEl ? parseInt(String(hotspotEl.id || '').slice(8), 10) : NaN;
+
+    if (classes.contains('in-scene-edit-btn') && Number.isFinite(hotspotId)) {
+      this.showEditHotspotDialog(hotspotId);
+      return true;
+    }
+    if (classes.contains('in-scene-move-btn') && Number.isFinite(hotspotId)) {
+      setTimeout(() => this.startReposition(hotspotId), 0);
+      return true;
+    }
+    if (
+      classes.contains('static-image-hotspot') ||
+      classes.contains('static-video-hotspot') ||
+      classes.contains('in-scene-edit-hint-bg') ||
+      classes.contains('in-scene-edit-hint-label')
+    ) {
+      if (hotspotEl) this.revealInSceneButtons(hotspotEl);
+      return true;
+    }
+    if (classes.contains('static-model-hotspot') && Number.isFinite(hotspotId)) {
+      this.showModelHotspotActionMenu(hotspotId);
+      return true;
+    }
+
+    this._emitSyntheticEntityClick(hitEl, sourceEvent);
+    return true;
+  }
+
+  _findEditInteractionTargetAtPointer(sourceEvent) {
+    const sceneEl = document.querySelector('a-scene');
+    const camEl = document.getElementById('cam');
+    const camera = camEl?.getObject3D?.('camera') || sceneEl?.camera;
+    const ndc = this._pointerEventToNdc(sourceEvent);
+    if (!camera || !ndc || typeof THREE === 'undefined') return null;
+
+    sceneEl?.object3D?.updateMatrixWorld(true);
+    camEl?.object3D?.updateMatrixWorld(true);
+
+    const entries = this._collectEditModeInteractionEntries();
+    if (!entries.length) return null;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(
+      entries.map((entry) => entry.mesh),
+      false
+    );
+    if (!hits.length) return null;
+
+    const hitMesh = hits[0].object;
+    return (
+      entries.find((entry) => entry.mesh === hitMesh)?.el ||
+      this._resolveAFrameElFromObject3D(hitMesh)
+    );
+  }
+
+  _emitSyntheticEntityClick(el, sourceEvent) {
+    if (!el || typeof el.emit !== 'function') return;
+    const mouseCursor = document.getElementById('mouse-cursor');
+    el.emit(
+      'click',
+      {
+        cursorEl: mouseCursor,
+        mouseEvent: sourceEvent,
+      },
+      false
+    );
+  }
+
+  _tryHandleEditModeInteraction(sourceEvent) {
+    if (this.navigationMode || this.repositioningHotspotId || this.editMode) return false;
+
+    const now =
+      typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+    if (now - (this._lastEditInteractionMs || 0) < 150) return false;
+
+    const hitEl = this._findEditInteractionTargetAtPointer(sourceEvent);
+    if (!hitEl) return false;
+
+    this._lastEditInteractionMs = now;
+    return this._dispatchEditModeInteraction(hitEl, sourceEvent);
+  }
+
+  _isScenePointerTap(sourceEvent, pressState, thresholdPx) {
+    if (!pressState || pressState.id !== sourceEvent.pointerId) return false;
+    if (sourceEvent.button != null && sourceEvent.button !== 0) return false;
+    const moved = Math.hypot(sourceEvent.clientX - pressState.x, sourceEvent.clientY - pressState.y);
+    return moved <= thresholdPx;
+  }
+
+  _handleScenePointerTap(sourceEvent) {
+    if (this.navigationMode && !this.editMode && !this.repositioningHotspotId) {
+      this._tryActivateNavigationPortalForMouse(sourceEvent);
+      return;
+    }
+    if (!this.navigationMode && !this.editMode && !this.repositioningHotspotId) {
+      this._tryHandleEditModeInteraction(sourceEvent);
+    }
   }
 
   _hasValidIntersectionPoint(hit) {
@@ -1946,7 +2115,13 @@ class HotspotEditor {
             });
             return;
           }
-          if (!this.editMode && !this.repositioningHotspotId) return;
+          if (!this.editMode && !this.repositioningHotspotId) {
+            this._tryHandleEditModeInteraction({
+              clientX: touch.clientX,
+              clientY: touch.clientY,
+            });
+            return;
+          }
           this._handleScenePlacementClick({
             clientX: touch.clientX,
             clientY: touch.clientY,
@@ -1974,13 +2149,10 @@ class HotspotEditor {
         'pointerup',
         (evt) => {
           if (evt.pointerType === 'touch') return;
-          if (!this.navigationMode || this.editMode || this.repositioningHotspotId) return;
-          if (evt.button !== 0) return;
-          if (!mousePress || mousePress.id !== evt.pointerId) return;
-          const moved = Math.hypot(evt.clientX - mousePress.x, evt.clientY - mousePress.y);
+          const press = mousePress;
           mousePress = null;
-          if (moved > MOUSE_DRAG_THRESHOLD_PX) return;
-          this._tryActivateNavigationPortalForMouse(evt);
+          if (!this._isScenePointerTap(evt, press, MOUSE_DRAG_THRESHOLD_PX)) return;
+          this._handleScenePointerTap(evt);
         },
         { passive: true }
       );
@@ -2207,14 +2379,8 @@ class HotspotEditor {
   }
 
   _findPortalHotspotDataAtPointer(sourceEvent) {
-    const sceneEl = document.querySelector('a-scene');
-    const canvas = sceneEl?.canvas;
-    if (!canvas || sourceEvent?.clientX == null) return null;
-    const rect = canvas.getBoundingClientRect();
-    const ndc = new THREE.Vector2(
-      ((sourceEvent.clientX - rect.left) / rect.width) * 2 - 1,
-      -((sourceEvent.clientY - rect.top) / rect.height) * 2 + 1
-    );
+    const ndc = this._pointerEventToNdc(sourceEvent);
+    if (!ndc) return null;
     return (
       this._portalRaycastFromNdc(ndc, { collidersOnly: true }) || this._portalRaycastFromNdc(ndc)
     );
@@ -17259,6 +17425,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Update visibility of all in-scene edit buttons
     this.updateInSceneEditButtons();
+    this._configurePlatformCursors();
   }
 
   updateInSceneEditButtons() {

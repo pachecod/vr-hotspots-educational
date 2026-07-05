@@ -30,6 +30,27 @@ function escapeAttr(str) {
     .replace(/</g, '&lt;');
 }
 
+function bindPlaygroundGridClicks(gridWrap, templates, state, { containerId, onAuthenticated }) {
+  gridWrap.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.welcome-playground-card');
+    if (!btn || state.loadingSlug) return;
+    const slug = btn.dataset.slug;
+    if (!slug) return;
+    state.loadingSlug = slug;
+    gridWrap.innerHTML = renderPlaygroundCards(templates, state.loadingSlug);
+    try {
+      await openPlaygroundTemplate(slug, { containerId, onAuthenticated });
+    } catch (err) {
+      if (!err || err.code !== 'GUEST_AGREEMENT_CANCELLED') {
+        alert(err.message || 'Could not open sample project');
+      }
+    } finally {
+      state.loadingSlug = null;
+      gridWrap.innerHTML = renderPlaygroundCards(templates, state.loadingSlug);
+    }
+  });
+}
+
 function renderPlaygroundCards(templates, loadingSlug) {
   if (!templates.length) {
     return '<p class="welcome-playground-empty">No public templates are available yet.</p>';
@@ -80,38 +101,90 @@ async function mountPlaygroundTemplatesSection(innerEl, { containerId, onAuthent
 
     if (shell) shell.classList.add('integrated-welcome-with-playground');
     const data = await fetchPlaygroundTemplates();
-    let loadingSlug = null;
 
     section.innerHTML = `
       <div class="welcome-playground-head">
         <h3 class="welcome-playground-title">Try a sample project</h3>
         <p class="welcome-playground-subtitle">No sign-in required — open in guest mode and explore.</p>
       </div>
-      <div class="welcome-playground-grid-wrap">${renderPlaygroundCards(data.templates || [], loadingSlug)}</div>
+      <div class="welcome-playground-grid-wrap">${renderPlaygroundCards(data.templates || [], null)}</div>
     `;
 
     const gridWrap = section.querySelector('.welcome-playground-grid-wrap');
-
-    gridWrap.addEventListener('click', async (e) => {
-      const btn = e.target.closest('.welcome-playground-card');
-      if (!btn || loadingSlug) return;
-      const slug = btn.dataset.slug;
-      if (!slug) return;
-      loadingSlug = slug;
-      gridWrap.innerHTML = renderPlaygroundCards(data.templates || [], loadingSlug);
-      try {
-        await openPlaygroundTemplate(slug, { containerId, onAuthenticated });
-      } catch (err) {
-        if (!err || err.code !== 'GUEST_AGREEMENT_CANCELLED') {
-          alert(err.message || 'Could not open sample project');
-        }
-      } finally {
-        loadingSlug = null;
-        gridWrap.innerHTML = renderPlaygroundCards(data.templates || [], loadingSlug);
-      }
-    });
+    bindPlaygroundGridClicks(gridWrap, data.templates || [], { loadingSlug: null }, { containerId, onAuthenticated });
   } catch (err) {
     section.innerHTML = `<p class="welcome-playground-error">${escapeHtml(err.message || 'Failed to load templates.')}</p>`;
+  }
+}
+
+async function renderGuestTemplatePicker(containerId, onAuthenticated) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  if (typeof window.setEntryGateActive === 'function') window.setEntryGateActive(true);
+  if (typeof window.hideSceneLoadingOverlay === 'function') window.hideSceneLoadingOverlay();
+
+  let inner = container.querySelector('#integrated-welcome-inner');
+  if (!inner) {
+    container.innerHTML = `
+      <div id="student-login-shell">
+        <div id="integrated-welcome-inner" class="guest-template-picker"></div>
+      </div>`;
+    inner = container.querySelector('#integrated-welcome-inner');
+  } else {
+    inner.className = 'guest-template-picker';
+    inner.innerHTML = '<p class="welcome-playground-loading">Loading templates…</p>';
+  }
+
+  const enterEditorWithoutTemplate = () => {
+    if (typeof window.beginIntegratedWelcomeAfterAuth === 'function') {
+      window.beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, null);
+    } else if (typeof onAuthenticated === 'function') {
+      onAuthenticated(null);
+    }
+  };
+
+  try {
+    const config = await fetchPlaygroundConfig();
+    if (!config.enabled) {
+      enterEditorWithoutTemplate();
+      return;
+    }
+
+    const data = await fetchPlaygroundTemplates();
+    const templates = data.templates || [];
+    if (!templates.length) {
+      enterEditorWithoutTemplate();
+      return;
+    }
+
+    inner.innerHTML = `
+      <button type="button" id="guest-template-picker-back" class="guest-template-picker-back" aria-label="Back to welcome">← Back</button>
+      <div class="guest-template-picker-content">
+        <div class="welcome-playground-head guest-template-picker-head">
+          <h2 class="welcome-playground-title">Choose a template to start from</h2>
+          <p class="welcome-playground-subtitle guest-template-picker-hint">You can change your template later by clicking the <strong>Templates</strong> menu item at the upper left of the flat page editor.</p>
+        </div>
+        <div class="welcome-playground-grid-wrap">${renderPlaygroundCards(templates, null)}</div>
+      </div>
+    `;
+
+    document.getElementById('guest-template-picker-back')?.addEventListener('click', async () => {
+      window.__guestAgreementAccepted = false;
+      try {
+        await fetch('/api/local/test-user/end', { method: 'POST', credentials: 'include' });
+      } catch (_) {}
+      window.editorAccessMode = 'none';
+      window.currentStudent = null;
+      if (typeof window.renderIntegratedAuthStep === 'function') {
+        window.renderIntegratedAuthStep(containerId, onAuthenticated, { showGuest: true });
+      }
+    });
+
+    const gridWrap = inner.querySelector('.welcome-playground-grid-wrap');
+    bindPlaygroundGridClicks(gridWrap, templates, { loadingSlug: null }, { containerId, onAuthenticated });
+  } catch (err) {
+    inner.innerHTML = `<p class="welcome-playground-error">${escapeHtml(err.message || 'Failed to load templates.')}</p>`;
   }
 }
 
@@ -125,7 +198,7 @@ async function fetchGuestAgreementPage() {
 }
 
 function shouldPromptGuestAgreement() {
-  return window.editorAccessMode !== 'student';
+  return window.editorAccessMode !== 'student' && !window.__guestAgreementAccepted;
 }
 
 function closeGuestAgreementOverlay() {
@@ -171,6 +244,7 @@ function showGuestAgreementOverlay(page) {
     `;
 
     const finish = (agreed) => {
+      if (agreed) window.__guestAgreementAccepted = true;
       closeGuestAgreementOverlay();
       document.removeEventListener('keydown', onKeyDown);
       resolve(agreed);
@@ -317,6 +391,7 @@ async function runPendingPlaygroundLoad() {
 
 window.fetchPlaygroundTemplates = fetchPlaygroundTemplates;
 window.mountPlaygroundTemplatesSection = mountPlaygroundTemplatesSection;
+window.renderGuestTemplatePicker = renderGuestTemplatePicker;
 window.openPlaygroundTemplate = openPlaygroundTemplate;
 window.runPendingPlaygroundLoad = runPendingPlaygroundLoad;
 window.promptGuestAgreementIfNeeded = promptGuestAgreementIfNeeded;

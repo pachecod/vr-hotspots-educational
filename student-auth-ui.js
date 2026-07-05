@@ -372,7 +372,11 @@ async function renderIntegratedAuthStep(containerId, onAuthenticated, options = 
         await startLocalTestUser();
         window.editorAccessMode = 'local_test';
         window.currentStudent = null;
-        beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, null);
+        if (typeof window.renderGuestTemplatePicker === 'function') {
+          await window.renderGuestTemplatePicker(containerId, onAuthenticated);
+        } else {
+          beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, null);
+        }
       } catch (err) {
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
@@ -422,6 +426,7 @@ async function returnToWelcomeScreen() {
   window.__playgroundGuestTemplate = false;
   window.__playgroundTemplateLoading = false;
   window.__integratedWelcomePending = false;
+  window.__guestAgreementAccepted = false;
   hideTestUserEditorSession();
   hideStudentEditorSession();
   const containerId = window.__integratedWelcomeContainerId || 'student-login-gate';
@@ -796,3 +801,5 @@ window.clearEntryGateOverlay = clearEntryGateOverlay;
 window.setEntryGateActive = setEntryGateActive;
 window.returnToWelcomeScreen = returnToWelcomeScreen;
 window.renderIntegratedAuthStep = renderIntegratedAuthStep;
+window.beginIntegratedWelcomeAfterAuth = beginIntegratedWelcomeAfterAuth;
+window.hideSceneLoadingOverlay = hideSceneLoadingOverlay;

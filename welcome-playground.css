@@ -385,6 +385,56 @@ body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay)
   }
 }
 
+#integrated-welcome-inner.guest-template-picker {
+  padding: 28px 32px 32px;
+  max-width: 920px;
+  text-align: left;
+}
+
+.guest-template-picker-back {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.guest-template-picker-back:hover {
+  color: #fff;
+}
+
+.guest-template-picker-content {
+  padding-top: 8px;
+}
+
+.guest-template-picker-head {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.guest-template-picker-head .welcome-playground-title {
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.guest-template-picker-hint {
+  font-size: 15px;
+  line-height: 1.55;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#integrated-welcome-inner.guest-template-picker .welcome-playground-grid-wrap {
+  max-height: min(58vh, 520px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 body.guest-agreement-open {
   overflow: hidden;
 }

@@ -1139,6 +1139,7 @@ class HotspotEditor {
       toggle.checked = false;
       toggle.disabled = true;
     }
+    this._applyNavigationModeCursors();
     this.setContentMode('spherical');
     this.updateModeIndicator();
     if (typeof this._updateAddHotspotButtonState === 'function') {
@@ -1931,7 +1932,6 @@ class HotspotEditor {
       canvas.addEventListener(
         'touchend',
         (evt) => {
-          if (!this.editMode && !this.repositioningHotspotId) return;
           const touch = evt.changedTouches?.[0];
           if (!touch || !touchStart) return;
 
@@ -1940,6 +1940,14 @@ class HotspotEditor {
           touchStart = null;
           if (Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD_PX) return;
 
+          if (this.navigationMode && !this.repositioningHotspotId) {
+            this._tryActivateNavigationPortalAtViewCenter({
+              clientX: touch.clientX,
+              clientY: touch.clientY,
+            });
+            return;
+          }
+          if (!this.editMode && !this.repositioningHotspotId) return;
           this._handleScenePlacementClick({
             clientX: touch.clientX,
             clientY: touch.clientY,
@@ -2023,8 +2031,261 @@ class HotspotEditor {
       this.applyReposition(evt);
       return;
     }
-    if (!this.editMode) return;
+    if (!this.editMode) {
+      if (this.navigationMode) {
+        this._tryActivateNavigationPortalAtViewCenter(evt);
+      }
+      return;
+    }
     this.placeHotspot(evt);
+  }
+
+  _activateEditorPortalHotspot(data, evt) {
+    if (!this.navigationMode || !data) return false;
+    if (evt && evt.type) {
+      const allowed = [
+        'click',
+        'triggerdown',
+        'triggerup',
+        'mouseup',
+        'touchend',
+        'mousedown',
+        'pointerdown',
+        'pointerup',
+      ];
+      if (!allowed.includes(evt.type)) return false;
+    }
+    const now =
+      typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+    if (now - (this._lastPortalActivationMs || 0) < 250) return true;
+    this._lastPortalActivationMs = now;
+    if (evt) {
+      try {
+        evt.stopPropagation();
+        if (evt.preventDefault) evt.preventDefault();
+      } catch (_) {}
+    }
+    if (data.type === 'navigation') {
+      this.navigateToScene(data.navigationTarget);
+    } else if (data.type === 'weblink') {
+      const url = data.weblinkUrl;
+      if (url) {
+        try {
+          window.open(url, '_blank');
+        } catch (_) {
+          location.href = url;
+        }
+      }
+    }
+    return true;
+  }
+
+  _findPortalHotspotDataAtViewCenter() {
+    const sceneEl = document.querySelector('a-scene');
+    const camEl = document.getElementById('cam');
+    const camera = camEl?.getObject3D?.('camera') || sceneEl?.camera;
+    if (!camera || typeof THREE === 'undefined') return null;
+
+    sceneEl?.object3D?.updateMatrixWorld(true);
+    camEl?.object3D?.updateMatrixWorld(true);
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+    const meshes = [];
+    const meshToData = new Map();
+    document.querySelectorAll("#hotspot-container [id^='hotspot-']").forEach((hotspotEl) => {
+      const id = parseInt(String(hotspotEl.id || '').slice(8), 10);
+      if (!Number.isFinite(id)) return;
+      const hs =
+        (this.hotspots || []).find((h) => h && h.id === id) ||
+        ((this.scenes[this.currentScene] || {}).hotspots || []).find((h) => h && h.id === id);
+      if (!hs || (hs.type !== 'navigation' && hs.type !== 'weblink')) return;
+      const registerMesh = (mesh) => {
+        if (!mesh) return;
+        meshes.push(mesh);
+        meshToData.set(mesh, hs);
+      };
+      hotspotEl.querySelectorAll('.clickable, .nav-ring').forEach((child) => {
+        registerMesh(child.getObject3D && child.getObject3D('mesh'));
+      });
+      registerMesh(hotspotEl.getObject3D && hotspotEl.getObject3D('mesh'));
+    });
+
+    const hits = raycaster.intersectObjects(meshes, false);
+    if (!hits.length) return null;
+    return meshToData.get(hits[0].object) || null;
+  }
+
+  _tryActivateNavigationPortalAtViewCenter(evt) {
+    const data = this._findPortalHotspotDataAtViewCenter();
+    if (!data) return false;
+    return this._activateEditorPortalHotspot(data, evt);
+  }
+
+  _applyNavigationModeCursors() {
+    const mouseCursor = document.getElementById('mouse-cursor');
+    const gazeCursor = document.getElementById('gaze-cursor');
+    if (!mouseCursor || !gazeCursor || this._isTouchDevice()) return;
+    if (this.navigationMode) {
+      gazeCursor.setAttribute('visible', 'false');
+      mouseCursor.setAttribute('visible', 'true');
+    } else {
+      gazeCursor.setAttribute('visible', 'true');
+      mouseCursor.setAttribute('visible', 'true');
+    }
+  }
+
+  _bindEditorPortalActivation(hotspotEl, data) {
+    const collider = hotspotEl.querySelector('.clickable');
+    const ring = hotspotEl.querySelector('.nav-ring');
+    const previewEl = hotspotEl.querySelector('.nav-preview-circle');
+    const activationEvents = [
+      'click',
+      'triggerdown',
+      'mouseup',
+      'touchend',
+      'mousedown',
+      'pointerdown',
+      'pointerup',
+    ];
+    const handleActivation = (e) => this._activateEditorPortalHotspot(data, e);
+    const registerTarget = (element) => {
+      if (!element) return;
+      element.classList.add('clickable');
+      activationEvents.forEach((evtName) => element.addEventListener(evtName, handleActivation));
+    };
+    registerTarget(hotspotEl);
+    registerTarget(collider);
+    registerTarget(ring);
+
+    const targetEl = collider || hotspotEl;
+    targetEl.addEventListener('mouseenter', () => {
+      if (previewEl) {
+        let src = null;
+        if (data.type === 'navigation') {
+          src = this._getEditorPreviewSrc(data.navigationTarget);
+        } else if (data.type === 'weblink') {
+          if (data.weblinkPreview instanceof File) {
+            try {
+              src = URL.createObjectURL(data.weblinkPreview);
+            } catch (_) {}
+          } else if (typeof data.weblinkPreview === 'string' && data.weblinkPreview) {
+            src = data.weblinkPreview;
+          }
+        }
+        if (src === 'VIDEO_ICON') {
+          (async () => {
+            const thumb = await this._ensureVideoPreview(data.navigationTarget);
+            const matSrc =
+              thumb ||
+              'data:image/svg+xml;charset=UTF-8,' +
+                encodeURIComponent(
+                  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="128" height="128"><rect rx="4" ry="4" x="2" y="6" width="14" height="12" fill="#111" stroke="#2ae" stroke-width="2"/><polygon points="16,10 22,7 22,17 16,14" fill="#2ae"/></svg>'
+                );
+            previewEl.setAttribute('material', 'src', matSrc);
+            previewEl.setAttribute('material', 'transparent', true);
+            previewEl.setAttribute('material', 'opacity', 1);
+            previewEl.setAttribute('material', 'shader', 'flat');
+            previewEl.setAttribute('material', 'side', 'double');
+            previewEl.setAttribute('material', 'alphaTest', 0.01);
+            previewEl.setAttribute('material', 'npot', true);
+          })();
+          previewEl.setAttribute('material', 'transparent', true);
+          previewEl.setAttribute('material', 'opacity', 1);
+          previewEl.setAttribute('material', 'shader', 'flat');
+          previewEl.setAttribute('material', 'side', 'double');
+          previewEl.setAttribute('material', 'alphaTest', 0.01);
+          previewEl.setAttribute('material', 'npot', true);
+        } else if (src) {
+          previewEl.setAttribute('material', 'src', src);
+          previewEl.setAttribute('material', 'transparent', true);
+          previewEl.setAttribute('material', 'opacity', 1);
+          previewEl.setAttribute('material', 'shader', 'flat');
+          previewEl.setAttribute('material', 'side', 'double');
+          previewEl.setAttribute('material', 'alphaTest', 0.01);
+          previewEl.setAttribute('material', 'npot', true);
+          setTimeout(() => {
+            try {
+              const mesh = previewEl.getObject3D('mesh');
+              const m = mesh && mesh.material;
+              const img = m && m.map && m.map.image;
+              if (!(img && img.naturalWidth)) {
+                const assetSel = this._ensurePreviewAsset(src, data.navigationTarget || data.id);
+                previewEl.setAttribute('material', 'src', assetSel);
+              }
+            } catch (_) {}
+          }, 150);
+        } else if (data.type === 'weblink') {
+          previewEl.setAttribute('material', 'color', '#000');
+          previewEl.setAttribute('material', 'transparent', true);
+          previewEl.setAttribute('material', 'opacity', 0.15);
+          previewEl.setAttribute('material', 'shader', 'flat');
+          previewEl.setAttribute('material', 'side', 'double');
+        }
+        previewEl.setAttribute('visible', 'true');
+        previewEl.removeAttribute('animation__shrink');
+        previewEl.setAttribute('scale', '0.01 0.01 0.01');
+        previewEl.setAttribute('animation__grow', {
+          property: 'scale',
+          to: '1 1 1',
+          dur: 180,
+          easing: 'easeOutCubic',
+        });
+      }
+      try {
+        const label = hotspotEl.querySelector('.nav-label');
+        const txt = label?.querySelector('a-text');
+        if (label && txt) {
+          if (data.type === 'navigation') {
+            const sc = this.scenes[data.navigationTarget];
+            txt.setAttribute('value', `Portal to ${sc?.name || data.navigationTarget}`);
+          } else {
+            const title =
+              data.weblinkTitle && data.weblinkTitle.trim()
+                ? data.weblinkTitle.trim()
+                : 'Open Link';
+            txt.setAttribute('value', title);
+          }
+          try {
+            const bg = label.querySelector('a-plane');
+            const minW = 1.7;
+            const maxW = 10;
+            const tW = parseFloat(txt.getAttribute('width') || '0') || minW;
+            const val = (txt.getAttribute('value') || '').toString();
+            const spaces = (val.match(/\s/g) || []).length;
+            const letters = Math.max(0, val.length - spaces);
+            const effChars = letters + 0.4 * spaces;
+            const est = 0.095 * effChars + 0.25;
+            const nextW = Math.min(maxW, Math.max(minW, Math.min(tW, est)));
+            if (bg) bg.setAttribute('width', String(nextW));
+          } catch (_) {}
+          label.setAttribute('visible', 'true');
+        }
+      } catch (_) {}
+    });
+    targetEl.addEventListener('mouseleave', () => {
+      if (previewEl) {
+        previewEl.removeAttribute('animation__grow');
+        previewEl.setAttribute('animation__shrink', {
+          property: 'scale',
+          to: '0.01 0.01 0.01',
+          dur: 120,
+          easing: 'easeInCubic',
+        });
+        setTimeout(() => {
+          previewEl.setAttribute('visible', 'false');
+        }, 130);
+      }
+      try {
+        const label = hotspotEl.querySelector('.nav-label');
+        if (label) {
+          label.setAttribute('visible', 'false');
+          const bg = label.querySelector('a-plane');
+          if (bg) bg.setAttribute('width', '1.8');
+        }
+      } catch (_) {}
+    });
   }
 
   armHotspotPlacement() {
@@ -3221,8 +3482,19 @@ class HotspotEditor {
     });
 
     // Edit mode toggle
+    const editModeToggle = document.getElementById('edit-mode-toggle');
+    if (editModeToggle) {
+      this.navigationMode = !editModeToggle.checked;
+      this._applyNavigationModeCursors();
+    }
     document.getElementById('edit-mode-toggle').addEventListener('change', (e) => {
       this.navigationMode = !e.target.checked;
+      if (this.navigationMode) {
+        this.editMode = false;
+        const indicator = document.getElementById('edit-indicator');
+        if (indicator) indicator.style.display = 'none';
+      }
+      this._applyNavigationModeCursors();
       this.updateModeIndicator();
       this._updateAddHotspotButtonState();
       // Auto-collapse hotspot type when leaving edit mode; expand when entering
@@ -5560,208 +5832,8 @@ class HotspotEditor {
 
     // In-scene edit/move buttons are attached after the entity enters the scene (see below).
 
-    // Add navigation click handler if not in edit mode
     if (data.type === 'navigation' || data.type === 'weblink') {
-      const targetEl = hotspotEl.querySelector('.clickable') || hotspotEl;
-      targetEl.addEventListener('click', (e) => {
-        if (!this.navigationMode) return; // Only navigate when not in edit mode
-        e.stopPropagation();
-        if (data.type === 'navigation') this.navigateToScene(data.navigationTarget);
-        else if (data.type === 'weblink') {
-          const url = data.weblinkUrl;
-          if (url) {
-            try {
-              window.open(url, '_blank');
-            } catch (_) {
-              location.href = url;
-            }
-          }
-        }
-      });
-
-      // Hover preview of destination scene INSIDE the circle
-      const previewEl = hotspotEl.querySelector('.nav-preview-circle');
-      targetEl.addEventListener('mouseenter', () => {
-        if (previewEl) {
-          let src = null;
-          if (data.type === 'navigation') {
-            src = this._getEditorPreviewSrc(data.navigationTarget);
-          } else if (data.type === 'weblink') {
-            if (data.weblinkPreview instanceof File) {
-              try {
-                src = URL.createObjectURL(data.weblinkPreview);
-              } catch (_) {}
-            } else if (typeof data.weblinkPreview === 'string' && data.weblinkPreview) {
-              src = data.weblinkPreview;
-            }
-          }
-          if (src === 'VIDEO_ICON') {
-            // Try to generate a thumbnail from the destination video
-            (async () => {
-              const thumb = await this._ensureVideoPreview(data.navigationTarget);
-              const matSrc =
-                thumb ||
-                'data:image/svg+xml;charset=UTF-8,' +
-                  encodeURIComponent(
-                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="128" height="128"><rect rx="4" ry="4" x="2" y="6" width="14" height="12" fill="#111" stroke="#2ae" stroke-width="2"/><polygon points="16,10 22,7 22,17 16,14" fill="#2ae"/></svg>'
-                  );
-              previewEl.setAttribute('material', 'src', matSrc);
-              previewEl.setAttribute('material', 'transparent', true);
-              previewEl.setAttribute('material', 'opacity', 1);
-              previewEl.setAttribute('material', 'shader', 'flat');
-              previewEl.setAttribute('material', 'side', 'double');
-              previewEl.setAttribute('material', 'alphaTest', 0.01);
-              previewEl.setAttribute('material', 'npot', true);
-              // Debug: verify texture binding shortly after
-              setTimeout(() => {
-                try {
-                  const mesh = previewEl.getObject3D('mesh');
-                  const ok = !!(
-                    mesh &&
-                    mesh.material &&
-                    mesh.material.map &&
-                    mesh.material.map.image &&
-                    mesh.material.map.image.naturalWidth
-                  );
-                  console.log('[Preview][Check][VideoThumb]', { ok, matSrc, hasMesh: !!mesh });
-                } catch (_) {}
-              }, 120);
-            })();
-            previewEl.setAttribute('material', 'transparent', true);
-            previewEl.setAttribute('material', 'opacity', 1);
-            previewEl.setAttribute('material', 'shader', 'flat');
-            previewEl.setAttribute('material', 'side', 'double');
-            previewEl.setAttribute('material', 'alphaTest', 0.01);
-            previewEl.setAttribute('material', 'npot', true);
-          } else if (src) {
-            console.log('[Preview][Hover][Editor]', {
-              id: data.id,
-              type: data.type,
-              srcType: src.startsWith('data:') ? 'dataURL' : 'url',
-              len: src.length,
-            });
-            previewEl.setAttribute('material', 'src', src);
-            previewEl.setAttribute('material', 'transparent', true);
-            previewEl.setAttribute('material', 'opacity', 1);
-            previewEl.setAttribute('material', 'shader', 'flat');
-            previewEl.setAttribute('material', 'side', 'double');
-            previewEl.setAttribute('material', 'alphaTest', 0.01);
-            previewEl.setAttribute('material', 'npot', true);
-            // Debug: verify texture binding shortly after
-            setTimeout(() => {
-              try {
-                const mesh = previewEl.getObject3D('mesh');
-                const m = mesh && mesh.material;
-                const img = m && m.map && m.map.image;
-                console.log('[Preview][Check]', {
-                  hasMesh: !!mesh,
-                  hasMap: !!(m && m.map),
-                  imgW: img && img.naturalWidth,
-                  imgH: img && img.naturalHeight,
-                  color: m && m.color && m.color.getHexString && m.color.getHexString(),
-                  npot: m && m.npot,
-                });
-                // If still no map image dimensions, try to nudge material by reassigning src once
-                if (!(img && img.naturalWidth)) {
-                  // Create or reuse an <img> asset and point the material to it
-                  const assetSel = this._ensurePreviewAsset(src, data.navigationTarget || data.id);
-                  previewEl.setAttribute('material', 'src', assetSel);
-                  // Re-check once more
-                  setTimeout(() => {
-                    try {
-                      const mesh2 = previewEl.getObject3D('mesh');
-                      const m2 = mesh2 && mesh2.material;
-                      const img2 = m2 && m2.map && m2.map.image;
-                      console.log('[Preview][Check][Asset]', {
-                        ok: !!(img2 && img2.naturalWidth),
-                        assetSel,
-                        imgW: img2 && img2.naturalWidth,
-                        imgH: img2 && img2.naturalHeight,
-                      });
-                    } catch (_) {}
-                  }, 120);
-                }
-              } catch (_) {}
-            }, 150);
-          } else if (data.type === 'weblink') {
-            // Fallback: subtle fill to indicate active portal when no preview image is provided
-            previewEl.setAttribute('material', 'color', '#000');
-            previewEl.setAttribute('material', 'transparent', true);
-            previewEl.setAttribute('material', 'opacity', 0.15);
-            previewEl.setAttribute('material', 'shader', 'flat');
-            previewEl.setAttribute('material', 'side', 'double');
-          }
-          previewEl.setAttribute('visible', 'true');
-          previewEl.removeAttribute('animation__shrink');
-          previewEl.setAttribute('scale', '0.01 0.01 0.01');
-          previewEl.setAttribute('animation__grow', {
-            property: 'scale',
-            to: '1 1 1',
-            dur: 180,
-            easing: 'easeOutCubic',
-          });
-          try {
-            console.log('[Preview][MaterialAfterSet][Editor]', previewEl.getAttribute('material'));
-          } catch (_) {}
-        }
-        // Show label title
-        try {
-          const label = hotspotEl.querySelector('.nav-label');
-          const txt = label?.querySelector('a-text');
-          if (label && txt) {
-            if (data.type === 'navigation') {
-              const sc = this.scenes[data.navigationTarget];
-              txt.setAttribute('value', `Portal to ${sc?.name || data.navigationTarget}`);
-            } else {
-              const title =
-                data.weblinkTitle && data.weblinkTitle.trim()
-                  ? data.weblinkTitle.trim()
-                  : 'Open Link';
-              txt.setAttribute('value', title);
-            }
-            // Dynamically size the label background using a tighter char-based estimate (spaces discounted), clamped by text width
-            try {
-              const bg = label.querySelector('a-plane');
-              const minW = 1.7; // tighter compact width
-              const maxW = 10; // safety cap
-              const tW = parseFloat(txt.getAttribute('width') || '0') || minW; // your chosen text width (e.g., 5)
-              const val = (txt.getAttribute('value') || '').toString();
-              const spaces = (val.match(/\s/g) || []).length;
-              const letters = Math.max(0, val.length - spaces);
-              const effChars = letters + 0.4 * spaces; // spaces count less toward width
-              // Heuristic: ~0.095 world units per effective char + small padding
-              const est = 0.095 * effChars + 0.25;
-              const nextW = Math.min(maxW, Math.max(minW, Math.min(tW, est)));
-              if (bg) bg.setAttribute('width', String(nextW));
-            } catch (_) {}
-            label.setAttribute('visible', 'true');
-          }
-        } catch (_) {}
-      });
-      targetEl.addEventListener('mouseleave', () => {
-        if (previewEl) {
-          previewEl.removeAttribute('animation__grow');
-          previewEl.setAttribute('animation__shrink', {
-            property: 'scale',
-            to: '0.01 0.01 0.01',
-            dur: 120,
-            easing: 'easeInCubic',
-          });
-          setTimeout(() => {
-            previewEl.setAttribute('visible', 'false');
-          }, 130);
-        }
-        // Hide label title
-        try {
-          const label = hotspotEl.querySelector('.nav-label');
-          if (label) {
-            label.setAttribute('visible', 'false');
-            // Reset background width back to default for next hover
-            const bg = label.querySelector('a-plane');
-            if (bg) bg.setAttribute('width', '1.8');
-          }
-        } catch (_) {}
-      });
+      this._bindEditorPortalActivation(hotspotEl, data);
     }
 
     container.appendChild(hotspotEl);

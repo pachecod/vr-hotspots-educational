@@ -1139,7 +1139,6 @@ class HotspotEditor {
       toggle.checked = false;
       toggle.disabled = true;
     }
-    this._applyNavigationModeCursors();
     this.setContentMode('spherical');
     this.updateModeIndicator();
     if (typeof this._updateAddHotspotButtonState === 'function') {
@@ -1941,7 +1940,7 @@ class HotspotEditor {
           if (Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD_PX) return;
 
           if (this.navigationMode && !this.repositioningHotspotId) {
-            this._tryActivateNavigationPortalAtViewCenter({
+            this._tryActivateNavigationPortal({
               clientX: touch.clientX,
               clientY: touch.clientY,
             });
@@ -2033,28 +2032,54 @@ class HotspotEditor {
     }
     if (!this.editMode) {
       if (this.navigationMode) {
-        this._tryActivateNavigationPortalAtViewCenter(evt);
+        this._tryActivateNavigationPortal(evt);
       }
       return;
     }
     this.placeHotspot(evt);
   }
 
+  _getPortalHotspotDataById(id) {
+    if (!Number.isFinite(id)) return null;
+    const hs =
+      (this.hotspots || []).find((h) => h && h.id === id) ||
+      ((this.scenes[this.currentScene] || {}).hotspots || []).find((h) => h && h.id === id);
+    if (!hs || (hs.type !== 'navigation' && hs.type !== 'weblink')) return null;
+    return hs;
+  }
+
+  _resolvePortalHotspotDataFromElement(el) {
+    let node = el;
+    while (node) {
+      const idAttr = node.id || '';
+      if (idAttr.startsWith('hotspot-')) {
+        const hs = this._getPortalHotspotDataById(parseInt(idAttr.slice(8), 10));
+        if (hs) return hs;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  _resolvePortalHotspotDataFromEvent(evt) {
+    const intersectionEl = evt?.detail?.intersection?.el;
+    if (intersectionEl) {
+      const fromIntersection = this._resolvePortalHotspotDataFromElement(intersectionEl);
+      if (fromIntersection) return fromIntersection;
+    }
+    const targetEl = evt?.target;
+    if (targetEl && targetEl.closest) {
+      const hotspotEl = targetEl.closest("[id^='hotspot-']");
+      if (hotspotEl) {
+        const fromTarget = this._resolvePortalHotspotDataFromElement(hotspotEl);
+        if (fromTarget) return fromTarget;
+      }
+    }
+    return null;
+  }
+
   _activateEditorPortalHotspot(data, evt) {
     if (!this.navigationMode || !data) return false;
-    if (evt && evt.type) {
-      const allowed = [
-        'click',
-        'triggerdown',
-        'triggerup',
-        'mouseup',
-        'touchend',
-        'mousedown',
-        'pointerdown',
-        'pointerup',
-      ];
-      if (!allowed.includes(evt.type)) return false;
-    }
     const now =
       typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
     if (now - (this._lastPortalActivationMs || 0) < 250) return true;
@@ -2062,7 +2087,6 @@ class HotspotEditor {
     if (evt) {
       try {
         evt.stopPropagation();
-        if (evt.preventDefault) evt.preventDefault();
       } catch (_) {}
     }
     if (data.type === 'navigation') {
@@ -2092,70 +2116,53 @@ class HotspotEditor {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
-    const meshes = [];
-    const meshToData = new Map();
+    const roots = [];
     document.querySelectorAll("#hotspot-container [id^='hotspot-']").forEach((hotspotEl) => {
-      const id = parseInt(String(hotspotEl.id || '').slice(8), 10);
-      if (!Number.isFinite(id)) return;
-      const hs =
-        (this.hotspots || []).find((h) => h && h.id === id) ||
-        ((this.scenes[this.currentScene] || {}).hotspots || []).find((h) => h && h.id === id);
-      if (!hs || (hs.type !== 'navigation' && hs.type !== 'weblink')) return;
-      const registerMesh = (mesh) => {
-        if (!mesh) return;
-        meshes.push(mesh);
-        meshToData.set(mesh, hs);
-      };
-      hotspotEl.querySelectorAll('.clickable, .nav-ring').forEach((child) => {
-        registerMesh(child.getObject3D && child.getObject3D('mesh'));
-      });
-      registerMesh(hotspotEl.getObject3D && hotspotEl.getObject3D('mesh'));
+      const hs = this._getPortalHotspotDataById(
+        parseInt(String(hotspotEl.id || '').slice(8), 10)
+      );
+      if (!hs) return;
+      const root = hotspotEl.object3D;
+      if (root) roots.push({ root, hs });
     });
+    if (!roots.length) return null;
 
-    const hits = raycaster.intersectObjects(meshes, false);
+    const hits = raycaster.intersectObjects(
+      roots.map((entry) => entry.root),
+      true
+    );
     if (!hits.length) return null;
-    return meshToData.get(hits[0].object) || null;
+
+    const hitObject = hits[0].object;
+    for (const entry of roots) {
+      let obj = hitObject;
+      while (obj) {
+        if (obj === entry.root) return entry.hs;
+        obj = obj.parent;
+      }
+    }
+    return null;
   }
 
-  _tryActivateNavigationPortalAtViewCenter(evt) {
-    const data = this._findPortalHotspotDataAtViewCenter();
+  _tryActivateNavigationPortal(evt) {
+    if (!this.navigationMode) return false;
+    const data =
+      this._resolvePortalHotspotDataFromEvent(evt) || this._findPortalHotspotDataAtViewCenter();
     if (!data) return false;
     return this._activateEditorPortalHotspot(data, evt);
-  }
-
-  _applyNavigationModeCursors() {
-    const mouseCursor = document.getElementById('mouse-cursor');
-    const gazeCursor = document.getElementById('gaze-cursor');
-    if (!mouseCursor || !gazeCursor || this._isTouchDevice()) return;
-    if (this.navigationMode) {
-      gazeCursor.setAttribute('visible', 'false');
-      mouseCursor.setAttribute('visible', 'true');
-    } else {
-      gazeCursor.setAttribute('visible', 'true');
-      mouseCursor.setAttribute('visible', 'true');
-    }
   }
 
   _bindEditorPortalActivation(hotspotEl, data) {
     const collider = hotspotEl.querySelector('.clickable');
     const ring = hotspotEl.querySelector('.nav-ring');
     const previewEl = hotspotEl.querySelector('.nav-preview-circle');
-    const activationEvents = [
-      'click',
-      'triggerdown',
-      'mouseup',
-      'touchend',
-      'mousedown',
-      'pointerdown',
-      'pointerup',
-    ];
+    const activationEvents = ['click', 'triggerdown'];
     const handleActivation = (e) => this._activateEditorPortalHotspot(data, e);
     const registerTarget = (element) => {
       if (!element) return;
       element.classList.add('clickable');
       activationEvents.forEach((evtName) => element.addEventListener(evtName, handleActivation));
     };
-    registerTarget(hotspotEl);
     registerTarget(collider);
     registerTarget(ring);
 
@@ -3485,7 +3492,6 @@ class HotspotEditor {
     const editModeToggle = document.getElementById('edit-mode-toggle');
     if (editModeToggle) {
       this.navigationMode = !editModeToggle.checked;
-      this._applyNavigationModeCursors();
     }
     document.getElementById('edit-mode-toggle').addEventListener('change', (e) => {
       this.navigationMode = !e.target.checked;
@@ -3494,7 +3500,6 @@ class HotspotEditor {
         const indicator = document.getElementById('edit-indicator');
         if (indicator) indicator.style.display = 'none';
       }
-      this._applyNavigationModeCursors();
       this.updateModeIndicator();
       this._updateAddHotspotButtonState();
       // Auto-collapse hotspot type when leaving edit mode; expand when entering
@@ -5837,6 +5842,10 @@ class HotspotEditor {
     }
 
     container.appendChild(hotspotEl);
+
+    if (data.type === 'navigation' || data.type === 'weblink') {
+      this.refreshSceneMediaRaycasters();
+    }
 
     if (data.type === 'model') {
       setTimeout(() => this.ensureInSceneEditButtons(hotspotEl, data), 150);

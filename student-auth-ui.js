@@ -213,11 +213,69 @@ function bindTestUserSignOutBtn() {
   });
 }
 
+function closeGuestSignInWarningOverlay() {
+  const overlay = document.getElementById('guest-signin-warning-overlay');
+  if (overlay) overlay.remove();
+  document.body.classList.remove('guest-agreement-open');
+}
+
+function promptGuestSignInWarning() {
+  return new Promise((resolve) => {
+    closeGuestSignInWarningOverlay();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'guest-signin-warning-overlay';
+    overlay.className = 'guest-agreement-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'guest-signin-warning-title');
+
+    overlay.innerHTML = `
+      <div class="guest-agreement-backdrop" data-action="cancel"></div>
+      <div class="guest-agreement-dialog">
+        <h2 id="guest-signin-warning-title" class="guest-agreement-title">Sign in?</h2>
+        <div class="guest-agreement-content">
+          <p>All work done as a guest will be deleted after signing in.</p>
+          <p>If you want to save your work, click <strong>Save Template</strong> to get a local ZIP. You can upload that to your 360° editor after you are signed in.</p>
+        </div>
+        <div class="guest-agreement-actions">
+          <button type="button" class="guest-agreement-btn guest-agreement-cancel" data-action="cancel">Cancel</button>
+          <button type="button" class="guest-agreement-btn guest-agreement-agree" data-action="ok">OK</button>
+        </div>
+      </div>
+    `;
+
+    const finish = (proceed) => {
+      closeGuestSignInWarningOverlay();
+      document.removeEventListener('keydown', onKeyDown);
+      resolve(proceed);
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') finish(false);
+    };
+
+    overlay.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-action]')?.dataset.action;
+      if (action === 'ok') finish(true);
+      if (action === 'cancel') finish(false);
+    });
+
+    document.addEventListener('keydown', onKeyDown);
+    document.body.appendChild(overlay);
+    document.body.classList.add('guest-agreement-open');
+    overlay.querySelector('[data-action="ok"]')?.focus();
+  });
+}
+
 function bindTestUserSignInBtn() {
   const btn = document.getElementById('test-user-signin-btn');
   if (!btn || btn.dataset.bound === '1') return;
   btn.dataset.bound = '1';
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
+    const proceed = await promptGuestSignInWarning();
+    if (!proceed) return;
+
     renderStudentLoginGate(
       'student-login-gate',
       (student) => {

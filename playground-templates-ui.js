@@ -218,6 +218,9 @@ async function openPlaygroundTemplate(slug, { containerId, onAuthenticated } = {
   if (!slug) return;
 
   window.__pendingPlaygroundSlug = slug;
+  window.__playgroundTemplateLoading = true;
+  window.__playgroundGuestTemplate = true;
+  window.__integratedWelcomePending = false;
 
   await ensureGuestSessionForPlayground();
 
@@ -229,9 +232,8 @@ async function openPlaygroundTemplate(slug, { containerId, onAuthenticated } = {
     return;
   }
 
-  if (typeof beginIntegratedWelcomeAfterAuth === 'function' && containerId && onAuthenticated) {
-    beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, null);
-  } else if (typeof onAuthenticated === 'function') {
+  // Playground samples skip the post-auth 360°/flat welcome — agreement + load happen in runPendingPlaygroundLoad.
+  if (typeof onAuthenticated === 'function') {
     onAuthenticated(window.currentStudent || null);
   }
 }
@@ -254,42 +256,63 @@ async function runPendingPlaygroundLoad() {
   const slug = window.__pendingPlaygroundSlug;
   if (!slug || !window.hotspotEditor) return;
   window.__pendingPlaygroundSlug = null;
+  window.__playgroundTemplateLoading = true;
+  window.__playgroundGuestTemplate = true;
+  window.__integratedWelcomePending = false;
 
-  const detailRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}`);
-  const detail = await detailRes.json();
-  if (!detailRes.ok || !detail.success) {
-    throw new Error(detail.message || 'Template not found');
-  }
-  const template = detail.template;
-
-  if (template.has_bundle) {
-    const bundleRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}/bundle`, {
-      credentials: 'include',
-    });
-    if (!bundleRes.ok) throw new Error('Could not download project bundle');
-    const blob = await bundleRes.blob();
-    await window.hotspotEditor.loadZIPTemplate(blob, {
-      silent: true,
-      initialContentMode: 'spherical',
-    });
-  } else if (template.files_manifest && template.files_manifest.length) {
-    if (window.flatPageEditor && typeof window.flatPageEditor.loadTemplate === 'function') {
-      window.flatPageEditor.loadTemplate({
-        title: template.title,
-        slug: template.slug,
-        description: template.description,
-        files_manifest: template.files_manifest,
-        config_ui_schema: template.config_ui_schema,
-      });
+  try {
+    const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
+    if (!agreed) {
+      window.__playgroundGuestTemplate = false;
+      const err = new Error('Guest agreement cancelled');
+      err.code = 'GUEST_AGREEMENT_CANCELLED';
+      throw err;
     }
-    window.hotspotEditor.setContentMode('flat', { skipVrGenerate: true });
-  } else {
-    throw new Error('This sample is not ready yet (no bundle or flat files).');
+    try {
+      localStorage.setItem('vr-hotspot-welcome-seen', '1');
+    } catch (_) {}
+
+    const detailRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}`);
+    const detail = await detailRes.json();
+    if (!detailRes.ok || !detail.success) {
+      throw new Error(detail.message || 'Template not found');
+    }
+    const template = detail.template;
+
+    if (template.has_bundle) {
+      const bundleRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}/bundle`, {
+        credentials: 'include',
+      });
+      if (!bundleRes.ok) throw new Error('Could not download project bundle');
+      const blob = await bundleRes.blob();
+      await window.hotspotEditor.loadZIPTemplate(blob, {
+        silent: true,
+        initialContentMode: 'spherical',
+      });
+      // Re-bind image hotspot textures after ZIP import (avoids black billboards on guest samples).
+      if (typeof window.hotspotEditor.rehydrateImageHotspotsFromIDB === 'function') {
+        await window.hotspotEditor.rehydrateImageHotspotsFromIDB();
+      }
+      await window.hotspotEditor.loadCurrentScene();
+    } else if (template.files_manifest && template.files_manifest.length) {
+      if (window.flatPageEditor && typeof window.flatPageEditor.loadTemplate === 'function') {
+        window.flatPageEditor.loadTemplate({
+          title: template.title,
+          slug: template.slug,
+          description: template.description,
+          files_manifest: template.files_manifest,
+          config_ui_schema: template.config_ui_schema,
+        });
+      }
+      window.hotspotEditor.setContentMode('flat', { skipVrGenerate: true });
+    } else {
+      throw new Error('This sample is not ready yet (no bundle or flat files).');
+    }
+
+    if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
+  } finally {
+    window.__playgroundTemplateLoading = false;
   }
-
-  if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
-
-  await promptGuestAgreementAfterPlaygroundLoad();
 }
 
 window.fetchPlaygroundTemplates = fetchPlaygroundTemplates;

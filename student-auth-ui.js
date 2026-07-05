@@ -361,6 +361,8 @@ async function returnToWelcomeScreen() {
   window.editorAccessMode = 'none';
   window.currentStudent = null;
   window.__pendingPlaygroundSlug = null;
+  window.__playgroundGuestTemplate = false;
+  window.__playgroundTemplateLoading = false;
   window.__integratedWelcomePending = false;
   hideTestUserEditorSession();
   hideStudentEditorSession();

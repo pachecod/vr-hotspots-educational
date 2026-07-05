@@ -54,3 +54,5 @@ services:
         value: "false"
       - key: VIDEO_EXPORT_URL_MODE
         value: "false"
+      - key: GOOGLE_ANALYTICS_MEASUREMENT_ID
+        sync: false

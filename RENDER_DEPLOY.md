@@ -67,6 +67,8 @@ Optional:
 | `STRIPE_PRICE_CLASS` | Stripe Price ID for Class tier |
 | `STRIPE_PRICE_PRO` | Stripe Price ID for Pro tier |
 | `STRIPE_ALLOW_STUDENT_UPGRADES` | Set `true` to allow per-student upgrades |
+| `GOOGLE_ANALYTICS_MEASUREMENT_ID` | GA4 measurement ID (e.g. `G-XXXXXXXXXX`) for site-wide usage tracking |
+| `GOOGLE_ANALYTICS_ALLOW_LOCALHOST` | Set `true` to send analytics from localhost during development |
 
 ### Ridey quick setup
 
@@ -81,6 +83,20 @@ RIDEY_STRICT_VALIDATION=false
 
 Mark `OPENAI_API_KEY` as a **Secret** in Render. After deploy, confirm in **Editor Settings** that Ridey is enabled and choose **1.0** or **2.0 (beta)**. Team members or students must be signed in to use **Ask Ridey** (or **Ask Ridey 2.0**). To roll back from **2.0**, switch the version to **1.0** in Editor Settings — no redeploy required.
 
+### Google Analytics quick setup
+
+Track usage on the editor, admin, legal pages, and hosted student projects (`/hosted/*`):
+
+```bash
+GOOGLE_ANALYTICS_MEASUREMENT_ID=G-XXXXXXXXXX
+```
+
+1. In Render → **Environment**, add `GOOGLE_ANALYTICS_MEASUREMENT_ID` with your GA4 measurement ID (mark as **Secret** if you prefer — the ID is public in page source but this keeps it out of git).
+2. Redeploy or restart the service so the server picks up the variable.
+3. Sign in to **Editor Settings** (`/admin-snippets.html`) and ensure **Enable Google Analytics** is checked (enabled by default when the ID is set).
+
+Local development does not send analytics unless you also set `GOOGLE_ANALYTICS_ALLOW_LOCALHOST=true` in your gitignored `.env`.
+
 ## 4. After deploy
 
 Your app will be at `https://YOUR-SERVICE.onrender.com`:
@@ -89,7 +105,7 @@ Your app will be at `https://YOUR-SERVICE.onrender.com`:
 - **Admin overview:** `/admin`
 - **Admin submissions:** `/admin-submissions.html` (primary admin inbox)
 - **Admin assets (Online Assets):** `/admin-common-assets.html` (includes **Review All Content** hub)
-- **Admin editor settings:** `/admin-snippets.html` (snippets, Ridey version, blocked extensions)
+- **Admin editor settings:** `/admin-snippets.html` (snippets, Ridey version, Google Analytics, blocked extensions)
 - **Admin templates:** `/admin-templates.html` (flat page starter templates)
 - **Users & teams/classes:** `/admin-users.html`
 - **Billing (if Stripe enabled):** `/admin-billing.html`

@@ -172,6 +172,14 @@ function hasImageHotspotReference(h) {
   return false;
 }
 
+function isPlaygroundGuestTemplateFlow() {
+  return !!(
+    window.__playgroundGuestTemplate ||
+    window.__playgroundTemplateLoading ||
+    window.__pendingPlaygroundSlug
+  );
+}
+
 function isEditorVideoSkyboxScene() {
   try {
     const ed = window.hotspotEditor;
@@ -1153,24 +1161,29 @@ class HotspotEditor {
 
     this.loadVideoPipelineConfig().catch(() => {});
 
-    // Rehydrate any image/video/audio blob URLs from IndexedDB, then load the scene
-    this.rehydrateImageSourcesFromIDB()
-      .catch(() => {})
-      .then(() => this.rehydrateImageHotspotsFromIDB())
-      .catch(() => {})
-      .then(() => this.rehydrateVideoSourcesFromIDB())
-      .catch(() => {})
-      .then(() => this.rehydrateVideoHotspotsFromIDB())
-      .catch(() => {})
-      .then(() => this.rehydrateAudioSourcesFromIDB())
-      .catch(() => {})
-      .then(() => this.rehydrateGroundTexturesFromIDB())
-      .catch(() => {})
-      .then(() => this.rehydrateModelSourcesFromIDB())
-      .catch(() => {})
-      .finally(() => {
-        this.loadCurrentScene();
-      });
+    const skipInitialSceneBootstrap = isPlaygroundGuestTemplateFlow();
+    if (skipInitialSceneBootstrap) {
+      window.__integratedWelcomePending = false;
+    } else {
+      // Rehydrate any image/video/audio blob URLs from IndexedDB, then load the scene
+      this.rehydrateImageSourcesFromIDB()
+        .catch(() => {})
+        .then(() => this.rehydrateImageHotspotsFromIDB())
+        .catch(() => {})
+        .then(() => this.rehydrateVideoSourcesFromIDB())
+        .catch(() => {})
+        .then(() => this.rehydrateVideoHotspotsFromIDB())
+        .catch(() => {})
+        .then(() => this.rehydrateAudioSourcesFromIDB())
+        .catch(() => {})
+        .then(() => this.rehydrateGroundTexturesFromIDB())
+        .catch(() => {})
+        .then(() => this.rehydrateModelSourcesFromIDB())
+        .catch(() => {})
+        .finally(() => {
+          if (!isPlaygroundGuestTemplateFlow()) this.loadCurrentScene();
+        });
+    }
 
     // Prompt to change default scene image (only if still using default)
     this.promptForSceneImageChange();
@@ -1947,9 +1960,198 @@ class HotspotEditor {
   }
 
   _configureTouchCursors() {
-    if (!this._isTouchDevice()) return;
+    this._configurePlatformCursors();
+  }
+
+  _configurePlatformCursors() {
     const mouseCursor = document.getElementById('mouse-cursor');
-    if (mouseCursor) mouseCursor.setAttribute('visible', 'false');
+    const gazeCursor = document.getElementById('gaze-cursor');
+    if (this._isTouchDevice()) {
+      if (mouseCursor) mouseCursor.setAttribute('visible', 'false');
+      return;
+    }
+    // Desktop: one active cursor avoids duplicate raycasts that block edit clicks.
+    if (gazeCursor) gazeCursor.setAttribute('visible', 'false');
+    if (mouseCursor) mouseCursor.setAttribute('visible', 'true');
+  }
+
+  _pointerEventToNdc(sourceEvent) {
+    if (typeof THREE === 'undefined') return null;
+    const sceneEl = document.querySelector('a-scene');
+    const canvas = sceneEl?.canvas;
+    if (!canvas || sourceEvent?.clientX == null) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    return new THREE.Vector2(
+      ((sourceEvent.clientX - rect.left) / rect.width) * 2 - 1,
+      -((sourceEvent.clientY - rect.top) / rect.height) * 2 + 1
+    );
+  }
+
+  _resolveAFrameElFromObject3D(object) {
+    let node = object;
+    while (node) {
+      if (node.el) return node.el;
+      node = node.parent;
+    }
+    return null;
+  }
+
+  _collectEditModeInteractionEntries() {
+    const entries = [];
+    const pushEl = (el) => {
+      if (!el) return;
+      if (el.getAttribute && el.getAttribute('visible') === 'false') return;
+      const mesh = el.getObject3D && el.getObject3D('mesh');
+      if (!mesh) return;
+      if (el.object3D && el.object3D.visible === false) return;
+      el.object3D?.updateMatrixWorld(true);
+      entries.push({ mesh, el });
+    };
+
+    document.querySelectorAll('#hotspot-container .clickable:not(.nav-ring)').forEach((el) => {
+      if (el.closest('.in-scene-edit-controls') || el.closest('.in-scene-edit-hint')) {
+        pushEl(el);
+        return;
+      }
+      const hotspotEl = el.closest("[id^='hotspot-']");
+      if (!hotspotEl) {
+        pushEl(el);
+        return;
+      }
+      const id = parseInt(String(hotspotEl.id || '').slice(8), 10);
+      if (this._getPortalHotspotDataById(id)) return;
+      pushEl(el);
+    });
+
+    document.querySelectorAll('#hotspot-container .model-transform-handle').forEach(pushEl);
+
+    return entries;
+  }
+
+  _dispatchEditModeInteraction(hitEl, sourceEvent) {
+    if (!hitEl) return false;
+
+    const classes = hitEl.classList;
+    const hotspotEl = hitEl.closest?.("[id^='hotspot-']");
+    const hotspotId = hotspotEl ? parseInt(String(hotspotEl.id || '').slice(8), 10) : NaN;
+
+    if (classes.contains('in-scene-edit-btn') && Number.isFinite(hotspotId)) {
+      this.showEditHotspotDialog(hotspotId);
+      return true;
+    }
+    if (classes.contains('in-scene-move-btn') && Number.isFinite(hotspotId)) {
+      setTimeout(() => this.startReposition(hotspotId), 0);
+      return true;
+    }
+    if (
+      classes.contains('static-image-hotspot') ||
+      classes.contains('static-video-hotspot') ||
+      classes.contains('in-scene-edit-hint-bg') ||
+      classes.contains('in-scene-edit-hint-label')
+    ) {
+      if (hotspotEl) this.revealInSceneButtons(hotspotEl);
+      return true;
+    }
+    if (classes.contains('static-model-hotspot') && Number.isFinite(hotspotId)) {
+      this.showModelHotspotActionMenu(hotspotId);
+      return true;
+    }
+
+    this._emitSyntheticEntityClick(hitEl, sourceEvent);
+    return true;
+  }
+
+  _findEditInteractionTargetAtPointer(sourceEvent) {
+    const sceneEl = document.querySelector('a-scene');
+    const camEl = document.getElementById('cam');
+    const camera = camEl?.getObject3D?.('camera') || sceneEl?.camera;
+    const ndc = this._pointerEventToNdc(sourceEvent);
+    if (!camera || !ndc || typeof THREE === 'undefined') return null;
+
+    sceneEl?.object3D?.updateMatrixWorld(true);
+    camEl?.object3D?.updateMatrixWorld(true);
+
+    const entries = this._collectEditModeInteractionEntries();
+    if (!entries.length) return null;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(
+      entries.map((entry) => entry.mesh),
+      false
+    );
+    if (!hits.length) return null;
+
+    const hitMesh = hits[0].object;
+    return (
+      entries.find((entry) => entry.mesh === hitMesh)?.el ||
+      this._resolveAFrameElFromObject3D(hitMesh)
+    );
+  }
+
+  _emitSyntheticEntityClick(el, sourceEvent) {
+    if (!el || typeof el.emit !== 'function') return;
+    const mouseCursor = document.getElementById('mouse-cursor');
+    el.emit(
+      'click',
+      {
+        cursorEl: mouseCursor,
+        mouseEvent: sourceEvent,
+      },
+      false
+    );
+  }
+
+  _tryHandleEditModeInteraction(sourceEvent) {
+    if (this.navigationMode || this.repositioningHotspotId || this.editMode) return false;
+
+    const now =
+      typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+    if (now - (this._lastEditInteractionMs || 0) < 150) return false;
+
+    const hitEl = this._findEditInteractionTargetAtPointer(sourceEvent);
+    if (!hitEl) return false;
+
+    this._lastEditInteractionMs = now;
+    return this._dispatchEditModeInteraction(hitEl, sourceEvent);
+  }
+
+  _maybeShowEditModePortalNavigateHint(anchor) {
+    if (this.navigationMode || this.repositioningHotspotId || this.editMode) return;
+    const now =
+      typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+    if (now - (this._lastEditModePortalHintMs || 0) < 800) return;
+    this._lastEditModePortalHintMs = now;
+    this._showSubtleEditorHint('Turn edit mode off to navigate', 2200, anchor);
+  }
+
+  _tryShowEditModePortalNavigateHint(sourceEvent) {
+    if (this.navigationMode || this.repositioningHotspotId || this.editMode) return false;
+    const hit = this._findPortalHotspotHitAtPointer(sourceEvent);
+    if (!hit) return false;
+    this._maybeShowEditModePortalNavigateHint(this._worldPointToScreen(hit.point));
+    return true;
+  }
+
+  _isScenePointerTap(sourceEvent, pressState, thresholdPx) {
+    if (!pressState || pressState.id !== sourceEvent.pointerId) return false;
+    if (sourceEvent.button != null && sourceEvent.button !== 0) return false;
+    const moved = Math.hypot(sourceEvent.clientX - pressState.x, sourceEvent.clientY - pressState.y);
+    return moved <= thresholdPx;
+  }
+
+  _handleScenePointerTap(sourceEvent) {
+    if (this.navigationMode && !this.editMode && !this.repositioningHotspotId) {
+      this._tryActivateNavigationPortalForMouse(sourceEvent);
+      return;
+    }
+    if (!this.navigationMode && !this.editMode && !this.repositioningHotspotId) {
+      const handled = this._tryHandleEditModeInteraction(sourceEvent);
+      if (!handled) {
+        this._tryShowEditModePortalNavigateHint(sourceEvent);
+      }
+    }
   }
 
   _hasValidIntersectionPoint(hit) {
@@ -2012,7 +2214,6 @@ class HotspotEditor {
       canvas.addEventListener(
         'touchend',
         (evt) => {
-          if (!this.editMode && !this.repositioningHotspotId) return;
           const touch = evt.changedTouches?.[0];
           if (!touch || !touchStart) return;
 
@@ -2021,6 +2222,20 @@ class HotspotEditor {
           touchStart = null;
           if (Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD_PX) return;
 
+          if (this.navigationMode && !this.repositioningHotspotId) {
+            this._tryActivateNavigationPortalForMouse({
+              clientX: touch.clientX,
+              clientY: touch.clientY,
+            });
+            return;
+          }
+          if (!this.editMode && !this.repositioningHotspotId) {
+            this._handleScenePointerTap({
+              clientX: touch.clientX,
+              clientY: touch.clientY,
+            });
+            return;
+          }
           this._handleScenePlacementClick({
             clientX: touch.clientX,
             clientY: touch.clientY,
@@ -2030,11 +2245,56 @@ class HotspotEditor {
       );
     }
 
-    ['mouse-cursor', 'gaze-cursor'].forEach((id) => {
-      document.getElementById(id)?.addEventListener('click', (evt) => {
+    if (!this._isTouchDevice()) {
+      let mousePress = null;
+      const MOUSE_DRAG_THRESHOLD_PX = 8;
+
+      canvas.addEventListener(
+        'pointerdown',
+        (evt) => {
+          if (evt.pointerType === 'mouse' || evt.pointerType === 'pen') {
+            mousePress = { x: evt.clientX, y: evt.clientY, id: evt.pointerId };
+          }
+        },
+        { passive: true }
+      );
+
+      canvas.addEventListener(
+        'pointerup',
+        (evt) => {
+          if (evt.pointerType === 'touch') return;
+          const press = mousePress;
+          mousePress = null;
+          if (!this._isScenePointerTap(evt, press, MOUSE_DRAG_THRESHOLD_PX)) return;
+          this._handleScenePointerTap(evt);
+        },
+        { passive: true }
+      );
+    }
+
+    const mouseCursor = document.getElementById('mouse-cursor');
+    if (mouseCursor) {
+      mouseCursor.addEventListener('click', (evt) => {
+        if (this.repositioningHotspotId) {
+          this._handleScenePlacementClick(evt);
+          return;
+        }
+        if (this.navigationMode && !this.editMode) {
+          this._tryActivateNavigationPortalForMouse(evt);
+          return;
+        }
         this._handleScenePlacementClick(evt);
       });
-    });
+    }
+
+    const gazeCursor = document.getElementById('gaze-cursor');
+    if (gazeCursor) {
+      gazeCursor.addEventListener('click', (evt) => {
+        // Gaze navigation is handled by fuse clicks on portal colliders — do not reroute here.
+        if (this.navigationMode) return;
+        this._handleScenePlacementClick(evt);
+      });
+    }
 
     this._configureTouchCursors();
   }
@@ -2104,8 +2364,352 @@ class HotspotEditor {
       this.applyReposition(evt);
       return;
     }
-    if (!this.editMode) return;
+    if (!this.editMode) {
+      if (this.navigationMode) {
+        this._tryActivateNavigationPortalForMouse(evt);
+      }
+      return;
+    }
     this.placeHotspot(evt);
+  }
+
+  _getPortalHotspotDataById(id) {
+    if (!Number.isFinite(id)) return null;
+    const hs =
+      (this.hotspots || []).find((h) => h && h.id === id) ||
+      ((this.scenes[this.currentScene] || {}).hotspots || []).find((h) => h && h.id === id);
+    if (!hs || (hs.type !== 'navigation' && hs.type !== 'weblink')) return null;
+    return hs;
+  }
+
+  _resolvePortalHotspotDataFromElement(el) {
+    let node = el;
+    while (node) {
+      const idAttr = node.id || '';
+      if (idAttr.startsWith('hotspot-')) {
+        const hs = this._getPortalHotspotDataById(parseInt(idAttr.slice(8), 10));
+        if (hs) return hs;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  _resolvePortalHotspotDataFromEvent(evt) {
+    const intersectionEl = evt?.detail?.intersection?.el;
+    if (intersectionEl) {
+      const fromIntersection = this._resolvePortalHotspotDataFromElement(intersectionEl);
+      if (fromIntersection) return fromIntersection;
+    }
+    const targetEl = evt?.target;
+    if (targetEl && targetEl.closest) {
+      const hotspotEl = targetEl.closest("[id^='hotspot-']");
+      if (hotspotEl) {
+        const fromTarget = this._resolvePortalHotspotDataFromElement(hotspotEl);
+        if (fromTarget) return fromTarget;
+      }
+    }
+    return null;
+  }
+
+  _activateEditorPortalHotspot(data, evt) {
+    if (!data) return false;
+    if (!this.navigationMode) {
+      let anchor = null;
+      const intersectionPoint = evt?.detail?.intersection?.point;
+      if (intersectionPoint) {
+        anchor = this._worldPointToScreen(intersectionPoint);
+      } else {
+        const worldPos = this._getPortalHotspotWorldPosition(data);
+        if (worldPos) anchor = this._worldPointToScreen(worldPos);
+      }
+      this._maybeShowEditModePortalNavigateHint(anchor);
+      return false;
+    }
+    const now =
+      typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+    if (now - (this._lastPortalActivationMs || 0) < 250) return true;
+    this._lastPortalActivationMs = now;
+    if (evt) {
+      try {
+        evt.stopPropagation();
+      } catch (_) {}
+    }
+    if (data.type === 'navigation') {
+      this.navigateToScene(data.navigationTarget);
+    } else if (data.type === 'weblink') {
+      const url = data.weblinkUrl;
+      if (url) {
+        try {
+          window.open(url, '_blank');
+        } catch (_) {
+          location.href = url;
+        }
+      }
+    }
+    return true;
+  }
+
+  _collectPortalRaycastMeshes(options = {}) {
+    const { collidersOnly = false } = options;
+    const entries = [];
+    document.querySelectorAll("#hotspot-container [id^='hotspot-']").forEach((hotspotEl) => {
+      const hs = this._getPortalHotspotDataById(
+        parseInt(String(hotspotEl.id || '').slice(8), 10)
+      );
+      if (!hs) return;
+      const children = collidersOnly
+        ? Array.from(hotspotEl.querySelectorAll('.clickable')).filter(
+            (child) => !child.classList.contains('nav-ring')
+          )
+        : Array.from(hotspotEl.querySelectorAll('.clickable, .nav-ring'));
+      children.forEach((child) => {
+        const mesh = child.getObject3D && child.getObject3D('mesh');
+        if (!mesh) return;
+        if (child.object3D) child.object3D.updateMatrixWorld(true);
+        entries.push({ mesh, hs });
+      });
+    });
+    return entries;
+  }
+
+  _portalRaycastHitFromNdc(ndc, options = {}) {
+    const sceneEl = document.querySelector('a-scene');
+    const camEl = document.getElementById('cam');
+    const camera = camEl?.getObject3D?.('camera') || sceneEl?.camera;
+    if (!camera || typeof THREE === 'undefined') return null;
+
+    sceneEl?.object3D?.updateMatrixWorld(true);
+    camEl?.object3D?.updateMatrixWorld(true);
+
+    const entries = this._collectPortalRaycastMeshes(options);
+    if (!entries.length) return null;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(
+      entries.map((entry) => entry.mesh),
+      false
+    );
+    if (!hits.length) return null;
+    const hitMesh = hits[0].object;
+    const hs = entries.find((entry) => entry.mesh === hitMesh)?.hs;
+    if (!hs) return null;
+    return { hs, point: hits[0].point.clone() };
+  }
+
+  _portalRaycastFromNdc(ndc, options = {}) {
+    return this._portalRaycastHitFromNdc(ndc, options)?.hs || null;
+  }
+
+  _findPortalHotspotHitAtPointer(sourceEvent) {
+    const ndc = this._pointerEventToNdc(sourceEvent);
+    if (!ndc) return null;
+    return (
+      this._portalRaycastHitFromNdc(ndc, { collidersOnly: true }) ||
+      this._portalRaycastHitFromNdc(ndc)
+    );
+  }
+
+  _getPortalHotspotWorldPosition(data) {
+    if (!data?.id || typeof THREE === 'undefined') return null;
+    const el = document.getElementById(`hotspot-${data.id}`);
+    if (!el?.object3D) return null;
+    el.object3D.updateMatrixWorld(true);
+    return el.object3D.getWorldPosition(new THREE.Vector3());
+  }
+
+  _worldPointToScreen(point) {
+    if (!point || typeof THREE === 'undefined') return null;
+    const sceneEl = document.querySelector('a-scene');
+    const camEl = document.getElementById('cam');
+    const camera = camEl?.getObject3D?.('camera') || sceneEl?.camera;
+    const canvas = sceneEl?.canvas;
+    if (!camera || !canvas) return null;
+
+    const projected = new THREE.Vector3(point.x, point.y, point.z);
+    projected.project(camera);
+    if (projected.z > 1) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: rect.left + ((projected.x + 1) / 2) * rect.width,
+      y: rect.top + ((-projected.y + 1) / 2) * rect.height,
+    };
+  }
+
+  _findPortalHotspotDataAtViewCenter() {
+    // Solid collider disks cover the ring hole — prefer them for center-view aiming.
+    return (
+      this._portalRaycastFromNdc(new THREE.Vector2(0, 0), { collidersOnly: true }) ||
+      this._portalRaycastFromNdc(new THREE.Vector2(0, 0))
+    );
+  }
+
+  _findPortalHotspotDataAtPointer(sourceEvent) {
+    const ndc = this._pointerEventToNdc(sourceEvent);
+    if (!ndc) return null;
+    return (
+      this._portalRaycastFromNdc(ndc, { collidersOnly: true }) || this._portalRaycastFromNdc(ndc)
+    );
+  }
+
+  _tryActivateNavigationPortalForMouse(evt) {
+    if (!this.navigationMode) return false;
+    // In 360° view, mouse clicks should activate what you are looking at (center), not
+    // where the pointer happens to be. Fall back to pointer raycast for direct ring hits.
+    const data =
+      this._findPortalHotspotDataAtViewCenter() ||
+      this._findPortalHotspotDataAtPointer(evt);
+    if (!data) return false;
+    return this._activateEditorPortalHotspot(data, evt);
+  }
+
+  _tryActivateNavigationPortal(evt) {
+    return this._tryActivateNavigationPortalForMouse(evt);
+  }
+
+  _bindEditorPortalActivation(hotspotEl, data) {
+    const collider = hotspotEl.querySelector('.clickable');
+    const ring = hotspotEl.querySelector('.nav-ring');
+    const previewEl = hotspotEl.querySelector('.nav-preview-circle');
+    const activationEvents = ['click', 'triggerdown'];
+    const handleActivation = (e) => this._activateEditorPortalHotspot(data, e);
+    const registerTarget = (element) => {
+      if (!element) return;
+      element.classList.add('clickable');
+      activationEvents.forEach((evtName) => element.addEventListener(evtName, handleActivation));
+    };
+    registerTarget(collider);
+    registerTarget(ring);
+
+    const targetEl = collider || hotspotEl;
+    targetEl.addEventListener('mouseenter', () => {
+      if (previewEl) {
+        let src = null;
+        if (data.type === 'navigation') {
+          src = this._getEditorPreviewSrc(data.navigationTarget);
+        } else if (data.type === 'weblink') {
+          if (data.weblinkPreview instanceof File) {
+            try {
+              src = URL.createObjectURL(data.weblinkPreview);
+            } catch (_) {}
+          } else if (typeof data.weblinkPreview === 'string' && data.weblinkPreview) {
+            src = data.weblinkPreview;
+          }
+        }
+        if (src === 'VIDEO_ICON') {
+          (async () => {
+            const thumb = await this._ensureVideoPreview(data.navigationTarget);
+            const matSrc =
+              thumb ||
+              'data:image/svg+xml;charset=UTF-8,' +
+                encodeURIComponent(
+                  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="128" height="128"><rect rx="4" ry="4" x="2" y="6" width="14" height="12" fill="#111" stroke="#2ae" stroke-width="2"/><polygon points="16,10 22,7 22,17 16,14" fill="#2ae"/></svg>'
+                );
+            previewEl.setAttribute('material', 'src', matSrc);
+            previewEl.setAttribute('material', 'transparent', true);
+            previewEl.setAttribute('material', 'opacity', 1);
+            previewEl.setAttribute('material', 'shader', 'flat');
+            previewEl.setAttribute('material', 'side', 'double');
+            previewEl.setAttribute('material', 'alphaTest', 0.01);
+            previewEl.setAttribute('material', 'npot', true);
+          })();
+          previewEl.setAttribute('material', 'transparent', true);
+          previewEl.setAttribute('material', 'opacity', 1);
+          previewEl.setAttribute('material', 'shader', 'flat');
+          previewEl.setAttribute('material', 'side', 'double');
+          previewEl.setAttribute('material', 'alphaTest', 0.01);
+          previewEl.setAttribute('material', 'npot', true);
+        } else if (src) {
+          previewEl.setAttribute('material', 'src', src);
+          previewEl.setAttribute('material', 'transparent', true);
+          previewEl.setAttribute('material', 'opacity', 1);
+          previewEl.setAttribute('material', 'shader', 'flat');
+          previewEl.setAttribute('material', 'side', 'double');
+          previewEl.setAttribute('material', 'alphaTest', 0.01);
+          previewEl.setAttribute('material', 'npot', true);
+          setTimeout(() => {
+            try {
+              const mesh = previewEl.getObject3D('mesh');
+              const m = mesh && mesh.material;
+              const img = m && m.map && m.map.image;
+              if (!(img && img.naturalWidth)) {
+                const assetSel = this._ensurePreviewAsset(src, data.navigationTarget || data.id);
+                previewEl.setAttribute('material', 'src', assetSel);
+              }
+            } catch (_) {}
+          }, 150);
+        } else if (data.type === 'weblink') {
+          previewEl.setAttribute('material', 'color', '#000');
+          previewEl.setAttribute('material', 'transparent', true);
+          previewEl.setAttribute('material', 'opacity', 0.15);
+          previewEl.setAttribute('material', 'shader', 'flat');
+          previewEl.setAttribute('material', 'side', 'double');
+        }
+        previewEl.setAttribute('visible', 'true');
+        previewEl.removeAttribute('animation__shrink');
+        previewEl.setAttribute('scale', '0.01 0.01 0.01');
+        previewEl.setAttribute('animation__grow', {
+          property: 'scale',
+          to: '1 1 1',
+          dur: 180,
+          easing: 'easeOutCubic',
+        });
+      }
+      try {
+        const label = hotspotEl.querySelector('.nav-label');
+        const txt = label?.querySelector('a-text');
+        if (label && txt) {
+          if (data.type === 'navigation') {
+            const sc = this.scenes[data.navigationTarget];
+            txt.setAttribute('value', `Portal to ${sc?.name || data.navigationTarget}`);
+          } else {
+            const title =
+              data.weblinkTitle && data.weblinkTitle.trim()
+                ? data.weblinkTitle.trim()
+                : 'Open Link';
+            txt.setAttribute('value', title);
+          }
+          try {
+            const bg = label.querySelector('a-plane');
+            const minW = 1.7;
+            const maxW = 10;
+            const tW = parseFloat(txt.getAttribute('width') || '0') || minW;
+            const val = (txt.getAttribute('value') || '').toString();
+            const spaces = (val.match(/\s/g) || []).length;
+            const letters = Math.max(0, val.length - spaces);
+            const effChars = letters + 0.4 * spaces;
+            const est = 0.095 * effChars + 0.25;
+            const nextW = Math.min(maxW, Math.max(minW, Math.min(tW, est)));
+            if (bg) bg.setAttribute('width', String(nextW));
+          } catch (_) {}
+          label.setAttribute('visible', 'true');
+        }
+      } catch (_) {}
+    });
+    targetEl.addEventListener('mouseleave', () => {
+      if (previewEl) {
+        previewEl.removeAttribute('animation__grow');
+        previewEl.setAttribute('animation__shrink', {
+          property: 'scale',
+          to: '0.01 0.01 0.01',
+          dur: 120,
+          easing: 'easeInCubic',
+        });
+        setTimeout(() => {
+          previewEl.setAttribute('visible', 'false');
+        }, 130);
+      }
+      try {
+        const label = hotspotEl.querySelector('.nav-label');
+        if (label) {
+          label.setAttribute('visible', 'false');
+          const bg = label.querySelector('a-plane');
+          if (bg) bg.setAttribute('width', '1.8');
+        }
+      } catch (_) {}
+    });
   }
 
   armHotspotPlacement() {
@@ -3302,8 +3906,17 @@ class HotspotEditor {
     });
 
     // Edit mode toggle
+    const editModeToggle = document.getElementById('edit-mode-toggle');
+    if (editModeToggle) {
+      this.navigationMode = !editModeToggle.checked;
+    }
     document.getElementById('edit-mode-toggle').addEventListener('change', (e) => {
       this.navigationMode = !e.target.checked;
+      if (this.navigationMode) {
+        this.editMode = false;
+        const indicator = document.getElementById('edit-indicator');
+        if (indicator) indicator.style.display = 'none';
+      }
       this.updateModeIndicator();
       this._updateAddHotspotButtonState();
       // Auto-collapse hotspot type when leaving edit mode; expand when entering
@@ -5562,7 +6175,7 @@ class HotspotEditor {
                 // only replace if still same id and still not loaded
                 const el2 = document.getElementById(`hotspot-${data.id}`);
                 const imgEnt2 = el2?.querySelector('.static-image-hotspot');
-                if (imgEnt2) imgEnt2.setAttribute('src', fr2.result);
+                if (imgEnt2) setAImageHotspotSrc(imgEnt2, fr2.result);
               };
               try {
                 fr2.readAsDataURL(fileForFallback);
@@ -5641,211 +6254,15 @@ class HotspotEditor {
 
     // In-scene edit/move buttons are attached after the entity enters the scene (see below).
 
-    // Add navigation click handler if not in edit mode
     if (data.type === 'navigation' || data.type === 'weblink') {
-      const targetEl = hotspotEl.querySelector('.clickable') || hotspotEl;
-      targetEl.addEventListener('click', (e) => {
-        if (!this.navigationMode) return; // Only navigate when not in edit mode
-        e.stopPropagation();
-        if (data.type === 'navigation') this.navigateToScene(data.navigationTarget);
-        else if (data.type === 'weblink') {
-          const url = data.weblinkUrl;
-          if (url) {
-            try {
-              window.open(url, '_blank');
-            } catch (_) {
-              location.href = url;
-            }
-          }
-        }
-      });
-
-      // Hover preview of destination scene INSIDE the circle
-      const previewEl = hotspotEl.querySelector('.nav-preview-circle');
-      targetEl.addEventListener('mouseenter', () => {
-        if (previewEl) {
-          let src = null;
-          if (data.type === 'navigation') {
-            src = this._getEditorPreviewSrc(data.navigationTarget);
-          } else if (data.type === 'weblink') {
-            if (data.weblinkPreview instanceof File) {
-              try {
-                src = URL.createObjectURL(data.weblinkPreview);
-              } catch (_) {}
-            } else if (typeof data.weblinkPreview === 'string' && data.weblinkPreview) {
-              src = data.weblinkPreview;
-            }
-          }
-          if (src === 'VIDEO_ICON') {
-            // Try to generate a thumbnail from the destination video
-            (async () => {
-              const thumb = await this._ensureVideoPreview(data.navigationTarget);
-              const matSrc =
-                thumb ||
-                'data:image/svg+xml;charset=UTF-8,' +
-                  encodeURIComponent(
-                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="128" height="128"><rect rx="4" ry="4" x="2" y="6" width="14" height="12" fill="#111" stroke="#2ae" stroke-width="2"/><polygon points="16,10 22,7 22,17 16,14" fill="#2ae"/></svg>'
-                  );
-              previewEl.setAttribute('material', 'src', matSrc);
-              previewEl.setAttribute('material', 'transparent', true);
-              previewEl.setAttribute('material', 'opacity', 1);
-              previewEl.setAttribute('material', 'shader', 'flat');
-              previewEl.setAttribute('material', 'side', 'double');
-              previewEl.setAttribute('material', 'alphaTest', 0.01);
-              previewEl.setAttribute('material', 'npot', true);
-              // Debug: verify texture binding shortly after
-              setTimeout(() => {
-                try {
-                  const mesh = previewEl.getObject3D('mesh');
-                  const ok = !!(
-                    mesh &&
-                    mesh.material &&
-                    mesh.material.map &&
-                    mesh.material.map.image &&
-                    mesh.material.map.image.naturalWidth
-                  );
-                  console.log('[Preview][Check][VideoThumb]', { ok, matSrc, hasMesh: !!mesh });
-                } catch (_) {}
-              }, 120);
-            })();
-            previewEl.setAttribute('material', 'transparent', true);
-            previewEl.setAttribute('material', 'opacity', 1);
-            previewEl.setAttribute('material', 'shader', 'flat');
-            previewEl.setAttribute('material', 'side', 'double');
-            previewEl.setAttribute('material', 'alphaTest', 0.01);
-            previewEl.setAttribute('material', 'npot', true);
-          } else if (src) {
-            console.log('[Preview][Hover][Editor]', {
-              id: data.id,
-              type: data.type,
-              srcType: src.startsWith('data:') ? 'dataURL' : 'url',
-              len: src.length,
-            });
-            previewEl.setAttribute('material', 'src', src);
-            previewEl.setAttribute('material', 'transparent', true);
-            previewEl.setAttribute('material', 'opacity', 1);
-            previewEl.setAttribute('material', 'shader', 'flat');
-            previewEl.setAttribute('material', 'side', 'double');
-            previewEl.setAttribute('material', 'alphaTest', 0.01);
-            previewEl.setAttribute('material', 'npot', true);
-            // Debug: verify texture binding shortly after
-            setTimeout(() => {
-              try {
-                const mesh = previewEl.getObject3D('mesh');
-                const m = mesh && mesh.material;
-                const img = m && m.map && m.map.image;
-                console.log('[Preview][Check]', {
-                  hasMesh: !!mesh,
-                  hasMap: !!(m && m.map),
-                  imgW: img && img.naturalWidth,
-                  imgH: img && img.naturalHeight,
-                  color: m && m.color && m.color.getHexString && m.color.getHexString(),
-                  npot: m && m.npot,
-                });
-                // If still no map image dimensions, try to nudge material by reassigning src once
-                if (!(img && img.naturalWidth)) {
-                  // Create or reuse an <img> asset and point the material to it
-                  const assetSel = this._ensurePreviewAsset(src, data.navigationTarget || data.id);
-                  previewEl.setAttribute('material', 'src', assetSel);
-                  // Re-check once more
-                  setTimeout(() => {
-                    try {
-                      const mesh2 = previewEl.getObject3D('mesh');
-                      const m2 = mesh2 && mesh2.material;
-                      const img2 = m2 && m2.map && m2.map.image;
-                      console.log('[Preview][Check][Asset]', {
-                        ok: !!(img2 && img2.naturalWidth),
-                        assetSel,
-                        imgW: img2 && img2.naturalWidth,
-                        imgH: img2 && img2.naturalHeight,
-                      });
-                    } catch (_) {}
-                  }, 120);
-                }
-              } catch (_) {}
-            }, 150);
-          } else if (data.type === 'weblink') {
-            // Fallback: subtle fill to indicate active portal when no preview image is provided
-            previewEl.setAttribute('material', 'color', '#000');
-            previewEl.setAttribute('material', 'transparent', true);
-            previewEl.setAttribute('material', 'opacity', 0.15);
-            previewEl.setAttribute('material', 'shader', 'flat');
-            previewEl.setAttribute('material', 'side', 'double');
-          }
-          previewEl.setAttribute('visible', 'true');
-          previewEl.removeAttribute('animation__shrink');
-          previewEl.setAttribute('scale', '0.01 0.01 0.01');
-          previewEl.setAttribute('animation__grow', {
-            property: 'scale',
-            to: '1 1 1',
-            dur: 180,
-            easing: 'easeOutCubic',
-          });
-          try {
-            console.log('[Preview][MaterialAfterSet][Editor]', previewEl.getAttribute('material'));
-          } catch (_) {}
-        }
-        // Show label title
-        try {
-          const label = hotspotEl.querySelector('.nav-label');
-          const txt = label?.querySelector('a-text');
-          if (label && txt) {
-            if (data.type === 'navigation') {
-              const sc = this.scenes[data.navigationTarget];
-              txt.setAttribute('value', `Portal to ${sc?.name || data.navigationTarget}`);
-            } else {
-              const title =
-                data.weblinkTitle && data.weblinkTitle.trim()
-                  ? data.weblinkTitle.trim()
-                  : 'Open Link';
-              txt.setAttribute('value', title);
-            }
-            // Dynamically size the label background using a tighter char-based estimate (spaces discounted), clamped by text width
-            try {
-              const bg = label.querySelector('a-plane');
-              const minW = 1.7; // tighter compact width
-              const maxW = 10; // safety cap
-              const tW = parseFloat(txt.getAttribute('width') || '0') || minW; // your chosen text width (e.g., 5)
-              const val = (txt.getAttribute('value') || '').toString();
-              const spaces = (val.match(/\s/g) || []).length;
-              const letters = Math.max(0, val.length - spaces);
-              const effChars = letters + 0.4 * spaces; // spaces count less toward width
-              // Heuristic: ~0.095 world units per effective char + small padding
-              const est = 0.095 * effChars + 0.25;
-              const nextW = Math.min(maxW, Math.max(minW, Math.min(tW, est)));
-              if (bg) bg.setAttribute('width', String(nextW));
-            } catch (_) {}
-            label.setAttribute('visible', 'true');
-          }
-        } catch (_) {}
-      });
-      targetEl.addEventListener('mouseleave', () => {
-        if (previewEl) {
-          previewEl.removeAttribute('animation__grow');
-          previewEl.setAttribute('animation__shrink', {
-            property: 'scale',
-            to: '0.01 0.01 0.01',
-            dur: 120,
-            easing: 'easeInCubic',
-          });
-          setTimeout(() => {
-            previewEl.setAttribute('visible', 'false');
-          }, 130);
-        }
-        // Hide label title
-        try {
-          const label = hotspotEl.querySelector('.nav-label');
-          if (label) {
-            label.setAttribute('visible', 'false');
-            // Reset background width back to default for next hover
-            const bg = label.querySelector('a-plane');
-            if (bg) bg.setAttribute('width', '1.8');
-          }
-        } catch (_) {}
-      });
+      this._bindEditorPortalActivation(hotspotEl, data);
     }
 
     container.appendChild(hotspotEl);
+
+    if (data.type === 'navigation' || data.type === 'weblink') {
+      this.refreshSceneMediaRaycasters();
+    }
 
     if (data.type === 'model') {
       setTimeout(() => this.ensureInSceneEditButtons(hotspotEl, data), 150);
@@ -7174,6 +7591,61 @@ class HotspotEditor {
     }
 
     setTimeout(() => overlay.remove(), duration);
+  }
+
+  _showSubtleEditorHint(message, duration = 2200, anchor = null) {
+    const existing = document.getElementById('editor-subtle-hint');
+    if (existing) existing.remove();
+
+    const hint = document.createElement('div');
+    hint.id = 'editor-subtle-hint';
+    hint.textContent = message;
+
+    const hasAnchor =
+      anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
+    let positionCss = `
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+    `;
+    if (hasAnchor) {
+      const margin = 12;
+      const clampedX = Math.min(Math.max(anchor.x, margin), window.innerWidth - margin);
+      const clampedY = Math.min(Math.max(anchor.y, margin + 48), window.innerHeight - margin);
+      positionCss = `
+      position: fixed;
+      left: ${clampedX}px;
+      top: ${clampedY}px;
+      transform: translate(-50%, calc(-100% - 10px));
+    `;
+    }
+
+    hint.style.cssText = `
+      ${positionCss}
+      background: rgba(0, 0, 0, 0.72);
+      color: rgba(255, 255, 255, 0.92);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: Arial, sans-serif;
+      z-index: ${EDITOR_LAYER.toast};
+      pointer-events: none;
+      max-width: min(92vw, 280px);
+      text-align: center;
+      line-height: 1.4;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    `;
+    document.body.appendChild(hint);
+    requestAnimationFrame(() => {
+      hint.style.opacity = '1';
+    });
+    setTimeout(() => {
+      hint.style.opacity = '0';
+      setTimeout(() => hint.remove(), 220);
+    }, duration);
   }
 
   showHotspotPlacementFeedback(hotspotData) {
@@ -11007,7 +11479,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
             }
             if (appliedKey !== radiusKey) {
               if (imgEl.dataset.originalSrc) {
-                imgEl.setAttribute('src', imgEl.dataset.originalSrc);
+                setAImageHotspotSrc(imgEl, imgEl.dataset.originalSrc);
               }
               applyRoundedMaskToAImage(imgEl, istyle, true)
                 .then(() => {
@@ -11018,7 +11490,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
           } else {
             // If rounding disabled, restore original if stored
             if (imgEl.dataset.originalSrc) {
-              imgEl.setAttribute('src', imgEl.dataset.originalSrc);
+              setAImageHotspotSrc(imgEl, imgEl.dataset.originalSrc);
               restoreUnmaskedImageMaterial(imgEl);
             }
             delete imgEl.dataset.roundedAppliedRadius;
@@ -17264,6 +17736,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Update visibility of all in-scene edit buttons
     this.updateInSceneEditButtons();
+    this._configurePlatformCursors();
   }
 
   updateInSceneEditButtons() {
@@ -17715,6 +18188,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   mountIntegratedWelcome(containerId, onComplete) {
+    if (isPlaygroundGuestTemplateFlow()) {
+      window.__integratedWelcomePending = false;
+      if (typeof onComplete === 'function') onComplete();
+      return;
+    }
+
     try {
       if (localStorage.getItem(HotspotEditor.WELCOME_SEEN_KEY)) {
         if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
@@ -17908,6 +18387,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   _showWelcomeInterstitial(onComplete) {
+    if (isPlaygroundGuestTemplateFlow()) {
+      if (typeof onComplete === 'function') onComplete();
+      return;
+    }
     this._ensureWelcomeAnimationStyle();
     const { dialog, inner } = this._createWelcomeOverlay();
     document.body.appendChild(dialog);
@@ -17916,6 +18399,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   promptForSceneImageChange() {
     if (new URLSearchParams(window.location.search).get('adminReview') === '1') return;
+    if (isPlaygroundGuestTemplateFlow()) {
+      window.__integratedWelcomePending = false;
+      return;
+    }
 
     if (window.__integratedWelcomePending && window.__integratedWelcomeContainerId) {
       const containerId = window.__integratedWelcomeContainerId;
@@ -21581,6 +22068,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const playgroundSlug = urlParams.get('playground');
   if (playgroundSlug) {
     window.__pendingPlaygroundSlug = playgroundSlug;
+    window.__playgroundTemplateLoading = true;
+    window.__playgroundGuestTemplate = true;
+    window.__integratedWelcomePending = false;
     try {
       localStorage.setItem('vr-hotspot-welcome-seen', '1');
     } catch (_) {}

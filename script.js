@@ -2023,19 +2023,20 @@ class HotspotEditor {
     return this._dispatchEditModeInteraction(hitEl, sourceEvent);
   }
 
-  _maybeShowEditModePortalNavigateHint() {
+  _maybeShowEditModePortalNavigateHint(anchor) {
     if (this.navigationMode || this.repositioningHotspotId || this.editMode) return;
     const now =
       typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
     if (now - (this._lastEditModePortalHintMs || 0) < 800) return;
     this._lastEditModePortalHintMs = now;
-    this._showSubtleEditorHint('Turn edit mode off to navigate');
+    this._showSubtleEditorHint('Turn edit mode off to navigate', 2200, anchor);
   }
 
   _tryShowEditModePortalNavigateHint(sourceEvent) {
     if (this.navigationMode || this.repositioningHotspotId || this.editMode) return false;
-    if (!this._findPortalHotspotDataAtPointer(sourceEvent)) return false;
-    this._maybeShowEditModePortalNavigateHint();
+    const hit = this._findPortalHotspotHitAtPointer(sourceEvent);
+    if (!hit) return false;
+    this._maybeShowEditModePortalNavigateHint(this._worldPointToScreen(hit.point));
     return true;
   }
 
@@ -2320,7 +2321,15 @@ class HotspotEditor {
   _activateEditorPortalHotspot(data, evt) {
     if (!data) return false;
     if (!this.navigationMode) {
-      this._maybeShowEditModePortalNavigateHint();
+      let anchor = null;
+      const intersectionPoint = evt?.detail?.intersection?.point;
+      if (intersectionPoint) {
+        anchor = this._worldPointToScreen(intersectionPoint);
+      } else {
+        const worldPos = this._getPortalHotspotWorldPosition(data);
+        if (worldPos) anchor = this._worldPointToScreen(worldPos);
+      }
+      this._maybeShowEditModePortalNavigateHint(anchor);
       return false;
     }
     const now =
@@ -2370,7 +2379,7 @@ class HotspotEditor {
     return entries;
   }
 
-  _portalRaycastFromNdc(ndc, options = {}) {
+  _portalRaycastHitFromNdc(ndc, options = {}) {
     const sceneEl = document.querySelector('a-scene');
     const camEl = document.getElementById('cam');
     const camera = camEl?.getObject3D?.('camera') || sceneEl?.camera;
@@ -2390,7 +2399,49 @@ class HotspotEditor {
     );
     if (!hits.length) return null;
     const hitMesh = hits[0].object;
-    return entries.find((entry) => entry.mesh === hitMesh)?.hs || null;
+    const hs = entries.find((entry) => entry.mesh === hitMesh)?.hs;
+    if (!hs) return null;
+    return { hs, point: hits[0].point.clone() };
+  }
+
+  _portalRaycastFromNdc(ndc, options = {}) {
+    return this._portalRaycastHitFromNdc(ndc, options)?.hs || null;
+  }
+
+  _findPortalHotspotHitAtPointer(sourceEvent) {
+    const ndc = this._pointerEventToNdc(sourceEvent);
+    if (!ndc) return null;
+    return (
+      this._portalRaycastHitFromNdc(ndc, { collidersOnly: true }) ||
+      this._portalRaycastHitFromNdc(ndc)
+    );
+  }
+
+  _getPortalHotspotWorldPosition(data) {
+    if (!data?.id || typeof THREE === 'undefined') return null;
+    const el = document.getElementById(`hotspot-${data.id}`);
+    if (!el?.object3D) return null;
+    el.object3D.updateMatrixWorld(true);
+    return el.object3D.getWorldPosition(new THREE.Vector3());
+  }
+
+  _worldPointToScreen(point) {
+    if (!point || typeof THREE === 'undefined') return null;
+    const sceneEl = document.querySelector('a-scene');
+    const camEl = document.getElementById('cam');
+    const camera = camEl?.getObject3D?.('camera') || sceneEl?.camera;
+    const canvas = sceneEl?.canvas;
+    if (!camera || !canvas) return null;
+
+    const projected = new THREE.Vector3(point.x, point.y, point.z);
+    projected.project(camera);
+    if (projected.z > 1) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: rect.left + ((projected.x + 1) / 2) * rect.width,
+      y: rect.top + ((-projected.y + 1) / 2) * rect.height,
+    };
   }
 
   _findPortalHotspotDataAtViewCenter() {
@@ -7442,18 +7493,36 @@ class HotspotEditor {
     setTimeout(() => overlay.remove(), duration);
   }
 
-  _showSubtleEditorHint(message, duration = 2200) {
+  _showSubtleEditorHint(message, duration = 2200, anchor = null) {
     const existing = document.getElementById('editor-subtle-hint');
     if (existing) existing.remove();
 
     const hint = document.createElement('div');
     hint.id = 'editor-subtle-hint';
     hint.textContent = message;
-    hint.style.cssText = `
+
+    const hasAnchor =
+      anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
+    let positionCss = `
       position: fixed;
       left: 50%;
       bottom: 24px;
       transform: translateX(-50%);
+    `;
+    if (hasAnchor) {
+      const margin = 12;
+      const clampedX = Math.min(Math.max(anchor.x, margin), window.innerWidth - margin);
+      const clampedY = Math.min(Math.max(anchor.y, margin + 48), window.innerHeight - margin);
+      positionCss = `
+      position: fixed;
+      left: ${clampedX}px;
+      top: ${clampedY}px;
+      transform: translate(-50%, calc(-100% - 10px));
+    `;
+    }
+
+    hint.style.cssText = `
+      ${positionCss}
       background: rgba(0, 0, 0, 0.72);
       color: rgba(255, 255, 255, 0.92);
       padding: 10px 16px;
@@ -7462,7 +7531,7 @@ class HotspotEditor {
       font-family: Arial, sans-serif;
       z-index: ${EDITOR_LAYER.toast};
       pointer-events: none;
-      max-width: min(92vw, 420px);
+      max-width: min(92vw, 280px);
       text-align: center;
       line-height: 1.4;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);

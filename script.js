@@ -2023,6 +2023,22 @@ class HotspotEditor {
     return this._dispatchEditModeInteraction(hitEl, sourceEvent);
   }
 
+  _maybeShowEditModePortalNavigateHint() {
+    if (this.navigationMode || this.repositioningHotspotId || this.editMode) return;
+    const now =
+      typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+    if (now - (this._lastEditModePortalHintMs || 0) < 800) return;
+    this._lastEditModePortalHintMs = now;
+    this._showSubtleEditorHint('Turn edit mode off to navigate');
+  }
+
+  _tryShowEditModePortalNavigateHint(sourceEvent) {
+    if (this.navigationMode || this.repositioningHotspotId || this.editMode) return false;
+    if (!this._findPortalHotspotDataAtPointer(sourceEvent)) return false;
+    this._maybeShowEditModePortalNavigateHint();
+    return true;
+  }
+
   _isScenePointerTap(sourceEvent, pressState, thresholdPx) {
     if (!pressState || pressState.id !== sourceEvent.pointerId) return false;
     if (sourceEvent.button != null && sourceEvent.button !== 0) return false;
@@ -2036,7 +2052,10 @@ class HotspotEditor {
       return;
     }
     if (!this.navigationMode && !this.editMode && !this.repositioningHotspotId) {
-      this._tryHandleEditModeInteraction(sourceEvent);
+      const handled = this._tryHandleEditModeInteraction(sourceEvent);
+      if (!handled) {
+        this._tryShowEditModePortalNavigateHint(sourceEvent);
+      }
     }
   }
 
@@ -2116,7 +2135,7 @@ class HotspotEditor {
             return;
           }
           if (!this.editMode && !this.repositioningHotspotId) {
-            this._tryHandleEditModeInteraction({
+            this._handleScenePointerTap({
               clientX: touch.clientX,
               clientY: touch.clientY,
             });
@@ -2299,7 +2318,11 @@ class HotspotEditor {
   }
 
   _activateEditorPortalHotspot(data, evt) {
-    if (!this.navigationMode || !data) return false;
+    if (!data) return false;
+    if (!this.navigationMode) {
+      this._maybeShowEditModePortalNavigateHint();
+      return false;
+    }
     const now =
       typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
     if (now - (this._lastPortalActivationMs || 0) < 250) return true;
@@ -7417,6 +7440,43 @@ class HotspotEditor {
     }
 
     setTimeout(() => overlay.remove(), duration);
+  }
+
+  _showSubtleEditorHint(message, duration = 2200) {
+    const existing = document.getElementById('editor-subtle-hint');
+    if (existing) existing.remove();
+
+    const hint = document.createElement('div');
+    hint.id = 'editor-subtle-hint';
+    hint.textContent = message;
+    hint.style.cssText = `
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.72);
+      color: rgba(255, 255, 255, 0.92);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: Arial, sans-serif;
+      z-index: ${EDITOR_LAYER.toast};
+      pointer-events: none;
+      max-width: min(92vw, 420px);
+      text-align: center;
+      line-height: 1.4;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    `;
+    document.body.appendChild(hint);
+    requestAnimationFrame(() => {
+      hint.style.opacity = '1';
+    });
+    setTimeout(() => {
+      hint.style.opacity = '0';
+      setTimeout(() => hint.remove(), 220);
+    }, duration);
   }
 
   showHotspotPlacementFeedback(hotspotData) {

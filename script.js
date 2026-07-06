@@ -1876,10 +1876,11 @@ class HotspotEditor {
       if (mouseCursor) mouseCursor.setAttribute('visible', 'false');
       return;
     }
-    // Desktop: one active cursor — fuse ring in Navigation Mode, mouse ray in Edit Mode.
+    // Desktop: gaze ring in Navigation Mode; mouse ray always on for pointer clicks.
+    // Edit Mode hides gaze only — dual raycasters in Edit Mode block hotspot edit clicks.
     const navMode = !!this.navigationMode;
     if (gazeCursor) gazeCursor.setAttribute('visible', navMode ? 'true' : 'false');
-    if (mouseCursor) mouseCursor.setAttribute('visible', navMode ? 'false' : 'true');
+    if (mouseCursor) mouseCursor.setAttribute('visible', 'true');
     this.refreshSceneMediaRaycasters();
   }
 

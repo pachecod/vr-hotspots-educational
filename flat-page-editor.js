@@ -121,7 +121,7 @@ button:hover { background: #1d4ed8; }`;
       this._mounted = false;
       this._visible = false;
       this._previewTimer = null;
-      this._autoReloadPreview = false;
+      this._autoReloadPreview = true;
       this._els = {};
       this._loadFromStorage();
     }
@@ -472,7 +472,7 @@ button:hover { background: #1d4ed8; }`;
         'display:flex;align-items:center;gap:5px;cursor:pointer;color:#ccc;user-select:none;';
       const autoReloadCb = document.createElement('input');
       autoReloadCb.type = 'checkbox';
-      autoReloadCb.checked = false;
+      autoReloadCb.checked = true;
       autoReloadCb.addEventListener('change', () => {
         this._autoReloadPreview = autoReloadCb.checked;
       });
@@ -530,8 +530,8 @@ button:hover { background: #1d4ed8; }`;
     show() {
       this.ensureMounted();
       this._visible = true;
-      this._autoReloadPreview = false;
-      if (this._els.autoReloadCb) this._els.autoReloadCb.checked = false;
+      this._autoReloadPreview = true;
+      if (this._els.autoReloadCb) this._els.autoReloadCb.checked = true;
       if (this._els.root) this._els.root.style.display = 'flex';
       // Refresh content from current state in case it was imported while hidden.
       if (this._els.nameInput) this._els.nameInput.value = this.getActivePage().name;

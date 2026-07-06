@@ -224,7 +224,7 @@ The preview pane shows your page as you edit. Use the layout buttons:
 | **50/50** | Balanced split (default) |
 | **Preview** | Mostly preview, small code |
 
-Click **↻ Refresh** if the preview looks out of date. By default the preview does **not** auto-reload on every keystroke — enable **Reload preview automatically** in the preview toolbar if you want live updates while typing.
+Click **↻ Refresh** if the preview looks out of date. By default the preview **auto-reloads** as you edit — disable **Reload preview automatically** in the preview toolbar if you prefer manual refresh only.
 
 ### Snippets
 

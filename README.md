@@ -122,7 +122,7 @@ Students switch **Editing Tools → 📄 Flat Web Page** to open a full code edi
 |---------|-------------|
 | **Multi-file tabs** | `index.html`, `style.css`, `script.js`, `config.json` (on starter templates), plus optional custom files |
 | **Visual / Code config** | When a template includes a config schema, edit `config.json` in a visual form or raw JSON (Code mode) |
-| **Live preview** | Split view with **Editor**, **50/50**, and **Preview** layout presets; optional auto-reload (off by default) |
+| **Live preview** | Split view with **Editor**, **50/50**, and **Preview** layout presets; preview auto-reloads on edit by default (toggle **automatically** in the preview toolbar to turn off) |
 | **Copy / Format** | Copy the active file; auto-format HTML, CSS, or JavaScript |
 | **Snippets** | Insert admin-curated code blocks at the cursor |
 | **Templates** | Load public starter templates from the gallery (e.g. immersive museum) |

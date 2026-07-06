@@ -20,7 +20,7 @@ const SPLIT_PRESETS = {
 
 const SPLIT_STORAGE_KEY = 'flat-editor-split-preset';
 const CONFIG_MODE_STORAGE_KEY = 'flat-editor-config-mode';
-const AUTO_RELOAD_PREVIEW_DEFAULT = false;
+const AUTO_RELOAD_PREVIEW_DEFAULT = true;
 
 function initialConfigMode(bridge) {
   try {

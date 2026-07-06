@@ -61,10 +61,14 @@ function renderAssets() {
   list.innerHTML = items
     .map((asset) => {
       const tagChips = window.AssetTagsUI ? AssetTagsUI.renderTagChips(asset.tags) : '';
+      const visibilityBadge =
+        asset.visibility === 'admin'
+          ? '<span class="asset-visibility-badge" title="Admin-only — not yet shared with students">Admin only</span>'
+          : '';
       return `
     <div class="asset-card" data-name="${asset.name}">
       ${CommonAssetsPreview.renderGridThumb(asset.category, asset)}
-      <div class="asset-name">${asset.name}</div>
+      <div class="asset-name">${asset.name}${visibilityBadge}</div>
       ${tagChips}
       <div class="asset-meta">${formatBytes(asset.size)} · ${new Date(asset.uploadedAt).toLocaleString()}</div>
       <div class="asset-actions">

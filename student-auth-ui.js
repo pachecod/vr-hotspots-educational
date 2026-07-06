@@ -66,6 +66,11 @@ const DEFAULT_WELCOME_SCREEN_HTML = `<h2>Welcome to the WebXRIDE<br/>Immersive S
 <p>Choose how you'd like to get started.</p>`;
 
 let welcomeSystemTextCache = null;
+let noTeamsSigninTextCache = null;
+
+const DEFAULT_NO_TEAMS_SIGNIN_HTML = `<p>No teams or classes currently exist in this install.</p>
+<p>If you have admin access, open the <a href="/admin-users.html">Users</a> tab and add a team or class with a password. Then add users to that team or class.</p>
+<p>After that, your users can sign in, upload their own content, and submit it to you to review as a team leader or teacher.</p>`;
 
 async function fetchWelcomeSystemText() {
   if (welcomeSystemTextCache) return welcomeSystemTextCache;
@@ -81,6 +86,22 @@ async function fetchWelcomeSystemText() {
   }
   welcomeSystemTextCache = DEFAULT_WELCOME_SCREEN_HTML;
   return welcomeSystemTextCache;
+}
+
+async function fetchNoTeamsSigninText() {
+  if (noTeamsSigninTextCache) return noTeamsSigninTextCache;
+  try {
+    const res = await fetch('/api/system-text/no-teams-signin');
+    const data = await res.json();
+    if (data.success && data.text?.content_html) {
+      noTeamsSigninTextCache = data.text.content_html;
+      return noTeamsSigninTextCache;
+    }
+  } catch (_) {
+    /* use default */
+  }
+  noTeamsSigninTextCache = DEFAULT_NO_TEAMS_SIGNIN_HTML;
+  return noTeamsSigninTextCache;
 }
 
 function welcomeGithubFooterHtml() {
@@ -448,6 +469,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   hideTestUserEditorSession();
 
   let classes = [];
+  let noTeamsMessageHtml = DEFAULT_NO_TEAMS_SIGNIN_HTML;
   let selectedClass = null;
   let selectedStudent = null;
   let students = [];
@@ -548,7 +570,8 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
         : '';
     if (!classes.length) {
       stepEl.innerHTML =
-        backBtn + '<p style="color:#f0f0f0;">No teams or classes available. Ask your team leader or teacher to add you.</p>';
+        backBtn +
+        `<div class="no-teams-signin-message welcome-system-text">${noTeamsMessageHtml}</div>`;
       return;
     }
     stepEl.innerHTML =
@@ -733,8 +756,11 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
     students = Array.isArray(data) ? data : [];
   }
 
-  loadClasses()
-    .then(renderClassStep)
+  Promise.all([loadClasses(), fetchNoTeamsSigninText()])
+    .then(([, messageHtml]) => {
+      noTeamsMessageHtml = messageHtml;
+      renderClassStep();
+    })
     .catch((err) => {
       showError(err.message || 'Could not load teams or classes. Try again later.');
       subtitleEl.textContent = 'Choose your team or class';

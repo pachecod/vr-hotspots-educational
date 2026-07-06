@@ -189,9 +189,17 @@
 
         const ext = (file.name.split('.').pop() || '').toLowerCase();
         const isVideo = ['mp4', 'webm', 'mov'].includes(ext);
+        const isModel = ['glb', 'gltf', 'obj', 'fbx'].includes(ext);
         if (isVideo && activeCategory !== '360-videos' && activeCategory !== 'videos') {
           if (status) {
             status.textContent = `Select the Flat Videos or 360 Videos tab before uploading ${file.name}.`;
+          }
+          hadFailure = true;
+          continue;
+        }
+        if (isModel && activeCategory !== '3d') {
+          if (status) {
+            status.textContent = `Select the 3D tab before uploading ${file.name}.`;
           }
           hadFailure = true;
           continue;

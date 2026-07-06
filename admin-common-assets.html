@@ -266,6 +266,17 @@
         word-break: break-all;
         margin-bottom: 4px;
       }
+      .asset-visibility-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: #fff3cd;
+        color: #856404;
+        font-size: 10px;
+        font-weight: 600;
+        vertical-align: middle;
+      }
       .asset-meta {
         font-size: 12px;
         color: #666;
@@ -429,10 +440,9 @@
 
         <h1>Assets</h1>
         <p style="color: #666">
-          Upload online flat images, 360° photos/videos, audio, and 3D models. New uploads go to your
-          <strong>admin library</strong> (Review All Content). Check <strong>Share with students immediately</strong>
-          to add them to Shared Online Assets below, or share later from Review All Content. To see assets a team member
-          or student has uploaded, select their name in the pulldown.
+          Upload online flat images, 360° photos/videos, audio, and 3D models. Files appear in the category
+          tabs below. By default they are <strong>admin-only</strong> until you check
+          <strong>Share with students immediately</strong> or share them later from Review All Content.
         </p>
 
         <div id="assets-library-view">
@@ -572,6 +582,6 @@
     <script src="asset-tags-ui.js"></script>
     <script src="admin-content-hub.js"></script>
     <script src="admin-common-asset-upload.js"></script>
-    <script src="admin-common-assets.js?v=3"></script>
+    <script src="admin-common-assets.js?v=4"></script>
   </body>
 </html>

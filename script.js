@@ -1876,9 +1876,11 @@ class HotspotEditor {
       if (mouseCursor) mouseCursor.setAttribute('visible', 'false');
       return;
     }
-    // Desktop: one active cursor avoids duplicate raycasts that block edit clicks.
-    if (gazeCursor) gazeCursor.setAttribute('visible', 'false');
-    if (mouseCursor) mouseCursor.setAttribute('visible', 'true');
+    // Desktop: one active cursor — fuse ring in Navigation Mode, mouse ray in Edit Mode.
+    const navMode = !!this.navigationMode;
+    if (gazeCursor) gazeCursor.setAttribute('visible', navMode ? 'true' : 'false');
+    if (mouseCursor) mouseCursor.setAttribute('visible', navMode ? 'false' : 'true');
+    this.refreshSceneMediaRaycasters();
   }
 
   _pointerEventToNdc(sourceEvent) {

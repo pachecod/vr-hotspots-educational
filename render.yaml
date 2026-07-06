@@ -1,5 +1,12 @@
-# Render Blueprint for 2.0 — deploy as a separate stack from 1.0 production
+# Render Blueprint — WebXRIDE / VR Hotspots Educational
 # https://render.com/docs/blueprint-spec
+#
+# Build: `npm install` only. flat-editor.bundle.js is committed; do not run
+# `npm run build:flat-editor` here — Vite is a devDependency and fails on
+# Render with exit 127 when NODE_ENV=production.
+#
+# Guest mode + welcome-screen samples are enabled by default below.
+# Enter B2 and admin secrets when the blueprint prompts (sync: false).
 databases:
   - name: vr-hotspots-2-0-db
     plan: free
@@ -10,7 +17,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm install && npm run build:flat-editor
+    buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /
     envVars:
@@ -22,11 +29,19 @@ services:
           property: connectionString
       - key: STUDENT_AUTH_REQUIRED
         value: "true"
+      - key: LOCAL_TEST_USER_ENABLED
+        value: "true"
+      - key: LOCAL_TEST_USER_ALLOW_PRODUCTION
+        value: "true"
+      - key: PUBLIC_PLAYGROUND_ENABLED
+        value: "true"
       - key: B2_KEY_ID
         sync: false
       - key: B2_APP_KEY
         sync: false
       - key: B2_BUCKET_NAME
+        sync: false
+      - key: B2_BUCKET_ID
         sync: false
       - key: ADMIN_PASSWORD
         sync: false

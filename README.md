@@ -83,12 +83,15 @@ Then run `npm run dev` and open the editor. You will see an entry gate:
 - **Continue as Guest** — build 360° tours and flat pages locally, pick **local files** (preview + ZIP export), browse **Shared Online Assets**, load a ZIP template, and **Save Template**. No cloud save or submit to admin.
 - **Sign in to a team or class account** — full student features if you have a password from your team leader or teacher.
 
-Test User mode is off on production by default. For a **demo/staging** deploy on Render, set both:
+On **Render**, the blueprint (`render.yaml`) enables guest mode and welcome-screen samples by default:
 
 ```bash
 LOCAL_TEST_USER_ENABLED=true
 LOCAL_TEST_USER_ALLOW_PRODUCTION=true
+PUBLIC_PLAYGROUND_ENABLED=true
 ```
+
+For local `.env` demos, set at least `LOCAL_TEST_USER_ENABLED=true` (production also needs `LOCAL_TEST_USER_ALLOW_PRODUCTION=true`).
 
 Guest mode still blocks cloud save, submit, and server uploads.
 
@@ -330,6 +333,8 @@ vr_hotspots/
 - **Ask Ridey missing**: Admin must enable Ridey, set `OPENAI_API_KEY`, and choose version under **Editor Settings** (see [RENDER_DEPLOY.md](RENDER_DEPLOY.md))
 - **Ridey 2.0 issues**: Switch back to **Ridey 1.0** in **Editor Settings** for legacy behavior
 - **Snippets/templates empty on Render**: Run database migration (`npm run db:migrate`) and ensure `DATABASE_URL` is set
+- **No Continue as Guest on Render**: Blueprint must set `LOCAL_TEST_USER_ENABLED` and `LOCAL_TEST_USER_ALLOW_PRODUCTION` (preset in `render.yaml`). Check `/api/student/session` for `testUserModeAvailable: true`
+- **Render build exit 127**: Use build command `npm install` only — see [RENDER_DEPLOY.md](RENDER_DEPLOY.md#build-command-notes)
 
 ### Support:
 

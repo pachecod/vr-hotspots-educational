@@ -11,39 +11,75 @@ The repo must be on GitHub before connecting Render. Do not commit `.env` — se
 **Option A — Blueprint (recommended)**
 
 1. Open [Render Dashboard](https://dashboard.render.com/) → **New** → **Blueprint**
-2. Connect your GitHub repo and select this directory as the root (if the repo is only this project, use repo root)
-3. Render reads `render.yaml` and creates the web service
-4. When prompted, enter environment variables (see below)
+2. Connect your GitHub repo (`vr-hotspots-educational`) and branch (e.g. `2.8`)
+3. Render reads `render.yaml` and creates a PostgreSQL database plus the web service
+4. When prompted, enter the **secret** environment variables (`sync: false` in the blueprint)
+5. If Render suffixes resource names (e.g. `vr-hotspots-educational-2-0-f8z2`), that is normal when names already exist on your account — each suffix is a separate stack
+
+**Preset in `render.yaml` (no manual entry needed):**
+
+| Variable | Blueprint value |
+|----------|-----------------|
+| `NODE_ENV` | `production` |
+| `DATABASE_URL` | Wired from the blueprint database |
+| `STUDENT_AUTH_REQUIRED` | `true` |
+| `LOCAL_TEST_USER_ENABLED` | `true` |
+| `LOCAL_TEST_USER_ALLOW_PRODUCTION` | `true` |
+| `PUBLIC_PLAYGROUND_ENABLED` | `true` |
+| `buildCommand` | `npm install` |
 
 **Option B — Manual Web Service**
 
 1. **New** → **Web Service** → connect the GitHub repo
 2. Settings:
    - **Runtime:** Node
-   - **Build command:** `npm install` (or `npm install && npm run build:flat-editor` if you change flat-editor sources without committing the bundle)
+   - **Build command:** `npm install` — see [Build command notes](#build-command-notes) below
    - **Start command:** `npm start`
    - **Health check path:** `/`
-3. Add environment variables (see below)
+3. Add environment variables (see below), including guest-mode presets
 4. **Create Web Service**
+
+### Build command notes
+
+Use **`npm install`** on Render. The flat page editor is shipped as a pre-built `flat-editor.bundle.js` in the repo.
+
+Do **not** use `npm install && npm run build:flat-editor` unless you change the build to `npm install --include=dev && npm run build:flat-editor`. Vite lives in `devDependencies`; with `NODE_ENV=production`, a plain `npm install` skips dev deps and the build fails with **exit 127** (command not found).
+
+Rebuild locally after editing `flat-editor/` sources:
+
+```bash
+npm run build:flat-editor
+git add flat-editor.bundle.js vr-hotspots-educational.css
+git commit && git push
+```
 
 ## 3. Required environment variables
 
-Copy values from your local `.env` into Render → **Environment**:
+### Enter when the blueprint prompts (secrets)
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | PostgreSQL connection (auto-set when using `render.yaml` blueprint). Required for snippets, templates, and editor settings. |
 | `B2_KEY_ID` | Backblaze application key ID |
 | `B2_APP_KEY` | Backblaze application key secret |
 | `B2_BUCKET_NAME` | Private bucket (student projects) |
-| `B2_BUCKET_ID` | Bucket ID from B2 console |
-| `ADMIN_PASSWORD` | Admin login for dashboard & common assets |
-| `ADMIN_SESSION_SECRET` | Long random string for admin session cookies |
-| `STUDENT_SESSION_SECRET` | Long random string for student session cookies |
-| `STUDENT_AUTH_REQUIRED` | Set `true` in production to require student sign-in |
-| `LOCAL_TEST_USER_ENABLED` | Set `true` to offer **Continue as Guest** on the welcome screen |
-| `LOCAL_TEST_USER_ALLOW_PRODUCTION` | Required with guest mode on Render (`NODE_ENV=production`) |
-| `PUBLIC_PLAYGROUND_ENABLED` | Set `true` to show **Try a sample project** grid on the welcome screen |
+| `B2_BUCKET_ID` | Bucket ID from B2 console → Bucket Settings |
+| `ADMIN_PASSWORD` | Admin login for dashboard & common assets (not `admin123`) |
+| `ADMIN_SESSION_SECRET` | Long random string (`openssl rand -hex 32`) |
+| `STUDENT_SESSION_SECRET` | Different long random string |
+
+### Set automatically by the blueprint
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL — required for snippets, templates, teams/classes, editor settings |
+| `STUDENT_AUTH_REQUIRED` | `true` — sign-in flow for team/class accounts |
+| `LOCAL_TEST_USER_ENABLED` | `true` — **Continue as Guest** on the welcome screen |
+| `LOCAL_TEST_USER_ALLOW_PRODUCTION` | `true` — required for guest mode when `NODE_ENV=production` |
+| `PUBLIC_PLAYGROUND_ENABLED` | `true` — **Try a sample project** grid on the welcome screen (after admin curates templates) |
+
+**Reusing an existing Backblaze bucket:** You can point a new Render stack at the same `B2_*` values. Student ZIPs and common assets in B2 persist. The **new PostgreSQL database starts empty** — recreate teams/classes, snippets, and playground templates in admin (or run migrations only; B2 files are not imported into the DB automatically).
+
+**Verify guest mode after deploy:** open `/api/student/session` — expect `"testUserModeAvailable": true`. If the welcome screen shows only **Sign in** with no guest button, confirm the three guest/playground variables above are set and redeploy.
 
 Optional:
 
@@ -123,14 +159,13 @@ On first deploy, check **Logs** for PostgreSQL migration, B2 authorization, and 
 5. Optional: add **code snippets** and **flat page templates** under **Editor Settings** and **Templates** (templates with `config.ui.json` support visual **config.json** editing)
 6. Optional: set `OPENAI_API_KEY`, enable **Ridey**, and choose **1.0** or **2.0 (beta)** under **Editor Settings**
 
-### Welcome-screen sample projects (optional)
+### Welcome-screen sample projects
 
-When `PUBLIC_PLAYGROUND_ENABLED=true` and guest mode is enabled, visitors see curated sample projects on the editor welcome screen.
+The blueprint enables `PUBLIC_PLAYGROUND_ENABLED=true` by default. After deploy, curate samples in admin:
 
 1. Build a showcase project in the main editor → **Save Template** → choose **bundle** export mode
 2. Open **Templates** (`/admin-templates.html`) → **Create combined playground sample** (or edit a flat template)
 3. Enable **Show on welcome screen**, set a thumbnail URL, and **Upload bundle** (combined samples)
-4. Set on Render: `PUBLIC_PLAYGROUND_ENABLED=true`, `LOCAL_TEST_USER_ENABLED=true`, `LOCAL_TEST_USER_ALLOW_PRODUCTION=true`
 
 Share a direct link: `https://YOUR-SERVICE.onrender.com/?playground=your-template-slug`
 

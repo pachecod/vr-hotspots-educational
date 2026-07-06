@@ -19,13 +19,31 @@ async function checkAdminSession() {
   }
 }
 
-async function checkBackendAvailable() {
-  try {
-    const res = await fetch('/admin/session', { credentials: 'include' });
-    return res.ok || res.status === 401;
-  } catch (_) {
-    return false;
+function isViteDevFrontend() {
+  const host = window.location.hostname;
+  const port = window.location.port;
+  return (host === 'localhost' || host === '127.0.0.1') && (port === '5173' || port === '5174');
+}
+
+async function checkBackendAvailable(retries = 3) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch('/admin/session', { credentials: 'include' });
+      if (res.ok || res.status === 401) return true;
+      if ([502, 503, 504].includes(res.status) && attempt < retries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        continue;
+      }
+      return false;
+    } catch (_) {
+      if (attempt < retries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        continue;
+      }
+      return false;
+    }
   }
+  return false;
 }
 
 async function adminLogin(password) {
@@ -96,7 +114,9 @@ async function adminFetch(url, options = {}) {
 function renderBackendWarning(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  container.innerHTML = `
+  const viteDev = isViteDevFrontend();
+  container.innerHTML = viteDev
+    ? `
     <div style="max-width:520px;margin:80px auto;padding:30px;border:2px solid #dc3545;border-radius:8px;background:#fff5f5;">
       <h2 style="margin-top:0;color:#dc3545;">API Server Not Running</h2>
       <p style="color:#333;">Vite is serving the frontend, but the Express backend on port <strong>3000</strong> is not reachable.</p>
@@ -104,6 +124,15 @@ function renderBackendWarning(containerId) {
       <pre style="background:#222;color:#0f0;padding:12px;border-radius:4px;overflow:auto;">npm run dev</pre>
       <p style="color:#666;font-size:13px;">This starts both the API (3000) and Vite (5173). Then reload this page.</p>
       <p style="color:#666;font-size:13px;">Or run the API alone: <code>npm run dev:api</code></p>
+    </div>
+  `
+    : `
+    <div style="max-width:520px;margin:80px auto;padding:30px;border:2px solid #dc3545;border-radius:8px;background:#fff5f5;">
+      <h2 style="margin-top:0;color:#dc3545;">Cannot Reach Server API</h2>
+      <p style="color:#333;">This page could not contact <code>/admin/session</code> on your deployed server.</p>
+      <p style="color:#666;font-size:14px;">On Render free tier, the service may be waking up — wait 30–60 seconds and reload.</p>
+      <p style="color:#666;font-size:14px;">If it persists, open Render → your web service → <strong>Logs</strong> and check for startup errors (missing env vars, B2, or database).</p>
+      <p style="color:#666;font-size:13px;">Quick test: open <a href="/admin/session" target="_blank" rel="noopener">/admin/session</a> — you should see JSON like <code>{"authenticated":false}</code>.</p>
     </div>
   `;
 }

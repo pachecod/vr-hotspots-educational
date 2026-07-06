@@ -6,6 +6,7 @@
 # Render with exit 127 when NODE_ENV=production.
 #
 # Guest mode + welcome-screen samples are enabled by default below.
+# 360° video pipeline: transcode + student server upload + URL export (see ROLLBACK_VIDEO.md).
 # Enter B2 and admin secrets when the blueprint prompts (sync: false).
 databases:
   - name: vr-hotspots-2-0-db
@@ -62,12 +63,12 @@ services:
       - key: STRIPE_PRICE_PRO
         sync: false
       - key: VIDEO_TRANSCODE_ENABLED
-        value: "false"
-      - key: VIDEO_TRANSCODE_ADMIN_ONLY
         value: "true"
+      - key: VIDEO_TRANSCODE_ADMIN_ONLY
+        value: "false"
       - key: VIDEO_SCENE_SERVER_UPLOAD
-        value: "false"
+        value: "true"
       - key: VIDEO_EXPORT_URL_MODE
-        value: "false"
+        value: "true"
       - key: GOOGLE_ANALYTICS_MEASUREMENT_ID
         sync: false

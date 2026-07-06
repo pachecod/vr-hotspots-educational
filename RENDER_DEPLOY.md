@@ -26,6 +26,10 @@ The repo must be on GitHub before connecting Render. Do not commit `.env` — se
 | `LOCAL_TEST_USER_ENABLED` | `true` |
 | `LOCAL_TEST_USER_ALLOW_PRODUCTION` | `true` |
 | `PUBLIC_PLAYGROUND_ENABLED` | `true` |
+| `VIDEO_TRANSCODE_ENABLED` | `true` |
+| `VIDEO_TRANSCODE_ADMIN_ONLY` | `false` (compress admin and student 360° uploads) |
+| `VIDEO_SCENE_SERVER_UPLOAD` | `true` |
+| `VIDEO_EXPORT_URL_MODE` | `true` |
 | `buildCommand` | `npm install` |
 
 **Option B — Manual Web Service**

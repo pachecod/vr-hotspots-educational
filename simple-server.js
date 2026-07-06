@@ -69,6 +69,11 @@ const {
 const app = express();
 const upload = multer({ dest: 'temp-uploads/' });
 
+// Render, Heroku, etc. set X-Forwarded-For; required for express-rate-limit on admin/student login
+if (process.env.NODE_ENV === 'production' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
+
 app.use(
   helmet({
     contentSecurityPolicy: false,

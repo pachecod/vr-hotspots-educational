@@ -75,6 +75,17 @@ Ask your team leader or teacher to reset your password from **Users** if you for
 
 ---
 
+## Guest mode (try without signing in)
+
+If your site allows guest mode, you can explore the editor without an account. Guests can build and preview both spherical and flat content, but:
+
+- **Hosted preview tours and QR codes** created when switching to Flat Web Page mode may be **auto-deleted** after a timeout (admins configure this in **Editor Settings**; default is 1200 seconds / 20 minutes).
+- **Export (Save Template)** includes only the **360° tour** — not the flat web page or QR code. Sign in to export or publish a permanent flat page with a working QR code.
+
+Signed-in students and admins are not affected by guest preview timeouts or guest export limits.
+
+---
+
 ## Editor layout
 
 - **Center:** the 360° scene (spherical mode) or the flat page code editor with live preview (flat mode)

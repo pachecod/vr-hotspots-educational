@@ -91,6 +91,37 @@ async function saveRideySettings({ enabled, version } = {}) {
   showToast('Ridey settings saved');
 }
 
+function updateGuestPreviewSecondsRow() {
+  const enabled = document.getElementById('guest-preview-timeout-enabled').checked;
+  const input = document.getElementById('guest-preview-timeout-seconds');
+  if (input) input.disabled = !enabled;
+}
+
+function updateGuestPreviewStatus(enabled, seconds) {
+  if (enabled) {
+    setStatus('guest-preview-status', `Guest preview timeout enabled (${seconds} seconds).`);
+  } else {
+    setStatus('guest-preview-status', 'Guest preview timeout disabled — hosted previews will not auto-delete.');
+  }
+}
+
+async function saveGuestPreviewSettings() {
+  const enabled = document.getElementById('guest-preview-timeout-enabled').checked;
+  const seconds = Number(document.getElementById('guest-preview-timeout-seconds').value);
+  const res = await adminFetch('/admin/editor-settings/guest-preview', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled, seconds }),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message);
+  document.getElementById('guest-preview-timeout-enabled').checked = !!data.guestPreviewTimeoutEnabled;
+  document.getElementById('guest-preview-timeout-seconds').value = data.guestPreviewTimeoutSeconds;
+  updateGuestPreviewSecondsRow();
+  updateGuestPreviewStatus(!!data.guestPreviewTimeoutEnabled, data.guestPreviewTimeoutSeconds);
+  showToast('Guest preview settings saved');
+}
+
 async function loadSettings() {
   const res = await adminFetch('/admin/editor-settings');
   const data = await res.json();
@@ -103,6 +134,18 @@ async function loadSettings() {
 
   document.getElementById('analytics-enabled').checked = !!data.analyticsEnabled;
   updateAnalyticsStatus(!!data.analyticsEnabled, !!data.analyticsConfigured);
+
+  document.getElementById('guest-preview-timeout-enabled').checked =
+    data.guestPreviewTimeoutEnabled !== false;
+  document.getElementById('guest-preview-timeout-seconds').value =
+    data.guestPreviewTimeoutSeconds ?? 1200;
+  updateGuestPreviewSecondsRow();
+  updateGuestPreviewStatus(
+    data.guestPreviewTimeoutEnabled !== false,
+    data.guestPreviewTimeoutSeconds ?? 1200
+  );
+  document.getElementById('guest-preview-db-warn').style.display = data.dbEnabled ? 'none' : 'block';
+  document.getElementById('save-guest-preview-btn').disabled = !data.dbEnabled;
 
   blockedExtensions = data.blockedExtensions || [];
   renderExtChips();
@@ -173,6 +216,18 @@ function renderExtChips() {
     )
     .join('');
 }
+
+document.getElementById('guest-preview-timeout-enabled').addEventListener('change', () => {
+  updateGuestPreviewSecondsRow();
+});
+
+document.getElementById('save-guest-preview-btn').addEventListener('click', async () => {
+  try {
+    await saveGuestPreviewSettings();
+  } catch (err) {
+    setStatus('guest-preview-status', err.message, true);
+  }
+});
 
 document.getElementById('ridey-enabled').addEventListener('change', async (e) => {
   try {

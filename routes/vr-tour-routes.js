@@ -9,6 +9,14 @@ const { slugify, query, isDbEnabled } = require('../services/db-service');
 const { writeTourQrPng, tourUrlToQrUrl, renderTourQrBuffer } = require('../services/qr-service');
 const { requireStudentStrict } = require('../student-auth');
 const { parseCookies } = require('../lib/session');
+const { isLocalTestUser } = require('../lib/local-test-user');
+const { getGuestPreviewTimeoutMs, getGuestPreviewTimeoutSeconds } = require('../lib/app-settings');
+const {
+  markGuestPreviewExpiry,
+  isExpiredGuestPreviewTourUrl,
+  deleteGuestPreviewDir,
+  hostedPathFromTourUrl,
+} = require('../lib/guest-preview-cleanup');
 
 const HOSTED_DIR = path.join(process.cwd(), 'hosted-projects');
 const PREVIEW_COOKIE = 'vr_preview_sid';
@@ -76,6 +84,11 @@ function registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDir
     if (!isAllowedTourQrUrl(url, req)) {
       return res.status(400).json({ success: false, message: 'Invalid tour URL' });
     }
+    const hostedPath = hostedPathFromTourUrl(url);
+    if (hostedPath && isExpiredGuestPreviewTourUrl(HOSTED_DIR, url)) {
+      deleteGuestPreviewDir(HOSTED_DIR, hostedPath);
+      return res.status(404).json({ success: false, message: 'Guest preview expired' });
+    }
     try {
       const buffer = await renderTourQrBuffer(url);
       res.setHeader('Content-Type', 'image/png');
@@ -110,7 +123,19 @@ function registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDir
         extractZipToDirSafe,
       });
 
-      res.json({ success: true, preview: true, ...result });
+      let expiresAt = null;
+      if (isLocalTestUser(req)) {
+        const ttlMs = await getGuestPreviewTimeoutMs();
+        if (ttlMs != null) {
+          expiresAt = Date.now() + ttlMs;
+          const timeoutSeconds = await getGuestPreviewTimeoutSeconds();
+          markGuestPreviewExpiry(HOSTED_DIR, hostedPath, { expiresAt, timeoutSeconds });
+        } else {
+          markGuestPreviewExpiry(HOSTED_DIR, hostedPath, {});
+        }
+      }
+
+      res.json({ success: true, preview: true, expiresAt, ...result });
     } catch (err) {
       console.error('VR tour preview publish error:', err);
       res.status(err.status || 500).json({ success: false, message: err.message || 'Publish failed' });

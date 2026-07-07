@@ -17,6 +17,7 @@ function getEditorCapabilities() {
     canUseMyAssets: isStudent,
     canUseRidey: isStudent || isAdmin,
     canPublishVrTour: isStudent,
+    canExportFlatPages: isStudent || isAdmin,
     canExport: true,
     canLoadZip: true,
     canUseSharedAssets: true,

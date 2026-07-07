@@ -18,6 +18,7 @@ const b2Service = require('./services/b2-service');
 const { resolveHostedProjectUrls } = require('./services/hosted-project-urls');
 const { createAnalyticsHtmlMiddleware } = require('./lib/analytics-html-inject');
 const { createHostedQrMiddleware } = require('./lib/hosted-qr-middleware');
+const { createGuestPreviewExpiryGuard, sweepExpiredGuestPreviews } = require('./lib/guest-preview-cleanup');
 const os = require('os');
 const { requireAdmin } = require('./admin-auth');
 const { registerCommonAssetRoutes } = require('./routes/common-assets-routes');
@@ -334,6 +335,11 @@ function getServerBaseUrlForHosted(req) {
   return `${proto}://${req.get('host')}`;
 }
 
+app.use(
+  createGuestPreviewExpiryGuard({
+    hostedDir: path.join(__dirname, 'hosted-projects'),
+  })
+);
 app.use(
   createHostedQrMiddleware({
     hostedDir: path.join(__dirname, 'hosted-projects'),
@@ -2306,3 +2312,17 @@ function cleanupTempFiles() {
 
 // Call cleanup on server start
 cleanupTempFiles();
+
+const HOSTED_PROJECTS_DIR = path.join(__dirname, 'hosted-projects');
+function sweepGuestPreviewDirs() {
+  try {
+    const deleted = sweepExpiredGuestPreviews(HOSTED_PROJECTS_DIR);
+    if (deleted > 0) {
+      console.log(`🧹 Removed ${deleted} expired guest preview tour(s)`);
+    }
+  } catch (err) {
+    console.error('Guest preview cleanup error:', err);
+  }
+}
+sweepGuestPreviewDirs();
+setInterval(sweepGuestPreviewDirs, 60 * 1000);

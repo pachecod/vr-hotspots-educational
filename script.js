@@ -9348,9 +9348,58 @@ class HotspotEditor {
         description: 'Choose how media should be included in your exported ZIP.',
       });
       if (!exportMode) return;
+    } else {
+      const proceed = await this.showGuestExportDialog();
+      if (!proceed) return;
     }
 
     this.saveAsCompleteProject(templateName, exportMode);
+  }
+
+  showGuestExportDialog() {
+    return new Promise((resolve) => {
+      const dialog = document.createElement('div');
+      dialog.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85); z-index: ${EDITOR_LAYER.dialog}; display: flex;
+        align-items: center; justify-content: center; font-family: Arial;
+      `;
+
+      dialog.innerHTML = `
+        <div style="background: #2a2a2a; padding: 28px; border-radius: 12px; color: white; max-width: 520px; width: calc(100% - 40px); box-shadow: 0 12px 40px rgba(0,0,0,0.45);">
+          <h3 style="margin: 0 0 8px 0; color: #4CAF50;">Guest Export</h3>
+          <p style="color: #ccc; margin: 0 0 14px 0; line-height: 1.5; font-size: 14px;">
+            Only your <strong>360° tour</strong> will be included in the ZIP.
+          </p>
+          <p style="color: #ccc; margin: 0 0 14px 0; line-height: 1.5; font-size: 14px;">
+            The <strong>flat web page and QR code are not included</strong> in guest exports.
+          </p>
+          <p style="color: #ccc; margin: 0 0 22px 0; line-height: 1.5; font-size: 14px;">
+            <strong>Sign in</strong> to save and publish a permanent flat page with a working QR code.
+          </p>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button type="button" id="guest-export-cancel" style="
+              background: #666; color: white; border: none; padding: 12px 18px;
+              border-radius: 6px; cursor: pointer;
+            ">Cancel</button>
+            <button type="button" id="guest-export-continue" style="
+              background: #4CAF50; color: white; border: none; padding: 12px 18px;
+              border-radius: 6px; cursor: pointer; font-weight: bold;
+            ">Continue Export</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(dialog);
+      dialog.querySelector('#guest-export-cancel').onclick = () => {
+        if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
+        resolve(false);
+      };
+      dialog.querySelector('#guest-export-continue').onclick = () => {
+        if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
+        resolve(true);
+      };
+    });
   }
 
   showExportModeDialog(options = {}) {
@@ -9556,8 +9605,12 @@ class HotspotEditor {
     // Include the flat web page content (if any) so spherical + flat travel together
     // as one project. Source files are written under flat-pages/<id>/ and the full
     // content is also embedded in config.flatPages for robust round-tripping.
+    const caps =
+      typeof window.getEditorCapabilities === 'function'
+        ? window.getEditorCapabilities()
+        : { canExportFlatPages: true };
     try {
-      if (window.flatPageEditor) {
+      if (window.flatPageEditor && caps.canExportFlatPages !== false) {
         window.flatPageEditor.addToZip(zip, {
           exportMode,
           vrTourEmbed: this.vrTourEmbed,

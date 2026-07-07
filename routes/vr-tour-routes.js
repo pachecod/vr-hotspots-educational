@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { slugify, query, isDbEnabled } = require('../services/db-service');
-const { writeTourQrPng, tourUrlToQrUrl } = require('../services/qr-service');
+const { writeTourQrPng, tourUrlToQrUrl, renderTourQrBuffer } = require('../services/qr-service');
 const { requireStudentStrict } = require('../student-auth');
 const { parseCookies } = require('../lib/session');
 
@@ -58,7 +58,35 @@ async function publishZipToHostedDir({ zipPath, hostedPath, req, assertValidZipF
   return { url, hostedPath, hostedUrl: url, qrUrl };
 }
 
+function isAllowedTourQrUrl(url, req) {
+  if (!url || !/^https?:\/\//i.test(url)) return false;
+  try {
+    const parsed = new URL(url);
+    const allowed = new URL(getServerBaseUrl(req));
+    return parsed.origin === allowed.origin && /\/hosted\/[^/]+\/index\.html$/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
 function registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe }) {
+  /** Dynamic QR image for flat-page preview (avoids stale/corrupt qr.png on disk). */
+  app.get('/api/vr-tour/qr', async (req, res) => {
+    const url = typeof req.query.url === 'string' ? req.query.url.trim() : '';
+    if (!isAllowedTourQrUrl(url, req)) {
+      return res.status(400).json({ success: false, message: 'Invalid tour URL' });
+    }
+    try {
+      const buffer = await renderTourQrBuffer(url);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      res.send(buffer);
+    } catch (err) {
+      console.error('VR tour QR render error:', err);
+      res.status(500).json({ success: false, message: 'Could not generate QR code' });
+    }
+  });
+
   /** Ephemeral preview tour for flat-page editing (guests + students, no sign-in). */
   app.post('/api/vr-tour/preview-publish', upload.single('project'), async (req, res) => {
     const tempPath = req.file?.path;

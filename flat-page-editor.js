@@ -114,12 +114,17 @@ button:hover { background: #1d4ed8; }`;
       .replace(/>/g, '&gt;');
   }
 
-  function extractHostedQrSrc(inner) {
-    const qrMatch = String(inner || '').match(
-      /<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*\ssrc=(["'])([^"']+)\1/i
+  function extractHostedTourUrl(divAttrs, inner) {
+    const blob = `${divAttrs || ''} ${inner || ''}`;
+    const match = blob.match(
+      /(?:data-vr-tour-url|\ssrc)=(["'])(https?:\/\/[^"']+\/index\.html(?:\?[^"']*)?)\1/i
     );
-    const src = qrMatch ? qrMatch[2] : '';
-    return /\/hosted\/[^"']*qr\.png/i.test(src) ? src : '';
+    return match ? match[2] : '';
+  }
+
+  function tourQrPreviewSrc(tourUrl) {
+    if (!tourUrl || !/\/hosted\/[^"']+\/index\.html/i.test(tourUrl)) return '';
+    return `/api/vr-tour/qr?url=${encodeURIComponent(tourUrl)}`;
   }
 
   function rewriteVrTourEmbedsForEditorPreview(html) {
@@ -131,12 +136,25 @@ button:hover { background: #1d4ed8; }`;
 
     const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
     let out = html.replace(wrapperRe, (match, divAttrs, inner) => {
-      const existingQr = extractHostedQrSrc(inner);
+      const tourUrl = extractHostedTourUrl(divAttrs, inner);
+      const previewQr = tourQrPreviewSrc(tourUrl);
       let updatedInner = inner.replace(
         /(<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*\s)src=(["'])[^"']*\2/gi,
         `$1src="${embedSrc}"`
       );
-      if (existingQr) {
+      if (previewQr) {
+        if (!/vr-tour-mobile-qr-img/i.test(updatedInner)) {
+          updatedInner = [
+            updatedInner.trimEnd(),
+            '<p class="vr-tour-mobile-label">View on Your Phone</p>',
+            `<img class="vr-tour-mobile-qr-img" src="${previewQr}" alt="Scan to open this 360° tour on your phone" width="160" height="160" />`,
+          ].join('\n');
+        } else {
+          updatedInner = updatedInner.replace(
+            /(<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*\ssrc=)(["'])[^"']*\2/i,
+            `$1"${previewQr}"`
+          );
+        }
         updatedInner = updatedInner.replace(
           /(<p\b[^>]*\bvr-tour-mobile-label\b[^>]*)(>)/gi,
           (m, start, end) => start.replace(/\sstyle=(["'])[^"']*\1/i, '') + end

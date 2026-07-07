@@ -11,12 +11,17 @@ export function getEditorPreviewVrTourEmbedUrl() {
   return EDITOR_PREVIEW_VR_TOUR_EMBED_PATH;
 }
 
-function extractHostedQrSrc(inner) {
-  const qrMatch = String(inner || '').match(
-    /<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*\ssrc=(["'])([^"']+)\1/i
+function extractHostedTourUrl(divAttrs, inner) {
+  const blob = `${divAttrs || ''} ${inner || ''}`;
+  const match = blob.match(
+    /(?:data-vr-tour-url|\ssrc)=(["'])(https?:\/\/[^"']+\/index\.html(?:\?[^"']*)?)\1/i
   );
-  const src = qrMatch ? qrMatch[2] : '';
-  return /\/hosted\/[^"']*qr\.png/i.test(src) ? resolveAbsoluteUrl(src) : '';
+  return match ? match[2] : '';
+}
+
+function tourQrPreviewSrc(tourUrl) {
+  if (!tourUrl || !/\/hosted\/[^"']+\/index\.html/i.test(tourUrl)) return '';
+  return `/api/vr-tour/qr?url=${encodeURIComponent(tourUrl)}`;
 }
 
 /** Rewrite flat-page VR embeds for in-editor live preview (avoid loading the full editor UI). */
@@ -26,14 +31,15 @@ export function rewriteVrTourEmbedsForEditorPreview(html) {
 
   const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
   let out = html.replace(wrapperRe, (match, divAttrs, inner) => {
-    const existingQr = extractHostedQrSrc(inner);
+    const tourUrl = extractHostedTourUrl(divAttrs, inner);
+    const previewQr = tourQrPreviewSrc(tourUrl);
     return rewriteWrapperEmbedBlock(
       divAttrs,
       inner,
       embedUrl,
       embedUrl,
-      existingQr,
-      Boolean(existingQr)
+      previewQr,
+      Boolean(previewQr)
     );
   });
 

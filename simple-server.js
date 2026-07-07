@@ -17,6 +17,7 @@ const AdmZip = require('adm-zip');
 const b2Service = require('./services/b2-service');
 const { resolveHostedProjectUrls } = require('./services/hosted-project-urls');
 const { createAnalyticsHtmlMiddleware } = require('./lib/analytics-html-inject');
+const { createHostedQrMiddleware } = require('./lib/hosted-qr-middleware');
 const os = require('os');
 const { requireAdmin } = require('./admin-auth');
 const { registerCommonAssetRoutes } = require('./routes/common-assets-routes');
@@ -326,6 +327,18 @@ app.use(
   '/starter-templates',
   requireAdmin,
   express.static(path.join(__dirname, 'starter-templates'), staticNoStaleOptions)
+);
+function getServerBaseUrlForHosted(req) {
+  if (process.env.SERVER_BASE_URL) return process.env.SERVER_BASE_URL.replace(/\/$/, '');
+  const proto = req.headers['x-forwarded-proto'] ? String(req.headers['x-forwarded-proto']) : req.protocol;
+  return `${proto}://${req.get('host')}`;
+}
+
+app.use(
+  createHostedQrMiddleware({
+    hostedDir: path.join(__dirname, 'hosted-projects'),
+    getServerBaseUrl: getServerBaseUrlForHosted,
+  })
 );
 app.use(createAnalyticsHtmlMiddleware());
 app.use(express.static('.', staticNoStaleOptions));

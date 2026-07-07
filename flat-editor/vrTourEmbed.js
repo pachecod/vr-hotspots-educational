@@ -11,12 +11,39 @@ export function getEditorPreviewVrTourEmbedUrl() {
   return EDITOR_PREVIEW_VR_TOUR_EMBED_PATH;
 }
 
+function extractHostedQrSrc(inner) {
+  const qrMatch = String(inner || '').match(
+    /<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*\ssrc=(["'])([^"']+)\1/i
+  );
+  const src = qrMatch ? qrMatch[2] : '';
+  return /\/hosted\/[^"']*qr\.png/i.test(src) ? resolveAbsoluteUrl(src) : '';
+}
+
 /** Rewrite flat-page VR embeds for in-editor live preview (avoid loading the full editor UI). */
 export function rewriteVrTourEmbedsForEditorPreview(html) {
-  return rewriteVrTourEmbedsInHtml(html, {
-    hostedUrl: getEditorPreviewVrTourEmbedUrl(),
-    useOnlineUrl: true,
+  if (!html || !hasVrTourEmbed(html)) return html;
+  const embedUrl = getEditorPreviewVrTourEmbedUrl();
+
+  const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
+  let out = html.replace(wrapperRe, (match, divAttrs, inner) => {
+    const existingQr = extractHostedQrSrc(inner);
+    return rewriteWrapperEmbedBlock(
+      divAttrs,
+      inner,
+      embedUrl,
+      embedUrl,
+      existingQr,
+      Boolean(existingQr)
+    );
   });
+
+  const legacyBlockRe =
+    /(?:<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*)?<iframe\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>\s*<\/iframe>/gi;
+  out = out.replace(legacyBlockRe, (match, attrs) =>
+    `${rewriteIframeOpenTag(attrs, embedUrl)}</iframe>`
+  );
+
+  return out;
 }
 
 export function resolveAbsoluteUrl(url) {
@@ -65,6 +92,18 @@ export function stripExistingVrTourEmbeds(html) {
 
 export function hasVrTourEmbed(html) {
   return /data-vr-tour-embed=["']1["']/i.test(html || '');
+}
+
+/** HTML snippet for bundle export — relative path to the spherical viewer at project root. */
+export function buildLocalBundleVrInsertHtml(name) {
+  const title = escapeAttr(name || '360° VR Tour');
+  return [
+    '<!-- 360° VR tour from this project (Spherical Content) -->',
+    `<style>${VR_TOUR_EMBED_STYLES}</style>`,
+    `<div class="vr-tour-embed" data-vr-tour-embed="1" data-vr-tour-url="${LOCAL_VR_TOUR_EMBED_PATH}">`,
+    `<iframe src="${LOCAL_VR_TOUR_EMBED_PATH}" title="${title}" allow="fullscreen; vr; accelerometer; gyroscope"></iframe>`,
+    '</div>',
+  ].join('\n');
 }
 
 /** HTML snippet for embedding the project's hosted VR viewer in a flat page. */
@@ -132,12 +171,15 @@ function rewriteWrapperEmbedBlock(divAttrs, inner, targetSrc, tourUrl, qrSrc, sh
  * @param {string} html
  * @param {{ hostedUrl?: string, useOnlineUrl?: boolean }} options
  */
-export function rewriteVrTourEmbedsInHtml(html, { hostedUrl = '', useOnlineUrl = true } = {}) {
+export function rewriteVrTourEmbedsInHtml(
+  html,
+  { hostedUrl = '', useOnlineUrl = true, hideQr = false } = {}
+) {
   if (!html) return html;
   const onlineSrc = resolveAbsoluteUrl(hostedUrl);
   const targetSrc = useOnlineUrl && onlineSrc ? onlineSrc : LOCAL_VR_TOUR_EMBED_PATH;
   const tourUrl = useOnlineUrl && onlineSrc ? onlineSrc : targetSrc;
-  const qrSrc = useOnlineUrl && onlineSrc ? deriveQrUrlFromTourUrl(onlineSrc) : '';
+  const qrSrc = !hideQr && useOnlineUrl && onlineSrc ? deriveQrUrlFromTourUrl(onlineSrc) : '';
   const showQr = Boolean(qrSrc);
 
   const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;

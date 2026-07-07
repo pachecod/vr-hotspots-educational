@@ -114,6 +114,95 @@ button:hover { background: #1d4ed8; }`;
       .replace(/>/g, '&gt;');
   }
 
+  function extractHostedQrSrc(inner) {
+    const qrMatch = String(inner || '').match(
+      /<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*\ssrc=(["'])([^"']+)\1/i
+    );
+    const src = qrMatch ? qrMatch[2] : '';
+    return /\/hosted\/[^"']*qr\.png/i.test(src) ? src : '';
+  }
+
+  function rewriteVrTourEmbedsForEditorPreview(html) {
+    if (!html || !/data-vr-tour-embed=["']1["']/i.test(html)) return html;
+    if (typeof window === 'undefined' || !window.hotspotEditor) return html;
+    const embedSrc =
+      (window.location?.origin ? window.location.origin : '') + '/index.html?embed=1';
+    if (!embedSrc) return html;
+
+    const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
+    let out = html.replace(wrapperRe, (match, divAttrs, inner) => {
+      const existingQr = extractHostedQrSrc(inner);
+      let updatedInner = inner.replace(
+        /(<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*\s)src=(["'])[^"']*\2/gi,
+        `$1src="${embedSrc}"`
+      );
+      if (existingQr) {
+        updatedInner = updatedInner.replace(
+          /(<p\b[^>]*\bvr-tour-mobile-label\b[^>]*)(>)/gi,
+          (m, start, end) => start.replace(/\sstyle=(["'])[^"']*\1/i, '') + end
+        );
+        updatedInner = updatedInner.replace(
+          /(<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*)(>)/gi,
+          (m, start, end) => start.replace(/\sstyle=(["'])[^"']*\1/i, '') + end
+        );
+      } else {
+        updatedInner = updatedInner.replace(
+          /(<p\b[^>]*\bvr-tour-mobile-label\b[^>]*)(>)/gi,
+          '$1 style="display:none"$2'
+        );
+        updatedInner = updatedInner.replace(
+          /(<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*)(>)/gi,
+          '$1 style="display:none"$2'
+        );
+      }
+      const updatedDivAttrs = divAttrs
+        .replace(/\sdata-vr-tour-url=(["'])[^"']*\1/i, '')
+        .trim();
+      return `<div ${updatedDivAttrs} data-vr-tour-url="${embedSrc}">${updatedInner}</div>`;
+    });
+
+    out = out.replace(
+      /(<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*\s)src=(["'])[^"']*\2/gi,
+      `$1src="${embedSrc}"`
+    );
+    return out;
+  }
+
+  const LOCAL_VR_TOUR_EMBED_PATH = '../../index.html';
+  const VR_TOUR_EMBED_STYLES =
+    '.vr-tour-embed{margin:1rem auto;max-width:100%;text-align:center;}' +
+    '.vr-tour-embed iframe{width:100%;min-height:480px;height:70vh;border:0;display:block;border-radius:8px;background:#111;}';
+
+  function buildLocalBundleVrInsertHtml(name) {
+    const title = String(name || '360° VR Tour')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
+    return [
+      '<!-- 360° VR tour from this project (Spherical Content) -->',
+      '<style>' + VR_TOUR_EMBED_STYLES + '</style>',
+      '<div class="vr-tour-embed" data-vr-tour-embed="1" data-vr-tour-url="' + LOCAL_VR_TOUR_EMBED_PATH + '">',
+      '<iframe src="' + LOCAL_VR_TOUR_EMBED_PATH + '" title="' + title + '" allow="fullscreen; vr; accelerometer; gyroscope"></iframe>',
+      '</div>',
+    ].join('\n');
+  }
+
+  function stripExistingVrTourEmbeds(html) {
+    if (!html) return html;
+    return html
+      .replace(
+        /<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*<style>[\s\S]*?<\/style>\s*<div\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>[\s\S]*?<\/div>\s*/gi,
+        ''
+      )
+      .replace(/<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>\s*<\/iframe>\s*/gi, '');
+  }
+
+  function defaultHtmlInsertPos(html) {
+    const bodyClose = /<\/body>/i.exec(html);
+    if (bodyClose) return bodyClose.index;
+    return html.length;
+  }
+
   class FlatPageEditor {
     constructor() {
       this.project = createDefaultProject();
@@ -245,6 +334,9 @@ button:hover { background: #1d4ed8; }`;
         return f ? f.content || '' : '';
       };
       let html = getContent('index.html') || '<!DOCTYPE html><html><head></head><body></body></html>';
+      if (typeof window !== 'undefined' && window.hotspotEditor) {
+        html = rewriteVrTourEmbedsForEditorPreview(html);
+      }
       const css = getContent('style.css');
       const js = getContent('script.js');
       const configJson = getContent('config.json');
@@ -776,6 +868,22 @@ button:hover { background: #1d4ed8; }`;
         this._setCloudStatus(err.message || 'Publish failed', true);
         alert('Could not publish flat page: ' + (err.message || 'unknown error'));
       }
+    }
+
+    syncLocalVrTourEmbedToFlatPage() {
+      const name =
+        (window.hotspotEditor &&
+          typeof window.hotspotEditor.getProjectVrEmbedInfo === 'function' &&
+          window.hotspotEditor.getProjectVrEmbedInfo().name) ||
+        '360° VR Tour';
+      let html = this.getFileContent('index.html');
+      html = stripExistingVrTourEmbeds(html);
+      const snippet = buildLocalBundleVrInsertHtml(name);
+      const insertAt = defaultHtmlInsertPos(html);
+      html = html.slice(0, insertAt) + '\n' + snippet + '\n' + html.slice(insertAt);
+      this.setFileContent('index.html', html);
+      if (this._mounted) this.refreshPreview();
+      return true;
     }
 
     // Resets flat page content (used by "Clear Data").

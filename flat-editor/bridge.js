@@ -20,6 +20,7 @@ import {
   isAdminOnlyFile,
 } from './file-utils.js';
 import {
+  buildLocalBundleVrInsertHtml,
   buildProjectVrInsertHtml,
   deriveQrUrlFromTourUrl,
   hasVrTourEmbed,
@@ -443,6 +444,25 @@ export class FlatPageEditorBridge {
     return true;
   }
 
+  /** Insert or refresh the VR tour block using the bundle-relative viewer (guest / in-editor). */
+  syncLocalVrTourEmbedToFlatPage() {
+    const name =
+      (window.hotspotEditor &&
+        typeof window.hotspotEditor.getProjectVrEmbedInfo === 'function' &&
+        window.hotspotEditor.getProjectVrEmbedInfo().name) ||
+      '360° VR Tour';
+
+    let html = this.getFileContent('index.html');
+    html = stripExistingVrTourEmbeds(html);
+    const snippet = buildLocalBundleVrInsertHtml(name);
+    const insertAt = defaultHtmlInsertPos(html);
+    html = `${html.slice(0, insertAt)}\n${snippet}\n${html.slice(insertAt)}`;
+    this.setFileContent('index.html', html);
+    this._syncScenesData();
+    this._notify();
+    return true;
+  }
+
   /** Insert or refresh the VR tour block on the flat page (used when switching from 360° mode). */
   syncVrTourEmbedToFlatPage(vrTourEmbed = {}) {
     const embedUrl = resolveAbsoluteUrl(vrTourEmbed.hostedUrl || '');
@@ -612,7 +632,13 @@ export class FlatPageEditorBridge {
   }
 
   buildPreviewDocument(page) {
-    return buildPreviewDocument(page || this.getActivePage());
+    const useEditorPreview =
+      !this._adminTemplateMode &&
+      typeof window !== 'undefined' &&
+      !!window.hotspotEditor;
+    return buildPreviewDocument(page || this.getActivePage(), {
+      editorPreview: useEditorPreview,
+    });
   }
 
   show() {

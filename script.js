@@ -579,25 +579,147 @@ function imageMaskStyleKey(styleCfg) {
   return `${styleCfg.borderRadius || 0}|${styleCfg.borderWidth || 0}|${styleCfg.borderColor || ''}`;
 }
 
-function mergeAImageMaterial(aImgEl, patch) {
-  if (!aImgEl || !patch) return;
-  const current = aImgEl.getAttribute('material');
-  if (current && typeof current === 'object') {
-    aImgEl.setAttribute('material', Object.assign({}, current, patch));
+function imageHotspotTextureReady(aImgEl) {
+  try {
+    const mesh = aImgEl && aImgEl.getObject3D && aImgEl.getObject3D('mesh');
+    const texImg = mesh && mesh.material && mesh.material.map && mesh.material.map.image;
+    if (!texImg) return false;
+    const w = texImg.naturalWidth || texImg.videoWidth || texImg.width || 0;
+    const h = texImg.naturalHeight || texImg.videoHeight || texImg.height || 0;
+    return w > 0 && h > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+function applyImageHotspotCrossOrigin(aImgEl, src) {
+  if (!aImgEl || !src || typeof src !== 'string') return;
+  if (src.startsWith('data:')) {
+    aImgEl.removeAttribute('crossorigin');
     return;
   }
-  aImgEl.setAttribute(
-    'material',
-    Object.assign(
-      {
-        shader: 'flat',
-        side: 'double',
-        transparent: false,
-        opacity: 1,
-      },
-      patch
+  try {
+    const resolved = new URL(src, window.location.href);
+    if (resolved.origin === window.location.origin) {
+      aImgEl.removeAttribute('crossorigin');
+    } else {
+      aImgEl.setAttribute('crossorigin', 'anonymous');
+    }
+  } catch (_) {
+    aImgEl.removeAttribute('crossorigin');
+  }
+}
+
+function srcToImageHotspotDataUrl(src) {
+  if (!src || typeof src !== 'string') return Promise.resolve(null);
+  if (src.startsWith('data:')) return Promise.resolve(src);
+  return fetch(src)
+    .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('fetch failed'))))
+    .then(
+      (blob) =>
+        new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(fr.result);
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        })
     )
-  );
+    .catch(() => null);
+}
+
+function mergeAImageMaterial(aImgEl, patch) {
+  if (!aImgEl || !patch) return;
+  try {
+    const mesh = aImgEl.getObject3D('mesh');
+    const liveMat = mesh && mesh.material;
+    if (liveMat) {
+      const preservedMap = liveMat.map;
+      Object.assign(liveMat, patch);
+      if (preservedMap && !liveMat.map) liveMat.map = preservedMap;
+      liveMat.needsUpdate = true;
+      if (mesh.geometry && mesh.geometry.computeBoundingSphere) {
+        mesh.geometry.computeBoundingSphere();
+      }
+      return;
+    }
+  } catch (_) {}
+  const current = aImgEl.getAttribute('material');
+  const src = aImgEl.getAttribute('src');
+  const base =
+    current && typeof current === 'object'
+      ? Object.assign({}, current)
+      : {
+          shader: 'flat',
+          side: 'double',
+          transparent: false,
+          opacity: 1,
+        };
+  if (src && !base.src) base.src = src;
+  aImgEl.setAttribute('material', Object.assign(base, patch));
+}
+
+function whenImageHotspotTextureReady(aImgEl, callback) {
+  if (!aImgEl || typeof callback !== 'function') return;
+  if (imageHotspotTextureReady(aImgEl)) {
+    callback();
+    return;
+  }
+  let done = false;
+  const run = () => {
+    if (done || !document.body.contains(aImgEl)) return;
+    if (imageHotspotTextureReady(aImgEl)) {
+      done = true;
+      callback();
+    }
+  };
+  aImgEl.addEventListener('materialtextureloaded', run, { once: true });
+  aImgEl.addEventListener('load', run, { once: true });
+  setTimeout(run, 300);
+  setTimeout(run, 800);
+}
+
+function ensureImageHotspotTexture(aImgEl, srcHint) {
+  if (!aImgEl || !aImgEl.classList || !aImgEl.classList.contains('static-image-hotspot')) {
+    return Promise.resolve(false);
+  }
+  if (imageHotspotTextureReady(aImgEl)) return Promise.resolve(true);
+  const src = srcHint || aImgEl.dataset.originalSrc || aImgEl.getAttribute('src') || '';
+  if (!src || src.startsWith('data:image/gif')) return Promise.resolve(false);
+
+  applyImageHotspotCrossOrigin(aImgEl, src);
+
+  const applySrc = (nextSrc) => {
+    if (!nextSrc || !document.body.contains(aImgEl)) return Promise.resolve(false);
+    setAImageHotspotSrc(aImgEl, nextSrc);
+    disableImageHotspotCulling(aImgEl);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        resolve(!!ok);
+      };
+      whenImageHotspotTextureReady(aImgEl, () => finish(imageHotspotTextureReady(aImgEl)));
+      setTimeout(() => finish(imageHotspotTextureReady(aImgEl)), 2200);
+    });
+  };
+
+  if (src.startsWith('blob:') || src.startsWith('http://') || src.startsWith('https://')) {
+    return srcToImageHotspotDataUrl(src).then((dataUrl) => applySrc(dataUrl || src));
+  }
+  return applySrc(src);
+}
+
+function scheduleImageHotspotTextureRepair(aImgEl, srcHint) {
+  if (!aImgEl) return;
+  [250, 800, 2000].forEach((delay) => {
+    setTimeout(() => {
+      if (!document.body.contains(aImgEl)) return;
+      if (!imageHotspotTextureReady(aImgEl)) {
+        ensureImageHotspotTexture(aImgEl, srcHint).catch(() => {});
+      }
+    }, delay);
+  });
 }
 
 function normalizeImageFadeDurationMs(value, fallbackMs = 5000) {
@@ -730,6 +852,27 @@ function restoreUnmaskedImageMaterial(aImgEl) {
 function applyRoundedMaskToAImage(aImgEl, styleCfg, force = false) {
   try {
     if (!aImgEl || !styleCfg) return Promise.resolve();
+    if (
+      aImgEl.classList &&
+      aImgEl.classList.contains('static-image-hotspot') &&
+      !imageHotspotTextureReady(aImgEl)
+    ) {
+      return new Promise((resolve) => {
+        let settled = false;
+        const runMask = () => {
+          if (settled) return;
+          settled = true;
+          applyRoundedMaskToAImage(aImgEl, styleCfg, force).then(resolve).catch(() => resolve());
+        };
+        whenImageHotspotTextureReady(aImgEl, runMask);
+        setTimeout(() => {
+          if (!settled && !imageHotspotTextureReady(aImgEl)) {
+            settled = true;
+            resolve();
+          }
+        }, 2500);
+      });
+    }
     const src = aImgEl.getAttribute('src');
     if (!src || src.startsWith('data:image/gif')) return Promise.resolve();
     const styleKey = imageMaskStyleKey(styleCfg);
@@ -6053,51 +6196,16 @@ class HotspotEditor {
         );
       } catch (_) {}
       // Schedule integrity check & fallback to data URL if texture fails to materialize
-      const fileForFallback =
-        data._imageFileForIDB instanceof File
-          ? data._imageFileForIDB
-          : data.image instanceof File
-          ? data.image
-          : null;
-      if (fileForFallback) {
-        const scheduleFallback = (delay) => {
-          setTimeout(() => {
-            const el = document.getElementById(`hotspot-${data.id}`);
-            if (!el) return;
-            const imgEnt = el.querySelector('.static-image-hotspot');
-            if (!imgEnt) return;
-            let needsFallback = false;
-            try {
-              const mesh = imgEnt.getObject3D('mesh');
-              const texImg = mesh && mesh.material && mesh.material.map && mesh.material.map.image;
-              if (!texImg || !texImg.naturalWidth) needsFallback = true;
-            } catch (err) {
-              needsFallback = true;
-            }
-            if (needsFallback) {
-              console.log(
-                '[ImageHotspot] Fallback triggered; converting file to data URL for',
-                fileForFallback.name
-              );
-              const fr2 = new FileReader();
-              fr2.onload = () => {
-                // only replace if still same id and still not loaded
-                const el2 = document.getElementById(`hotspot-${data.id}`);
-                const imgEnt2 = el2?.querySelector('.static-image-hotspot');
-                if (imgEnt2) setAImageHotspotSrc(imgEnt2, fr2.result);
-              };
-              try {
-                fr2.readAsDataURL(fileForFallback);
-              } catch (_) {}
-            } else {
-              // Texture fine
-              // Optionally revoke object URL later (not revoking to allow editing reuse)
-            }
-          }, delay);
-        };
-        scheduleFallback(800);
-        scheduleFallback(2000);
-      }
+      const srcHintForRepair =
+        imgSrc ||
+        (typeof data.image === 'string' ? data.image : '') ||
+        data.commonAssetUrl ||
+        '';
+      setTimeout(() => {
+        const el = document.getElementById(`hotspot-${data.id}`);
+        const imgEnt = el?.querySelector('.static-image-hotspot');
+        if (imgEnt) scheduleImageHotspotTextureRepair(imgEnt, srcHintForRepair);
+      }, 50);
     }
 
     if (data.type === 'model') {
@@ -6240,13 +6348,17 @@ class HotspotEditor {
               const imgEnt = hotspotEl.querySelector('.static-image-hotspot');
               if (imgEnt) {
                 setAImageHotspotSrc(imgEnt, url);
+                applyImageHotspotCrossOrigin(imgEnt, url);
+                scheduleImageHotspotTextureRepair(imgEnt, url);
                 // mark into data so subsequent saves can strip the blob (storageKey persisted separately)
                 data.image = url;
                 // If rounded corners are enabled, re-apply mask now that real image is in place
                 try {
                   const istyleNow = this.customStyles && this.customStyles.image;
                   if (istyleNow && istyleNow.borderRadius && istyleNow.borderRadius > 0) {
-                    applyRoundedMaskToAImage(imgEnt, istyleNow, true);
+                    whenImageHotspotTextureReady(imgEnt, () => {
+                      applyRoundedMaskToAImage(imgEnt, istyleNow, true).catch(() => {});
+                    });
                   }
                 } catch (_) {}
                 // Re-evaluate aspect ratio based on the real texture once it binds
@@ -11174,11 +11286,15 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
       }
 
       this.updateSceneDropdown();
-      this.loadCurrentScene();
+      await this.rehydrateImageHotspotsFromIDB();
+      await this.loadCurrentScene();
       this.updateHotspotList();
       this.updateNavigationTargets();
       this.updateStartingPointInfo();
       this.applyStylesToExistingElements();
+      this.repairAllImageHotspotTextures();
+      setTimeout(() => this.repairAllImageHotspotTextures(), 500);
+      setTimeout(() => this.repairAllImageHotspotTextures(), 1200);
 
       // Playground / bundle ZIPs must not depend on ephemeral /hosted/ tour URLs.
       this.vrTourEmbed = {
@@ -11429,14 +11545,21 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
               imgEl.dataset.originalSrc = currentSrc;
             }
             if (appliedKey !== radiusKey) {
-              if (imgEl.dataset.originalSrc) {
-                setAImageHotspotSrc(imgEl, imgEl.dataset.originalSrc);
+              const applyMask = () => {
+                if (imgEl.dataset.originalSrc) {
+                  setAImageHotspotSrc(imgEl, imgEl.dataset.originalSrc);
+                }
+                applyRoundedMaskToAImage(imgEl, istyle, true)
+                  .then(() => {
+                    imgEl.dataset.roundedAppliedRadius = radiusKey;
+                  })
+                  .catch(() => {});
+              };
+              if (imgEl.classList.contains('static-image-hotspot')) {
+                whenImageHotspotTextureReady(imgEl, applyMask);
+              } else {
+                applyMask();
               }
-              applyRoundedMaskToAImage(imgEl, istyle, true)
-                .then(() => {
-                  imgEl.dataset.roundedAppliedRadius = radiusKey;
-                })
-                .catch(() => {});
             }
           } else {
             // If rounding disabled, restore original if stored
@@ -11445,6 +11568,12 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
               restoreUnmaskedImageMaterial(imgEl);
             }
             delete imgEl.dataset.roundedAppliedRadius;
+          }
+          if (imgEl.classList.contains('static-image-hotspot')) {
+            scheduleImageHotspotTextureRepair(
+              imgEl,
+              imgEl.dataset.originalSrc || imgEl.getAttribute('src') || ''
+            );
           }
         } catch (e) {
           /* ignore individual failures */
@@ -11455,11 +11584,27 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
     console.log('✅ Applied custom styles to existing elements');
   }
 
+  repairAllImageHotspotTextures() {
+    document.querySelectorAll('.static-image-hotspot').forEach((imgEl) => {
+      try {
+        const srcHint = imgEl.dataset.originalSrc || imgEl.getAttribute('src') || '';
+        if (!imageHotspotTextureReady(imgEl)) {
+          ensureImageHotspotTexture(imgEl, srcHint).catch(() => {});
+        }
+        scheduleImageHotspotTextureRepair(imgEl, srcHint);
+      } catch (_) {}
+    });
+    if (typeof this.refreshSceneMediaRaycasters === 'function') {
+      this.refreshSceneMediaRaycasters();
+    }
+  }
+
   refreshAllHotspotStyles() {
     console.log('🎨 Refreshing all hotspot styles');
 
     // Refresh styles for all existing hotspots
     this.applyStylesToExistingElements();
+    this.repairAllImageHotspotTextures();
 
     // Also refresh any in-memory hotspot data
     // Apply navigation ring customizations to existing navigation hotspots
@@ -19611,7 +19756,7 @@ AFRAME.registerComponent('editor-spot', {
       }
       setAImageHotspotSrc(img, _src);
       disableImageHotspotCulling(img);
-      img.setAttribute('crossorigin', 'anonymous');
+      applyImageHotspotCrossOrigin(img, _src);
       if (!img.getAttribute('material'))
         img.setAttribute('material', 'transparent:true; side:double');
       const scl = data.imageScale || 1;
@@ -19822,6 +19967,7 @@ AFRAME.registerComponent('editor-spot', {
         img.addEventListener('materialtextureloaded', syncImageFade, { once: true });
       }
       el.appendChild(img);
+      scheduleImageHotspotTextureRepair(img, _src);
       try {
         const ed = window.hotspotEditor;
         if (ed && el._repositionEditButtons) el._repositionEditButtons();

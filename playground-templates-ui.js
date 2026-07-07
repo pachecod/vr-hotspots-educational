@@ -363,11 +363,6 @@ async function runPendingPlaygroundLoad() {
         silent: true,
         initialContentMode: 'spherical',
       });
-      // Re-bind image hotspot textures after ZIP import (avoids black billboards on guest samples).
-      if (typeof window.hotspotEditor.rehydrateImageHotspotsFromIDB === 'function') {
-        await window.hotspotEditor.rehydrateImageHotspotsFromIDB();
-      }
-      await window.hotspotEditor.loadCurrentScene();
     } else if (template.files_manifest && template.files_manifest.length) {
       if (window.flatPageEditor && typeof window.flatPageEditor.loadTemplate === 'function') {
         window.flatPageEditor.loadTemplate({

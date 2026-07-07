@@ -22,6 +22,8 @@ import {
 import {
   buildLocalBundleVrInsertHtml,
   buildProjectVrInsertHtml,
+  buildGuestProjectVrInsertHtml,
+  isGuestEditor,
   deriveQrUrlFromTourUrl,
   hasVrTourEmbed,
   resolveAbsoluteUrl,
@@ -431,11 +433,17 @@ export class FlatPageEditorBridge {
           typeof window.hotspotEditor.getProjectVrEmbedInfo === 'function' &&
           window.hotspotEditor.getProjectVrEmbedInfo().name) ||
         '360° VR Tour';
-      const snippet = buildProjectVrInsertHtml(name, embedUrl, qrUrl);
+      const snippet = isGuestEditor()
+        ? buildGuestProjectVrInsertHtml(name, embedUrl, qrUrl)
+        : buildProjectVrInsertHtml(name, embedUrl, qrUrl);
       const insertAt = defaultHtmlInsertPos(html);
       html = `${html.slice(0, insertAt)}\n${snippet}\n${html.slice(insertAt)}`;
     } else {
-      html = rewriteVrTourEmbedsInHtml(html, { hostedUrl: embedUrl, useOnlineUrl: true });
+      html = rewriteVrTourEmbedsInHtml(html, {
+        hostedUrl: embedUrl,
+        useOnlineUrl: true,
+        guestMode: isGuestEditor(),
+      });
     }
 
     this.setFileContent('index.html', html);
@@ -477,7 +485,9 @@ export class FlatPageEditorBridge {
 
     let html = this.getFileContent('index.html');
     html = stripExistingVrTourEmbeds(html);
-    const snippet = buildProjectVrInsertHtml(name, embedUrl, qrUrl);
+    const snippet = isGuestEditor()
+      ? buildGuestProjectVrInsertHtml(name, embedUrl, qrUrl)
+      : buildProjectVrInsertHtml(name, embedUrl, qrUrl);
     const insertAt = defaultHtmlInsertPos(html);
     html = `${html.slice(0, insertAt)}\n${snippet}\n${html.slice(insertAt)}`;
     this.setFileContent('index.html', html);

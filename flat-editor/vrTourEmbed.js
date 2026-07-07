@@ -4,6 +4,15 @@ export const LOCAL_VR_TOUR_EMBED_PATH = '../../index.html';
 /** Same-origin viewer URL when flat preview runs inside the live editor (not a bundle ZIP). */
 export const EDITOR_PREVIEW_VR_TOUR_EMBED_PATH = '/index.html?embed=1';
 
+export function isGuestEditor() {
+  if (typeof window === 'undefined') return false;
+  if (window.editorAccessMode === 'local_test') return true;
+  if (typeof window.getEditorCapabilities === 'function') {
+    return !!window.getEditorCapabilities().isTestUser;
+  }
+  return false;
+}
+
 export function getEditorPreviewVrTourEmbedUrl() {
   if (typeof window !== 'undefined' && window.location?.origin) {
     return `${window.location.origin}${EDITOR_PREVIEW_VR_TOUR_EMBED_PATH}`;
@@ -22,34 +31,6 @@ function extractHostedTourUrl(divAttrs, inner) {
 function tourQrPreviewSrc(tourUrl) {
   if (!tourUrl || !/\/hosted\/[^"']+\/index\.html/i.test(tourUrl)) return '';
   return `/api/vr-tour/qr?url=${encodeURIComponent(tourUrl)}`;
-}
-
-/** Rewrite flat-page VR embeds for in-editor live preview (avoid loading the full editor UI). */
-export function rewriteVrTourEmbedsForEditorPreview(html) {
-  if (!html || !hasVrTourEmbed(html)) return html;
-  const embedUrl = getEditorPreviewVrTourEmbedUrl();
-
-  const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
-  let out = html.replace(wrapperRe, (match, divAttrs, inner) => {
-    const tourUrl = extractHostedTourUrl(divAttrs, inner);
-    const previewQr = tourQrPreviewSrc(tourUrl);
-    return rewriteWrapperEmbedBlock(
-      divAttrs,
-      inner,
-      embedUrl,
-      embedUrl,
-      previewQr,
-      Boolean(previewQr)
-    );
-  });
-
-  const legacyBlockRe =
-    /(?:<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*)?<iframe\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>\s*<\/iframe>/gi;
-  out = out.replace(legacyBlockRe, (match, attrs) =>
-    `${rewriteIframeOpenTag(attrs, embedUrl)}</iframe>`
-  );
-
-  return out;
 }
 
 export function resolveAbsoluteUrl(url) {
@@ -73,58 +54,36 @@ export function deriveQrUrlFromTourUrl(embedUrl) {
   return resolveAbsoluteUrl(embedUrl).replace(/index\.html(\?.*)?$/i, 'qr.png');
 }
 
-const VR_TOUR_EMBED_STYLES = [
+const GUEST_VR_TOUR_EMBED_STYLES = [
   '.vr-tour-embed{margin:1rem auto;max-width:100%;text-align:center;}',
   '.vr-tour-embed iframe{width:100%;min-height:480px;height:70vh;border:0;display:block;border-radius:8px;background:#111;}',
   '.vr-tour-mobile-label{margin:1rem 0 0.5rem;font-size:1rem;font-weight:600;color:#333;}',
   '.vr-tour-mobile-qr-img{display:inline-block;border-radius:4px;margin-bottom:1rem;}',
 ].join('');
 
-/** Remove any existing VR tour embed blocks (legacy iframe-only or current wrapper format). */
-export function stripExistingVrTourEmbeds(html) {
-  if (!html) return html;
-  let out = html;
-  out = out.replace(
-    /<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*<style>[\s\S]*?<\/style>\s*<div\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>[\s\S]*?<\/div>\s*/gi,
-    ''
-  );
-  out = out.replace(
-    /<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>\s*<\/iframe>\s*/gi,
-    ''
-  );
-  out = out.replace(/<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>\s*<\/iframe>\s*/gi, '');
-  return out;
+function buildSignedInStyleBlock() {
+  return `<style>
+  .vr-tour-embed { margin: 1rem auto; max-width: 100%; text-align: center; }
+  .vr-tour-embed iframe { width: 100%; min-height: 480px; height: 70vh; border: 0; border-radius: 8px; background: #111; }
+  .vr-tour-mobile-section { margin-top: 1.5rem; text-align: center; }
+  .vr-tour-mobile-label { margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600; color: #333; }
+  .vr-tour-mobile-qr-img { display: inline-block; border-radius: 4px; }
+</style>`;
 }
 
-export function hasVrTourEmbed(html) {
-  return /data-vr-tour-embed=["']1["']/i.test(html || '');
+function stripQrFromEmbedInner(inner) {
+  return String(inner || '')
+    .replace(/<div\b[^>]*\bvr-tour-mobile-section\b[^>]*>[\s\S]*?<\/div>\s*/gi, '')
+    .replace(/<p\b[^>]*\bvr-tour-mobile-label\b[^>]*>[\s\S]*?<\/p>\s*/gi, '')
+    .replace(/<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*\/?>\s*/gi, '');
 }
 
-/** HTML snippet for bundle export — relative path to the spherical viewer at project root. */
-export function buildLocalBundleVrInsertHtml(name) {
-  const title = escapeAttr(name || '360° VR Tour');
+function buildMobileQrSectionHtml(qrSrc) {
+  if (!qrSrc) return '';
   return [
-    '<!-- 360° VR tour from this project (Spherical Content) -->',
-    `<style>${VR_TOUR_EMBED_STYLES}</style>`,
-    `<div class="vr-tour-embed" data-vr-tour-embed="1" data-vr-tour-url="${LOCAL_VR_TOUR_EMBED_PATH}">`,
-    `<iframe src="${LOCAL_VR_TOUR_EMBED_PATH}" title="${title}" allow="fullscreen; vr; accelerometer; gyroscope"></iframe>`,
-    '</div>',
-  ].join('\n');
-}
-
-/** HTML snippet for embedding the project's hosted VR viewer in a flat page. */
-export function buildProjectVrInsertHtml(name, embedUrl, qrUrl) {
-  const title = escapeAttr(name || '360° VR Tour');
-  const src = escapeAttr(resolveAbsoluteUrl(embedUrl));
-  if (!src) return '';
-  const qrSrc = escapeAttr(qrUrl ? resolveAbsoluteUrl(qrUrl) : deriveQrUrlFromTourUrl(embedUrl));
-  return [
-    '<!-- 360° VR tour from this project (Spherical Content) -->',
-    `<style>${VR_TOUR_EMBED_STYLES}</style>`,
-    `<div class="vr-tour-embed" data-vr-tour-embed="1" data-vr-tour-url="${src}">`,
-    `<iframe src="${src}" title="${title}" allow="fullscreen; vr; accelerometer; gyroscope"></iframe>`,
+    '<div class="vr-tour-mobile-section">',
     '<p class="vr-tour-mobile-label">View on Your Phone</p>',
-    `<img class="vr-tour-mobile-qr-img" src="${qrSrc}" alt="Scan to open this 360° tour on your phone" width="160" height="160" />`,
+    `<img class="vr-tour-mobile-qr-img" src="${escapeAttr(qrSrc)}" alt="Scan to open this 360° tour on your phone" width="160" height="160">`,
     '</div>',
   ].join('\n');
 }
@@ -134,21 +93,61 @@ function rewriteIframeOpenTag(attrs, targetSrc) {
   return `<iframe src="${escapeAttr(targetSrc)}" ${next}>`;
 }
 
-function rewriteWrapperEmbedBlock(divAttrs, inner, targetSrc, tourUrl, qrSrc, showQr) {
+function buildSignedInEmbedDivHtml(name, iframeSrc, tourUrl) {
+  const title = escapeAttr(name || '360° VR Tour');
+  const src = escapeAttr(iframeSrc);
+  const url = escapeAttr(tourUrl || iframeSrc);
+  return [
+    `<div class="vr-tour-embed" data-vr-tour-embed="1" data-vr-tour-url="${url}">`,
+    `<iframe src="${src}" title="${title}" allow="fullscreen; vr; accelerometer; gyroscope"></iframe>`,
+    '</div>',
+  ].join('\n');
+}
+
+function removeMobileSection(html) {
+  return String(html || '').replace(
+    /<div\b[^>]*\bvr-tour-mobile-section\b[^>]*>[\s\S]*?<\/div>\s*/gi,
+    ''
+  );
+}
+
+function upsertMobileSection(html, qrSrc) {
+  const section = buildMobileQrSectionHtml(qrSrc);
+  if (!section) return removeMobileSection(html);
+  if (/<div\b[^>]*\bvr-tour-mobile-section\b/i.test(html)) {
+    return html.replace(/<div\b[^>]*\bvr-tour-mobile-section\b[^>]*>[\s\S]*?<\/div>/i, section);
+  }
+  return html.replace(
+    /(<div\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>[\s\S]*?<\/div>)/i,
+    `$1\n\n${section}`
+  );
+}
+
+function rewriteSignedInWrapperEmbedBlock(divAttrs, inner, targetSrc, tourUrl) {
+  const cleaned = stripQrFromEmbedInner(inner);
+  const iframeMatch = cleaned.match(/<iframe\b([^>]*)>/i);
+  const iframeHtml = iframeMatch
+    ? rewriteIframeOpenTag(iframeMatch[1], targetSrc) + (cleaned.includes('</iframe>') ? '</iframe>' : '')
+    : `<iframe src="${escapeAttr(targetSrc)}" title="360° VR Tour" allow="fullscreen; vr; accelerometer; gyroscope"></iframe>`;
+
+  let updatedDivAttrs = divAttrs.replace(/\sdata-vr-tour-url=(["'])[^"']*\1/i, '').trim();
+  if (!/\bclass=/i.test(updatedDivAttrs)) {
+    updatedDivAttrs = `class="vr-tour-embed" ${updatedDivAttrs}`.trim();
+  }
+  return `<div ${updatedDivAttrs} data-vr-tour-url="${escapeAttr(tourUrl)}">${iframeHtml}</div>`;
+}
+
+function rewriteGuestWrapperEmbedBlock(divAttrs, inner, targetSrc, tourUrl, qrSrc, showQr) {
   let updatedInner = inner.replace(/<iframe\b([^>]*)>/i, (m, attrs) => rewriteIframeOpenTag(attrs, targetSrc));
+  updatedInner = stripQrFromEmbedInner(updatedInner);
+  updatedInner = removeMobileSection(updatedInner);
 
   if (showQr && qrSrc) {
-    if (!/vr-tour-mobile-qr-img/i.test(updatedInner)) {
-      updatedInner = [
-        updatedInner.trimEnd(),
-        '<p class="vr-tour-mobile-label">View on Your Phone</p>',
-        `<img class="vr-tour-mobile-qr-img" src="${escapeAttr(qrSrc)}" alt="Scan to open this 360° tour on your phone" width="160" height="160" />`,
-      ].join('\n');
-    }
-    updatedInner = updatedInner.replace(
-      /(<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*\ssrc=)(["'])[^"']*\2/i,
-      `$1"${escapeAttr(qrSrc)}"`
-    );
+    updatedInner = [
+      updatedInner.trimEnd(),
+      '<p class="vr-tour-mobile-label">View on Your Phone</p>',
+      `<img class="vr-tour-mobile-qr-img" src="${escapeAttr(qrSrc)}" alt="Scan to open this 360° tour on your phone" width="160" height="160" />`,
+    ].join('\n');
     updatedInner = updatedInner.replace(
       /(<p\b[^>]*\bvr-tour-mobile-label\b[^>]*)(>)/i,
       (m, start, end) => start.replace(/\sstyle=(["'])[^"']*\1/i, '') + end
@@ -172,14 +171,160 @@ function rewriteWrapperEmbedBlock(divAttrs, inner, targetSrc, tourUrl, qrSrc, sh
   return `<div ${updatedDivAttrs} data-vr-tour-url="${escapeAttr(tourUrl)}">${updatedInner}</div>`;
 }
 
+function rewriteSignedInVrTourEmbedBlocks(html, { targetSrc, tourUrl, qrSrc, showQr }) {
+  const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
+  let out = html.replace(wrapperRe, (match, divAttrs, inner) =>
+    rewriteSignedInWrapperEmbedBlock(divAttrs, inner, targetSrc, tourUrl)
+  );
+
+  if (showQr && qrSrc) {
+    out = upsertMobileSection(out, qrSrc);
+  } else {
+    out = removeMobileSection(out);
+  }
+
+  return out;
+}
+
+function rewriteGuestVrTourEmbedBlocks(html, { targetSrc, tourUrl, qrSrc, showQr }) {
+  const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
+  return html.replace(wrapperRe, (match, divAttrs, inner) =>
+    rewriteGuestWrapperEmbedBlock(divAttrs, inner, targetSrc, tourUrl, qrSrc, showQr)
+  );
+}
+
+function rewriteGuestVrTourEmbedsForEditorPreview(html) {
+  const embedUrl = getEditorPreviewVrTourEmbedUrl();
+  const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
+  let out = html.replace(wrapperRe, (match, divAttrs, inner) => {
+    const tourUrl = extractHostedTourUrl(divAttrs, inner);
+    const previewQr = tourQrPreviewSrc(tourUrl);
+    return rewriteGuestWrapperEmbedBlock(
+      divAttrs,
+      inner,
+      embedUrl,
+      embedUrl,
+      previewQr,
+      Boolean(previewQr)
+    );
+  });
+
+  const legacyBlockRe =
+    /(?:<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*)?<iframe\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>\s*<\/iframe>/gi;
+  out = out.replace(legacyBlockRe, (match, attrs) =>
+    `${rewriteIframeOpenTag(attrs, embedUrl)}</iframe>`
+  );
+
+  return out;
+}
+
+function rewriteSignedInVrTourEmbedsForEditorPreview(html) {
+  const embedUrl = getEditorPreviewVrTourEmbedUrl();
+  let previewQr = '';
+
+  const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
+  let out = html.replace(wrapperRe, (match, divAttrs, inner) => {
+    const hostedTourUrl = extractHostedTourUrl(divAttrs, inner);
+    const qr = tourQrPreviewSrc(hostedTourUrl);
+    if (qr) previewQr = qr;
+    return rewriteSignedInWrapperEmbedBlock(divAttrs, inner, embedUrl, embedUrl);
+  });
+
+  out = removeMobileSection(out);
+  if (previewQr) {
+    out = upsertMobileSection(out, previewQr);
+  }
+
+  const legacyBlockRe =
+    /(?:<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*)?<iframe\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>\s*<\/iframe>/gi;
+  out = out.replace(legacyBlockRe, (match, attrs) => {
+    const titleMatch = attrs.match(/\stitle=(["'])([^"']*)\1/i);
+    const name = titleMatch ? titleMatch[2] : '360° VR Tour';
+    return buildSignedInEmbedDivHtml(name, embedUrl, embedUrl);
+  });
+
+  return out;
+}
+
+/** Rewrite flat-page VR embeds for in-editor live preview (avoid loading the full editor UI). */
+export function rewriteVrTourEmbedsForEditorPreview(html) {
+  if (!html || !hasVrTourEmbed(html)) return html;
+  return isGuestEditor()
+    ? rewriteGuestVrTourEmbedsForEditorPreview(html)
+    : rewriteSignedInVrTourEmbedsForEditorPreview(html);
+}
+
+/** Remove any existing VR tour embed blocks (legacy iframe-only or current wrapper format). */
+export function stripExistingVrTourEmbeds(html) {
+  if (!html) return html;
+  let out = html;
+  out = out.replace(
+    /<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*<style>[\s\S]*?<\/style>\s*<div\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>[\s\S]*?<\/div>\s*(?:<div\b[^>]*\bvr-tour-mobile-section\b[^>]*>[\s\S]*?<\/div>\s*)?/gi,
+    ''
+  );
+  out = out.replace(
+    /<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>\s*<\/iframe>\s*/gi,
+    ''
+  );
+  out = out.replace(/<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>\s*<\/iframe>\s*/gi, '');
+  out = removeMobileSection(out);
+  return out;
+}
+
+export function hasVrTourEmbed(html) {
+  return /data-vr-tour-embed=["']1["']/i.test(html || '');
+}
+
+/** HTML snippet for bundle export — relative path to the spherical viewer at project root (admin). */
+export function buildLocalBundleVrInsertHtml(name) {
+  return [
+    '<!-- 360° VR tour from this project (Spherical Content) -->',
+    buildSignedInStyleBlock(),
+    buildSignedInEmbedDivHtml(name, LOCAL_VR_TOUR_EMBED_PATH, LOCAL_VR_TOUR_EMBED_PATH),
+  ].join('\n');
+}
+
+/** Guest flat-page embed — unchanged legacy format (QR inside embed wrapper). */
+export function buildGuestProjectVrInsertHtml(name, embedUrl, qrUrl) {
+  const title = escapeAttr(name || '360° VR Tour');
+  const src = escapeAttr(resolveAbsoluteUrl(embedUrl));
+  if (!src) return '';
+  const qrSrc = escapeAttr(qrUrl ? resolveAbsoluteUrl(qrUrl) : deriveQrUrlFromTourUrl(embedUrl));
+  return [
+    '<!-- 360° VR tour from this project (Spherical Content) -->',
+    `<style>${GUEST_VR_TOUR_EMBED_STYLES}</style>`,
+    `<div class="vr-tour-embed" data-vr-tour-embed="1" data-vr-tour-url="${src}">`,
+    `<iframe src="${src}" title="${title}" allow="fullscreen; vr; accelerometer; gyroscope"></iframe>`,
+    '<p class="vr-tour-mobile-label">View on Your Phone</p>',
+    `<img class="vr-tour-mobile-qr-img" src="${qrSrc}" alt="Scan to open this 360° tour on your phone" width="160" height="160" />`,
+    '</div>',
+  ].join('\n');
+}
+
+/** Signed-in student hosted embed — separate mobile QR section below iframe. */
+export function buildProjectVrInsertHtml(name, embedUrl, qrUrl) {
+  const src = resolveAbsoluteUrl(embedUrl);
+  if (!src) return '';
+  const qrSrc = qrUrl ? resolveAbsoluteUrl(qrUrl) : deriveQrUrlFromTourUrl(embedUrl);
+  const lines = [
+    '<!-- 360° VR tour from this project (Spherical Content) -->',
+    buildSignedInStyleBlock(),
+    buildSignedInEmbedDivHtml(name, src, src),
+  ];
+  if (qrSrc) {
+    lines.push('', buildMobileQrSectionHtml(qrSrc));
+  }
+  return lines.join('\n');
+}
+
 /**
- * Rewrite VR tour iframe src in flat page HTML for export packaging.
+ * Rewrite VR tour iframe src in flat page HTML for export packaging (signed-in export paths).
  * @param {string} html
- * @param {{ hostedUrl?: string, useOnlineUrl?: boolean }} options
+ * @param {{ hostedUrl?: string, useOnlineUrl?: boolean, guestMode?: boolean }} options
  */
 export function rewriteVrTourEmbedsInHtml(
   html,
-  { hostedUrl = '', useOnlineUrl = true, hideQr = false } = {}
+  { hostedUrl = '', useOnlineUrl = true, hideQr = false, guestMode = false } = {}
 ) {
   if (!html) return html;
   const onlineSrc = resolveAbsoluteUrl(hostedUrl);
@@ -188,10 +333,9 @@ export function rewriteVrTourEmbedsInHtml(
   const qrSrc = !hideQr && useOnlineUrl && onlineSrc ? deriveQrUrlFromTourUrl(onlineSrc) : '';
   const showQr = Boolean(qrSrc);
 
-  const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
-  let out = html.replace(wrapperRe, (match, divAttrs, inner) =>
-    rewriteWrapperEmbedBlock(divAttrs, inner, targetSrc, tourUrl, qrSrc, showQr)
-  );
+  let out = guestMode
+    ? rewriteGuestVrTourEmbedBlocks(html, { targetSrc, tourUrl, qrSrc, showQr })
+    : rewriteSignedInVrTourEmbedBlocks(html, { targetSrc, tourUrl, qrSrc, showQr });
 
   const legacyBlockRe =
     /(?:<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*)?<iframe\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>\s*<\/iframe>/gi;
@@ -199,9 +343,24 @@ export function rewriteVrTourEmbedsInHtml(
     if (showQr && qrSrc) {
       const titleMatch = attrs.match(/\stitle=(["'])([^"']*)\1/i);
       const name = titleMatch ? titleMatch[2] : '360° VR Tour';
-      return buildProjectVrInsertHtml(name, tourUrl, qrSrc);
+      return guestMode
+        ? buildGuestProjectVrInsertHtml(name, tourUrl, qrSrc)
+        : buildProjectVrInsertHtml(name, tourUrl, qrSrc);
     }
-    return `${rewriteIframeOpenTag(attrs, targetSrc)}</iframe>`;
+    const titleMatch = attrs.match(/\stitle=(["'])([^"']*)\1/i);
+    const name = titleMatch ? titleMatch[2] : '360° VR Tour';
+    if (guestMode) {
+      return [
+        '<!-- 360° VR tour from this project (Spherical Content) -->',
+        `<style>${GUEST_VR_TOUR_EMBED_STYLES}</style>`,
+        buildSignedInEmbedDivHtml(name, targetSrc, tourUrl),
+      ].join('\n');
+    }
+    return [
+      '<!-- 360° VR tour from this project (Spherical Content) -->',
+      buildSignedInStyleBlock(),
+      buildSignedInEmbedDivHtml(name, targetSrc, tourUrl),
+    ].join('\n');
   });
 
   if (hostedUrl) {

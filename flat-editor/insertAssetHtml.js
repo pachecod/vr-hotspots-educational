@@ -1,6 +1,6 @@
 const AFRAME_CDN = 'https://aframe.io/releases/1.7.1/aframe.min.js';
 const MODEL_VIEWER_CDN = 'https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js';
-import { buildProjectVrInsertHtml } from './vrTourEmbed.js';
+import { buildProjectVrInsertHtml, buildGuestProjectVrInsertHtml, isGuestEditor } from './vrTourEmbed.js';
 
 function escapeAttr(value) {
   return String(value || '')
@@ -70,7 +70,8 @@ export function defaultHtmlInsertPos(html) {
 /** Build HTML snippet to insert for a common-assets library item. */
 export function buildInsertHtml(category, asset) {
   if (category === 'project-vr') {
-    return buildProjectVrInsertHtml(
+    const buildFn = isGuestEditor() ? buildGuestProjectVrInsertHtml : buildProjectVrInsertHtml;
+    return buildFn(
       asset?.name,
       asset?.embedUrl || asset?.url,
       asset?.qrUrl

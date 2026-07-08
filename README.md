@@ -80,7 +80,7 @@ LOCAL_TEST_USER_ENABLED=true
 
 Then run `npm run dev` and open the editor. You will see an entry gate:
 
-- **Continue as Guest** — build 360° tours and flat pages locally, pick **local files** (preview + ZIP export), browse **Shared Online Assets**, load a ZIP template, and **Save Template**. No cloud save or submit to admin.
+- **Continue as Guest** — build 360° tours and flat pages locally, pick **local files** (preview + ZIP export), browse **Shared Online Assets**, **Save Locally** (named projects in this browser), load a ZIP template, and **Save Template**. No cloud save or submit to admin. After you sign in on the same browser, leftover local saves appear under **My Local Projects** so you can open them; cloud save/submit stay unchanged.
 - **Sign in to a team or class account** — full student features if you have a password from your team leader or teacher.
 
 On **Render**, the blueprint (`render.yaml`) enables guest mode and welcome-screen samples by default:

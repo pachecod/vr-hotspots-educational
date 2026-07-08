@@ -11,6 +11,7 @@
     <script src="asset-preview-modal.js"></script>
     <script src="asset-tags-ui.js"></script>
     <script src="editor-capabilities.js"></script>
+    <script src="local-projects.js"></script>
     <script src="playground-templates-ui.js"></script>
     <script src="student-auth-ui.js"></script>
     <script>
@@ -618,6 +619,24 @@
         position: relative;
       }
 
+      .my-local-projects-btn {
+        background: #e65100;
+        color: #fff;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: bold;
+        flex-shrink: 0;
+        position: relative;
+      }
+
+      .my-local-projects-btn:hover {
+        background: #ff9800;
+        color: #111;
+      }
+
       .student-my-submissions-btn .unread-badge {
         position: absolute;
         top: -6px;
@@ -1221,9 +1240,10 @@
       <div id="hotspot-editor-content">
       <div id="test-user-editor-session" class="test-user-editor-session" aria-live="polite">
         <div class="student-editor-session-text">
-          <span><strong>Guest</strong> (local only) — pick local files, use shared assets, export ZIP. Sign in for cloud save and submit.</span>
+          <span><strong>Guest</strong> (local only) — pick local files, use shared assets, Save Locally, export ZIP. Sign in for cloud save and submit.</span>
         </div>
         <div class="student-editor-session-actions">
+          <button type="button" id="my-local-projects-btn" class="my-local-projects-btn">My Local Projects</button>
           <button type="button" id="test-user-signout-btn" class="test-user-signout-btn">Sign out</button>
           <button type="button" id="test-user-signin-btn" class="test-user-signin-btn">Sign in for full features</button>
         </div>
@@ -1234,6 +1254,9 @@
         </div>
         <div class="student-editor-session-actions">
           <button type="button" id="student-editor-logout-btn" class="student-editor-logout-btn">Logout</button>
+          <button type="button" id="student-my-local-projects-btn" class="my-local-projects-btn" style="display:none;">
+            My Local Projects
+          </button>
           <button type="button" id="student-my-submissions-btn" class="student-my-submissions-btn" style="display:none;">
             My Submissions
           </button>
@@ -2000,6 +2023,7 @@
           <input type="text" id="template-name" placeholder="Enter template name" />
         </div>
         <button class="btn btn-primary" id="save-template">Save Template</button>
+        <button class="btn btn-secondary" id="save-locally" style="display:none;">💾 Save Locally</button>
         <button class="btn btn-secondary" id="save-cloud-draft" style="display:none;">☁️ Save to Cloud</button>
         <button class="btn btn-secondary" id="load-template">Load Template</button>
         <!-- Temporarily hidden — GitHub upload still wired in script.js -->

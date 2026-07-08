@@ -50,7 +50,7 @@ Guest Mode is not a slideshow. You get the same core tools signed-in students us
 - **Templates** from the gallery
 - **ZIP export** — a standalone site you can host anywhere
 
-By design, Guest Mode does **not** cloud-save projects, submit to an admin, or accept personal server uploads. Work lives in your browser session. That keeps the public playground simple and safe.
+By design, Guest Mode does **not** cloud-save projects, submit to an admin, or accept personal server uploads. Guests can use **Save Locally** to keep named projects in this browser only, then open them from **My Local Projects** (including after sign-in on the same device). That keeps the public playground simple and safe.
 
 Want cloud drafts, **My Assets**, and **Submit to Admin**? Sign in from the same welcome screen when your team or class is ready.
 

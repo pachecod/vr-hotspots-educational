@@ -79,10 +79,11 @@ Ask your team leader or teacher to reset your password from **Users** if you for
 
 If your site allows guest mode, you can explore the editor without an account. Guests can build and preview both spherical and flat content, but:
 
+- **Save Locally** keeps named projects in **this browser** only (not on our servers). Use **My Local Projects** to switch between them. Cap is a small number of projects; **Clear Data** wipes them.
 - **Hosted preview tours and QR codes** created when switching to Flat Web Page mode may be **auto-deleted** after a timeout (admins configure this in **Editor Settings**; default is 1200 seconds / 20 minutes).
 - **Export (Save Template)** includes only the **360° tour** — not the flat web page or QR code. Sign in to export or publish a permanent flat page with a working QR code.
 
-Signed-in students and admins are not affected by guest preview timeouts or guest export limits.
+Signed-in students and admins are not affected by guest preview timeouts or guest export limits. If you previously saved locally as a guest on this browser, **My Local Projects** appears so you can open those leftovers; then use the normal cloud save and submit flow.
 
 ---
 

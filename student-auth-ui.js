@@ -196,6 +196,11 @@ function showStudentEditorSession(student) {
   if (window.StudentProjectsPanel) {
     setTimeout(() => window.StudentProjectsPanel.refreshUnreadBadge(), 300);
   }
+  if (window.LocalProjects && typeof window.LocalProjects.bind === 'function') {
+    window.LocalProjects.bind();
+  } else if (window.LocalProjects && typeof window.LocalProjects.refreshButtonVisibility === 'function') {
+    window.LocalProjects.refreshButtonVisibility();
+  }
 }
 
 function hideStudentEditorSession() {
@@ -208,6 +213,11 @@ function showTestUserEditorSession() {
   const bar = document.getElementById('test-user-editor-session');
   if (bar) bar.classList.add('visible');
   bindTestUserGuestSessionButtons();
+  if (window.LocalProjects && typeof window.LocalProjects.bind === 'function') {
+    window.LocalProjects.bind();
+  } else if (window.LocalProjects && typeof window.LocalProjects.refreshButtonVisibility === 'function') {
+    window.LocalProjects.refreshButtonVisibility();
+  }
 }
 
 function hideTestUserEditorSession() {
@@ -256,8 +266,8 @@ function promptGuestSignInWarning() {
       <div class="guest-agreement-dialog">
         <h2 id="guest-signin-warning-title" class="guest-agreement-title">Sign in?</h2>
         <div class="guest-agreement-content">
-          <p>All work done as a guest will be deleted after signing in.</p>
-          <p>If you want to save your work, click <strong>Save Template</strong> to get a local ZIP. You can upload that to your 360° editor after you are signed in.</p>
+          <p>Signing in does not upload guest work automatically. Projects you <strong>Save Locally</strong> stay in this browser under <strong>My Local Projects</strong> so you can open them after you sign in, then use cloud save or submit.</p>
+          <p>You can also click <strong>Save Template</strong> for a ZIP backup before signing in.</p>
         </div>
         <div class="guest-agreement-actions">
           <button type="button" class="guest-agreement-btn guest-agreement-cancel" data-action="cancel">Cancel</button>

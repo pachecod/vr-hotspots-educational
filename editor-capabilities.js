@@ -45,6 +45,10 @@ function applyEditorCapabilities() {
   const cloudSavesBtn = document.getElementById('student-my-cloud-saves-btn');
   if (cloudSavesBtn) cloudSavesBtn.style.display = caps.canUseCloudSave ? '' : 'none';
 
+  if (caps.canSubmit && window.StudentProjectsPanel && typeof window.StudentProjectsPanel.bind === 'function') {
+    window.StudentProjectsPanel.bind();
+  }
+
   if (window.LocalProjects && typeof window.LocalProjects.refreshButtonVisibility === 'function') {
     window.LocalProjects.refreshButtonVisibility();
   }

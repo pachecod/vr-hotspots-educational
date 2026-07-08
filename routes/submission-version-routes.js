@@ -86,11 +86,11 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
           return res.status(401).json({ success: false, message: 'Not authenticated' });
         }
         if (!isDbEnabled()) {
-          return res.json({ success: true, projects: [], unreadCount: 0 });
+          return res.json({ success: true, projects: [], unreadCount: 0, dbEnabled: false });
         }
         const projects = await projectVersionsDb.listStudentProjects(sess.studentId);
         const unreadCount = await projectVersionsDb.getUnreadFeedbackCount(sess.studentId);
-        return res.json({ success: true, projects, unreadCount });
+        return res.json({ success: true, projects, unreadCount, dbEnabled: true });
       } catch (err) {
         console.error('list student projects error:', err);
         return res.status(500).json({ success: false, message: err.message });
@@ -192,7 +192,12 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
           return res.status(400).json({ success: false, message: 'Missing required fields' });
         }
         if (!isDbEnabled()) {
-          return res.json({ success: true, message: 'Draft saved (no database)' });
+          return res.json({
+            success: true,
+            message: 'Draft uploaded to cloud storage, but DATABASE_URL is not set so it cannot appear in My Cloud Saves.',
+            dbEnabled: false,
+            fileName,
+          });
         }
         const result = await projectVersionsDb.createVersion({
           studentId: sess.studentId,
@@ -211,6 +216,8 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
           versionId: result.version.id,
           threadId: result.thread.id,
           versionNumber: result.versionNumber,
+          fileName,
+          dbEnabled: true,
         });
       } catch (err) {
         console.error('save-draft error:', err);

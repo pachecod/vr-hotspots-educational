@@ -464,6 +464,7 @@ button:hover { background: #1d4ed8; }`;
       const cloudSaveBtn = document.createElement('button');
       cloudSaveBtn.type = 'button';
       cloudSaveBtn.textContent = '☁️ Save to Cloud';
+      cloudSaveBtn.title = 'Save your full VR project (scenes + flat page) as a cloud draft';
       cloudSaveBtn.style.cssText =
         'padding:6px 10px;border:none;border-radius:4px;background:#3d5a80;color:#fff;cursor:pointer;font-size:12px;';
       cloudSaveBtn.addEventListener('click', () => this.cloudSave());
@@ -798,28 +799,28 @@ button:hover { background: #1d4ed8; }`;
       };
     }
 
-    // Save the current flat page to Render Postgres + Backblaze (no spherical content).
+    // Save the full VR project draft (same as Template panel → Save to Cloud).
     async cloudSave() {
-      this._setCloudStatus('Saving…');
-      try {
-        const page = this.getActivePage();
-        const resp = await fetch('/api/student/flat-pages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify(this._filesPayload()),
-        });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok || !data.success) {
-          throw new Error(data.message || `Save failed (${resp.status})`);
-        }
-        await this._syncSavedPagesToAssets(data, page);
-        this._setCloudStatus('Saved to cloud ✓ — find it under Online Assets → My Saved Pages');
-      } catch (err) {
-        console.warn('[FlatPage] cloud save failed', err);
-        this._setCloudStatus(err.message || 'Save failed', true);
-        alert('Could not save flat page to the cloud: ' + (err.message || 'unknown error'));
+      this._setCloudStatus('');
+      this.save();
+      if (window.hotspotEditor && typeof window.hotspotEditor.saveScenesData === 'function') {
+        try {
+          window.hotspotEditor.saveScenesData();
+        } catch (_) {}
       }
+
+      const templateInput = document.getElementById('template-name');
+      const resolvedName = this._resolveCloudPageName();
+      if (templateInput && resolvedName && !templateInput.value.trim()) {
+        templateInput.value = resolvedName;
+      }
+
+      if (window.StudentSubmission && typeof window.StudentSubmission.saveCloudDraft === 'function') {
+        await window.StudentSubmission.saveCloudDraft();
+        return;
+      }
+
+      alert('Cloud save is not available yet. Please wait for the editor to finish loading.');
     }
 
     async _syncSavedPagesToAssets(data, page, slugHint, { published = false } = {}) {

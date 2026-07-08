@@ -1204,6 +1204,9 @@ class HotspotEditor {
   init() {
     this.updateInstructionsVersion();
     this.bindEvents();
+    if (window.LocalProjects && typeof window.LocalProjects.applyTemplateNameToEditor === 'function') {
+      window.LocalProjects.applyTemplateNameToEditor();
+    }
     this.setupEditorPanelToggle();
     this.setupEditModeBarToggle();
 
@@ -20461,9 +20464,13 @@ class StudentProjectsPanel {
 
     const title = draftsOnly ? 'My Cloud Saves' : 'My Submissions';
     const titleColor = draftsOnly ? '#42a5f5' : '#4CAF50';
-    const emptyCopy = draftsOnly
+    let emptyCopy = draftsOnly
       ? 'No cloud drafts yet. Use <strong>Save to Cloud</strong> in the Template panel to keep a draft online.'
       : 'No submissions yet.';
+    if (draftsOnly && data.dbEnabled === false) {
+      emptyCopy =
+        'This server is not using the project database, so cloud drafts cannot be listed here. Set <strong>DATABASE_URL</strong> on the server (hosted deployments usually have this). Your ZIP may still upload to cloud storage.';
+    }
 
     const dialog = document.createElement('div');
     dialog.style.cssText = `
@@ -20862,26 +20869,41 @@ class StudentSubmission {
     const studentNote = prompt('Optional note for this draft (or leave blank):') ?? '';
     const overlay = StudentSubmission.createStatusOverlay('☁️ Saving draft to cloud...');
     try {
-      await StudentSubmission.submitProject(projectName, {
+      if (
+        window.LocalProjects &&
+        typeof window.LocalProjects.ensureTrackedForCloudSave === 'function'
+      ) {
+        await window.LocalProjects.ensureTrackedForCloudSave(projectName);
+      }
+      const saved = await StudentSubmission.submitProject(projectName, {
         studentNote,
         kind: 'draft',
         successMessage: 'Draft saved to cloud!',
         removeLocalAfterSave: true,
       });
+      if (!saved) {
+        const statusDiv = document.getElementById('submission-status');
+        if (statusDiv && !statusDiv.innerHTML.trim()) {
+          statusDiv.innerHTML = '<p style="color:#ccc;">Save cancelled.</p>';
+        }
+        setTimeout(() => overlay._remove && overlay._remove(), 3000);
+        return;
+      }
+      setTimeout(() => overlay._remove && overlay._remove(), 4000);
     } catch (_) {
       /* submitProject shows error in status */
+      setTimeout(() => overlay._remove && overlay._remove(), 4000);
     }
-    setTimeout(() => overlay._remove && overlay._remove(), 2500);
   }
 
   static async submitProject(projectDisplayName, options = {}) {
     if (typeof window.getEditorCapabilities === 'function' && !window.getEditorCapabilities().canSubmit) {
       alert('Sign in with your team or class account to submit or save projects online.');
-      return;
+      return false;
     }
     if (!projectDisplayName || !projectDisplayName.trim()) {
       alert('Please enter a project name!');
-      return;
+      return false;
     }
 
     const projectName = projectDisplayName.trim();
@@ -20892,7 +20914,7 @@ class StudentSubmission {
       const sess = await sessRes.json();
       if (sess.authRequired && !sess.authenticated) {
         alert('Please sign in before submitting your project.');
-        return;
+        return false;
       }
       if (sess.authenticated && sess.student) {
         studentName = sess.student.displayName;
@@ -20902,12 +20924,22 @@ class StudentSubmission {
       /* continue with project name */
     }
 
+    const kind = options.kind || 'submitted';
     const exportMode = await window.hotspotEditor.showExportModeDialog({
-      title: 'Submit to Admin',
-      description: 'Choose how media should be included in the package uploaded to admin.',
+      title: kind === 'draft' ? 'Save to Cloud' : 'Submit to Admin',
+      description:
+        kind === 'draft'
+          ? 'Choose how media should be included in your cloud draft.'
+          : 'Choose how media should be included in the package uploaded to admin.',
       defaultMode: window.hotspotEditor._getDefaultExportModeForProject(),
     });
-    if (!exportMode) return;
+    if (!exportMode) {
+      const statusDiv = document.getElementById('submission-status');
+      if (statusDiv && kind === 'draft') {
+        statusDiv.innerHTML = '<p style="color:#ccc;">Save cancelled.</p>';
+      }
+      return false;
+    }
 
     StudentSubmission.hideSubmissionFormControls();
 
@@ -20944,26 +20976,23 @@ class StudentSubmission {
       const content = await zip.generateAsync({ type: 'blob' });
 
       const studentNote = options.studentNote || '';
-      const kind = options.kind || 'submitted';
 
       let prepareData = { fileName: null, b2Path: null, threadId: null, versionNumber: null };
-      try {
-        const prepRes = await fetch('/api/student/projects/prepare-upload', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectName, kind, threadId: options.threadId || null }),
-        });
-        if (prepRes.status === 402) {
-          const quota = await prepRes.json();
-          throw new Error(quota.message || 'Usage limit reached.');
-        }
-        if (prepRes.ok) {
-          prepareData = await prepRes.json();
-        }
-      } catch (prepErr) {
-        if (prepErr.message && prepErr.message.includes('Usage limit')) throw prepErr;
+      const prepRes = await fetch('/api/student/projects/prepare-upload', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectName, kind, threadId: options.threadId || null }),
+      });
+      if (prepRes.status === 402) {
+        const quota = await prepRes.json();
+        throw new Error(quota.message || 'Usage limit reached.');
       }
+      if (!prepRes.ok) {
+        const errBody = await prepRes.json().catch(() => ({}));
+        throw new Error(errBody.message || 'Could not prepare cloud save.');
+      }
+      prepareData = await prepRes.json();
 
       if (statusDiv) {
         statusDiv.innerHTML = `
@@ -21119,8 +21148,9 @@ class StudentSubmission {
         if (statusDiv) {
         statusDiv.innerHTML = `
           <p style="color: #4CAF50;">✅ ${options.successMessage || 'Project submitted successfully!'}</p>
-          <p style="color: #ccc; font-size: 0.9em;">File: ${result.fileName}</p>
+          <p style="color: #ccc; font-size: 0.9em;">File: ${result.fileName || prepareData.fileName || 'uploaded'}</p>
           ${result.versionNumber ? `<p style="color: #ccc; font-size: 0.85em;">Version #${result.versionNumber}</p>` : ''}
+          ${result.dbEnabled === false ? '<p style="color:#ffb74d;font-size:0.85em;">This server has no project database, so the draft will not appear in My Cloud Saves.</p>' : ''}
           <button id="close-submission-dialog" style="
             background: #4CAF50; color: white; border: none; padding: 10px 20px;
             border-radius: 4px; cursor: pointer; margin-top: 10px;
@@ -21177,6 +21207,7 @@ class StudentSubmission {
         if (cancelBtn2) cancelBtn2.disabled = false;
       }
     }
+    return submissionSucceeded;
   }
 }
 

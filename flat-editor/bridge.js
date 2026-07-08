@@ -886,20 +886,26 @@ export class FlatPageEditorBridge {
   }
 
   async cloudSave() {
-    this._setCloudStatus('Saving…');
-    try {
-      const page = this.getActivePage();
-      const cloudName = this._resolveCloudPageName();
-      page.name = cloudName;
-      this.save();
-      const data = await saveFlatPage(this._filesPayload());
-      await this._syncSavedPagesToAssets(data, page);
-      this._setCloudStatus('Saved to cloud ✓ — find it under Online Assets → My Saved Pages');
-      return data;
-    } catch (err) {
-      this._setCloudStatus(err.message || 'Save failed', true);
-      alert('Could not save flat page to the cloud: ' + (err.message || 'unknown error'));
+    this._setCloudStatus('');
+    this.save();
+    if (window.hotspotEditor && typeof window.hotspotEditor.saveScenesData === 'function') {
+      try {
+        window.hotspotEditor.saveScenesData();
+      } catch (_) {}
     }
+
+    const templateInput = document.getElementById('template-name');
+    const resolvedName = this._resolveCloudPageName();
+    if (templateInput && resolvedName && !templateInput.value.trim()) {
+      templateInput.value = resolvedName;
+    }
+
+    if (window.StudentSubmission && typeof window.StudentSubmission.saveCloudDraft === 'function') {
+      await window.StudentSubmission.saveCloudDraft();
+      return;
+    }
+
+    alert('Cloud save is not available yet. Please wait for the editor to finish loading.');
   }
 
   async publish() {

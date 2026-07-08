@@ -196,6 +196,9 @@ function showStudentEditorSession(student) {
   if (cloudSavesBtn) cloudSavesBtn.style.display = '';
   if (cloudBtn) cloudBtn.style.display = '';
   if (window.StudentProjectsPanel) {
+    if (typeof window.StudentProjectsPanel.bind === 'function') {
+      window.StudentProjectsPanel.bind();
+    }
     setTimeout(() => window.StudentProjectsPanel.refreshUnreadBadge(), 300);
   }
   if (window.LocalProjects && typeof window.LocalProjects.bind === 'function') {

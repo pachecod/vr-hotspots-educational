@@ -6,6 +6,7 @@
   const LOCAL_PROJECTS_STORE = 'localProjects';
   const LOCAL_PROJECTS_MAX = 8;
   const LAST_OPENED_LOCAL_KEY = 'vr-hotspot-last-opened-local-id';
+  const TEMPLATE_NAME_FROM_LOCAL_KEY = 'vr-hotspot-template-name-from-local';
   const SCENES_KEY = 'vr-hotspot-scenes-data';
   const CSS_KEY = 'vr-hotspot-css-styles';
   const FLAT_KEY = 'vr-flat-pages-data';
@@ -258,17 +259,49 @@
       } catch (_) {}
     },
 
+    applyTemplateNameToEditor() {
+      try {
+        const fromLocal = sessionStorage.getItem(TEMPLATE_NAME_FROM_LOCAL_KEY);
+        if (!fromLocal) return;
+        const nameInput = document.getElementById('template-name');
+        if (nameInput) nameInput.value = fromLocal;
+        sessionStorage.removeItem(TEMPLATE_NAME_FROM_LOCAL_KEY);
+      } catch (_) {}
+    },
+
+    /**
+     * Best-effort link between the active editor session and a local IndexedDB row
+     * before cloud save (guest → sign-in often skips open/save after tracking was added).
+     */
+    async ensureTrackedForCloudSave(projectName) {
+      if (this.getLastOpenedId()) return;
+      const list = await this.list();
+      if (!list.length) return;
+      if (list.length === 1) {
+        this.rememberOpenedId(list[0].id);
+        return;
+      }
+      const needle = String(projectName || '').trim().toLowerCase();
+      if (!needle) return;
+      const match = list.find((p) => String(p.name || '').trim().toLowerCase() === needle);
+      if (match) this.rememberOpenedId(match.id);
+    },
+
     /**
      * After a successful cloud draft save, drop the matching IndexedDB local copy
-     * (tracked open/save id first, then case-insensitive name match).
+     * (tracked open/save id first, then case-insensitive name match, then sole local row).
      */
     async removeAfterCloudSave(projectName) {
+      await this.ensureTrackedForCloudSave(projectName);
+      const list = await this.list();
       let id = this.getLastOpenedId();
       if (!id && projectName) {
-        const list = await this.list();
         const needle = String(projectName).trim().toLowerCase();
         const match = list.find((p) => String(p.name || '').trim().toLowerCase() === needle);
         if (match) id = match.id;
+      }
+      if (!id && list.length === 1) {
+        id = list[0].id;
       }
       if (!id) return false;
       const rec = await this.get(id);
@@ -348,6 +381,10 @@
       const ok = await idbPut(LOCAL_PROJECTS_STORE, record);
       if (!ok) throw new Error('Browser storage is full or unavailable. Try removing media or projects.');
       this.rememberOpenedId(id);
+      try {
+        const nameInput = document.getElementById('template-name');
+        if (nameInput) nameInput.value = record.name;
+      } catch (_) {}
       await this.refreshButtonVisibility();
       return record;
     },
@@ -416,6 +453,11 @@
       }
 
       this.rememberOpenedId(id);
+      try {
+        if (rec.name) {
+          sessionStorage.setItem(TEMPLATE_NAME_FROM_LOCAL_KEY, String(rec.name));
+        }
+      } catch (_) {}
       global.location.reload();
     },
 

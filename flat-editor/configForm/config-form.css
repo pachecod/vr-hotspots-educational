@@ -308,3 +308,67 @@
 .flat-config-mode-btn:not(.active):hover {
   background: #3a3a3a;
 }
+
+.cfg-richtext {
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #333;
+  overflow: hidden;
+}
+
+.cfg-richtext-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid #444;
+  background: #2a2a2a;
+}
+
+.cfg-richtext-btn {
+  min-width: 32px;
+  padding: 4px 8px;
+  border: 1px solid #555;
+  border-radius: 3px;
+  background: #3a3a3a;
+  color: #eee;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.cfg-richtext-btn:hover {
+  background: #4caf50;
+  border-color: #4caf50;
+  color: #fff;
+}
+
+.cfg-richtext-editor {
+  min-height: 140px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.5;
+  outline: none;
+}
+
+.cfg-richtext-editor:focus {
+  box-shadow: inset 0 0 0 1px #4caf50;
+}
+
+.cfg-richtext-editor ul,
+.cfg-richtext-editor ol {
+  margin: 0.4em 0 0.4em 1.2em;
+  padding: 0;
+}
+
+.cfg-richtext-editor p {
+  margin: 0 0 0.55em;
+}
+
+.cfg-richtext-editor p:last-child {
+  margin-bottom: 0;
+}

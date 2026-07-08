@@ -1,0 +1,152 @@
+/* Daily Reflection Journal — flat page (preview is view-only). */
+
+:root {
+  --bg: #f4f1ea;
+  --paper: #fffcf7;
+  --ink: #1f2933;
+  --muted: #5b6770;
+  --accent: #2f6f5e;
+  --rule: #d8d0c4;
+  --empty: #8a8278;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 500px at 10% -10%, #e7efe9 0%, transparent 55%),
+    linear-gradient(180deg, #ebe4d8 0%, var(--bg) 40%, #ebe6dc 100%);
+}
+
+.journal {
+  width: min(720px, calc(100% - 2rem));
+  margin: 2.5rem auto 3.5rem;
+  padding: 2.25rem 2rem 2.5rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: 0 18px 40px rgba(40, 32, 20, 0.08);
+}
+
+.journal-header {
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.1rem;
+  border-bottom: 2px solid var(--accent);
+}
+
+.journal-header h1 {
+  margin: 0 0 0.45rem;
+  font-size: clamp(1.6rem, 2.4vw, 2.05rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+
+.journal-subtitle {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.journal-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.journal-entry {
+  padding: 1.1rem 1.15rem 1.2rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.journal-entry-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.journal-prompt {
+  margin: 0 0 0.85rem;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.journal-response-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.journal-response {
+  min-height: 3.5rem;
+  padding: 0.75rem 0.85rem;
+  border-left: 3px solid var(--accent);
+  background: rgba(47, 111, 94, 0.05);
+  font-size: 1.02rem;
+  line-height: 1.55;
+}
+
+.journal-response.is-empty {
+  color: var(--empty);
+  font-style: italic;
+  border-left-color: var(--rule);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.journal-response p {
+  margin: 0 0 0.55em;
+}
+
+.journal-response p:last-child {
+  margin-bottom: 0;
+}
+
+.journal-response ul,
+.journal-response ol {
+  margin: 0.35em 0 0.55em 1.25em;
+  padding: 0;
+}
+
+.journal-error {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 6px;
+  background: #fde8e8;
+  color: #8a1f1f;
+  font-family: system-ui, sans-serif;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 560px) {
+  .journal {
+    margin: 1rem auto 2rem;
+    padding: 1.4rem 1.1rem 1.75rem;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+  .journal {
+    width: 100%;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+  }
+}

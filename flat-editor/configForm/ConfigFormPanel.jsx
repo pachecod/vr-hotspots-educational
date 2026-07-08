@@ -5,6 +5,7 @@ import { loadUiSchema } from './loadUiSchema.js';
 import { assetUrlForConfig, normalizeConfigAssetUrl } from '../resolveConfigAssetUrls.js';
 import NumberStepper, { inferNumberStep } from './NumberStepper.jsx';
 import VectorField from './VectorField.jsx';
+import RichTextField from './RichTextField.jsx';
 import { isLiveTransformPath } from './liveConfigPaths.js';
 import './config-form.css';
 
@@ -96,14 +97,28 @@ function ConfigField({ field, fullPath, value, onChange }) {
     );
   }
 
+  if (field.type === 'richtext') {
+    return (
+      <RichTextField
+        id={id}
+        label={field.label}
+        value={value}
+        help={field.help}
+        onChange={handleChange}
+      />
+    );
+  }
+
   if (field.type === 'textarea') {
+    const rows =
+      typeof field.rows === 'number' && field.rows > 0 ? Math.min(24, Math.round(field.rows)) : 4;
     return (
       <div className="cfg-form-group">
         <label htmlFor={id}>{field.label}</label>
         <textarea
           id={id}
           className="cfg-textarea"
-          rows={4}
+          rows={rows}
           value={value ?? ''}
           onChange={(e) => handleChange(e.target.value)}
         />

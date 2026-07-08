@@ -1,0 +1,47 @@
+{
+  "sections": [
+    {
+      "title": "Journal",
+      "fields": [
+        {
+          "path": "title",
+          "label": "Journal title",
+          "type": "text",
+          "help": "Shown at the top of the journal page."
+        },
+        {
+          "path": "subtitle",
+          "label": "Subtitle / instructions",
+          "type": "textarea",
+          "rows": 3,
+          "help": "Shown under the title. Teachers can customize the instructions here."
+        }
+      ]
+    },
+    {
+      "title": "Entries",
+      "repeat": { "path": "entries", "itemLabel": "title" },
+      "fields": [
+        {
+          "path": "title",
+          "label": "Entry heading",
+          "type": "text",
+          "help": "Short label for this reflection prompt (teacher)."
+        },
+        {
+          "path": "prompt",
+          "label": "Prompt (teacher)",
+          "type": "textarea",
+          "rows": 5,
+          "help": "The question students respond to. Edit this when authoring the template."
+        },
+        {
+          "path": "response",
+          "label": "Your response (student)",
+          "type": "richtext",
+          "help": "Write your answer here. Use the toolbar for bold, italic, lists, and more. Preview shows the formatted text."
+        }
+      ]
+    }
+  ]
+}

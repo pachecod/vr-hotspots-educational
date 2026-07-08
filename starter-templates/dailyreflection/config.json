@@ -1,0 +1,24 @@
+{
+  "title": "Daily Reflection Journal",
+  "subtitle": "Take a moment to write about your day. Fill in your responses in Visual mode (config.json).",
+  "entries": [
+    {
+      "id": "entry1",
+      "title": "Noticing",
+      "prompt": "What stood out to you today?",
+      "response": ""
+    },
+    {
+      "id": "entry2",
+      "title": "Feeling",
+      "prompt": "How are you feeling about it?",
+      "response": ""
+    },
+    {
+      "id": "entry3",
+      "title": "Next step",
+      "prompt": "What is one thing you want to try tomorrow?",
+      "response": ""
+    }
+  ]
+}

@@ -23,7 +23,7 @@ A comprehensive VR Hotspot Editor with built-in student submission system for ed
 - **Host projects**: Publish live preview URLs for sharing
 - **Online Assets library**: Upload shared media to Backblaze B2 with tags and stable URLs
 - **Editor Settings**: Manage code snippets, enable Ridey AI (**1.0** or **2.0 beta**), and block risky file extensions
-- **Starter templates**: Create and publish flat-page templates (including immersive museum starters with visual **config.json** editing)
+- **Starter templates**: Create and publish flat-page templates (immersive museum, daily reflection journal, and others with visual **config.json** editing)
 - **Team member or student Peek**: Browse uploads and submission history from Users or Assets
 - **Users & Teams/Classes**: Roster management, password CSV export, reset password
 - **Review All Content**: Site-wide content hub for projects, uploads, tours, and orphaned files
@@ -211,7 +211,7 @@ vr_hotspots/
 ├── script.js                       # Spherical editor + CommonAssetsPicker + submissions UI
 ├── flat-editor/                    # Flat page editor source (React + CodeMirror)
 ├── flat-editor/configForm/         # Visual config.json editor (ConfigFormPanel, schema helpers)
-├── starter-templates/              # Disk-based starter templates (immersive museum, scrollytelling, …)
+├── starter-templates/              # Disk-based starters (immersive museum, dailyreflection journal, scrollytelling, …)
 ├── flat-editor.bundle.js           # Built flat editor bundle (commit after npm run build:flat-editor)
 ├── vr-hotspots-educational.css     # Flat editor styles (built)
 ├── asset-tags-ui.js / .css         # Tag chips, filter bar, Edit Tags modal
@@ -355,6 +355,7 @@ vr_hotspots/
 - **Ridey 2.0 (beta)** — admin-selectable; holistic multi-file editing including `config.json`, multi-file preview diffs, JSON apply validation
 - **Visual config editor** — Visual/Code toggle for `config.json` on templates with `config.ui.json` schema; live preview updates for transforms
 - **Immersive museum starter templates** — `immersive-museum` and `new-immersive-museum` with config-driven exhibits
+- **Daily reflection journal starter** — `dailyreflection` flat journal with Visual prompts + richtext student responses (`config.ui.json`)
 - **Admin overview** (`/admin`) and **Review All Content** hub on Assets
 - **Welcome screen** polish — sample projects grid, MIT license footer, sign-in copy updates
 - **`main` branch** aligned with `2.8` for production deploys

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { SESSION_BOOT_ID } = require('./lib/session-boot-id');
+const { endLocalTestUser } = require('./lib/local-test-user');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_SESSION_SECRET =
@@ -66,17 +67,32 @@ function parseCookies(req) {
   return cookies;
 }
 
+function appendSetCookie(res, cookieValue) {
+  if (typeof res.appendHeader === 'function') {
+    res.appendHeader('Set-Cookie', cookieValue);
+    return;
+  }
+  const prev = res.getHeader('Set-Cookie');
+  if (!prev) {
+    res.setHeader('Set-Cookie', cookieValue);
+  } else if (Array.isArray(prev)) {
+    res.setHeader('Set-Cookie', [...prev, cookieValue]);
+  } else {
+    res.setHeader('Set-Cookie', [prev, cookieValue]);
+  }
+}
+
 function setSessionCookie(res, token) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   const maxAgeSec = Math.floor(SESSION_MAX_AGE_MS / 1000);
-  res.setHeader(
-    'Set-Cookie',
+  appendSetCookie(
+    res,
     `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${maxAgeSec}; SameSite=Lax${secure}`
   );
 }
 
 function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
+  appendSetCookie(res, `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
 }
 
 function getAdminSession(req) {
@@ -98,6 +114,8 @@ function handleAdminLogin(req, res) {
   if (!password || password !== ADMIN_PASSWORD) {
     return res.status(401).json({ success: false, message: 'Invalid admin password' });
   }
+  // Drop guest cookie so leftover local_test sessions stop blocking admin POSTs.
+  endLocalTestUser(res);
   const token = createAdminSessionToken();
   setSessionCookie(res, token);
   return res.json({ success: true });
@@ -105,6 +123,7 @@ function handleAdminLogin(req, res) {
 
 function handleAdminLogout(req, res) {
   clearSessionCookie(res);
+  endLocalTestUser(res);
   return res.json({ success: true });
 }
 

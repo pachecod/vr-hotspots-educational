@@ -11,6 +11,7 @@ const {
   isLocalTestUserModeAvailable,
   startLocalTestUser,
   getLocalTestSession,
+  rejectLocalTestUserWrites,
 } = require('../lib/local-test-user');
 const { handleStudentLogout } = require('../student-auth');
 const { isPublicPlaygroundEnabled } = require('../lib/playground-config');
@@ -164,6 +165,81 @@ function testPlaygroundBundleValidation() {
   console.log('✓ playground bundle validation');
 }
 
+function testGuestWriteAllowlistsAdminLogin() {
+  const prev = { ...process.env };
+  try {
+    delete process.env.NODE_ENV;
+    process.env.LOCAL_TEST_USER_ENABLED = 'true';
+
+    const mockRes = {
+      _headers: {},
+      setHeader(key, value) {
+        this._headers[key] = value;
+      },
+      appendHeader(key, value) {
+        const existing = this._headers[key];
+        if (!existing) this._headers[key] = value;
+        else if (Array.isArray(existing)) this._headers[key] = [...existing, value];
+        else this._headers[key] = [existing, value];
+      },
+    };
+    startLocalTestUser(mockRes);
+    const setCookie = mockRes._headers['Set-Cookie'] || '';
+    const cookiePair = String(Array.isArray(setCookie) ? setCookie[0] : setCookie).split(';')[0];
+
+    let nextCalled = false;
+    let statusCode = null;
+    let body = null;
+    const req = {
+      method: 'POST',
+      path: '/admin/login',
+      headers: { cookie: cookiePair },
+    };
+    const res = {
+      status(code) {
+        statusCode = code;
+        return this;
+      },
+      json(payload) {
+        body = payload;
+        return this;
+      },
+    };
+    rejectLocalTestUserWrites(req, res, () => {
+      nextCalled = true;
+    });
+    assert.strictEqual(nextCalled, true, 'admin login should pass guest write guard');
+    assert.strictEqual(statusCode, null);
+    assert.strictEqual(body, null);
+
+    nextCalled = false;
+    statusCode = null;
+    body = null;
+    rejectLocalTestUserWrites(
+      { method: 'POST', path: '/admin/templates', headers: { cookie: cookiePair } },
+      {
+        status(code) {
+          statusCode = code;
+          return this;
+        },
+        json(payload) {
+          body = payload;
+          return this;
+        },
+      },
+      () => {
+        nextCalled = true;
+      }
+    );
+    assert.strictEqual(nextCalled, false);
+    assert.strictEqual(statusCode, 403);
+    assert.ok(body && /local-only/i.test(body.message || ''));
+  } finally {
+    process.env = prev;
+  }
+  console.log('✓ guest write allowlist includes admin login');
+}
+
 testSafeRedirect();
 testSsrfBlocklist();
 testCloudWriteAuthFlag();
@@ -172,4 +248,5 @@ testCloudWriteAuthWithLocalTestCookie();
 testStudentLogoutSetsBothClearCookies();
 testPublicPlaygroundFlag();
 testPlaygroundBundleValidation();
+testGuestWriteAllowlistsAdminLogin();
 console.log('\nAll security regression tests passed.');

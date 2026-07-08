@@ -426,12 +426,12 @@
     async refreshButtonVisibility() {
       const guestBtn = document.getElementById('my-local-projects-btn');
       const studentBtn = document.getElementById('student-my-local-projects-btn');
-      const saveBtn = document.getElementById('save-locally');
+      const guest = canSaveLocally();
       const count = await this.count().catch(() => 0);
 
-      if (saveBtn) {
-        saveBtn.style.display = canSaveLocally() ? '' : 'none';
-      }
+      document.querySelectorAll('.save-locally-trigger').forEach((btn) => {
+        btn.style.display = guest ? '' : 'none';
+      });
 
       // Guests always see My Local Projects (empty state explains Save Locally).
       if (guestBtn) {
@@ -465,11 +465,11 @@
     },
 
     bind() {
-      const saveBtn = document.getElementById('save-locally');
-      if (saveBtn && saveBtn.dataset.bound !== '1') {
-        saveBtn.dataset.bound = '1';
-        saveBtn.addEventListener('click', () => this.promptSave());
-      }
+      document.querySelectorAll('.save-locally-trigger').forEach((btn) => {
+        if (btn.dataset.bound === '1') return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => this.promptSave());
+      });
 
       const guestBtn = document.getElementById('my-local-projects-btn');
       if (guestBtn && guestBtn.dataset.bound !== '1') {

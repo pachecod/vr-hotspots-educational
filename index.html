@@ -664,6 +664,22 @@
         color: #111;
       }
 
+      .guest-save-locally-btn {
+        background: #2e7d32;
+        color: #fff;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: bold;
+        flex-shrink: 0;
+      }
+
+      .guest-save-locally-btn:hover {
+        background: #43a047;
+      }
+
       .student-my-submissions-btn .unread-badge {
         position: absolute;
         top: -6px;
@@ -1270,6 +1286,7 @@
           <span><strong>Guest</strong> (local only) — pick local files, use shared assets, Save Locally, export ZIP. Sign in for cloud save and submit.</span>
         </div>
         <div class="student-editor-session-actions">
+          <button type="button" id="guest-save-locally-btn" class="guest-save-locally-btn save-locally-trigger">💾 Save Locally</button>
           <button type="button" id="my-local-projects-btn" class="my-local-projects-btn">My Local Projects</button>
           <button type="button" id="test-user-signout-btn" class="test-user-signout-btn">Sign out</button>
           <button type="button" id="test-user-signin-btn" class="test-user-signin-btn">Sign in for full features</button>
@@ -2057,7 +2074,7 @@
           <input type="text" id="template-name" placeholder="Enter template name" />
         </div>
         <button class="btn btn-primary" id="save-template">Save Template</button>
-        <button class="btn btn-secondary" id="save-locally" style="display:none;">💾 Save Locally</button>
+        <button class="btn btn-secondary save-locally-trigger" id="save-locally" style="display:none;">💾 Save Locally</button>
         <button class="btn btn-secondary" id="save-cloud-draft" style="display:none;">☁️ Save to Cloud</button>
         <button class="btn btn-secondary" id="load-template">Load Template</button>
         <!-- Temporarily hidden — GitHub upload still wired in script.js -->

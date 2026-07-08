@@ -35,8 +35,9 @@ function applyEditorCapabilities() {
   const cloudBtn = document.getElementById('save-cloud-draft');
   if (cloudBtn) cloudBtn.style.display = caps.canUseCloudSave ? '' : 'none';
 
-  const saveLocallyBtn = document.getElementById('save-locally');
-  if (saveLocallyBtn) saveLocallyBtn.style.display = caps.canSaveLocally ? '' : 'none';
+  document.querySelectorAll('.save-locally-trigger').forEach((btn) => {
+    btn.style.display = caps.canSaveLocally ? '' : 'none';
+  });
 
   const subsBtn = document.getElementById('student-my-submissions-btn');
   if (subsBtn) subsBtn.style.display = caps.canSubmit ? '' : 'none';

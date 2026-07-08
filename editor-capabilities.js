@@ -42,6 +42,9 @@ function applyEditorCapabilities() {
   const subsBtn = document.getElementById('student-my-submissions-btn');
   if (subsBtn) subsBtn.style.display = caps.canSubmit ? '' : 'none';
 
+  const cloudSavesBtn = document.getElementById('student-my-cloud-saves-btn');
+  if (cloudSavesBtn) cloudSavesBtn.style.display = caps.canUseCloudSave ? '' : 'none';
+
   if (window.LocalProjects && typeof window.LocalProjects.refreshButtonVisibility === 'function') {
     window.LocalProjects.refreshButtonVisibility();
   }

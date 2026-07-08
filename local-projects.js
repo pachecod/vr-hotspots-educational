@@ -5,6 +5,7 @@
 (function (global) {
   const LOCAL_PROJECTS_STORE = 'localProjects';
   const LOCAL_PROJECTS_MAX = 8;
+  const LAST_OPENED_LOCAL_KEY = 'vr-hotspot-last-opened-local-id';
   const SCENES_KEY = 'vr-hotspot-scenes-data';
   const CSS_KEY = 'vr-hotspot-css-styles';
   const FLAT_KEY = 'vr-flat-pages-data';
@@ -236,6 +237,50 @@
   const LocalProjects = {
     MAX: LOCAL_PROJECTS_MAX,
 
+    rememberOpenedId(id) {
+      if (!id) return;
+      try {
+        sessionStorage.setItem(LAST_OPENED_LOCAL_KEY, String(id));
+      } catch (_) {}
+    },
+
+    getLastOpenedId() {
+      try {
+        return sessionStorage.getItem(LAST_OPENED_LOCAL_KEY);
+      } catch (_) {
+        return null;
+      }
+    },
+
+    clearLastOpenedId() {
+      try {
+        sessionStorage.removeItem(LAST_OPENED_LOCAL_KEY);
+      } catch (_) {}
+    },
+
+    /**
+     * After a successful cloud draft save, drop the matching IndexedDB local copy
+     * (tracked open/save id first, then case-insensitive name match).
+     */
+    async removeAfterCloudSave(projectName) {
+      let id = this.getLastOpenedId();
+      if (!id && projectName) {
+        const list = await this.list();
+        const needle = String(projectName).trim().toLowerCase();
+        const match = list.find((p) => String(p.name || '').trim().toLowerCase() === needle);
+        if (match) id = match.id;
+      }
+      if (!id) return false;
+      const rec = await this.get(id);
+      if (!rec) {
+        this.clearLastOpenedId();
+        return false;
+      }
+      await this.remove(id);
+      this.clearLastOpenedId();
+      return true;
+    },
+
     async list() {
       const rows = await idbGetAll(LOCAL_PROJECTS_STORE);
       return rows
@@ -302,6 +347,7 @@
       };
       const ok = await idbPut(LOCAL_PROJECTS_STORE, record);
       if (!ok) throw new Error('Browser storage is full or unavailable. Try removing media or projects.');
+      this.rememberOpenedId(id);
       await this.refreshButtonVisibility();
       return record;
     },
@@ -369,6 +415,7 @@
         throw new Error('Could not write project to browser storage.');
       }
 
+      this.rememberOpenedId(id);
       global.location.reload();
     },
 

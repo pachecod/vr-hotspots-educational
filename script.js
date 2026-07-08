@@ -20382,15 +20382,32 @@ AFRAME.registerComponent('editor-spot', {
 // Student submission functionality
 class StudentProjectsPanel {
   static bind() {
-    const btn = document.getElementById('student-my-submissions-btn');
-    if (!btn || btn.dataset.bound === '1') return;
     if (typeof window.getEditorCapabilities === 'function' && !window.getEditorCapabilities().canSubmit) {
-      btn.style.display = 'none';
+      const hideBtn = (id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      };
+      hideBtn('student-my-submissions-btn');
+      hideBtn('student-my-cloud-saves-btn');
       return;
     }
-    btn.dataset.bound = '1';
-    btn.style.display = '';
-    btn.addEventListener('click', () => StudentProjectsPanel.show());
+
+    const subsBtn = document.getElementById('student-my-submissions-btn');
+    if (subsBtn && subsBtn.dataset.bound !== '1') {
+      subsBtn.dataset.bound = '1';
+      subsBtn.style.display = '';
+      subsBtn.addEventListener('click', () => StudentProjectsPanel.show());
+    }
+
+    const cloudSavesBtn = document.getElementById('student-my-cloud-saves-btn');
+    if (cloudSavesBtn && cloudSavesBtn.dataset.bound !== '1') {
+      cloudSavesBtn.dataset.bound = '1';
+      cloudSavesBtn.style.display = '';
+      cloudSavesBtn.addEventListener('click', () =>
+        StudentProjectsPanel.show({ draftsOnly: true })
+      );
+    }
+
     StudentProjectsPanel.refreshUnreadBadge();
   }
 
@@ -20429,14 +20446,24 @@ class StudentProjectsPanel {
     return 'Submitted';
   }
 
-  static async show() {
+  static async show(options = {}) {
+    const draftsOnly = !!options.draftsOnly;
     const res = await fetch('/api/student/projects', { credentials: 'include' });
     if (!res.ok) {
-      alert('Please sign in to view your submissions.');
+      alert(draftsOnly ? 'Please sign in to view your cloud saves.' : 'Please sign in to view your submissions.');
       return;
     }
     const data = await res.json();
-    const projects = data.projects || [];
+    let projects = data.projects || [];
+    if (draftsOnly) {
+      projects = projects.filter((p) => p.latestKind === 'draft');
+    }
+
+    const title = draftsOnly ? 'My Cloud Saves' : 'My Submissions';
+    const titleColor = draftsOnly ? '#42a5f5' : '#4CAF50';
+    const emptyCopy = draftsOnly
+      ? 'No cloud drafts yet. Use <strong>Save to Cloud</strong> in the Template panel to keep a draft online.'
+      : 'No submissions yet.';
 
     const dialog = document.createElement('div');
     dialog.style.cssText = `
@@ -20445,7 +20472,8 @@ class StudentProjectsPanel {
     `;
     dialog.innerHTML = `
       <div style="background:#2a2a2a;color:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:85vh;overflow:auto;">
-        <h3 style="margin:0 0 16px;color:#4CAF50;">My Submissions</h3>
+        <h3 style="margin:0 0 16px;color:${titleColor};">${title}</h3>
+        ${draftsOnly ? '<p style="margin:0 0 14px;color:#aaa;font-size:13px;line-height:1.45;">Projects whose latest save is a cloud draft. After you submit or get teacher feedback, they appear under My Submissions instead.</p>' : ''}
         <div id="my-submissions-list"></div>
         <button id="close-my-submissions" style="margin-top:16px;padding:10px 20px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;">Close</button>
       </div>`;
@@ -20454,22 +20482,27 @@ class StudentProjectsPanel {
 
     const list = dialog.querySelector('#my-submissions-list');
     if (!projects.length) {
-      list.innerHTML = '<p style="color:#aaa;">No submissions yet.</p>';
+      list.innerHTML = `<p style="color:#aaa;">${emptyCopy}</p>`;
       return;
     }
 
     list.innerHTML = projects
       .map((p) => {
-        const hasFeedback = p.latestKind === 'admin_return' && !p.studentSeenAt;
+        const hasFeedback = !draftsOnly && p.latestKind === 'admin_return' && !p.studentSeenAt;
         const badge = hasFeedback
           ? '<span style="background:#2196F3;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px;">New feedback</span>'
           : '';
         const note = p.studentNote
           ? `<div style="font-size:12px;color:#ccc;margin-top:4px;">Your note: ${StudentProjectsPanel.escapeHtml(p.studentNote)}</div>`
           : '';
-        const adminNote = p.adminNote
-          ? `<div style="font-size:12px;color:#90caf9;margin-top:4px;">Teacher: ${StudentProjectsPanel.escapeHtml(p.adminNote)}</div>`
-          : '';
+        const adminNote =
+          !draftsOnly && p.adminNote
+            ? `<div style="font-size:12px;color:#90caf9;margin-top:4px;">Teacher: ${StudentProjectsPanel.escapeHtml(p.adminNote)}</div>`
+            : '';
+        const secondaryBtns = draftsOnly
+          ? `<button data-dl="${p.latestVersionId}" style="padding:6px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Download</button>`
+          : `<button data-dl="${p.latestVersionId}" style="padding:6px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Download</button>
+              <button data-history="${p.threadId}" style="padding:6px 12px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">History</button>`;
         return `
           <div style="border:1px solid #555;border-radius:6px;padding:12px;margin-bottom:10px;">
             <strong>${StudentProjectsPanel.escapeHtml(p.projectName)}</strong>
@@ -20477,8 +20510,7 @@ class StudentProjectsPanel {
             ${note}${adminNote}
             <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
               <button data-open="${p.latestVersionId}" data-thread="${p.threadId}" style="padding:6px 12px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Open in editor</button>
-              <button data-dl="${p.latestVersionId}" style="padding:6px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Download</button>
-              <button data-history="${p.threadId}" style="padding:6px 12px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">History</button>
+              ${secondaryBtns}
             </div>
             <div id="thread-history-${p.threadId}" style="display:none;margin-top:8px;font-size:12px;color:#bbb;"></div>
           </div>`;
@@ -20834,6 +20866,7 @@ class StudentSubmission {
         studentNote,
         kind: 'draft',
         successMessage: 'Draft saved to cloud!',
+        removeLocalAfterSave: true,
       });
     } catch (_) {
       /* submitProject shows error in status */
@@ -21104,6 +21137,18 @@ class StudentSubmission {
         });
         }
         if (window.StudentProjectsPanel) StudentProjectsPanel.refreshUnreadBadge();
+        if (
+          options.removeLocalAfterSave &&
+          kind === 'draft' &&
+          window.LocalProjects &&
+          typeof window.LocalProjects.removeAfterCloudSave === 'function'
+        ) {
+          try {
+            await window.LocalProjects.removeAfterCloudSave(projectName);
+          } catch (err) {
+            console.warn('Could not remove local project after cloud save:', err);
+          }
+        }
       } else {
         throw new Error(result.message || 'Submission failed');
       }
@@ -22195,8 +22240,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (student && window.StudentProjectsPanel) {
         const subsBtn = document.getElementById('student-my-submissions-btn');
+        const cloudSavesBtn = document.getElementById('student-my-cloud-saves-btn');
         const cloudBtn = document.getElementById('save-cloud-draft');
         if (subsBtn) subsBtn.style.display = '';
+        if (cloudSavesBtn) cloudSavesBtn.style.display = '';
         if (cloudBtn) cloudBtn.style.display = '';
       }
       if (student && window.flatPageEditor) {

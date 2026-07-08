@@ -190,8 +190,10 @@ function showStudentEditorSession(student) {
   bar.classList.add('visible');
   bindStudentEditorLogout();
   const subsBtn = document.getElementById('student-my-submissions-btn');
+  const cloudSavesBtn = document.getElementById('student-my-cloud-saves-btn');
   const cloudBtn = document.getElementById('save-cloud-draft');
   if (subsBtn) subsBtn.style.display = '';
+  if (cloudSavesBtn) cloudSavesBtn.style.display = '';
   if (cloudBtn) cloudBtn.style.display = '';
   if (window.StudentProjectsPanel) {
     setTimeout(() => window.StudentProjectsPanel.refreshUnreadBadge(), 300);

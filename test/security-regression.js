@@ -165,7 +165,7 @@ function testPlaygroundBundleValidation() {
   console.log('✓ playground bundle validation');
 }
 
-function testGuestWriteAllowlistsAdminLogin() {
+function testGuestWriteAllowlistsAuthFlows() {
   const prev = { ...process.env };
   try {
     delete process.env.NODE_ENV;
@@ -187,34 +187,35 @@ function testGuestWriteAllowlistsAdminLogin() {
     const setCookie = mockRes._headers['Set-Cookie'] || '';
     const cookiePair = String(Array.isArray(setCookie) ? setCookie[0] : setCookie).split(';')[0];
 
+    function assertAllowed(path) {
+      let nextCalled = false;
+      let statusCode = null;
+      rejectLocalTestUserWrites(
+        { method: 'POST', path, headers: { cookie: cookiePair } },
+        {
+          status(code) {
+            statusCode = code;
+            return this;
+          },
+          json() {
+            return this;
+          },
+        },
+        () => {
+          nextCalled = true;
+        }
+      );
+      assert.strictEqual(nextCalled, true, `${path} should pass guest write guard`);
+      assert.strictEqual(statusCode, null);
+    }
+
+    assertAllowed('/admin/login');
+    assertAllowed('/api/student/login');
+    assertAllowed('/api/classes/abc-123/verify-password');
+
     let nextCalled = false;
     let statusCode = null;
     let body = null;
-    const req = {
-      method: 'POST',
-      path: '/admin/login',
-      headers: { cookie: cookiePair },
-    };
-    const res = {
-      status(code) {
-        statusCode = code;
-        return this;
-      },
-      json(payload) {
-        body = payload;
-        return this;
-      },
-    };
-    rejectLocalTestUserWrites(req, res, () => {
-      nextCalled = true;
-    });
-    assert.strictEqual(nextCalled, true, 'admin login should pass guest write guard');
-    assert.strictEqual(statusCode, null);
-    assert.strictEqual(body, null);
-
-    nextCalled = false;
-    statusCode = null;
-    body = null;
     rejectLocalTestUserWrites(
       { method: 'POST', path: '/admin/templates', headers: { cookie: cookiePair } },
       {
@@ -237,7 +238,7 @@ function testGuestWriteAllowlistsAdminLogin() {
   } finally {
     process.env = prev;
   }
-  console.log('✓ guest write allowlist includes admin login');
+  console.log('✓ guest write allowlist includes auth flows');
 }
 
 testSafeRedirect();
@@ -248,5 +249,5 @@ testCloudWriteAuthWithLocalTestCookie();
 testStudentLogoutSetsBothClearCookies();
 testPublicPlaygroundFlag();
 testPlaygroundBundleValidation();
-testGuestWriteAllowlistsAdminLogin();
+testGuestWriteAllowlistsAuthFlows();
 console.log('\nAll security regression tests passed.');

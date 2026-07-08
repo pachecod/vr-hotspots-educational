@@ -91,7 +91,7 @@ Signed-in students and admins are not affected by guest preview timeouts or gues
 
 - **Center:** the 360° scene (spherical mode) or the flat page code editor with live preview (flat mode)
 - **Top left:** **Edit Mode** panel — switch between editing and preview/navigation (spherical mode only)
-- **Right side:** **Editing Tools** panel — content mode toggle, scenes, hotspots, Online Assets, export, and submit
+- **Right side:** **Editing Tools** panel — content mode toggle, **Templates** (spherical mode; same gallery as Flat Web Page), scenes, hotspots, Online Assets, export, and submit
 - **ℹ️ icon** next to “Hotspot Editor” — collapsible instructions that update based on your current mode
 
 In **Flat Web Page** mode, spherical-only sections hide automatically. The flat editor fills the main area; **Editing Tools** stays open for Online Assets and related actions.

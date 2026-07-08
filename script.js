@@ -3907,6 +3907,10 @@ class HotspotEditor {
       window.LocalProjects.bind();
     }
 
+    if (window.SphericalTemplateGallery && typeof window.SphericalTemplateGallery.bind === 'function') {
+      window.SphericalTemplateGallery.bind();
+    }
+
     const saveCloudBtn = document.getElementById('save-cloud-draft');
     if (saveCloudBtn) {
       saveCloudBtn.addEventListener('click', () => {

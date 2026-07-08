@@ -12,6 +12,7 @@
     <script src="asset-tags-ui.js"></script>
     <script src="editor-capabilities.js"></script>
     <script src="local-projects.js"></script>
+    <script src="template-gallery-ui.js"></script>
     <script src="playground-templates-ui.js"></script>
     <script src="student-auth-ui.js"></script>
     <script>
@@ -169,6 +170,32 @@
         background: rgba(76, 175, 80, 0.2);
         border-color: #4caf50;
         color: #fff;
+      }
+
+      /* Templates gallery — spherical Editing Tools only (flat editor has its own) */
+      #spherical-templates-section {
+        margin: 0 0 10px;
+        padding: 0;
+      }
+
+      body.content-mode-flat #spherical-templates-section {
+        display: none !important;
+      }
+
+      #spherical-templates-btn {
+        width: 100%;
+        padding: 10px 12px;
+        background: #3d5a80;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: bold;
+      }
+
+      #spherical-templates-btn:hover {
+        background: #4a6fa5;
       }
 
       /* Side Panel Styles */
@@ -1313,6 +1340,13 @@
           >
             📄 Flat Web Page
           </button>
+        </div>
+      </div>
+
+      <div class="panel-section" id="spherical-templates-section">
+        <button type="button" class="btn" id="spherical-templates-btn">Templates</button>
+        <div style="font-size: 12px; color: #999; margin-top: 6px">
+          Browse published templates (same list as Flat Web Page)
         </div>
       </div>
 

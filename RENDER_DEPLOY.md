@@ -39,7 +39,7 @@ The repo must be on GitHub before connecting Render. Do not commit `.env` — se
    - **Runtime:** Node
    - **Build command:** `npm install` — see [Build command notes](#build-command-notes) below
    - **Start command:** `npm start`
-   - **Health check path:** `/`
+   - **Health check path:** `/health`
 3. Add environment variables (see below), including guest-mode presets
 4. **Create Web Service**
 
@@ -109,6 +109,25 @@ Optional:
 | `STRIPE_ALLOW_STUDENT_UPGRADES` | Set `true` to allow per-student upgrades |
 | `GOOGLE_ANALYTICS_MEASUREMENT_ID` | GA4 measurement ID (e.g. `G-XXXXXXXXXX`) for site-wide usage tracking |
 | `GOOGLE_ANALYTICS_ALLOW_LOCALHOST` | Set `true` to send analytics from localhost during development |
+| `SITE_PASSWORD` | Optional. If set, the whole site requires this password before any other UI (editor, admin, hosted tours). Leave unset for open instances. |
+| `SITE_PASSWORD_SECRET` | Optional. Signs the site-access cookie. Falls back to `ADMIN_SESSION_SECRET` when omitted. |
+
+### Optional site-wide password
+
+Use this for private demo/teaching instances. Public production instances should leave `SITE_PASSWORD` unset.
+
+```bash
+SITE_PASSWORD=your-shared-instance-password
+SITE_PASSWORD_SECRET=  # optional; openssl rand -hex 32
+```
+
+1. In Render → **Environment**, add `SITE_PASSWORD` (mark as **Secret**).
+2. Optionally add `SITE_PASSWORD_SECRET` (also a secret). If omitted, the app uses `ADMIN_SESSION_SECRET`.
+3. Ensure **Health Check Path** is `/health` (not `/`) so Render probes stay public when the gate is on.
+4. Redeploy / restart. Opening the site shows a simple password page; after success a cookie unlocks the instance for 7 days.
+5. To disable the gate, remove `SITE_PASSWORD` and redeploy / restart.
+
+This gate is independent of admin login and team/student sign-in.
 
 ### Ridey quick setup
 

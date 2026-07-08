@@ -161,6 +161,10 @@ B2_BUCKET_NAME=your_bucket_name
 ADMIN_PASSWORD=your_secure_password
 ADMIN_SESSION_SECRET=random_long_secret_string
 
+# Optional: site-wide password for private instances (leave unset for open sites)
+# SITE_PASSWORD=shared-instance-password
+# SITE_PASSWORD_SECRET=random_long_secret_string
+
 # Optional Ridey AI (flat page editor)
 # OPENAI_API_KEY=sk-...
 # RIDEY_ENABLED=true

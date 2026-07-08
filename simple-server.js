@@ -62,6 +62,10 @@ const { sanitizeReturnTo } = require('./lib/security/safe-redirect');
 const { csrfGuard } = require('./lib/security/csrf-guard');
 const { requireAuthForCloudWrites, cloudWritesRequireAuth } = require('./lib/security/cloud-write-auth');
 const {
+  createSitePasswordMiddleware,
+  registerSitePasswordRoutes,
+} = require('./lib/security/site-password');
+const {
   createGitHubSession,
   getGitHubToken,
   clearGitHubSession,
@@ -92,6 +96,9 @@ app.use((req, res, next) => {
   next();
 });
 app.use(csrfGuard);
+
+registerSitePasswordRoutes(app);
+app.use(createSitePasswordMiddleware());
 
 registerStripeWebhook(app);
 

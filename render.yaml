@@ -20,7 +20,7 @@ services:
     region: oregon
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -36,6 +36,10 @@ services:
         value: "true"
       - key: PUBLIC_PLAYGROUND_ENABLED
         value: "true"
+      - key: SITE_PASSWORD
+        sync: false
+      - key: SITE_PASSWORD_SECRET
+        sync: false
       - key: B2_KEY_ID
         sync: false
       - key: B2_APP_KEY

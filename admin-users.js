@@ -32,6 +32,15 @@ async function initAdminUsers() {
 
 function bindEvents() {
   document.getElementById('add-class-btn').addEventListener('click', addClass);
+  const requireNewClassPw = document.getElementById('new-class-require-password');
+  const newClassPwRow = document.getElementById('new-class-password-row');
+  if (requireNewClassPw && newClassPwRow) {
+    const syncNewClassPasswordRow = () => {
+      newClassPwRow.style.display = requireNewClassPw.checked ? 'flex' : 'none';
+    };
+    requireNewClassPw.addEventListener('change', syncNewClassPasswordRow);
+    syncNewClassPasswordRow();
+  }
   document.getElementById('generate-new-class-password-btn').addEventListener('click', async () => {
     try {
       document.getElementById('new-class-password').value = await fetchSamplePassword();
@@ -134,6 +143,16 @@ function bindClassPasswordModal() {
   const modal = document.getElementById('class-password-modal');
   const input = document.getElementById('class-password-modal-input');
   const msg = document.getElementById('class-password-modal-msg');
+  const requireCheckbox = document.getElementById('class-password-modal-require');
+  const passwordRow = document.getElementById('class-password-modal-password-row');
+
+  const syncModalPasswordRow = () => {
+    if (!requireCheckbox || !passwordRow) return;
+    passwordRow.style.display = requireCheckbox.checked ? 'block' : 'none';
+  };
+  if (requireCheckbox) {
+    requireCheckbox.addEventListener('change', syncModalPasswordRow);
+  }
 
   document.getElementById('class-password-modal-cancel-btn').addEventListener('click', closeClassPasswordModal);
   modal.addEventListener('click', (e) => {
@@ -161,16 +180,30 @@ async function openClassPasswordModal(classId) {
   const cls = classes.find((c) => c.id === classId);
   if (!cls) return;
   classPasswordModalClassId = classId;
+  const requireCheckbox = document.getElementById('class-password-modal-require');
+  const passwordRow = document.getElementById('class-password-modal-password-row');
   document.getElementById('class-password-modal-class').textContent =
-    `Set the sign-in password for ${cls.name}. Students must enter this before they can see names on the sign-in page.`;
+    `Control whether ${cls.name} asks students for a shared password before showing names.`;
   document.getElementById('class-password-modal-input').value = '';
+  if (requireCheckbox) {
+    requireCheckbox.checked = !!cls.require_sign_in_password;
+  }
+  if (passwordRow && requireCheckbox) {
+    passwordRow.style.display = requireCheckbox.checked ? 'block' : 'none';
+  }
   document.getElementById('class-password-modal-msg').style.display = 'none';
   document.getElementById('class-password-modal').classList.add('open');
   try {
     const res = await adminFetch(`/admin/classes/${classId}/sign-in-password`);
     const data = await res.json();
-    if (data.success && data.password) {
-      document.getElementById('class-password-modal-input').value = data.password;
+    if (data.success) {
+      if (requireCheckbox) requireCheckbox.checked = !!data.requireSignInPassword;
+      if (passwordRow && requireCheckbox) {
+        passwordRow.style.display = requireCheckbox.checked ? 'block' : 'none';
+      }
+      if (data.password) {
+        document.getElementById('class-password-modal-input').value = data.password;
+      }
     }
   } catch (_) {
     /* optional preload */
@@ -186,10 +219,13 @@ function closeClassPasswordModal() {
 async function saveClassPasswordFromModal() {
   const input = document.getElementById('class-password-modal-input');
   const msg = document.getElementById('class-password-modal-msg');
+  const requireCheckbox = document.getElementById('class-password-modal-require');
   const password = input.value.trim();
   if (!classPasswordModalClassId) return;
+  const requireSignInPassword = !!(requireCheckbox && requireCheckbox.checked);
   msg.style.display = 'none';
-  const body = password ? { password } : {};
+  const body = { requireSignInPassword };
+  if (requireSignInPassword && password) body.password = password;
   const res = await adminFetch(`/admin/classes/${classPasswordModalClassId}/sign-in-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -197,14 +233,18 @@ async function saveClassPasswordFromModal() {
   });
   const data = await res.json();
   if (!data.success) {
-    msg.textContent = data.message || 'Could not save password';
+    msg.textContent = data.message || 'Could not save settings';
     msg.style.display = 'block';
     return;
   }
   closeClassPasswordModal();
-  alert(
-    `Class sign-in password saved for ${data.class.name}: ${data.signInPassword}\n\nShare this with students so they can unlock the roster.`
-  );
+  if (requireSignInPassword) {
+    alert(
+      `Class sign-in password saved for ${data.class.name}: ${data.signInPassword}\n\nShare this with students so they can unlock the roster.`
+    );
+  } else {
+    alert(`Class sign-in password disabled for ${data.class.name}. Students can pick their name directly.`);
+  }
   await loadClasses();
 }
 
@@ -336,15 +376,15 @@ function renderClasses() {
     return;
   }
   el.innerHTML = `<table>
-    <thead><tr><th>Name</th><th>Team members or students</th><th>Sign-in password</th><th>Plan</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Name</th><th>Team members or students</th><th>Class password</th><th>Plan</th><th>Actions</th></tr></thead>
     <tbody>${classes.map((c) => `
       <tr>
         <td><strong>${escapeHtml(c.name)}</strong><br><small style="color:#888;">${escapeHtml(c.description || '')}</small></td>
         <td>${c.student_count || 0}</td>
-        <td>${c.has_sign_in_password ? 'Set' : '<span style="color:#dc3545;">Not set</span>'}</td>
+        <td>${c.require_sign_in_password ? 'Required' : 'Not required'}</td>
         <td>${escapeHtml(c.plan_tier || 'free')}</td>
         <td>
-          <button type="button" class="btn-secondary" onclick="openClassPasswordModal('${c.id}')">Class Password</button>
+          <button type="button" class="btn-secondary" onclick="openClassPasswordModal('${c.id}')">Sign-In Settings</button>
           <a class="btn btn-secondary" href="admin-billing.html?classId=${encodeURIComponent(c.id)}">Limits</a>
           <button class="btn-danger" onclick="deleteClass('${c.id}')">Delete</button>
         </td>
@@ -355,9 +395,10 @@ async function addClass() {
   const name = document.getElementById('new-class-name').value.trim();
   const description = document.getElementById('new-class-desc').value.trim();
   const password = document.getElementById('new-class-password').value.trim();
+  const requireSignInPassword = !!document.getElementById('new-class-require-password')?.checked;
   if (!name) return alert('Team or Class name required');
-  const body = { name, description };
-  if (password) body.password = password;
+  const body = { name, description, requireSignInPassword };
+  if (requireSignInPassword && password) body.password = password;
   const res = await adminFetch('/admin/classes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -368,9 +409,17 @@ async function addClass() {
   document.getElementById('new-class-name').value = '';
   document.getElementById('new-class-desc').value = '';
   document.getElementById('new-class-password').value = '';
-  alert(
-    `Created ${data.class.name}.\n\nClass sign-in password: ${data.signInPassword}\n\nStudents need this before they can see the roster.`
-  );
+  const requireCheckbox = document.getElementById('new-class-require-password');
+  if (requireCheckbox) requireCheckbox.checked = false;
+  const pwRow = document.getElementById('new-class-password-row');
+  if (pwRow) pwRow.style.display = 'none';
+  if (requireSignInPassword && data.signInPassword) {
+    alert(
+      `Created ${data.class.name}.\n\nClass sign-in password: ${data.signInPassword}\n\nStudents need this before they can see the roster.`
+    );
+  } else {
+    alert(`Created ${data.class.name}. Students can pick their name directly — no class password required.`);
+  }
   await loadClasses();
 }
 

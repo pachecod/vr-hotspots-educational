@@ -15,7 +15,7 @@ const {
   verifyClassPassword,
   hasClassRosterAccess,
   grantClassRosterAccess,
-  isClassSignInConfigured,
+  isClassPasswordRequired,
 } = require('../lib/class-roster-gate');
 
 async function ensureClassBillingAccount(classId) {
@@ -34,7 +34,7 @@ async function ensureClassBillingAccount(classId) {
 
 async function listPublicClasses() {
   const { rows } = await query(
-    `SELECT c.id, c.name, c.description,
+    `SELECT c.id, c.name, c.description, c.require_sign_in_password,
             (SELECT COUNT(*)::int FROM students s WHERE s.class_id = c.id AND s.is_active = TRUE) AS student_count
      FROM classes c
      ORDER BY c.name ASC`
@@ -55,6 +55,7 @@ async function listPublicStudentsInClass(classId) {
 async function listClassesAdmin() {
   const { rows } = await query(
     `SELECT c.id, c.name, c.description, c.slug, c.created_at, c.updated_at, c.password_set_at,
+            c.require_sign_in_password,
             (c.password_hash IS NOT NULL) AS has_sign_in_password,
             (SELECT COUNT(*)::int FROM students s WHERE s.class_id = c.id) AS student_count,
             ba.plan_tier, ba.status AS billing_status
@@ -65,15 +66,33 @@ async function listClassesAdmin() {
   return rows;
 }
 
-async function createClass({ name, description, password }) {
+async function createClass({ name, description, password, requireSignInPassword }) {
   const slug = slugify(name);
-  const plainPassword = password || generateRandomPassword();
-  const passwordHash = await hashPassword(plainPassword);
-  const passwordEncrypted = encryptAdminPassword(plainPassword);
+  const requirePassword = !!requireSignInPassword;
+  let plainPassword = null;
+  let passwordHash = null;
+  let passwordEncrypted = null;
+  let passwordSetAt = null;
+
+  if (requirePassword) {
+    plainPassword = password || generateRandomPassword();
+    passwordHash = await hashPassword(plainPassword);
+    passwordEncrypted = encryptAdminPassword(plainPassword);
+    passwordSetAt = new Date();
+  }
+
   const { rows } = await query(
-    `INSERT INTO classes (name, description, slug, password_hash, password_encrypted, password_set_at)
-     VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
-    [name.trim(), description || null, slug, passwordHash, passwordEncrypted]
+    `INSERT INTO classes (name, description, slug, password_hash, password_encrypted, password_set_at, require_sign_in_password)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [
+      name.trim(),
+      description || null,
+      slug,
+      passwordHash,
+      passwordEncrypted,
+      passwordSetAt,
+      requirePassword,
+    ]
   );
   await ensureClassBillingAccount(rows[0].id);
   return { class: rows[0], plainPassword };
@@ -84,11 +103,25 @@ async function setClassSignInPassword(classId, password) {
   const passwordHash = await hashPassword(plainPassword);
   const passwordEncrypted = encryptAdminPassword(plainPassword);
   const { rows } = await query(
-    `UPDATE classes SET password_hash = $1, password_encrypted = $2, password_set_at = NOW(), updated_at = NOW()
-     WHERE id = $3 RETURNING id, name, password_set_at`,
+    `UPDATE classes SET password_hash = $1, password_encrypted = $2, password_set_at = NOW(),
+            require_sign_in_password = TRUE, updated_at = NOW()
+     WHERE id = $3 RETURNING id, name, password_set_at, require_sign_in_password`,
     [passwordHash, passwordEncrypted, classId]
   );
   return { class: rows[0] || null, plainPassword };
+}
+
+async function setClassSignInPasswordRequired(classId, { requireSignInPassword, password } = {}) {
+  if (!requireSignInPassword) {
+    const { rows } = await query(
+      `UPDATE classes SET password_hash = NULL, password_encrypted = NULL, password_set_at = NULL,
+              require_sign_in_password = FALSE, updated_at = NOW()
+       WHERE id = $1 RETURNING id, name, require_sign_in_password`,
+      [classId]
+    );
+    return { class: rows[0] || null, plainPassword: null };
+  }
+  return setClassSignInPassword(classId, password);
 }
 
 async function getClassSignInPassword(classId) {
@@ -243,13 +276,8 @@ function registerRosterRoutes(app, { requireAdmin }) {
       const classId = req.params.classId;
       const isAdmin = !!getAdminSession(req);
       if (!isAdmin) {
-        if (!(await isClassSignInConfigured(classId))) {
-          return res.status(403).json({
-            success: false,
-            message: 'Team or class sign-in is not set up yet. Ask your team leader or teacher.',
-          });
-        }
-        if (!hasClassRosterAccess(req, classId)) {
+        const passwordRequired = await isClassPasswordRequired(classId);
+        if (passwordRequired && !hasClassRosterAccess(req, classId)) {
           return res.status(401).json({
             success: false,
             message: 'Team or class password required',
@@ -278,7 +306,7 @@ function registerRosterRoutes(app, { requireAdmin }) {
       if (verification.reason === 'not_configured') {
         return res.status(403).json({
           success: false,
-          message: 'Team or class sign-in is not set up yet. Ask your team leader or teacher.',
+          message: 'This team or class does not use a sign-in password. Choose your name directly.',
         });
       }
       if (!verification.ok) {
@@ -302,11 +330,16 @@ function registerRosterRoutes(app, { requireAdmin }) {
 
   app.post('/admin/classes', requireAdmin, requireDb, async (req, res) => {
     try {
-      const { name, description, password } = req.body || {};
+      const { name, description, password, requireSignInPassword } = req.body || {};
       if (!name || !name.trim()) {
         return res.status(400).json({ success: false, message: 'Team or class name is required' });
       }
-      const result = await createClass({ name, description, password });
+      const result = await createClass({
+        name,
+        description,
+        password,
+        requireSignInPassword: !!requireSignInPassword,
+      });
       res.json({
         success: true,
         class: {
@@ -314,7 +347,8 @@ function registerRosterRoutes(app, { requireAdmin }) {
           name: result.class.name,
           description: result.class.description,
           slug: result.class.slug,
-          has_sign_in_password: true,
+          require_sign_in_password: !!result.class.require_sign_in_password,
+          has_sign_in_password: !!result.class.password_hash,
           password_set_at: result.class.password_set_at,
         },
         signInPassword: result.plainPassword,
@@ -346,12 +380,19 @@ function registerRosterRoutes(app, { requireAdmin }) {
 
   app.get('/admin/classes/:id/sign-in-password', requireAdmin, requireDb, async (req, res) => {
     try {
-      const { rows } = await query(`SELECT id FROM classes WHERE id = $1`, [req.params.id]);
+      const { rows } = await query(
+        `SELECT id, password_encrypted, require_sign_in_password FROM classes WHERE id = $1`,
+        [req.params.id]
+      );
       if (!rows.length) {
         return res.status(404).json({ success: false, message: 'Team or class not found' });
       }
-      const password = await getClassSignInPassword(req.params.id);
-      res.json({ success: true, password });
+      const password = decryptAdminPassword(rows[0].password_encrypted);
+      res.json({
+        success: true,
+        password,
+        requireSignInPassword: !!rows[0].require_sign_in_password,
+      });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -359,11 +400,22 @@ function registerRosterRoutes(app, { requireAdmin }) {
 
   app.post('/admin/classes/:id/sign-in-password', requireAdmin, requireDb, async (req, res) => {
     try {
-      const result = await setClassSignInPassword(req.params.id, req.body && req.body.password);
+      const body = req.body || {};
+      const requireSignInPassword =
+        body.requireSignInPassword !== undefined ? !!body.requireSignInPassword : true;
+      const result = await setClassSignInPasswordRequired(req.params.id, {
+        requireSignInPassword,
+        password: body.password,
+      });
       if (!result.class) {
         return res.status(404).json({ success: false, message: 'Team or class not found' });
       }
-      res.json({ success: true, class: result.class, signInPassword: result.plainPassword });
+      res.json({
+        success: true,
+        class: result.class,
+        signInPassword: result.plainPassword,
+        requireSignInPassword: !!result.class.require_sign_in_password,
+      });
     } catch (err) {
       res.status(400).json({ success: false, message: err.message });
     }

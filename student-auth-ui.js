@@ -575,10 +575,32 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
     errorEl.style.display = 'none';
   }
 
+  function classRequiresSignInPassword(cls) {
+    return !!(cls && cls.require_sign_in_password);
+  }
+
+  function signInStepCount() {
+    return selectedClass && classRequiresSignInPassword(selectedClass) ? 4 : 3;
+  }
+
+  function afterClassSelected() {
+    if (classRequiresSignInPassword(selectedClass)) {
+      renderClassPasswordStep();
+      return;
+    }
+    loadStudents(selectedClass.id)
+      .then(() => {
+        clearError();
+        renderStudentStep();
+      })
+      .catch((err) => showError(err.message));
+  }
+
   function renderClassStep() {
     selectedStudent = null;
     students = [];
-    subtitleEl.textContent = 'Step 1 of 4 — Choose your team or class';
+    const total = 4;
+    subtitleEl.textContent = `Step 1 of ${total} — Choose your team or class`;
     const backBtn =
       options.showBackToEntry && !useWelcomeShell
         ? `<button type="button" id="student-back-entry" style="background:none;border:none;color:#4caf50;cursor:pointer;margin-bottom:12px;padding:0;">← Back</button>`
@@ -609,7 +631,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
       btn.addEventListener('click', () => {
         selectedClass = classes.find((c) => c.id === btn.dataset.id);
         clearError();
-        renderClassPasswordStep();
+        afterClassSelected();
       });
     });
   }
@@ -617,7 +639,8 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   function renderClassPasswordStep() {
     selectedStudent = null;
     students = [];
-    subtitleEl.textContent = `Step 2 of 4 — Enter team or class password (${selectedClass.name})`;
+    const total = signInStepCount();
+    subtitleEl.textContent = `Step 2 of ${total} — Enter team or class password (${selectedClass.name})`;
     stepEl.innerHTML = `
       <button type="button" id="student-back-class" style="background:none;border:none;color:rgba(255,255,255,0.9);cursor:pointer;margin-bottom:12px;padding:0;">← Back to teams or classes</button>
       <p style="color:rgba(255,255,255,0.75);font-size:13px;margin:0 0 12px;">
@@ -656,7 +679,9 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   }
 
   function renderStudentStep() {
-    subtitleEl.textContent = `Step 3 of 4 — Choose your name (${selectedClass.name})`;
+    const total = signInStepCount();
+    const stepNum = classRequiresSignInPassword(selectedClass) ? 3 : 2;
+    subtitleEl.textContent = `Step ${stepNum} of ${total} — Choose your name (${selectedClass.name})`;
     stepEl.innerHTML = `
       <button type="button" id="student-back-class" style="background:none;border:none;color:rgba(255,255,255,0.9);cursor:pointer;margin-bottom:12px;padding:0;">← Back to teams or classes</button>
       <div style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto;">
@@ -674,7 +699,13 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
       </div>
     `;
 
-    document.getElementById('student-back-class').addEventListener('click', renderClassPasswordStep);
+    document.getElementById('student-back-class').addEventListener('click', () => {
+      if (classRequiresSignInPassword(selectedClass)) {
+        renderClassPasswordStep();
+      } else {
+        renderClassStep();
+      }
+    });
     stepEl.querySelectorAll('.student-name-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         selectedStudent = students.find((s) => s.id === btn.dataset.id);
@@ -684,7 +715,9 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   }
 
   function renderPasswordStep() {
-    subtitleEl.textContent = `Step 4 of 4 — Enter your password`;
+    const total = signInStepCount();
+    const stepNum = classRequiresSignInPassword(selectedClass) ? 4 : 3;
+    subtitleEl.textContent = `Step ${stepNum} of ${total} — Enter your password`;
     stepEl.innerHTML = `
       <button type="button" id="student-back-student" style="background:none;border:none;color:rgba(255,255,255,0.9);cursor:pointer;margin-bottom:12px;padding:0;">← Back to names</button>
       <div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:12px;margin-bottom:16px;">

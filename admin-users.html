@@ -75,15 +75,19 @@
           <div style="margin-bottom:12px;">
             <input type="text" id="new-class-name" placeholder="Team or Class name" />
             <input type="text" id="new-class-desc" placeholder="Team or Class description (optional)" />
-            <div class="password-field-row">
+            <label style="display:flex;align-items:center;gap:8px;margin:10px 0 8px;font-size:14px;">
+              <input type="checkbox" id="new-class-require-password" />
+              Require team/class password before students can see the roster
+            </label>
+            <div class="password-field-row" id="new-class-password-row" style="display:none;">
               <input type="text" id="new-class-password" placeholder="Class sign-in password (optional — auto-generated if blank)" />
               <button type="button" class="btn-secondary" id="generate-new-class-password-btn">Generate</button>
             </div>
             <button class="btn-primary" id="add-class-btn">Add Team or Class</button>
           </div>
           <p style="color:#666;font-size:13px;margin:0 0 12px;">
-            The class sign-in password is required before students can see the roster on the sign-in page.
-            Leave blank to auto-generate, or type your own.
+            By default, students pick their team or class and go straight to the name list. Check the box above
+            only if you want a shared class password before names appear.
           </p>
           <div id="classes-list"></div>
         </div>
@@ -160,9 +164,15 @@
 
     <div id="class-password-modal" role="dialog" aria-modal="true" aria-labelledby="class-password-modal-title">
       <div class="password-dialog">
-        <h3 id="class-password-modal-title">Set Class Sign-In Password</h3>
+        <h3 id="class-password-modal-title">Team or Class Sign-In Settings</h3>
         <p id="class-password-modal-class"></p>
-        <input type="text" id="class-password-modal-input" placeholder="Type a password, or generate one below" autocomplete="off" />
+        <label style="display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:14px;">
+          <input type="checkbox" id="class-password-modal-require" />
+          Require team/class password before students can see the roster
+        </label>
+        <div id="class-password-modal-password-row">
+          <input type="text" id="class-password-modal-input" placeholder="Type a password, or generate one below" autocomplete="off" />
+        </div>
         <div class="password-actions">
           <button type="button" class="btn-secondary" id="class-password-modal-generate-btn">Generate</button>
           <button type="button" class="btn-primary" id="class-password-modal-save-btn">Save Password</button>

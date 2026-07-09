@@ -191,6 +191,15 @@ async function applyIncrementalMigrations(pool) {
         ALTER TABLE classes ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ;
       `,
     },
+    {
+      name: 'classes_optional_sign_in_password_v1',
+      sql: `
+        ALTER TABLE classes ADD COLUMN IF NOT EXISTS require_sign_in_password BOOLEAN NOT NULL DEFAULT FALSE;
+        UPDATE classes
+        SET require_sign_in_password = TRUE
+        WHERE password_hash IS NOT NULL;
+      `,
+    },
   ];
 
   for (const migration of migrations) {

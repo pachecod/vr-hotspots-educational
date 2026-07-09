@@ -75,19 +75,11 @@
           <div style="margin-bottom:12px;">
             <input type="text" id="new-class-name" placeholder="Team or Class name" />
             <input type="text" id="new-class-desc" placeholder="Team or Class description (optional)" />
-            <label style="display:flex;align-items:center;gap:8px;margin:10px 0 8px;font-size:14px;">
-              <input type="checkbox" id="new-class-require-password" />
-              Require team/class password before students can see the roster
-            </label>
-            <div class="password-field-row" id="new-class-password-row" style="display:none;">
-              <input type="text" id="new-class-password" placeholder="Class sign-in password (optional — auto-generated if blank)" />
-              <button type="button" class="btn-secondary" id="generate-new-class-password-btn">Generate</button>
-            </div>
             <button class="btn-primary" id="add-class-btn">Add Team or Class</button>
           </div>
           <p style="color:#666;font-size:13px;margin:0 0 12px;">
-            By default, students pick their team or class and go straight to the name list. Check the box above
-            only if you want a shared class password before names appear.
+            New teams or classes do not require a class password by default. Use the
+            <strong>Require password</strong> checkbox on each class below to turn it on for that class only.
           </p>
           <div id="classes-list"></div>
         </div>
@@ -175,7 +167,8 @@
         </div>
         <div class="password-actions">
           <button type="button" class="btn-secondary" id="class-password-modal-generate-btn">Generate</button>
-          <button type="button" class="btn-primary" id="class-password-modal-save-btn">Save Password</button>
+          <button type="button" class="btn-primary" id="class-password-modal-save-btn">Save Settings</button>
+          <button type="button" class="btn-secondary" id="class-password-modal-disable-btn">Turn Off Class Password</button>
           <button type="button" class="btn-secondary" id="class-password-modal-cancel-btn">Cancel</button>
         </div>
         <div id="class-password-modal-msg" class="error" style="display:none;margin-top:12px;"></div>

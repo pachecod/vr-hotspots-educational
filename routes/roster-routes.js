@@ -39,7 +39,13 @@ async function listPublicClasses() {
      FROM classes c
      ORDER BY c.name ASC`
   );
-  return rows;
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    require_sign_in_password: !!r.require_sign_in_password,
+    student_count: r.student_count,
+  }));
 }
 
 async function listPublicStudentsInClass(classId) {
@@ -63,7 +69,20 @@ async function listClassesAdmin() {
      LEFT JOIN billing_accounts ba ON ba.scope_type = 'class' AND ba.scope_id = c.id
      ORDER BY c.name ASC`
   );
-  return rows;
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    slug: r.slug,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+    password_set_at: r.password_set_at,
+    require_sign_in_password: !!r.require_sign_in_password,
+    has_sign_in_password: !!r.has_sign_in_password,
+    student_count: r.student_count,
+    plan_tier: r.plan_tier,
+    billing_status: r.billing_status,
+  }));
 }
 
 async function createClass({ name, description, password, requireSignInPassword }) {
@@ -401,10 +420,24 @@ function registerRosterRoutes(app, { requireAdmin }) {
   app.post('/admin/classes/:id/sign-in-password', requireAdmin, requireDb, async (req, res) => {
     try {
       const body = req.body || {};
-      const requireSignInPassword =
-        body.requireSignInPassword !== undefined ? !!body.requireSignInPassword : true;
+      if (body.requireSignInPassword === false) {
+        const result = await setClassSignInPasswordRequired(req.params.id, {
+          requireSignInPassword: false,
+        });
+        if (!result.class) {
+          return res.status(404).json({ success: false, message: 'Team or class not found' });
+        }
+        return res.json({
+          success: true,
+          class: result.class,
+          signInPassword: null,
+          requireSignInPassword: false,
+        });
+      }
+
+      const requireSignInPassword = body.requireSignInPassword === true || !!body.password;
       const result = await setClassSignInPasswordRequired(req.params.id, {
-        requireSignInPassword,
+        requireSignInPassword: true,
         password: body.password,
       });
       if (!result.class) {
@@ -414,7 +447,25 @@ function registerRosterRoutes(app, { requireAdmin }) {
         success: true,
         class: result.class,
         signInPassword: result.plainPassword,
-        requireSignInPassword: !!result.class.require_sign_in_password,
+        requireSignInPassword: true,
+      });
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  });
+
+  app.delete('/admin/classes/:id/sign-in-password', requireAdmin, requireDb, async (req, res) => {
+    try {
+      const result = await setClassSignInPasswordRequired(req.params.id, {
+        requireSignInPassword: false,
+      });
+      if (!result.class) {
+        return res.status(404).json({ success: false, message: 'Team or class not found' });
+      }
+      res.json({
+        success: true,
+        class: result.class,
+        requireSignInPassword: false,
       });
     } catch (err) {
       res.status(400).json({ success: false, message: err.message });

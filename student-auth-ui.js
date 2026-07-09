@@ -576,7 +576,9 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   }
 
   function classRequiresSignInPassword(cls) {
-    return !!(cls && cls.require_sign_in_password);
+    if (!cls) return false;
+    const value = cls.require_sign_in_password ?? cls.requireSignInPassword;
+    return value === true || value === 'true' || value === 1 || value === '1';
   }
 
   function signInStepCount() {

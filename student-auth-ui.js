@@ -686,7 +686,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
     subtitleEl.textContent = `Step ${stepNum} of ${total} — Choose your name (${selectedClass.name})`;
     stepEl.innerHTML = `
       <button type="button" id="student-back-class" style="background:none;border:none;color:rgba(255,255,255,0.9);cursor:pointer;margin-bottom:12px;padding:0;">← Back to teams or classes</button>
-      <div style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto;">
+      <div class="student-login-step-list">
         ${students.length
           ? students
               .map(

@@ -27,6 +27,11 @@
         align-items: center; justify-content: center; z-index: 1000;
       }
       #password-modal.open { display: flex; }
+      #rename-modal {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+        align-items: center; justify-content: center; z-index: 1000;
+      }
+      #rename-modal.open { display: flex; }
       #class-password-modal {
         display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
         align-items: center; justify-content: center; z-index: 1000;
@@ -36,13 +41,20 @@
         background: #fff; border-radius: 8px; padding: 24px; width: min(420px, 92vw);
         box-shadow: 0 8px 32px rgba(0,0,0,0.2);
       }
+      #rename-modal .password-dialog {
+        background: #fff; border-radius: 8px; padding: 24px; width: min(420px, 92vw);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      }
       #class-password-modal .password-dialog {
         background: #fff; border-radius: 8px; padding: 24px; width: min(420px, 92vw);
         box-shadow: 0 8px 32px rgba(0,0,0,0.2);
       }
       #password-modal h3 { margin: 0 0 8px; }
       #password-modal p { margin: 0 0 16px; color: #666; font-size: 14px; }
+      #rename-modal h3 { margin: 0 0 8px; }
+      #rename-modal p { margin: 0 0 16px; color: #666; font-size: 14px; }
       #password-modal input[type="text"] { width: 100%; box-sizing: border-box; margin: 0 0 12px; }
+      #rename-modal input[type="text"] { width: 100%; box-sizing: border-box; margin: 0 0 12px; }
       #password-modal .password-actions { display: flex; gap: 8px; flex-wrap: wrap; }
       .password-field-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
       .password-field-row input { flex: 1; min-width: 180px; margin-right: 0; }
@@ -172,6 +184,29 @@
           <button type="button" class="btn-secondary" id="class-password-modal-cancel-btn">Cancel</button>
         </div>
         <div id="class-password-modal-msg" class="error" style="display:none;margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <div id="rename-modal" role="dialog" aria-modal="true" aria-labelledby="rename-modal-title">
+      <div class="password-dialog">
+        <h3 id="rename-modal-title">Rename team member or student</h3>
+        <p id="rename-modal-student"></p>
+        <label for="rename-modal-name-input" style="display:block;margin-bottom:6px;font-size:14px;color:#444;">Name</label>
+        <input type="text" id="rename-modal-name-input" placeholder="Enter the new name" autocomplete="off" />
+        <label for="rename-modal-username-input" style="display:block;margin:12px 0 6px;font-size:14px;color:#444;">Username</label>
+        <input type="text" id="rename-modal-username-input" placeholder="Letters and numbers only" autocomplete="off" />
+        <div style="margin:0 0 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <button type="button" class="btn-link" id="rename-modal-reset-username-btn">Reset username from name</button>
+        </div>
+        <p style="margin:0 0 12px;color:#666;font-size:13px;">
+          Updates the display name and username everywhere in the app, including the sign-in roster and past submissions.
+          Password is unchanged.
+        </p>
+        <div class="password-actions">
+          <button type="button" class="btn-primary" id="rename-modal-save-btn">Save</button>
+          <button type="button" class="btn-secondary" id="rename-modal-cancel-btn">Cancel</button>
+        </div>
+        <div id="rename-modal-msg" class="error" style="display:none;margin-top:12px;"></div>
       </div>
     </div>
 

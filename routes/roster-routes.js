@@ -2,6 +2,7 @@ const {
   query,
   slugify,
   generateUsername,
+  normalizeUsername,
   generateRandomPassword,
   isDbEnabled,
 } = require('../services/db-service');
@@ -184,15 +185,37 @@ async function listStudentsAdmin({ classId } = {}) {
   }));
 }
 
-async function ensureUniqueUsername(baseUsername) {
+async function ensureUniqueUsername(baseUsername, { excludeStudentId } = {}) {
   let username = baseUsername;
   let suffix = 1;
   while (true) {
-    const { rows } = await query(`SELECT id FROM students WHERE username = $1`, [username]);
+    let sql = `SELECT id FROM students WHERE username = $1`;
+    const params = [username];
+    if (excludeStudentId) {
+      sql += ` AND id != $2`;
+      params.push(excludeStudentId);
+    }
+    const { rows } = await query(sql, params);
     if (!rows.length) return username;
     username = `${baseUsername}${suffix}`;
     suffix++;
     if (suffix > 999) throw new Error('Could not generate unique username');
+  }
+}
+
+async function assertUsernameAvailable(username, excludeStudentId) {
+  let sql = `SELECT id FROM students WHERE username = $1`;
+  const params = [username];
+  if (excludeStudentId) {
+    sql += ` AND id != $2`;
+    params.push(excludeStudentId);
+  }
+  const { rows } = await query(sql, params);
+  if (rows.length) {
+    const err = new Error('That username is already in use');
+    err.code = '23505';
+    err.constraint = 'students_username_key';
+    throw err;
   }
 }
 
@@ -210,14 +233,35 @@ async function createStudent({ classId, displayName, password }) {
   return { student: rows[0], plainPassword };
 }
 
-async function updateStudent(id, { displayName, classId, isActive }) {
+async function updateStudent(id, { displayName, username, classId, isActive }) {
   const fields = [];
   const params = [];
   let i = 1;
+  let trimmedDisplayName;
+  let trimmedUsername;
+
   if (displayName !== undefined) {
+    trimmedDisplayName = String(displayName).trim();
+    if (!trimmedDisplayName) {
+      throw new Error('Display name is required');
+    }
     fields.push(`display_name = $${i++}`);
-    params.push(displayName.trim());
+    params.push(trimmedDisplayName);
   }
+
+  if (username !== undefined) {
+    trimmedUsername = normalizeUsername(username);
+    await assertUsernameAvailable(trimmedUsername, id);
+    fields.push(`username = $${i++}`);
+    params.push(trimmedUsername);
+  } else if (trimmedDisplayName !== undefined) {
+    trimmedUsername = await ensureUniqueUsername(generateUsername(trimmedDisplayName), {
+      excludeStudentId: id,
+    });
+    fields.push(`username = $${i++}`);
+    params.push(trimmedUsername);
+  }
+
   if (classId !== undefined) {
     fields.push(`class_id = $${i++}`);
     params.push(classId);
@@ -233,7 +277,14 @@ async function updateStudent(id, { displayName, classId, isActive }) {
     `UPDATE students SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`,
     params
   );
-  return rows[0] || null;
+  const student = rows[0] || null;
+  if (student && trimmedDisplayName !== undefined) {
+    await query(`UPDATE submissions SET student_name = $1, updated_at = NOW() WHERE student_id = $2`, [
+      trimmedDisplayName,
+      id,
+    ]);
+  }
+  return student;
 }
 
 async function deleteStudent(id) {
@@ -509,7 +560,15 @@ function registerRosterRoutes(app, { requireAdmin }) {
       if (!updated) return res.status(404).json({ success: false, message: 'Team member or student not found' });
       res.json({ success: true, student: updated });
     } catch (err) {
-      res.status(400).json({ success: false, message: err.message });
+      let msg = err.message;
+      if (err.code === '23505') {
+        if (err.constraint === 'students_username_key') {
+          msg = 'That username is already in use';
+        } else {
+          msg = 'Another team member or student in this class already has that name';
+        }
+      }
+      res.status(400).json({ success: false, message: msg });
     }
   });
 

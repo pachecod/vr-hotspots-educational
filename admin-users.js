@@ -2,6 +2,8 @@ let classes = [];
 let students = [];
 let filterClassId = 'all';
 let passwordModalStudentId = null;
+let renameModalStudentId = null;
+let renameUsernameManuallyEdited = false;
 let classPasswordModalClassId = null;
 let passwordReportRows = [];
 let passwordsVisible = false;
@@ -51,6 +53,7 @@ function bindEvents() {
   document.getElementById('toggle-password-visibility-btn').addEventListener('click', togglePasswordVisibility);
   document.getElementById('refresh-passwords-btn').addEventListener('click', loadPasswordReport);
   bindPasswordModal();
+  bindRenameModal();
   bindClassPasswordModal();
 }
 
@@ -120,6 +123,110 @@ async function savePasswordFromModal() {
   alert(
     `Password saved for ${data.student.display_name}: ${data.password}\n\nIncluded in password list and CSV download.`
   );
+  if (passwordsPanelOpen) loadPasswordReport();
+}
+
+function suggestUsernameFromDisplayName(displayName) {
+  const base = String(displayName || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-/g, '') || 'student';
+  return base.slice(0, 40);
+}
+
+function bindRenameModal() {
+  const modal = document.getElementById('rename-modal');
+  const nameInput = document.getElementById('rename-modal-name-input');
+  const usernameInput = document.getElementById('rename-modal-username-input');
+  const msg = document.getElementById('rename-modal-msg');
+
+  document.getElementById('rename-modal-cancel-btn').addEventListener('click', closeRenameModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeRenameModal();
+  });
+  document.getElementById('rename-modal-save-btn').addEventListener('click', saveRenameFromModal);
+  document.getElementById('rename-modal-reset-username-btn').addEventListener('click', () => {
+    renameUsernameManuallyEdited = false;
+    usernameInput.value = suggestUsernameFromDisplayName(nameInput.value);
+    usernameInput.focus();
+    usernameInput.select();
+  });
+  nameInput.addEventListener('input', () => {
+    if (!renameUsernameManuallyEdited) {
+      usernameInput.value = suggestUsernameFromDisplayName(nameInput.value);
+    }
+  });
+  usernameInput.addEventListener('input', () => {
+    renameUsernameManuallyEdited = true;
+  });
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveRenameFromModal();
+    if (e.key === 'Escape') closeRenameModal();
+  });
+  usernameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveRenameFromModal();
+    if (e.key === 'Escape') closeRenameModal();
+  });
+}
+
+function openRenameModal(studentId) {
+  const student = students.find((s) => s.id === studentId);
+  if (!student) return;
+  renameModalStudentId = studentId;
+  renameUsernameManuallyEdited = false;
+  document.getElementById('rename-modal-student').textContent =
+    `Rename ${student.display_name} (username: ${student.username}).`;
+  document.getElementById('rename-modal-name-input').value = student.display_name || '';
+  document.getElementById('rename-modal-username-input').value = student.username || '';
+  document.getElementById('rename-modal-msg').style.display = 'none';
+  document.getElementById('rename-modal').classList.add('open');
+  const nameInput = document.getElementById('rename-modal-name-input');
+  nameInput.focus();
+  nameInput.select();
+}
+
+function closeRenameModal() {
+  renameModalStudentId = null;
+  renameUsernameManuallyEdited = false;
+  document.getElementById('rename-modal').classList.remove('open');
+}
+
+async function saveRenameFromModal() {
+  const nameInput = document.getElementById('rename-modal-name-input');
+  const usernameInput = document.getElementById('rename-modal-username-input');
+  const msg = document.getElementById('rename-modal-msg');
+  const displayName = nameInput.value.trim();
+  const username = usernameInput.value.trim();
+  if (!renameModalStudentId) return;
+  if (!displayName) {
+    msg.textContent = 'Name is required';
+    msg.style.display = 'block';
+    return;
+  }
+  if (!username) {
+    msg.textContent = 'Username is required';
+    msg.style.display = 'block';
+    return;
+  }
+  msg.style.display = 'none';
+  const res = await adminFetch(`/admin/students/${renameModalStudentId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ displayName, username }),
+  });
+  const data = await res.json();
+  if (!data.success) {
+    msg.textContent = data.message || 'Could not save name';
+    msg.style.display = 'block';
+    return;
+  }
+  closeRenameModal();
+  const studentsMsg = document.getElementById('students-msg');
+  studentsMsg.className = 'success';
+  studentsMsg.textContent = `Renamed to ${data.student.display_name} (username: ${data.student.username}).`;
+  await loadStudents();
   if (passwordsPanelOpen) loadPasswordReport();
 }
 
@@ -498,6 +605,7 @@ function renderStudents() {
         <td>
           <a class="btn btn-secondary" href="admin-common-assets.html?view=content&studentId=${encodeURIComponent(s.id)}&classId=${encodeURIComponent(s.class_id || '')}">Content</a>
           <button class="btn-peek" onclick="openStudentPeek('${s.id}')">Peek</button>
+          <button class="btn-secondary" onclick="openRenameModal('${s.id}')">Rename</button>
           <button class="btn-secondary" onclick="openPasswordModal('${s.id}')">Set Password</button>
           <button class="btn-danger" onclick="deleteStudent('${s.id}')">Delete</button>
         </td>
@@ -569,6 +677,7 @@ window.deleteClass = deleteClass;
 window.deleteStudent = deleteStudent;
 window.resetPassword = resetPassword;
 window.openPasswordModal = openPasswordModal;
+window.openRenameModal = openRenameModal;
 window.openClassPasswordModal = openClassPasswordModal;
 window.setClassPasswordRequired = setClassPasswordRequired;
 

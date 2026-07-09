@@ -51,6 +51,18 @@ function generateUsername(displayName) {
   return base.slice(0, 40);
 }
 
+function normalizeUsername(input) {
+  const trimmed = String(input || '').trim();
+  if (!trimmed) {
+    throw new Error('Username is required');
+  }
+  const normalized = generateUsername(trimmed);
+  if (!/^[a-z0-9]+$/.test(normalized)) {
+    throw new Error('Username must use letters and numbers only');
+  }
+  return normalized;
+}
+
 function generateRandomPassword() {
   const crypto = require('crypto');
   const lowercase = 'abcdefghijklmnopqrstuvwxyz';
@@ -97,6 +109,7 @@ module.exports = {
   withClient,
   slugify,
   generateUsername,
+  normalizeUsername,
   generateRandomPassword,
   closePool,
 };

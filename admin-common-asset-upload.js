@@ -49,9 +49,44 @@
     if (typeof global.adminFetch !== 'function') {
       throw new Error('Admin session is not available');
     }
+    // Heavy FFmpeg work can make the server briefly unresponsive (proxy 502/503 or
+    // HTML error pages). Treat those as transient and keep polling; the job
+    // continues server-side.
+    let consecutiveFailures = 0;
+    const MAX_CONSECUTIVE_FAILURES = 40;
     for (let i = 0; i < 1200; i++) {
-      const res = await global.adminFetch(`/admin/common-assets/upload-jobs/${jobId}`);
-      const data = await res.json();
+      let data = null;
+      try {
+        const res = await global.adminFetch(`/admin/common-assets/upload-jobs/${jobId}`);
+        if (res.status === 404) {
+          throw Object.assign(
+            new Error(
+              'Upload job not found — the server may have restarted mid-processing. Refresh the asset list; the file may need to be uploaded again.'
+            ),
+            { fatal: true }
+          );
+        }
+        data = await res.json();
+      } catch (err) {
+        if (err && (err.fatal || err.code === 'AUTH_REQUIRED')) throw err;
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          throw new Error(
+            'Lost contact with the server while the video was processing. It may still finish — refresh the asset list in a minute to check.'
+          );
+        }
+        if (onUpdate) {
+          onUpdate({
+            success: true,
+            phase: 'transcoding',
+            transcodePercent: -1,
+            message: 'Server busy processing video… still waiting.',
+          });
+        }
+        await wait(3000);
+        continue;
+      }
+      consecutiveFailures = 0;
       if (!data.success) {
         throw new Error(data.message || 'Could not check upload status');
       }

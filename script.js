@@ -1566,11 +1566,38 @@ class HotspotEditor {
   }
 
   async _pollEditorLocalVideoCompressionJob(jobId) {
+    // Heavy FFmpeg work can make the server briefly unresponsive (proxy 502/503 or
+    // HTML error pages). Treat those as transient and keep polling.
+    let consecutiveFailures = 0;
+    const MAX_CONSECUTIVE_FAILURES = 40;
     for (let i = 0; i < 1200; i++) {
-      const res = await fetch(`/api/editor-video/compression-jobs/${encodeURIComponent(jobId)}`, {
-        credentials: 'include',
-      });
-      const data = await res.json();
+      let data = null;
+      try {
+        const res = await fetch(`/api/editor-video/compression-jobs/${encodeURIComponent(jobId)}`, {
+          credentials: 'include',
+        });
+        if (res.status === 404) {
+          throw Object.assign(
+            new Error('Video compression job not found — the server may have restarted. Please try again.'),
+            { fatal: true }
+          );
+        }
+        data = await res.json();
+      } catch (err) {
+        if (err && err.fatal) throw err;
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          throw new Error('Lost contact with the server while compressing the video. Please try again.');
+        }
+        this._updateEditorVideoCompressionProgress({
+          phase: 'transcoding',
+          transcodePercent: 0,
+          message: 'Server busy processing video… still waiting.',
+        });
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        continue;
+      }
+      consecutiveFailures = 0;
       if (!data.success) throw new Error(data.message || 'Could not check video compression status');
       this._updateEditorVideoCompressionProgress(data);
       if (data.phase === 'done') return data.asset;

@@ -61,10 +61,13 @@ function renderAssets() {
   list.innerHTML = items
     .map((asset) => {
       const tagChips = window.AssetTagsUI ? AssetTagsUI.renderTagChips(asset.tags) : '';
-      const visibilityBadge =
-        asset.visibility === 'admin'
-          ? '<span class="asset-visibility-badge" title="Admin-only — not yet shared with students">Admin only</span>'
-          : '';
+      const isAdminOnly = asset.visibility === 'admin';
+      const visibilityBadge = isAdminOnly
+        ? '<span class="asset-visibility-badge" title="Admin-only — not yet shared with students">Admin only</span>'
+        : '<span class="asset-visibility-badge is-shared" title="Visible to team members and students in Shared Online Assets">Shared</span>';
+      const visibilityButton = isAdminOnly
+        ? `<button class="btn-share" data-action="share" data-name="${asset.name}">Share with students</button>`
+        : `<button class="btn-unshare" data-action="unshare" data-name="${asset.name}">Make admin-only</button>`;
       return `
     <div class="asset-card" data-name="${asset.name}">
       ${CommonAssetsPreview.renderGridThumb(asset.category, asset)}
@@ -75,6 +78,7 @@ function renderAssets() {
         <button class="btn-preview" data-action="preview" data-name="${asset.name}">Preview</button>
         <button class="btn-copy" data-action="copy" data-name="${asset.name}">Copy URL</button>
         <button class="btn-tags-edit" data-action="tags" data-name="${asset.name}">Edit Tags</button>
+        ${visibilityButton}
         <button class="btn-delete" data-action="delete" data-name="${asset.name}">Delete</button>
       </div>
     </div>
@@ -136,6 +140,48 @@ async function editAssetTags(asset) {
       return true;
     },
   });
+}
+
+async function shareAssetWithStudents(asset) {
+  if (
+    !confirm(
+      `Share "${asset.name}" with students? It will appear in Shared Online Assets for team members and students.`
+    )
+  ) {
+    return;
+  }
+  const cat = asset.category || activeCategory;
+  const id = `${cat}::${asset.name}`;
+  const res = await adminFetch(`/admin/content/admin_asset/${encodeURIComponent(id)}/share`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category: cat, filename: asset.name }),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Share failed');
+  showToast('Asset shared with students');
+  await loadAssets();
+}
+
+async function makeAssetAdminOnly(asset) {
+  if (
+    !confirm(
+      `Move "${asset.name}" to the admin library? Students will no longer see it in Shared Online Assets.`
+    )
+  ) {
+    return;
+  }
+  const cat = asset.category || activeCategory;
+  const id = `${cat}::${asset.name}`;
+  const res = await adminFetch(`/admin/content/common_asset/${encodeURIComponent(id)}/unshare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category: cat, filename: asset.name }),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Move failed');
+  showToast('Asset is now admin-only');
+  await loadAssets();
 }
 
 async function deleteAsset(name) {
@@ -263,6 +309,8 @@ function setupAssetList() {
       if (btn.dataset.action === 'preview') openPreview(asset);
       if (btn.dataset.action === 'copy') await copyAssetUrl(asset);
       if (btn.dataset.action === 'tags') await editAssetTags(asset);
+      if (btn.dataset.action === 'share') await shareAssetWithStudents(asset);
+      if (btn.dataset.action === 'unshare') await makeAssetAdminOnly(asset);
       if (btn.dataset.action === 'delete') await deleteAsset(name);
     } catch (err) {
       if (err.code === 'AUTH_REQUIRED') {

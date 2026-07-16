@@ -168,8 +168,9 @@ async function refreshVideoPipelineBanner() {
       banner.style.background = '#fff3cd';
       banner.style.color = '#856404';
       banner.style.border = '1px solid #ffeeba';
-      banner.textContent =
-        'Video compression is OFF on this server (VIDEO_TRANSCODE_ENABLED is not true). Uploads store the original file. Enable the flag in Render Environment and restart the service to compress 360° videos on upload.';
+      banner.textContent = data.ffmpegAvailable
+        ? 'Video compression is OFF (VIDEO_TRANSCODE_ENABLED is not true). MP4/WebM uploads store the original file. QuickTime (.mov) uploads are still converted to MP4 when FFmpeg is available.'
+        : 'Video compression is OFF on this server (VIDEO_TRANSCODE_ENABLED is not true). Uploads store the original file. .mov uploads require FFmpeg and will be rejected until it is available.';
       return;
     }
     if (!data.ffmpegAvailable) {
@@ -177,14 +178,14 @@ async function refreshVideoPipelineBanner() {
       banner.style.color = '#721c24';
       banner.style.border = '1px solid #f5c6cb';
       banner.textContent =
-        'VIDEO_TRANSCODE_ENABLED is on, but FFmpeg is unavailable on this server. Uploads will store the original file.';
+        'VIDEO_TRANSCODE_ENABLED is on, but FFmpeg is unavailable on this server. MP4/WebM uploads store the original file; .mov uploads will fail until FFmpeg is available.';
       return;
     }
     banner.style.background = '#d4edda';
     banner.style.color = '#155724';
     banner.style.border = '1px solid #c3e6cb';
     banner.textContent =
-      'Video compression is ON. New 360° video uploads are transcoded on the server before storage.';
+      'Video compression is ON. New 360° video uploads (including .mov → MP4) are transcoded on the server before storage.';
   } catch (_) {
     banner.style.display = 'none';
   }

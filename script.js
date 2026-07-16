@@ -1361,8 +1361,44 @@ class HotspotEditor {
     return Boolean(this._videoPipelineConfig?.videoSceneServerUpload);
   }
 
-  _shouldUseEditorLocalVideoCompression() {
+  _shouldUseEditorLocalVideoCompression(file) {
+    if (file && this._isMovVideoFile(file)) {
+      return Boolean(
+        this._videoPipelineConfig?.editorLocalMovConversion ||
+          this._videoPipelineConfig?.editorLocalVideoCompression
+      );
+    }
     return Boolean(this._videoPipelineConfig?.editorLocalVideoCompression);
+  }
+
+  _isMovVideoFile(file) {
+    if (!file) return false;
+    const name = String(file.name || '').toLowerCase();
+    const type = String(file.type || '').toLowerCase();
+    return name.endsWith('.mov') || type === 'video/quicktime' || type.includes('quicktime');
+  }
+
+  _isSupportedLocalVideoFile(file) {
+    if (!file) return false;
+    const name = String(file.name || '').toLowerCase();
+    const type = String(file.type || '').toLowerCase();
+    const validTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+    const validExtensions = ['.mp4', '.webm', '.mov'];
+    const hasValidExt = validExtensions.some((ext) => name.endsWith(ext));
+    if (type && validTypes.includes(type)) return true;
+    // Some browsers leave type empty for .mov; fall back to extension.
+    if (!type || type === 'application/octet-stream') return hasValidExt;
+    return type.startsWith('video/') && hasValidExt;
+  }
+
+  _assertMovConversionAvailable(file) {
+    if (!this._isMovVideoFile(file)) return true;
+    if (this._shouldUseEditorLocalVideoCompression(file)) return true;
+    alert(
+      'QuickTime (.mov) files must be converted to MP4 on the server.\n\n' +
+        'Video conversion is not available right now. Export/convert the video to MP4 or WebM, then try again.'
+    );
+    return false;
   }
 
   get _videoExportUrlModeEnabled() {
@@ -1550,7 +1586,14 @@ class HotspotEditor {
       await this.loadVideoPipelineConfig();
     }
 
-    if (this._shouldUseEditorLocalVideoCompression()) {
+    const isMov = this._isMovVideoFile(file);
+    if (isMov && !this._shouldUseEditorLocalVideoCompression(file)) {
+      throw new Error(
+        'QuickTime (.mov) files require server conversion to MP4, which is not available.'
+      );
+    }
+
+    if (this._shouldUseEditorLocalVideoCompression(file)) {
       try {
         this._showEditorVideoProcessingProgress(file);
         const upload = await this._uploadEditorLocalVideoForCompression(file);
@@ -1584,7 +1627,14 @@ class HotspotEditor {
             };
           }
         }
+        if (isMov) {
+          throw new Error('QuickTime (.mov) conversion did not return a playable MP4.');
+        }
       } catch (err) {
+        if (isMov) {
+          this._hideEditorVideoProcessingProgress();
+          throw err;
+        }
         console.warn('Editor video compression failed; storing original video', err);
       } finally {
         this._hideEditorVideoProcessingProgress();
@@ -1608,8 +1658,14 @@ class HotspotEditor {
       await this.loadVideoPipelineConfig();
     }
 
-    if (this._shouldUseEditorLocalVideoCompression()) {
+    if (this._shouldUseEditorLocalVideoCompression(file)) {
       return this.processLocalVideoFileForEditor({ file, storageKey: storageKeyFinal });
+    }
+
+    if (this._isMovVideoFile(file)) {
+      throw new Error(
+        'QuickTime (.mov) files require server conversion to MP4, which is not available.'
+      );
     }
 
     if (this._shouldUseSceneVideoServerUpload() && (await this._isStudentAuthenticated())) {
@@ -5622,6 +5678,7 @@ class HotspotEditor {
           }
         } catch (err) {
           console.warn('[VideoHotspot] Failed to save video to IndexedDB', err);
+          alert(err.message || 'Failed to process video file.');
         }
       })();
     }
@@ -8043,7 +8100,7 @@ class HotspotEditor {
             </div>
             <div>
               <div style="font-size:12px; color:#ccc; margin-bottom:6px;">Replace Video</div>
-              <input id="edit-video-file" type="file" accept="video/mp4,video/webm" style="display:block; margin-bottom:6px; color:#ddd;" />
+              <input id="edit-video-file" type="file" accept="video/mp4,video/webm,video/quicktime,.mov" style="display:block; margin-bottom:6px; color:#ddd;" />
               <input id="edit-video-url" type="url" placeholder="https://example.com/video.mp4" value="${
                 typeof hotspot.video === 'string' && !hotspot.video.startsWith('blob:')
                   ? this._escapeAttr(hotspot.video)
@@ -8746,6 +8803,7 @@ class HotspotEditor {
                 }
               } catch (err) {
                 console.warn('[VideoHotspot] Edit save to IDB failed', err);
+                alert(err.message || 'Failed to process video file.');
               }
             })();
           } else {
@@ -17893,28 +17951,31 @@ document.addEventListener('DOMContentLoaded', () => {
       if (choose) {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = 'video/mp4,video/webm';
+        input.accept = 'video/mp4,video/webm,video/quicktime,.mov';
         input.onchange = async (e) => {
           const file = e.target.files && e.target.files[0];
           if (!file) return;
-          if (!file.type.startsWith('video/')) {
-            alert('Please select a valid MP4/WebM video.');
+          if (!this._isSupportedLocalVideoFile(file)) {
+            alert('Please select a valid MP4, WebM, or MOV video.');
             return;
           }
-          const key = scene.videoStorageKey || this.currentScene;
-          await this.saveVideoToIDB(key, file);
+          if (!this._assertMovConversionAvailable(file)) return;
           try {
-            const url = URL.createObjectURL(file);
+            const key = scene.videoStorageKey || this.currentScene;
+            const processed = await this.processLocalVideoFileForEditor({ file, storageKey: key });
             scene.type = 'video';
-            scene.videoSrc = url;
-            scene.videoStorageKey = key;
-            scene.videoFileName = file.name;
+            scene.videoSrc = processed.videoSrc;
+            scene.videoStorageKey = processed.videoStorageKey || key;
+            scene.videoFileName = processed.videoFileName || file.name;
             scene.videoVolume = scene.videoVolume || 0.5;
             if (scene.muteVideoAudio === undefined) scene.muteVideoAudio = true;
             this.saveScenesData();
             // reload scene now that source is available
             this.switchToScene(this.currentScene);
-          } catch (_) {}
+          } catch (err) {
+            console.error('Failed to restore video file', err);
+            alert(err.message || 'Failed to load video file.');
+          }
         };
         input.click();
       } else {
@@ -18560,7 +18621,7 @@ document.addEventListener('DOMContentLoaded', () => {
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
             ">🎥 Upload Video File</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-              MP4/WebM • 360° equirectangular format
+              MP4/WebM/MOV • 360° equirectangular format
             </div>
           </div>
           <div style="margin: 15px 0;">
@@ -18797,17 +18858,18 @@ document.addEventListener('DOMContentLoaded', () => {
   addSceneVideoFromFile(name) {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'video/mp4,video/webm';
+    input.accept = 'video/mp4,video/webm,video/quicktime,.mov';
 
     input.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
       // Validate file type
-      if (!file.type.startsWith('video/')) {
-        alert('Please select a valid video file (MP4 or WebM).');
+      if (!this._isSupportedLocalVideoFile(file)) {
+        alert('Please select a valid video file (MP4, WebM, or MOV).');
         return;
       }
+      if (!this._assertMovConversionAvailable(file)) return;
 
       // Warn if file is large
       if (file.size > 200 * 1024 * 1024) {
@@ -18862,7 +18924,7 @@ document.addEventListener('DOMContentLoaded', () => {
         this.finalizeNewScene(sceneId, name);
       } catch (err) {
         console.error('Failed to add scene video', err);
-        alert('Failed to add video scene.');
+        alert(err.message || 'Failed to add video scene.');
       }
     });
 
@@ -19138,28 +19200,34 @@ document.addEventListener('DOMContentLoaded', () => {
   pickSceneVideoFromFile(sceneId) {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'video/mp4,video/webm';
+    input.accept = 'video/mp4,video/webm,video/quicktime,.mov';
     input.onchange = async (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
-      if (!file.type.startsWith('video/')) {
-        alert('Please select a valid MP4/WebM video.');
+      if (!this._isSupportedLocalVideoFile(file)) {
+        alert('Please select a valid MP4, WebM, or MOV video.');
         return;
       }
-      const storageKey = sceneId === 'scene1' ? 'video_scene1' : `video_${sceneId}`;
-      await this.saveVideoToIDB(storageKey, file);
-      const url = URL.createObjectURL(file);
-      const sc = this.scenes[sceneId] || {};
-      sc.type = 'video';
-      sc.videoSrc = url;
-      sc.videoStorageKey = storageKey;
-      sc.videoFileName = file.name;
-      sc.videoVolume = sc.videoVolume || 0.5;
-      if (sc.muteVideoAudio === undefined) sc.muteVideoAudio = true;
-      this.clearCommonAssetProvenance(sc);
-      this.scenes[sceneId] = sc;
-      this.saveScenesData();
-      this.switchToScene(sceneId);
+      if (!this._assertMovConversionAvailable(file)) return;
+      try {
+        const storageKey = sceneId === 'scene1' ? 'video_scene1' : `video_${sceneId}`;
+        const processed = await this.processLocalVideoFileForScene({ file, storageKey });
+        const sc = this.scenes[sceneId] || {};
+        sc.type = 'video';
+        sc.videoSrc = processed.videoSrc;
+        sc.videoStorageKey = processed.videoStorageKey || storageKey;
+        sc.videoFileName = processed.videoFileName || file.name;
+        sc.videoVolume = sc.videoVolume || 0.5;
+        if (sc.muteVideoAudio === undefined) sc.muteVideoAudio = true;
+        this.clearCommonAssetProvenance(sc);
+        this.applyHostedVideoProvenance(sc, processed);
+        this.scenes[sceneId] = sc;
+        this.saveScenesData();
+        this.switchToScene(sceneId);
+      } catch (err) {
+        console.error('Failed to pick scene video', err);
+        alert(err.message || 'Failed to load video file.');
+      }
     };
     input.click();
   }
@@ -19186,7 +19254,7 @@ document.addEventListener('DOMContentLoaded', () => {
             border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
           ">📁 Upload Video File</button>
           <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-            MP4/WebM from your computer
+            MP4/WebM/MOV from your computer
           </div>
         </div>
 
@@ -19317,7 +19385,7 @@ document.addEventListener('DOMContentLoaded', () => {
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
             ">🎥 Upload Video File</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-              MP4/WebM • 360° equirectangular format
+              MP4/WebM/MOV • 360° equirectangular format
             </div>
           </div>
           <div style="margin: 15px 0;">
@@ -19470,29 +19538,19 @@ document.addEventListener('DOMContentLoaded', () => {
     dialog.querySelector('#upload-video-file').onclick = () => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'video/mp4,video/webm';
+      input.accept = 'video/mp4,video/webm,video/quicktime,.mov';
       input.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         // Validate file type - check both MIME type and extension
-        const validVideoTypes = ['video/mp4', 'video/webm'];
-        const validExtensions = ['.mp4', '.webm'];
-        const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-
-        if (!file.type.startsWith('video/') || !validVideoTypes.includes(file.type.toLowerCase())) {
+        if (!this._isSupportedLocalVideoFile(file)) {
           alert(
-            "❌ Can't be selected as it is not a video file.\n\nPlease select a valid video file (MP4 or WebM only)."
+            "❌ Can't be selected as it is not a video file.\n\nPlease select a valid video file (MP4, WebM, or MOV)."
           );
           return;
         }
-
-        if (!validExtensions.includes(fileExtension)) {
-          alert(
-            "❌ Can't be selected as it is not a video file.\n\nOnly MP4 and WebM formats are supported."
-          );
-          return;
-        }
+        if (!this._assertMovConversionAvailable(file)) return;
 
         // Warn if file is large
         if (file.size > 200 * 1024 * 1024) {

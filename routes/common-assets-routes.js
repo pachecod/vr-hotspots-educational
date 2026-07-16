@@ -31,7 +31,13 @@ const {
   parseTagSortParam,
 } = require('../lib/asset-tags');
 const { registerSiteAsset, listAdminAssetFilesFromB2 } = require('../lib/site-assets');
-const { prepareVideoForStorage, cleanupTempFiles, VIDEO_CATEGORY } = require('../lib/video-pipeline');
+const {
+  prepareVideoForStorage,
+  cleanupTempFiles,
+  VIDEO_CATEGORY,
+  isMovUpload,
+  isVideoCategory,
+} = require('../lib/video-pipeline');
 const { isTranscodeEnabledFor } = require('../lib/video-config');
 const { isFfmpegAvailable } = require('../lib/video-transcode');
 const {
@@ -213,12 +219,11 @@ function decorateAdminLibraryAssetUrls(req, assets) {
   return assets;
 }
 
-function shouldAsyncTranscodeCommonVideo(category) {
-  return (
-    category === VIDEO_CATEGORY &&
-    isTranscodeEnabledFor('admin-common') &&
-    isFfmpegAvailable()
-  );
+function shouldAsyncTranscodeCommonVideo(category, originalName) {
+  if (!isFfmpegAvailable()) return false;
+  // .mov must always convert to MP4 before storage (same FFmpeg path as compression).
+  if (isMovUpload(originalName) && isVideoCategory(category)) return true;
+  return category === VIDEO_CATEGORY && isTranscodeEnabledFor('admin-common');
 }
 
 function parseShareWithStudents(body) {
@@ -463,7 +468,7 @@ function registerCommonAssetRoutes(app, upload) {
       const shareWithStudents = parseShareWithStudents(req.body);
       const visibility = shareWithStudents ? 'shared' : 'admin';
 
-      if (shouldAsyncTranscodeCommonVideo(validation.category)) {
+      if (shouldAsyncTranscodeCommonVideo(validation.category, req.file.originalname)) {
         const job = createUploadJob({
           fileName: req.file.originalname,
           category: validation.category,

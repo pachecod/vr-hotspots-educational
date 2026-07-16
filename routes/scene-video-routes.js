@@ -12,7 +12,7 @@ const {
 const { assertCanUploadAsset } = require('../services/usage-quota');
 const { getVideoPipelineConfig } = require('../lib/video-config');
 const { getAnalyticsConfig } = require('../lib/analytics-config');
-const { prepareVideoForStorage, cleanupTempFiles, VIDEO_CATEGORY } = require('../lib/video-pipeline');
+const { prepareVideoForStorage, cleanupTempFiles, VIDEO_CATEGORY, isMovUpload } = require('../lib/video-pipeline');
 const { buildStudentAssetPath } = require('./student-assets-routes');
 const { isTranscodeEnabledFor } = require('../lib/video-config');
 const { isFfmpegAvailable } = require('../lib/video-transcode');
@@ -63,8 +63,11 @@ function buildSceneVideoFilename(originalName) {
   return `scene-${Date.now()}.${ext}`;
 }
 
-function canCompressEditorLocalVideo() {
-  return isTranscodeEnabledFor('editor-local') && isFfmpegAvailable();
+function canCompressEditorLocalVideo(originalName) {
+  if (!isFfmpegAvailable()) return false;
+  // Always convert .mov → MP4 for browser playback, using the same compression pipeline.
+  if (originalName && isMovUpload(originalName)) return true;
+  return isTranscodeEnabledFor('editor-local');
 }
 
 async function runEditorLocalVideoCompressionJob(jobId, { tempPath, originalName, originalSize }) {
@@ -123,6 +126,8 @@ function registerSceneVideoRoutes(app, upload) {
         videoExportUrlMode: videoPipeline.exportUrlMode,
         transcodeEnabled: videoPipeline.transcodeEnabled,
         editorLocalVideoCompression: canCompressEditorLocalVideo(),
+        // .mov conversion uses the same FFmpeg path; available whenever the binary is present.
+        editorLocalMovConversion: isFfmpegAvailable(),
       },
       analytics: {
         enabled: analytics.enabled,
@@ -195,10 +200,12 @@ function registerSceneVideoRoutes(app, upload) {
     const tempPath = req.file && req.file.path;
     const cleanupPaths = tempPath ? [tempPath] : [];
     try {
-      if (!canCompressEditorLocalVideo()) {
+      if (!canCompressEditorLocalVideo(req.file.originalname)) {
         return res.status(409).json({
           success: false,
-          message: 'Editor video compression is not enabled on this server.',
+          message: isMovUpload(req.file.originalname)
+            ? 'QuickTime (.mov) conversion is not available on this server (FFmpeg missing).'
+            : 'Editor video compression is not enabled on this server.',
         });
       }
       if (!req.file) {

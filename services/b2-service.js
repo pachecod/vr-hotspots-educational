@@ -849,7 +849,9 @@ class B2Service {
     if (!this.commonAssetsPublicAccess) {
       return this.getFileInfo(remotePath);
     }
-    return this._getFileInfoInBucket(this.commonAssetsBucketId, remotePath);
+    const publicInfo = await this._getFileInfoInBucket(this.commonAssetsBucketId, remotePath);
+    if (publicInfo) return publicInfo;
+    return this.getFileInfo(remotePath);
   }
 
   async deleteCommonAsset(remotePath) {
@@ -877,7 +879,22 @@ class B2Service {
     if (!this.commonAssetsPublicAccess) {
       return this.downloadStream(remotePath, options);
     }
-    return this._downloadStreamFromBucket(this.commonAssetsBucketName, remotePath, options);
+    try {
+      const result = await this._downloadStreamFromBucket(
+        this.commonAssetsBucketName,
+        remotePath,
+        options
+      );
+      if (result.statusCode !== 404) {
+        return result;
+      }
+    } catch (err) {
+      const status = err && err.response && err.response.status;
+      if (status !== 404) {
+        throw err;
+      }
+    }
+    return this.downloadStream(remotePath, options);
   }
 
   async syncLegacyCommonAssetsToPublicBucket() {
@@ -887,26 +904,35 @@ class B2Service {
     await this.ensureCommonAssetsBucket();
     if (!this.commonAssetsPublicAccess) return;
 
-    const prefix = 'common-assets/';
-    let privateFiles = [];
+    const migrationPrefixes = [
+      'common-assets/',
+      'admin-assets/',
+      'playground-tours/',
+      'playground-thumbs/',
+    ];
+    let legacyFiles = [];
     try {
-      privateFiles = await this._listFilesInBucket(this.bucketId, prefix);
+      for (const prefix of migrationPrefixes) {
+        const privateFiles = await this._listFilesInBucket(this.bucketId, prefix);
+        for (const file of privateFiles) {
+          const name = file.fileName || '';
+          if (!name.startsWith(prefix) || name.length <= prefix.length) continue;
+          if (prefix === 'common-assets/') {
+            const rest = name.slice(prefix.length);
+            const parts = rest.split('/');
+            if (parts.length !== 2 || !parts[0] || !parts[1]) continue;
+          }
+          legacyFiles.push(file);
+        }
+      }
     } catch (err) {
-      console.warn('⚠️ Could not scan private bucket for legacy common assets:', err.message);
+      console.warn('⚠️ Could not scan private bucket for legacy public-bucket files:', err.message);
       return;
     }
 
-    const legacyFiles = privateFiles.filter((file) => {
-      const name = file.fileName || '';
-      if (!name.startsWith('common-assets/')) return false;
-      const rest = name.slice('common-assets/'.length);
-      const parts = rest.split('/');
-      return parts.length === 2 && parts[0] && parts[1];
-    });
-
     if (legacyFiles.length === 0) return;
 
-    console.log(`ℹ️  Migrating ${legacyFiles.length} legacy common asset(s) to public bucket...`);
+    console.log(`ℹ️  Migrating ${legacyFiles.length} legacy file(s) to public bucket...`);
     const os = require('os');
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'b2-common-assets-'));
 
@@ -928,9 +954,9 @@ class B2Service {
           fs.unlinkSync(tempPath);
         } catch (_) {}
       }
-      console.log('✅ Legacy common assets migration complete');
+      console.log('✅ Legacy public-bucket migration complete');
     } catch (err) {
-      console.warn('⚠️ Legacy common assets migration failed:', err.message);
+      console.warn('⚠️ Legacy public-bucket migration failed:', err.message);
     } finally {
       try {
         fs.rmSync(tempDir, { recursive: true, force: true });

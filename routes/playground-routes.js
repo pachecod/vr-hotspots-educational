@@ -28,6 +28,18 @@ function playgroundBundleKey(slug) {
   return `playground-tours/${slug}.zip`;
 }
 
+async function streamTemplateBundle(res, bundleKey, downloadName) {
+  const { stream, statusCode } = await b2Service.downloadCommonAssetStream(bundleKey);
+  if (statusCode === 404) {
+    res.status(404).json({ success: false, message: 'Bundle not found' });
+    return;
+  }
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  stream.pipe(res);
+}
+
 function validateZipHasConfig(localPath) {
   const zip = new AdmZip(localPath);
   return zip.getEntry('config.json') != null;
@@ -121,14 +133,7 @@ function registerPlaygroundRoutes(app) {
         return res.status(404).json({ success: false, message: 'Bundle not found' });
       }
       await b2Service.ensureCommonAssetsBucket();
-      if (b2Service.commonAssetsPublicAccess) {
-        const url = b2Service.getCommonAssetPublicUrl(template.bundle_b2_key);
-        return res.redirect(302, url);
-      }
-      const streamResult = await b2Service.downloadCommonAssetStream(template.bundle_b2_key);
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="${template.slug}.zip"`);
-      streamResult.stream.pipe(res);
+      await streamTemplateBundle(res, template.bundle_b2_key, `${template.slug}.zip`);
     } catch (err) {
       console.error('Playground bundle download error:', err);
       res.status(500).json({ success: false, message: 'Could not download bundle' });
@@ -268,4 +273,9 @@ function registerPlaygroundRoutes(app) {
   });
 }
 
-module.exports = { registerPlaygroundRoutes, playgroundBundleKey, validateZipHasConfig };
+module.exports = {
+  registerPlaygroundRoutes,
+  playgroundBundleKey,
+  validateZipHasConfig,
+  streamTemplateBundle,
+};

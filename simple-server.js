@@ -360,6 +360,8 @@ app.use(rejectLocalTestUserWrites);
 
 function protectAdminRoutes(req, res, next) {
   if (!req.path.startsWith('/admin')) return next();
+  // Static admin UI files live at the site root (/admin-nav.js), not under /admin/.
+  if (/^\/admin-[a-z0-9-]+\.(html|js|css)$/i.test(req.path)) return next();
   if (req.method === 'POST' && req.path === '/admin/login') return next();
   if (req.method === 'POST' && req.path === '/admin/logout') return next();
   if (req.method === 'GET' && (req.path === '/admin' || req.path === '/admin/')) return next();
@@ -368,6 +370,10 @@ function protectAdminRoutes(req, res, next) {
 }
 
 app.use(protectAdminRoutes);
+
+app.get('/admin/', (req, res) => {
+  res.redirect(301, '/admin');
+});
 
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));

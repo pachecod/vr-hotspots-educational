@@ -205,6 +205,6 @@ For classroom workflows (grading, peek, asset tagging, flat page editor), see [U
 
 - **Free tier** services spin down after inactivity; the first request may take ~30s.
 - **PostgreSQL** stores teams/classes, team members/students, submissions metadata, billing, snippets, templates, and editor settings (including `ridey_version`) — survives redeploys.
-- **Ephemeral disk:** Local `hosted-projects/` resets on redeploy; **re-host** student projects from Submissions after redeploy if you use **Host**. Student ZIPs in B2 and PostgreSQL data persist.
+- **Hosted projects:** Live `/hosted/*` URLs are stored in the **public B2 bucket** under `hosted-projects/` and proxied by the app. They **survive redeploy** without re-hosting. On startup, any legacy copies still on local disk are migrated to B2 automatically.
 - **Flat editor bundle:** `flat-editor.bundle.js` is committed to the repo. Rebuild with `npm run build:flat-editor` after editing `flat-editor/` sources.
 - **HTTPS:** Render provides TLS automatically — use `https://` URLs when sharing links.

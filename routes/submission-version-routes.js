@@ -12,7 +12,8 @@ const {
 } = require('../student-auth');
 const { assertCanSubmit } = require('../services/usage-quota');
 const { listLegacyInbox, mergeB2OrphansIntoInbox } = require('../lib/legacy-submissions');
-const { resolveHostedProjectUrls, enrichInboxHosting } = require('../services/hosted-project-urls');
+const { resolveHostedProjectUrls, resolveHostedProjectUrlsAsync, enrichInboxHosting } = require('../services/hosted-project-urls');
+const { uploadHostedDirectory } = require('../lib/hosted-b2-storage');
 
 function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe }) {
   app.post('/api/student/projects/prepare-upload', async (req, res) => {
@@ -380,21 +381,20 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       return res.status(400).json({ error: 'Invalid urlPath' });
     }
     let tempPath = null;
+    let tempExtractDir = null;
     try {
       const version = await projectVersionsDb.getVersionById(req.params.versionId);
       if (!version) {
         return res.status(404).json({ success: false, message: 'Version not found' });
       }
       tempPath = path.join('temp-uploads', `host_${Date.now()}_${version.fileName}`);
-      const hostedDir = path.join('hosted-projects', urlPath);
+      tempExtractDir = path.join('temp-uploads', `host_extract_${Date.now()}_${urlPath}`);
       await b2Service.downloadFile(version.b2Path, tempPath);
       assertValidZipFile(tempPath);
-      if (fs.existsSync(hostedDir)) {
-        fs.rmSync(hostedDir, { recursive: true, force: true });
-      }
-      fs.mkdirSync(hostedDir, { recursive: true });
-      await extractZipToDirSafe(tempPath, hostedDir);
-      const urls = resolveHostedProjectUrls(urlPath, hostedDir);
+      fs.mkdirSync(tempExtractDir, { recursive: true });
+      await extractZipToDirSafe(tempPath, tempExtractDir);
+      await uploadHostedDirectory(tempExtractDir, urlPath);
+      const urls = await resolveHostedProjectUrlsAsync(urlPath);
       await projectVersionsDb.updateVersionHosting(version.id, {
         hostedPath: urlPath,
         hostedUrl: urls.tourUrl,
@@ -412,6 +412,11 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       if (tempPath) {
         try {
           if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch (_) {}
+      }
+      if (tempExtractDir) {
+        try {
+          if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
         } catch (_) {}
       }
     }

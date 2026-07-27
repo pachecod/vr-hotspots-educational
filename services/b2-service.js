@@ -836,6 +836,60 @@ class B2Service {
     return this._uploadFileToBucket(localPath, remotePath, contentType, this.commonAssetsBucketId);
   }
 
+  async uploadCommonAssetBuffer(buffer, remotePath, contentType = 'application/octet-stream') {
+    await this.ensureCommonAssetsBucket();
+    this.invalidateCommonAssetsCaches();
+    if (!this.commonAssetsPublicAccess) {
+      return this.uploadBuffer(buffer, remotePath, contentType);
+    }
+    await this.authorize();
+    const uploadUrlResponse = await this._withReauthRetry('getUploadUrl', async () =>
+      this.b2.getUploadUrl({ bucketId: this.commonAssetsBucketId })
+    );
+    const uploadResponse = await this._withReauthRetry('uploadBuffer', async () =>
+      this.b2.uploadFile({
+        uploadUrl: uploadUrlResponse.data.uploadUrl,
+        uploadAuthToken: uploadUrlResponse.data.authorizationToken,
+        fileName: remotePath,
+        data: buffer,
+        contentLength: buffer.length,
+        hash: 'do_not_verify',
+        mime: contentType,
+      })
+    );
+    console.log(`✅ Uploaded buffer to B2 (${this.commonAssetsBucketId}): ${remotePath}`);
+    return uploadResponse.data;
+  }
+
+  async deleteCommonAssetPrefix(prefix) {
+    await this.ensureCommonAssetsBucket();
+    this.invalidateCommonAssetsCaches();
+    const bucketId = this.commonAssetsPublicAccess
+      ? this.commonAssetsBucketId
+      : this.bucketId;
+    if (!bucketId) return 0;
+    let deleted = 0;
+    let startFileName = prefix;
+    for (;;) {
+      const files = await this._listFilesInBucket(bucketId, prefix, {
+        startFileName,
+        maxFileCount: 1000,
+      });
+      if (!files.length) break;
+      for (const file of files) {
+        const remotePath = file.fileName || '';
+        if (!remotePath.startsWith(prefix)) continue;
+        await this._deleteFileInBucket(bucketId, remotePath);
+        deleted++;
+      }
+      const last = files[files.length - 1];
+      if (!last || files.length < 1000) break;
+      startFileName = last.fileName;
+      if (startFileName === prefix && files.length === 1) break;
+    }
+    return deleted;
+  }
+
   async listCommonAssetFiles(prefix = '') {
     await this.ensureCommonAssetsBucket();
     if (!this.commonAssetsPublicAccess) {
@@ -909,6 +963,7 @@ class B2Service {
       'admin-assets/',
       'playground-tours/',
       'playground-thumbs/',
+      'hosted-projects/',
     ];
     let legacyFiles = [];
     try {

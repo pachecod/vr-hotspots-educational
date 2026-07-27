@@ -15,10 +15,13 @@ const unzipper = require('unzipper');
 const archiver = require('archiver');
 const AdmZip = require('adm-zip');
 const b2Service = require('./services/b2-service');
-const { resolveHostedProjectUrls } = require('./services/hosted-project-urls');
+const { resolveHostedProjectUrls, resolveHostedProjectUrlsAsync } = require('./services/hosted-project-urls');
+const { uploadHostedDirectory, hostedProjectExists, readHostedFileUtf8, uploadHostedUtf8, materializeHostedProjectToDir, getHostedProjectUpdatedAt, listHostedProjectPaths, deleteHostedProject, validateHostedPath } = require('./lib/hosted-b2-storage');
 const { createAnalyticsHtmlMiddleware } = require('./lib/analytics-html-inject');
 const { createHostedQrMiddleware } = require('./lib/hosted-qr-middleware');
 const { createGuestPreviewExpiryGuard, sweepExpiredGuestPreviews } = require('./lib/guest-preview-cleanup');
+const { createHostedStaticHandler } = require('./lib/hosted-serve');
+const { syncLocalHostedProjectsToB2 } = require('./lib/hosted-b2-storage');
 const os = require('os');
 const { requireAdmin } = require('./admin-auth');
 const { registerCommonAssetRoutes } = require('./routes/common-assets-routes');
@@ -342,14 +345,9 @@ function getServerBaseUrlForHosted(req) {
   return `${proto}://${req.get('host')}`;
 }
 
-app.use(
-  createGuestPreviewExpiryGuard({
-    hostedDir: path.join(__dirname, 'hosted-projects'),
-  })
-);
+app.use(createGuestPreviewExpiryGuard());
 app.use(
   createHostedQrMiddleware({
-    hostedDir: path.join(__dirname, 'hosted-projects'),
     getServerBaseUrl: getServerBaseUrlForHosted,
   })
 );
@@ -407,6 +405,7 @@ if (process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_BUCKET_NAM
   b2Service
     .ensureCommonAssetsBucket()
     .then(() => b2Service.syncLegacyCommonAssetsToPublicBucket())
+    .then(() => syncLocalHostedProjectsToB2())
     .catch((err) => {
       console.warn('⚠️ Common assets bucket setup skipped:', err.message);
     });
@@ -1241,8 +1240,8 @@ app.post('/github/push-zip-upload', upload.single('project'), async (req, res) =
   }
 });
 
-// Serve hosted student projects with the same anti-stale headers
-app.use('/hosted', express.static('hosted-projects', staticNoStaleOptions));
+// Serve hosted student projects from B2 (public bucket) via app proxy
+app.use('/hosted', createHostedStaticHandler());
 
 // Collect student project submissions (auth required when DB/B2/production)
 app.post('/submit-project', requireAuthForCloudWrites, upload.single('project'), async (req, res) => {
@@ -1543,7 +1542,16 @@ app.post('/fetch-video', requireAuthForVideoFetch, express.json(), async (req, r
   });
 });
 
-// Admin: Save updated config.json back to hosted project (with backup)
+async function enrichSubmissionHostingMeta(submission) {
+  try {
+    const hostedPath = submission.hostedPath;
+    if (hostedPath && typeof hostedPath === 'string') {
+      const updatedISO = await getHostedProjectUpdatedAt(hostedPath);
+      if (updatedISO) submission.updatedAt = updatedISO;
+    }
+  } catch (_) {}
+  return submission;
+}
 app.post('/admin/save-project-config', async (req, res) => {
   try {
     const { hostedPath, config } = req.body || {};
@@ -1554,32 +1562,20 @@ app.post('/admin/save-project-config', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid config payload' });
     }
 
-    const cfgDir = path.join('hosted-projects', hostedPath);
-    const cfgFile = path.join(cfgDir, 'config.json');
-    if (!fs.existsSync(cfgDir)) {
+    if (!(await hostedProjectExists(hostedPath))) {
       return res.status(404).json({ success: false, message: 'Hosted project not found' });
     }
 
-    // Backup existing config.json if present
     try {
-      if (fs.existsSync(cfgFile)) {
-        const backupName = `config.backup-${Date.now()}.json`;
-        fs.copyFileSync(cfgFile, path.join(cfgDir, backupName));
-      }
+      const existingConfig = await readHostedFileUtf8(hostedPath, 'config.json');
+      const backupName = `config.backup-${Date.now()}.json`;
+      await uploadHostedUtf8(hostedPath, backupName, existingConfig);
     } catch (e) {
       console.warn('Backup warning:', e.message);
     }
 
-    // Write new config.json (pretty printed)
-    fs.writeFileSync(cfgFile, JSON.stringify(config, null, 2), 'utf8');
+    await uploadHostedUtf8(hostedPath, 'config.json', JSON.stringify(config, null, 2));
 
-    // Touch index.html to help some CDNs revalidate (optional)
-    try {
-      const idx = path.join(cfgDir, 'index.html');
-      if (fs.existsSync(idx)) fs.utimesSync(idx, new Date(), new Date());
-    } catch (_) {}
-
-    // Also update the original submission ZIP so future downloads/hosting use the latest edits
     try {
       const subsPath = 'submissions.json';
       if (fs.existsSync(subsPath)) {
@@ -1590,47 +1586,32 @@ app.post('/admin/save-project-config', async (req, res) => {
           .map((l) => JSON.parse(l));
         const match = raw.find((s) => s.hostedPath === hostedPath);
         if (match && match.fileName) {
-          const zipOutPath = path.join('student-projects', match.fileName);
-
-          // Backup existing ZIP
+          const tempDir = path.join('temp-uploads', `repack_${Date.now()}_${hostedPath}`);
+          const zipOutPath = path.join('temp-uploads', `repack_${match.fileName}`);
           try {
-            if (fs.existsSync(zipOutPath)) {
-              const backupsDir = path.join('student-projects', 'backups');
-              if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir, { recursive: true });
-              const backupName =
-                match.fileName.replace(/\.zip$/i, '') + `-backup-${Date.now()}.zip`;
-              fs.copyFileSync(zipOutPath, path.join(backupsDir, backupName));
-            }
-          } catch (e) {
-            console.warn('ZIP backup warning:', e.message);
-          }
-
-          // Create a fresh ZIP from hosted folder contents
-          await new Promise((resolve, reject) => {
-            const output = fs.createWriteStream(zipOutPath + '.tmp');
-            const archive = archiver('zip', { zlib: { level: 9 } });
-            output.on('close', () => {
-              try {
-                // Replace original atomically
-                if (fs.existsSync(zipOutPath)) fs.unlinkSync(zipOutPath);
-                fs.renameSync(zipOutPath + '.tmp', zipOutPath);
-                resolve();
-              } catch (e) {
-                reject(e);
-              }
+            await materializeHostedProjectToDir(hostedPath, tempDir);
+            await new Promise((resolve, reject) => {
+              const output = fs.createWriteStream(zipOutPath);
+              const archive = archiver('zip', { zlib: { level: 9 } });
+              output.on('close', resolve);
+              output.on('error', reject);
+              archive.on('error', reject);
+              archive.pipe(output);
+              archive.directory(tempDir + path.sep, false);
+              archive.finalize();
             });
-            output.on('error', reject);
-            archive.on('error', reject);
-            archive.pipe(output);
-            // Add contents of hosted project at root of ZIP
-            archive.directory(cfgDir + path.sep, false);
-            archive.finalize();
-          });
+            const remoteZipPath = `student-projects/${match.fileName}`;
+            await b2Service.uploadFile(zipOutPath, remoteZipPath);
+          } finally {
+            try {
+              if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
+              if (fs.existsSync(zipOutPath)) fs.unlinkSync(zipOutPath);
+            } catch (_) {}
+          }
         }
       }
     } catch (packErr) {
       console.warn('Repack ZIP warning:', packErr.message);
-      // Non-fatal: we still saved config.json; downloads may be stale until rehosted
     }
 
     return res.json({ success: true, message: 'Config saved and package updated (if mapped)' });
@@ -1649,23 +1630,10 @@ app.get('/admin/submissions', async (req, res) => {
     if (isDbEnabled()) {
       const inbox = await projectVersionsDb.listAdminInbox({ classId, studentId });
       if (inbox.length > 0) {
-        const enriched = inbox.map((submission) => {
-          try {
-            const hostedPath = submission.hostedPath;
-            if (hostedPath && typeof hostedPath === 'string') {
-              const hostedDir = path.join('hosted-projects', hostedPath);
-              let updatedISO = undefined;
-              const cfg = path.join(hostedDir, 'config.json');
-              if (fs.existsSync(cfg)) {
-                updatedISO = fs.statSync(cfg).mtime.toISOString();
-              } else {
-                const idx = path.join(hostedDir, 'index.html');
-                if (fs.existsSync(idx)) updatedISO = fs.statSync(idx).mtime.toISOString();
-              }
-              if (updatedISO) submission.updatedAt = updatedISO;
-            }
-          } catch (_) {}
-          return {
+        const enriched = await Promise.all(
+          inbox.map(async (submission) => {
+            await enrichSubmissionHostingMeta(submission);
+            return {
             versionId: submission.id,
             threadId: submission.threadId,
             versionNumber: submission.versionNumber,
@@ -1685,29 +1653,17 @@ app.get('/admin/submissions', async (req, res) => {
             submittedAt: submission.submittedAt,
             updatedAt: submission.updatedAt,
           };
-        });
+          })
+        );
         return res.json(enriched);
       }
 
       const dbSubs = await submissionsDb.listSubmissions({ classId, studentId });
       if (dbSubs.length > 0) {
-        const enriched = dbSubs.map((submission) => {
-          try {
-            const hostedPath = submission.hostedPath;
-            if (hostedPath && typeof hostedPath === 'string') {
-              const hostedDir = path.join('hosted-projects', hostedPath);
-              let updatedISO = undefined;
-              const cfg = path.join(hostedDir, 'config.json');
-              if (fs.existsSync(cfg)) {
-                updatedISO = fs.statSync(cfg).mtime.toISOString();
-              } else {
-                const idx = path.join(hostedDir, 'index.html');
-                if (fs.existsSync(idx)) updatedISO = fs.statSync(idx).mtime.toISOString();
-              }
-              if (updatedISO) submission.updatedAt = updatedISO;
-            }
-          } catch (_) {}
-          return {
+        const enriched = await Promise.all(
+          dbSubs.map(async (submission) => {
+            await enrichSubmissionHostingMeta(submission);
+            return {
             studentName: submission.studentDisplayName || submission.studentName,
             studentId: submission.studentId,
             className: submission.className,
@@ -1723,7 +1679,8 @@ app.get('/admin/submissions', async (req, res) => {
             updatedAt: submission.updatedAt,
             syncedFromB2: submission.syncedFromB2,
           };
-        });
+          })
+        );
         return res.json(enriched);
       }
     }
@@ -1786,29 +1743,12 @@ app.get('/admin/submissions', async (req, res) => {
       console.log(`✅ Synced submissions.json with B2 (${syncedLogs.length} entries)`);
     }
 
-    // Get final list and enrich with hosted project info
-    const enriched = Array.from(submissionsMap.values()).map((submission) => {
-      try {
-        const hostedPath = submission.hostedPath;
-        if (hostedPath && typeof hostedPath === 'string') {
-          const hostedDir = path.join('hosted-projects', hostedPath);
-          let updatedISO = undefined;
-
-          const cfg = path.join(hostedDir, 'config.json');
-          if (fs.existsSync(cfg)) {
-            updatedISO = fs.statSync(cfg).mtime.toISOString();
-          } else {
-            const idx = path.join(hostedDir, 'index.html');
-            if (fs.existsSync(idx)) {
-              updatedISO = fs.statSync(idx).mtime.toISOString();
-            }
-          }
-
-          if (updatedISO) submission.updatedAt = updatedISO;
-        }
-      } catch (_) {}
-      return submission;
-    });
+    const enriched = await Promise.all(
+      Array.from(submissionsMap.values()).map(async (submission) => {
+        await enrichSubmissionHostingMeta(submission);
+        return submission;
+      })
+    );
 
     res.json(enriched);
   } catch (error) {
@@ -1979,32 +1919,29 @@ app.post('/admin/host/:filename', async (req, res) => {
   try {
     const remotePath = await resolveSubmissionRemotePath(filename);
     const tempPath = path.join('temp-uploads', `host_${Date.now()}_${filename}`);
-    const hostedDir = path.join('hosted-projects', urlPath);
+    const tempExtractDir = path.join('temp-uploads', `host_extract_${Date.now()}_${urlPath}`);
 
     // Download from B2
     await b2Service.downloadFile(remotePath, tempPath);
     assertValidZipFile(tempPath);
 
-    // Clear existing hosted directory if it exists
-    if (fs.existsSync(hostedDir)) {
-      fs.rmSync(hostedDir, { recursive: true, force: true });
-    }
-    fs.mkdirSync(hostedDir, { recursive: true });
+    fs.mkdirSync(tempExtractDir, { recursive: true });
 
-    // Extract ZIP to hosted directory
+    // Extract ZIP to temp directory, then upload to hosted B2 storage
     try {
-      await extractZipToDirSafe(tempPath, hostedDir);
+      await extractZipToDirSafe(tempPath, tempExtractDir);
+      await uploadHostedDirectory(tempExtractDir, urlPath);
     } finally {
-      // Clean up temp file
       try {
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
       } catch (_) {}
     }
 
     // Update submissions.json with hosting info
     const logs = loadSubmissionsLog();
     const submission = logs.find((sub) => sub.fileName === filename);
-    const urls = resolveHostedProjectUrls(urlPath, hostedDir);
+    const urls = await resolveHostedProjectUrlsAsync(urlPath);
 
     if (submission) {
       submission.hostedPath = urlPath;
@@ -2154,7 +2091,10 @@ app.post('/admin/restore-backup', upload.single('backup'), async (req, res) => {
       }
     }
 
-    // Clear hosted projects
+    // Clear hosted projects from B2 and local disk
+    for (const hostedPath of await listHostedProjectPaths()) {
+      await deleteHostedProject(hostedPath);
+    }
     const hostedDir = 'hosted-projects';
     if (fs.existsSync(hostedDir)) {
       fs.rmSync(hostedDir, { recursive: true, force: true });
@@ -2167,10 +2107,22 @@ app.post('/admin/restore-backup', upload.single('backup'), async (req, res) => {
     }
 
     // Extract all entries
+    const hostedUploads = new Map();
     for (const entry of entries) {
       if (!entry.isDirectory) {
         const entryPath = entry.entryName;
         const targetPath = path.join('.', entryPath);
+
+        if (entryPath.startsWith('hosted-projects/')) {
+          const parts = entryPath.slice('hosted-projects/'.length).split('/');
+          const projectPath = parts[0];
+          const relativePath = parts.slice(1).join('/');
+          if (projectPath && relativePath && validateHostedPath(projectPath)) {
+            if (!hostedUploads.has(projectPath)) hostedUploads.set(projectPath, []);
+            hostedUploads.get(projectPath).push({ relativePath, data: entry.getData() });
+          }
+          continue;
+        }
 
         // Ensure directory exists
         const targetDir = path.dirname(targetPath);
@@ -2180,6 +2132,23 @@ app.post('/admin/restore-backup', upload.single('backup'), async (req, res) => {
 
         // Extract file
         fs.writeFileSync(targetPath, entry.getData());
+      }
+    }
+
+    for (const [projectPath, files] of hostedUploads) {
+      const tempHostedDir = path.join('temp-uploads', `restore_hosted_${Date.now()}_${projectPath}`);
+      fs.mkdirSync(tempHostedDir, { recursive: true });
+      try {
+        for (const file of files) {
+          const target = path.join(tempHostedDir, file.relativePath);
+          fs.mkdirSync(path.dirname(target), { recursive: true });
+          fs.writeFileSync(target, file.data);
+        }
+        await uploadHostedDirectory(tempHostedDir, projectPath);
+      } finally {
+        try {
+          fs.rmSync(tempHostedDir, { recursive: true, force: true });
+        } catch (_) {}
       }
     }
 
@@ -2327,9 +2296,9 @@ function cleanupTempFiles() {
 cleanupTempFiles();
 
 const HOSTED_PROJECTS_DIR = path.join(__dirname, 'hosted-projects');
-function sweepGuestPreviewDirs() {
+async function sweepGuestPreviewDirs() {
   try {
-    const deleted = sweepExpiredGuestPreviews(HOSTED_PROJECTS_DIR);
+    const deleted = await sweepExpiredGuestPreviews();
     if (deleted > 0) {
       console.log(`🧹 Removed ${deleted} expired guest preview tour(s)`);
     }

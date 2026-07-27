@@ -4,9 +4,10 @@
  */
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const crypto = require('crypto');
 const { slugify, query, isDbEnabled } = require('../services/db-service');
-const { writeTourQrPng, tourUrlToQrUrl, renderTourQrBuffer } = require('../services/qr-service');
+const { tourUrlToQrUrl } = require('../services/qr-service');
 const { requireStudentStrict } = require('../student-auth');
 const { parseCookies } = require('../lib/session');
 const { isLocalTestUser } = require('../lib/local-test-user');
@@ -17,8 +18,8 @@ const {
   deleteGuestPreviewDir,
   hostedPathFromTourUrl,
 } = require('../lib/guest-preview-cleanup');
+const { uploadHostedDirectory } = require('../lib/hosted-b2-storage');
 
-const HOSTED_DIR = path.join(process.cwd(), 'hosted-projects');
 const PREVIEW_COOKIE = 'vr_preview_sid';
 const PREVIEW_COOKIE_MAX_AGE_SEC = 7 * 24 * 60 * 60;
 
@@ -44,26 +45,28 @@ function getOrSetPreviewSessionId(req, res) {
 async function publishZipToHostedDir({ zipPath, hostedPath, req, assertValidZipFile, extractZipToDirSafe }) {
   assertValidZipFile(zipPath);
 
-  const targetDir = path.join(HOSTED_DIR, hostedPath);
-  if (fs.existsSync(targetDir)) {
-    fs.rmSync(targetDir, { recursive: true, force: true });
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hosted-publish-'));
+  try {
+    await extractZipToDirSafe(zipPath, tempDir);
+
+    const indexPath = path.join(tempDir, 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      const err = new Error('Invalid project ZIP — expected index.html at the root of the package.');
+      err.status = 400;
+      throw err;
+    }
+
+    await uploadHostedDirectory(tempDir, hostedPath);
+
+    const url = `${getServerBaseUrl(req)}/hosted/${hostedPath}/index.html`;
+    const qrUrl = tourUrlToQrUrl(url);
+
+    return { url, hostedPath, hostedUrl: url, qrUrl };
+  } finally {
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch (_) {}
   }
-  fs.mkdirSync(targetDir, { recursive: true });
-
-  await extractZipToDirSafe(zipPath, targetDir);
-
-  const indexPath = path.join(targetDir, 'index.html');
-  if (!fs.existsSync(indexPath)) {
-    const err = new Error('Invalid project ZIP — expected index.html at the root of the package.');
-    err.status = 400;
-    throw err;
-  }
-
-  const url = `${getServerBaseUrl(req)}/hosted/${hostedPath}/index.html`;
-  await writeTourQrPng(targetDir, url);
-  const qrUrl = tourUrlToQrUrl(url);
-
-  return { url, hostedPath, hostedUrl: url, qrUrl };
 }
 
 function isAllowedTourQrUrl(url, req) {
@@ -85,11 +88,12 @@ function registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDir
       return res.status(400).json({ success: false, message: 'Invalid tour URL' });
     }
     const hostedPath = hostedPathFromTourUrl(url);
-    if (hostedPath && isExpiredGuestPreviewTourUrl(HOSTED_DIR, url)) {
-      deleteGuestPreviewDir(HOSTED_DIR, hostedPath);
+    if (hostedPath && (await isExpiredGuestPreviewTourUrl(url))) {
+      await deleteGuestPreviewDir(hostedPath);
       return res.status(404).json({ success: false, message: 'Guest preview expired' });
     }
     try {
+      const { renderTourQrBuffer } = require('../services/qr-service');
       const buffer = await renderTourQrBuffer(url);
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
@@ -129,9 +133,9 @@ function registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDir
         if (ttlMs != null) {
           expiresAt = Date.now() + ttlMs;
           const timeoutSeconds = await getGuestPreviewTimeoutSeconds();
-          markGuestPreviewExpiry(HOSTED_DIR, hostedPath, { expiresAt, timeoutSeconds });
+          await markGuestPreviewExpiry(hostedPath, { expiresAt, timeoutSeconds });
         } else {
-          markGuestPreviewExpiry(HOSTED_DIR, hostedPath, {});
+          await markGuestPreviewExpiry(hostedPath, {});
         }
       }
 

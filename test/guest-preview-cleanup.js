@@ -15,16 +15,19 @@ const {
   hostedPathFromTourUrl,
   isExpiredGuestPreviewTourUrl,
 } = require('../lib/guest-preview-cleanup');
+const { setHostedDirForTests } = require('../lib/hosted-b2-storage');
 const {
   clampGuestPreviewTimeoutSeconds,
   GUEST_PREVIEW_TIMEOUT_SECONDS_DEFAULT,
 } = require('../lib/app-settings');
 
-function withTempDir(fn) {
+async function withTempDir(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guest-preview-test-'));
+  setHostedDirForTests(dir);
   try {
-    return fn(dir);
+    return await fn(dir);
   } finally {
+    setHostedDirForTests(null);
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
@@ -43,88 +46,92 @@ function testGuestPreviewPathDetection() {
   console.log('✓ guest preview path detection');
 }
 
-function testExpiredGuestPreviewDeleted() {
-  withTempDir((root) => {
+async function testExpiredGuestPreviewDeleted() {
+  await withTempDir(async (root) => {
     const hostedPath = 'vr-preview-test-expired';
     const targetDir = path.join(root, hostedPath);
     fs.mkdirSync(targetDir, { recursive: true });
     fs.writeFileSync(path.join(targetDir, 'index.html'), '<html></html>');
-    markGuestPreviewExpiry(root, hostedPath, {
+    await markGuestPreviewExpiry(hostedPath, {
       expiresAt: Date.now() - 1000,
       timeoutSeconds: 1200,
     });
-    assert.strictEqual(isGuestPreviewExpired(root, hostedPath), true);
-    const deleted = sweepExpiredGuestPreviews(root);
+    assert.strictEqual(await isGuestPreviewExpired(hostedPath), true);
+    const deleted = await sweepExpiredGuestPreviews();
     assert.strictEqual(deleted, 1);
     assert.strictEqual(fs.existsSync(targetDir), false);
   });
   console.log('✓ expired guest preview deleted');
 }
 
-function testStudentPreviewWithoutMetaNotExpired() {
-  withTempDir((root) => {
+async function testStudentPreviewWithoutMetaNotExpired() {
+  await withTempDir(async (root) => {
     const hostedPath = 'vr-preview-student-session';
     const targetDir = path.join(root, hostedPath);
     fs.mkdirSync(targetDir, { recursive: true });
     fs.writeFileSync(path.join(targetDir, 'index.html'), '<html></html>');
-    assert.strictEqual(isGuestPreviewExpired(root, hostedPath), false);
-    const deleted = sweepExpiredGuestPreviews(root);
+    assert.strictEqual(await isGuestPreviewExpired(hostedPath), false);
+    const deleted = await sweepExpiredGuestPreviews();
     assert.strictEqual(deleted, 0);
     assert.strictEqual(fs.existsSync(targetDir), true);
   });
   console.log('✓ student preview without meta not expired');
 }
 
-function testPermanentTourPathIgnored() {
-  withTempDir((root) => {
+async function testPermanentTourPathIgnored() {
+  await withTempDir(async (root) => {
     const hostedPath = 'vr-abc12345-my-tour';
     const targetDir = path.join(root, hostedPath);
     fs.mkdirSync(targetDir, { recursive: true });
     fs.writeFileSync(path.join(targetDir, 'index.html'), '<html></html>');
-    assert.strictEqual(isGuestPreviewExpired(root, hostedPath), false);
-    const deleted = sweepExpiredGuestPreviews(root);
+    assert.strictEqual(await isGuestPreviewExpired(hostedPath), false);
+    const deleted = await sweepExpiredGuestPreviews();
     assert.strictEqual(deleted, 0);
   });
   console.log('✓ permanent tour path ignored');
 }
 
-function testDisabledTimeoutMetaNotExpired() {
-  withTempDir((root) => {
+async function testDisabledTimeoutMetaNotExpired() {
+  await withTempDir(async (root) => {
     const hostedPath = 'vr-preview-guest-no-timeout';
     const targetDir = path.join(root, hostedPath);
     fs.mkdirSync(targetDir, { recursive: true });
-    markGuestPreviewExpiry(root, hostedPath, {});
-    assert.strictEqual(isGuestPreviewExpired(root, hostedPath), false);
-    const deleted = sweepExpiredGuestPreviews(root);
+    await markGuestPreviewExpiry(hostedPath, {});
+    assert.strictEqual(await isGuestPreviewExpired(hostedPath), false);
+    const deleted = await sweepExpiredGuestPreviews();
     assert.strictEqual(deleted, 0);
   });
   console.log('✓ disabled timeout meta not expired');
 }
 
-function testTourUrlParsing() {
+async function testTourUrlParsing() {
   assert.strictEqual(
     hostedPathFromTourUrl('https://example.com/hosted/vr-preview-abc/index.html'),
     'vr-preview-abc'
   );
-  withTempDir((root) => {
+  await withTempDir(async (root) => {
     const dir = path.join(root, 'vr-preview-abc');
     fs.mkdirSync(dir, { recursive: true });
-    markGuestPreviewExpiry(root, 'vr-preview-abc', { expiresAt: Date.now() - 500, timeoutSeconds: 1200 });
+    fs.writeFileSync(path.join(dir, 'index.html'), '<html></html>');
+    await markGuestPreviewExpiry('vr-preview-abc', { expiresAt: Date.now() - 500, timeoutSeconds: 1200 });
     const url = 'https://example.com/hosted/vr-preview-abc/index.html';
-    assert.strictEqual(isExpiredGuestPreviewTourUrl(root, url), true);
+    assert.strictEqual(await isExpiredGuestPreviewTourUrl(url), true);
   });
   console.log('✓ tour URL parsing');
 }
 
-function main() {
+async function main() {
   testClampSeconds();
   testGuestPreviewPathDetection();
-  testExpiredGuestPreviewDeleted();
-  testStudentPreviewWithoutMetaNotExpired();
-  testPermanentTourPathIgnored();
-  testDisabledTimeoutMetaNotExpired();
-  testTourUrlParsing();
+  await testExpiredGuestPreviewDeleted();
+  await testStudentPreviewWithoutMetaNotExpired();
+  await testPermanentTourPathIgnored();
+  await testDisabledTimeoutMetaNotExpired();
+  await testTourUrlParsing();
   console.log('\nAll guest preview cleanup tests passed.');
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

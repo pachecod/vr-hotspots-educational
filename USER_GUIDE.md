@@ -428,7 +428,7 @@ Sign in at `/admin-submissions.html` (or any admin page — same password).
 1. Filter by **team or class**, **team member or student**, or whether they left a **note**
 2. For each submission:
    - **Download** — get the ZIP
-   - **🌐 Host** — publish a live preview URL (re-host after server redeploy if using ephemeral disk — see [RENDER_DEPLOY.md](RENDER_DEPLOY.md))
+   - **🌐 Host** — publish a live preview URL (stored in B2; survives redeploy)
    - **✏️ Review in Editor** — load the project in the editor with an **Admin Review** bar
    - **Version history** — expand to see all versions; download, review, or delete individual versions
    - **🗑️ Delete** — remove a specific version
@@ -580,7 +580,7 @@ If media was exported as **online URLs**, stay connected to the internet. If med
 | **Submit failed** | Confirm you are on the instructor’s server URL, not a local file. Retry; ask admin to check the server. |
 | **Shared asset URL broken** | Ask admin to re-open the asset library (signed links may expire after several days). Re-export with **Include media in the package** for long-term archives. |
 | **Can’t find an asset** | Add tag chips or type part of the filename in the filter bar; try **Show All Tags**. |
-| **Hosted project link dead after redeploy** | Admin must **Host** again — hosted URLs on ephemeral disk do not survive redeploy. |
+| **Hosted project link dead after redeploy** | Should not happen — hosted files live in B2. If a link fails, use **Host** again from Submissions or check B2 public bucket `hosted-projects/`. |
 | **Lost work** | Use **Save Template** often. Avoid **Clear Data** unless you mean to reset. |
 | **Ask Ridey missing** | Instructor must enable Ridey under **Editor Settings** and set `OPENAI_API_KEY` on the server. |
 | **Ridey put CSS inline** | Use **Ridey 1.0** or ensure **2.0** is enabled — both route CSS to `style.css` and JS to `script.js`. |

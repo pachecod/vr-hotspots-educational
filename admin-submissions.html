@@ -162,6 +162,41 @@
       .host-result a {
         color: #0b5ed7;
       }
+      .danger-zone {
+        margin-top: 40px;
+        padding: 20px;
+        border: 2px solid #f5c6cb;
+        border-radius: 8px;
+        background: #fff5f5;
+      }
+      .danger-zone h2 {
+        margin: 0 0 8px;
+        color: #842029;
+        font-size: 1.1em;
+      }
+      .danger-zone p {
+        margin: 0 0 16px;
+        color: #58151c;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .btn-unhost-all {
+        background: #dc3545;
+        color: #fff;
+        padding: 10px 18px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+      }
+      .btn-unhost-all:hover {
+        background: #bb2d3b;
+      }
+      .btn-unhost-all:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
     </style>
     <script src="admin-auth-ui.js"></script>
     <script src="admin-nav.js"></script>
@@ -205,6 +240,17 @@
     </div>
 
     <div id="inbox-list">Loading submissions...</div>
+
+    <section class="danger-zone" aria-labelledby="danger-zone-heading">
+      <h2 id="danger-zone-heading">Danger zone</h2>
+      <p>
+        Remove every hosted public tour from the server. Submission ZIPs stay in the queue; you can
+        host them again later.
+      </p>
+      <button type="button" class="btn-unhost-all" id="unhost-all-btn" onclick="unhostEverything()">
+        Unhost Everything
+      </button>
+    </section>
     </div>
 
     <script src="admin-submissions.js"></script>

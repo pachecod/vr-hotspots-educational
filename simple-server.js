@@ -59,6 +59,7 @@ const { parseCookies } = require('./lib/session');
 const {
   purgeLegacySubmission,
   purgeHostedSubmission,
+  purgeAllHostedProjects,
 } = require('./lib/student-content/purge');
 const { assertSafeOutboundUrl } = require('./lib/security/ssrf-guard');
 const { sanitizeReturnTo } = require('./lib/security/safe-redirect');
@@ -1991,6 +1992,25 @@ app.post('/admin/unhost/:filename', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error unhosting project: ' + error.message,
+    });
+  }
+});
+
+// Admin: remove all hosted public tours (submissions remain in queue)
+app.post('/admin/unhost-all', requireAdmin, async (req, res) => {
+  try {
+    const result = await purgeAllHostedProjects();
+    saveHostedProjects({ projects: [] });
+    res.json({
+      success: true,
+      message: `Unhosted ${result.unhostedCount} public tour(s). Submissions were not deleted.`,
+      result,
+    });
+  } catch (error) {
+    console.error('Unhost all error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error unhosting all projects: ' + error.message,
     });
   }
 });

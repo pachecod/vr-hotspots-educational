@@ -222,6 +222,30 @@ async function hostVersion(versionId, projectName) {
   }
 }
 
+async function unhostEverything() {
+  const confirmed = confirm(
+    'This will make all public links to hosted projects inaccessible, but they will still appear in the submission queue.\n\nAre you sure?'
+  );
+  if (!confirmed) return;
+
+  const btn = document.getElementById('unhost-all-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const response = await adminFetch('/admin/unhost-all', { method: 'POST' });
+    const result = await response.json();
+    if (result.success) {
+      alert(result.message || 'All hosted projects were unhosted.');
+      loadInbox();
+    } else {
+      alert(result.message || 'Unhost failed');
+    }
+  } catch (err) {
+    alert('Unhost failed: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function deleteVersion(versionId) {
   if (!confirm('Delete this project and all its versions (including teacher feedback) from cloud storage?')) return;
   try {

@@ -148,7 +148,7 @@ async function loadInbox() {
             ${noteBlock}
             <div class="actions">
               <button class="btn-download" onclick="downloadVersion('${versionId}', '${escapeHtml(sub.fileName)}')">📥 Download</button>
-              <button class="btn-host" onclick="hostVersion('${versionId}', '${escapeHtml(sub.studentDisplayName || sub.studentName || 'project')}')">🌐 Host</button>
+              <button class="btn-host" onclick="hostVersion('${versionId}', '${escapeHtml(sub.projectName || 'project')}')">🌐 Host</button>
               ${reviewLink}
               ${historyBtn}
               <button class="btn-delete" onclick="deleteVersion('${versionId}')">🗑️ Delete</button>
@@ -190,8 +190,12 @@ async function downloadVersion(versionId, fileName) {
   }
 }
 
-async function hostVersion(versionId, studentName) {
-  const suggestedPath = studentName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+async function hostVersion(versionId, projectName) {
+  const suggestedPath =
+    String(projectName || 'project')
+      .replace(/\s+/g, '')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .toLowerCase() || 'project';
   const urlPath = prompt('URL path for hosting (e.g. john_doe):', suggestedPath);
   if (!urlPath || !/^[a-zA-Z0-9_-]+$/.test(urlPath)) {
     if (urlPath) alert('Invalid URL path.');

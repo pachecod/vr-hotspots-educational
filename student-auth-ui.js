@@ -165,6 +165,10 @@ function showIntegratedWelcomeLoading(containerId) {
 function beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, student) {
   window.__integratedWelcomePending = true;
   window.__integratedWelcomeContainerId = containerId;
+  window.__postAuthWelcomeMounted = false;
+  try {
+    sessionStorage.setItem('vr-hotspot-pending-welcome', '1');
+  } catch (_) {}
   showIntegratedWelcomeLoading(containerId);
   if (student) {
     window.editorAccessMode = 'student';
@@ -752,13 +756,8 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
           showStudentEditorSession(info);
           if (typeof window.applyEditorCapabilities === 'function') window.applyEditorCapabilities();
           onAuthenticated(info);
-        } else if (window.__integratedWelcomePending || options.integratedWelcome) {
-          beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, info);
         } else {
-          clearEntryGateOverlay();
-          showStudentEditorSession(info);
-          if (typeof window.applyEditorCapabilities === 'function') window.applyEditorCapabilities();
-          onAuthenticated(info);
+          beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, info);
         }
       } catch (err) {
         showError(err.message);

@@ -233,6 +233,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
 
   app.get('/admin/submissions-inbox', async (req, res) => {
     try {
+      res.setHeader('Cache-Control', 'no-store');
       const { classId, studentId, filter } = req.query;
       const filterVal = filter || 'all';
 

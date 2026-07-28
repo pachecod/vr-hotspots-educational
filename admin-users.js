@@ -20,9 +20,18 @@ async function initAdminUsers() {
   const billingLink = document.getElementById('billing-link-wrap');
   if (billingLink) billingLink.style.display = '';
 
-  await loadClasses();
-  await loadStudents();
   bindEvents();
+
+  try {
+    await loadClasses();
+    await loadStudents();
+  } catch (err) {
+    console.error('Admin users init error:', err);
+    const classesList = document.getElementById('classes-list');
+    if (classesList) {
+      classesList.innerHTML = `<p class="error">Could not load teams/classes: ${escapeHtml(err.message || 'Unknown error')}</p>`;
+    }
+  }
 
   const peekId = new URLSearchParams(window.location.search).get('peek');
   if (peekId && window.StudentPeek) {
@@ -522,7 +531,14 @@ function renderPasswordReport() {
 
 async function loadClasses() {
   const res = await adminFetch('/admin/classes');
-  classes = await res.json();
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || `Could not load classes (${res.status})`);
+  }
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected response loading classes');
+  }
+  classes = data;
   renderClasses();
   const filter = document.getElementById('filter-class');
   filter.innerHTML = '<option value="all">All teams or classes</option>' +
@@ -557,21 +573,31 @@ function renderClasses() {
 }
 
 async function addClass() {
+  const btn = document.getElementById('add-class-btn');
   const name = document.getElementById('new-class-name').value.trim();
   const description = document.getElementById('new-class-desc').value.trim();
-  if (!name) return alert('Team or Class name required');
-  const body = { name, description, requireSignInPassword: false };
-  const res = await adminFetch('/admin/classes', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!data.success) return alert(data.message);
-  document.getElementById('new-class-name').value = '';
-  document.getElementById('new-class-desc').value = '';
-  alert(`Created ${data.class.name}. Class password is off — use the per-class checkbox to enable it for this class only.`);
-  await loadClasses();
+  if (!name) return alert('Team or Class name is required');
+  if (btn) btn.disabled = true;
+  try {
+    const body = { name, description, requireSignInPassword: false };
+    const res = await adminFetch('/admin/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return alert(data.message || `Could not create class (${res.status})`);
+    }
+    document.getElementById('new-class-name').value = '';
+    document.getElementById('new-class-desc').value = '';
+    alert(`Created ${data.class.name}. Class password is off — use the per-class checkbox to enable it for this class only.`);
+    await loadClasses();
+  } catch (err) {
+    alert('Could not create class: ' + (err.message || 'Unknown error'));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function deleteClass(id) {

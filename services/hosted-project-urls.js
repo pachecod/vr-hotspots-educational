@@ -105,6 +105,9 @@ async function resolveHostedProjectUrlsAsync(urlPath) {
 }
 
 function enrichInboxItem(item) {
+  if (!item.isHosted) {
+    return { ...item, hostedUrl: null, tourUrl: null, flatPageUrl: null };
+  }
   if (!item.hostedPath && !item.hostedUrl) return item;
   const urlPath =
     item.hostedPath ||

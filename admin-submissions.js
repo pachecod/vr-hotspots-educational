@@ -55,6 +55,91 @@ function showHostSuccess(result) {
   banner.style.display = 'block';
 }
 
+const HOST_PROGRESS_STAGES = [
+  { percent: 8, label: 'Downloading project from storage…' },
+  { percent: 22, label: 'Extracting project files…' },
+  { percent: 45, label: 'Uploading files to cloud storage…' },
+  { percent: 68, label: 'Uploading media and assets…' },
+  { percent: 82, label: 'Almost done — finishing upload…' },
+];
+
+let hostProgressTimer = null;
+let hostProgressStageIndex = 0;
+let hostProgressValue = 0;
+
+function setHostProgressUi(percent, statusText) {
+  const bar = document.getElementById('host-progress-bar');
+  const status = document.getElementById('host-progress-status');
+  if (bar) bar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+  if (status && statusText) status.textContent = statusText;
+}
+
+function setSubmissionActionsDisabled(disabled) {
+  document.querySelectorAll('.submission-card .actions button').forEach((el) => {
+    el.disabled = disabled;
+  });
+}
+
+function startHostProgress(projectName, urlPath) {
+  const overlay = document.getElementById('host-progress-overlay');
+  const title = document.getElementById('host-progress-title');
+  if (title) {
+    const name = String(projectName || 'Project').trim();
+    const path = String(urlPath || '').trim();
+    title.textContent = path ? `Hosting ${name} at /${path}` : `Hosting ${name}`;
+  }
+  hostProgressStageIndex = 0;
+  hostProgressValue = 0;
+  setHostProgressUi(0, HOST_PROGRESS_STAGES[0].label);
+  if (overlay) {
+    overlay.hidden = false;
+    overlay.setAttribute('aria-busy', 'true');
+  }
+  setSubmissionActionsDisabled(true);
+
+  if (hostProgressTimer) clearInterval(hostProgressTimer);
+  hostProgressTimer = setInterval(() => {
+    const stage = HOST_PROGRESS_STAGES[hostProgressStageIndex];
+    const nextStage = HOST_PROGRESS_STAGES[hostProgressStageIndex + 1];
+    const target = nextStage ? nextStage.percent : 88;
+    if (hostProgressValue < target) {
+      hostProgressValue = Math.min(target, hostProgressValue + 1.5);
+      setHostProgressUi(hostProgressValue, stage.label);
+      return;
+    }
+    if (nextStage) {
+      hostProgressStageIndex += 1;
+      setHostProgressUi(hostProgressValue, nextStage.label);
+    }
+  }, 700);
+}
+
+async function finishHostProgress(success) {
+  if (hostProgressTimer) {
+    clearInterval(hostProgressTimer);
+    hostProgressTimer = null;
+  }
+  if (success) {
+    setHostProgressUi(100, 'Hosting complete.');
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  }
+  stopHostProgress();
+}
+
+function stopHostProgress() {
+  if (hostProgressTimer) {
+    clearInterval(hostProgressTimer);
+    hostProgressTimer = null;
+  }
+  const overlay = document.getElementById('host-progress-overlay');
+  if (overlay) {
+    overlay.hidden = true;
+    overlay.setAttribute('aria-busy', 'false');
+  }
+  setHostProgressUi(0, 'Starting…');
+  setSubmissionActionsDisabled(false);
+}
+
 function kindBadge(kind) {
   const labels = {
     submitted: 'Submitted',
@@ -108,8 +193,9 @@ async function loadInbox() {
     if (classId) params.set('classId', classId);
     if (studentId) params.set('studentId', studentId);
     if (filter && filter !== 'all') params.set('filter', filter);
+    params.set('_', String(Date.now()));
     const url = '/admin/submissions-inbox' + (params.toString() ? '?' + params.toString() : '');
-    const response = await adminFetch(url);
+    const response = await adminFetch(url, { cache: 'no-store' });
     const submissions = await response.json();
 
     if (!submissions.length) {
@@ -201,6 +287,7 @@ async function hostVersion(versionId, projectName) {
     if (urlPath) alert('Invalid URL path.');
     return;
   }
+  startHostProgress(projectName, urlPath);
   try {
     const hostUrl = isLegacyVersion(versionId)
       ? `/admin/host/${encodeURIComponent(legacyFileName(versionId))}`
@@ -212,12 +299,15 @@ async function hostVersion(versionId, projectName) {
     });
     const result = await response.json();
     if (result.success) {
+      await finishHostProgress(true);
       showHostSuccess(result);
-      loadInbox();
+      await loadInbox();
     } else {
-      alert(result.message || 'Hosting failed');
+      stopHostProgress();
+      alert(result.message || result.error || 'Hosting failed');
     }
   } catch (err) {
+    stopHostProgress();
     alert('Hosting failed: ' + err.message);
   }
 }
@@ -234,8 +324,10 @@ async function unhostEverything() {
     const response = await adminFetch('/admin/unhost-all', { method: 'POST' });
     const result = await response.json();
     if (result.success) {
+      const banner = document.getElementById('host-result');
+      if (banner) banner.style.display = 'none';
+      await loadInbox();
       alert(result.message || 'All hosted projects were unhosted.');
-      loadInbox();
     } else {
       alert(result.message || 'Unhost failed');
     }

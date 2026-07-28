@@ -1,6 +1,6 @@
 {
   "name": "vr-hotspots-educational",
-  "version": "2.8.1",
+  "version": "2.8.2",
   "description": "VR Hotspots Editor with Educational Backend",
   "main": "simple-server.js",
   "scripts": {

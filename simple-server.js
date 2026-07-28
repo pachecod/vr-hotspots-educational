@@ -370,11 +370,7 @@ function protectAdminRoutes(req, res, next) {
 
 app.use(protectAdminRoutes);
 
-app.get('/admin/', (req, res) => {
-  res.redirect(301, '/admin');
-});
-
-app.get('/admin', (req, res) => {
+app.get(['/admin', '/admin/'], (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 

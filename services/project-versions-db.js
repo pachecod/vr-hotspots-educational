@@ -31,6 +31,8 @@ function formatVersionRow(row) {
     projectSlug: row.project_slug,
     studentId: row.student_id,
     studentDisplayName: row.student_display_name || row.display_name,
+    studentUsername: row.student_username,
+    studentName: row.student_name,
     className: row.class_name,
     classId: row.class_id,
     classSlug: row.class_slug,
@@ -176,7 +178,7 @@ async function createVersion({
 async function getVersionById(versionId) {
   const { rows } = await query(
     `SELECT pv.*, pt.project_name, pt.project_slug, pt.student_id,
-            s.display_name AS student_display_name, c.name AS class_name, c.id AS class_id,
+            s.display_name AS student_display_name, s.username AS student_username, c.name AS class_name, c.id AS class_id,
             c.slug AS class_slug
      FROM project_versions pv
      JOIN project_threads pt ON pt.id = pv.thread_id
@@ -191,7 +193,7 @@ async function getVersionById(versionId) {
 async function getVersionByFileName(fileName) {
   const { rows } = await query(
     `SELECT pv.*, pt.project_name, pt.project_slug, pt.student_id,
-            s.display_name AS student_display_name, c.name AS class_name, c.id AS class_id,
+            s.display_name AS student_display_name, s.username AS student_username, c.name AS class_name, c.id AS class_id,
             c.slug AS class_slug
      FROM project_versions pv
      JOIN project_threads pt ON pt.id = pv.thread_id
@@ -241,7 +243,7 @@ async function listStudentProjects(studentId) {
 
 async function listThreadVersions(threadId, { studentId } = {}) {
   let sql = `SELECT pv.*, pt.project_name, pt.project_slug, pt.student_id,
-                    s.display_name AS student_display_name, c.name AS class_name, c.id AS class_id,
+                    s.display_name AS student_display_name, s.username AS student_username, c.name AS class_name, c.id AS class_id,
                     c.slug AS class_slug
              FROM project_versions pv
              JOIN project_threads pt ON pt.id = pv.thread_id
@@ -261,7 +263,7 @@ async function listThreadVersions(threadId, { studentId } = {}) {
 async function listAdminInbox({ classId, studentId, filter } = {}) {
   let sql = `SELECT DISTINCT ON (pt.id)
                pv.*, pt.project_name, pt.project_slug, pt.student_id,
-               s.display_name AS student_display_name, c.name AS class_name, c.id AS class_id,
+               s.display_name AS student_display_name, s.username AS student_username, c.name AS class_name, c.id AS class_id,
                c.slug AS class_slug
              FROM project_threads pt
              JOIN project_versions pv ON pv.thread_id = pt.id AND pv.kind = 'submitted'
@@ -334,10 +336,31 @@ async function getUnreadFeedbackCount(studentId) {
   return rows[0]?.count || 0;
 }
 
+async function listUnreadFeedback(studentId) {
+  const { rows } = await query(
+    `SELECT pv.id, pv.admin_note, pv.submitted_at, pv.created_at,
+            pt.id AS thread_id, pt.project_name
+     FROM project_versions pv
+     JOIN project_threads pt ON pt.id = pv.thread_id
+     WHERE pt.student_id = $1
+       AND pv.kind = 'admin_return'
+       AND pv.student_seen_at IS NULL
+     ORDER BY COALESCE(pv.submitted_at, pv.created_at) DESC`,
+    [studentId]
+  );
+  return rows.map((row) => ({
+    versionId: row.id,
+    threadId: row.thread_id,
+    projectName: row.project_name,
+    adminNote: row.admin_note,
+    submittedAt: row.submitted_at || row.created_at,
+  }));
+}
+
 async function listAllVersionsForStudent(studentId) {
   const { rows } = await query(
     `SELECT pv.*, pt.project_name, pt.project_slug, pt.student_id,
-            s.display_name AS student_display_name, c.name AS class_name, c.id AS class_id,
+            s.display_name AS student_display_name, s.username AS student_username, c.name AS class_name, c.id AS class_id,
             c.slug AS class_slug
      FROM project_versions pv
      JOIN project_threads pt ON pt.id = pv.thread_id
@@ -409,6 +432,7 @@ module.exports = {
   deleteThread,
   listRawVersionsForThread,
   getUnreadFeedbackCount,
+  listUnreadFeedback,
   importLegacySubmissions,
   formatVersionRow,
 };

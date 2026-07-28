@@ -21,6 +21,9 @@ const session = createSessionHelpers({
   secret: STUDENT_SESSION_SECRET,
   role: 'student',
   maxAgeMs: SESSION_MAX_AGE_MS,
+  // Keep students signed in across nodemon restarts during local dev; production still
+  // invalidates cookies on deploy via SESSION_BOOT_ID.
+  persistAcrossRestarts: process.env.NODE_ENV !== 'production',
 });
 
 const loginRateLimiter = rateLimit({

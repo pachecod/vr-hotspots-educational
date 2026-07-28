@@ -162,6 +162,13 @@ function showPostAuthWelcomeIfPending() {
     containerId,
     () => {
       window.__integratedWelcomeContainerId = null;
+      if (
+        window.StudentProjectsPanel &&
+        typeof window.StudentProjectsPanel.startFeedbackPolling === 'function' &&
+        window.StudentProjectsPanel.isSignedInStudent()
+      ) {
+        window.StudentProjectsPanel.startFeedbackPolling();
+      }
     },
     { forceShow: true }
   );
@@ -20535,14 +20542,28 @@ AFRAME.registerComponent('editor-spot', {
 
 // Student submission functionality
 class StudentProjectsPanel {
+  static FEEDBACK_POLL_MS =
+    typeof location !== 'undefined' && location.hostname === 'localhost' ? 5000 : 15000;
+  static DISMISSED_FEEDBACK_KEY = 'vr-dismissed-feedback-ids';
+  static _feedbackPollTimer = null;
+  static _feedbackPollInFlight = false;
+  static _activeFeedbackModal = false;
+  static _shownFeedbackIds = new Set();
+  static _visibilityBound = false;
+
+  static isSignedInStudent() {
+    return !!(window.currentStudent && window.currentStudent.id);
+  }
+
   static bind() {
-    if (typeof window.getEditorCapabilities === 'function' && !window.getEditorCapabilities().canSubmit) {
+    if (!StudentProjectsPanel.isSignedInStudent()) {
       const hideBtn = (id) => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
       };
       hideBtn('student-my-submissions-btn');
       hideBtn('student-my-cloud-saves-btn');
+      StudentProjectsPanel.stopFeedbackPolling();
       return;
     }
 
@@ -20563,27 +20584,118 @@ class StudentProjectsPanel {
     }
 
     StudentProjectsPanel.refreshUnreadBadge();
+    StudentProjectsPanel.startFeedbackPolling();
+  }
+
+  static startFeedbackPolling() {
+    StudentProjectsPanel.stopFeedbackPolling();
+    if (!StudentProjectsPanel.isSignedInStudent()) {
+      return;
+    }
+    const tick = () => StudentProjectsPanel.pollForFeedback();
+    tick();
+    StudentProjectsPanel._feedbackPollTimer = setInterval(tick, StudentProjectsPanel.FEEDBACK_POLL_MS);
+    if (!StudentProjectsPanel._visibilityBound) {
+      StudentProjectsPanel._visibilityBound = true;
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) StudentProjectsPanel.pollForFeedback();
+      });
+    }
+  }
+
+  static stopFeedbackPolling() {
+    if (StudentProjectsPanel._feedbackPollTimer) {
+      clearInterval(StudentProjectsPanel._feedbackPollTimer);
+      StudentProjectsPanel._feedbackPollTimer = null;
+    }
+  }
+
+  static getDismissedFeedbackIds() {
+    try {
+      const raw = sessionStorage.getItem(StudentProjectsPanel.DISMISSED_FEEDBACK_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch (_) {
+      return new Set();
+    }
+  }
+
+  static dismissFeedbackForSession(versionId) {
+    const ids = StudentProjectsPanel.getDismissedFeedbackIds();
+    ids.add(versionId);
+    try {
+      sessionStorage.setItem(StudentProjectsPanel.DISMISSED_FEEDBACK_KEY, JSON.stringify([...ids]));
+    } catch (_) {}
+  }
+
+  static setUnreadBadgeCount(count) {
+    const btn = document.getElementById('student-my-submissions-btn');
+    if (!btn) return;
+    let badge = btn.querySelector('.unread-badge');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'unread-badge';
+        btn.appendChild(badge);
+      }
+      badge.textContent = String(count);
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+
+  static async pollForFeedback() {
+    if (document.hidden || StudentProjectsPanel._feedbackPollInFlight) return;
+    if (StudentProjectsPanel._activeFeedbackModal) return;
+    if (!StudentProjectsPanel.isSignedInStudent()) return;
+    StudentProjectsPanel._feedbackPollInFlight = true;
+    try {
+      const res = await fetch('/api/student/unread-feedback', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (res.status === 401) {
+        StudentProjectsPanel.stopFeedbackPolling();
+        return;
+      }
+      if (!res.ok) return;
+      const data = await res.json();
+      const items = data.items || [];
+      StudentProjectsPanel.setUnreadBadgeCount(items.length);
+
+      const dismissed = StudentProjectsPanel.getDismissedFeedbackIds();
+      const candidate = items.find(
+        (item) =>
+          !StudentProjectsPanel._shownFeedbackIds.has(item.versionId) &&
+          !dismissed.has(item.versionId)
+      );
+      if (candidate) {
+        StudentProjectsPanel._shownFeedbackIds.add(candidate.versionId);
+        StudentProjectsPanel.showAdminMessageModal(candidate);
+      }
+    } catch (_) {
+    } finally {
+      StudentProjectsPanel._feedbackPollInFlight = false;
+    }
   }
 
   static async refreshUnreadBadge() {
     const btn = document.getElementById('student-my-submissions-btn');
     if (!btn) return;
     try {
-      const res = await fetch('/api/student/projects', { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
-      const count = data.unreadCount || 0;
-      let badge = btn.querySelector('.unread-badge');
-      if (count > 0) {
-        if (!badge) {
-          badge = document.createElement('span');
-          badge.className = 'unread-badge';
-          btn.appendChild(badge);
-        }
-        badge.textContent = String(count);
-      } else if (badge) {
-        badge.remove();
+      const res = await fetch('/api/student/unread-feedback', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        StudentProjectsPanel.setUnreadBadgeCount((data.items || []).length);
+        return;
       }
+      const fallback = await fetch('/api/student/projects', { credentials: 'include' });
+      if (!fallback.ok) return;
+      const data = await fallback.json();
+      StudentProjectsPanel.setUnreadBadgeCount(data.unreadCount || 0);
     } catch (_) {}
   }
 
@@ -20715,7 +20827,7 @@ class StudentProjectsPanel {
     });
   }
 
-  static async openVersionInEditor(versionId, parentDialog) {
+  static async openVersionInEditor(versionId, parentDialog, options = {}) {
     try {
       const res = await fetch(`/api/student/versions/${versionId}/download`, { credentials: 'include' });
       if (!res.ok) throw new Error('Could not load project ZIP');
@@ -20732,13 +20844,8 @@ class StudentProjectsPanel {
         ver = (hd.versions || []).find((v) => v.id === versionId);
         if (ver) break;
       }
-      if (ver && ver.adminNote) {
+      if (ver && ver.adminNote && !options.skipFeedbackModal) {
         StudentProjectsPanel.showFeedbackModal(ver);
-        await fetch(`/api/student/versions/${versionId}/seen`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-        StudentProjectsPanel.refreshUnreadBadge();
       }
       if (parentDialog) parentDialog.remove();
     } catch (err) {
@@ -20746,27 +20853,85 @@ class StudentProjectsPanel {
     }
   }
 
-  static showFeedbackModal(version) {
+  static showAdminMessageModal(item, options = {}) {
+    StudentProjectsPanel._activeFeedbackModal = true;
     const existing = document.getElementById('teacher-feedback-modal');
     if (existing) existing.remove();
-    const modal = document.createElement('div');
-    modal.id = 'teacher-feedback-modal';
-    modal.style.cssText = `
-      position:fixed;bottom:24px;right:24px;max-width:360px;background:#1e3a5f;color:#fff;
-      padding:16px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:${EDITOR_LAYER.dialog + 1};
-      border-left:4px solid #2196F3;font-family:Arial;
+
+    const versionId = item.versionId || item.id;
+    const note = item.adminNote || item.admin_note || '';
+    const projectName = item.projectName || item.project_name || 'Your project';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'teacher-feedback-modal';
+    overlay.style.cssText = `
+      position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:${EDITOR_LAYER.dialog + 1};
+      display:flex;align-items:center;justify-content:center;font-family:Arial;padding:16px;box-sizing:border-box;
     `;
-    modal.innerHTML = `
-      <strong style="display:block;margin-bottom:8px;">Teacher feedback</strong>
-      <p style="margin:0 0 12px;font-size:14px;line-height:1.4;">${StudentProjectsPanel.escapeHtml(version.adminNote)}</p>
-      <button id="dismiss-feedback" style="padding:6px 14px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;">Got it</button>
-    `;
-    document.body.appendChild(modal);
-    modal.querySelector('#dismiss-feedback').addEventListener('click', async () => {
-      await fetch(`/api/student/versions/${version.id}/seen`, { method: 'POST', credentials: 'include' });
-      modal.remove();
+    overlay.innerHTML = `
+      <div role="dialog" aria-labelledby="admin-msg-title" style="background:#1e3a5f;color:#fff;border-radius:10px;padding:24px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.45);border-left:4px solid #2196F3;">
+        <h3 id="admin-msg-title" style="margin:0 0 8px;font-size:20px;">New message from admin</h3>
+        <p style="margin:0 0 12px;font-size:13px;color:#90caf9;">${StudentProjectsPanel.escapeHtml(projectName)}</p>
+        <p style="margin:0 0 20px;font-size:15px;line-height:1.5;">${
+          note
+            ? StudentProjectsPanel.escapeHtml(note)
+            : '<em style="opacity:0.85;">Your teacher returned an updated version of your project.</em>'
+        }</p>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+          <button type="button" id="admin-msg-ok" style="padding:10px 18px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">OK</button>
+          <button type="button" id="admin-msg-cancel" style="padding:10px 18px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
+          <button type="button" id="admin-msg-open" style="padding:10px 18px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;">Open in editor</button>
+        </div>
+      </div>`;
+
+    const closeModal = () => {
+      overlay.remove();
+      StudentProjectsPanel._activeFeedbackModal = false;
+    };
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#admin-msg-ok').addEventListener('click', async () => {
+      await fetch(`/api/student/versions/${versionId}/seen`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      closeModal();
+      StudentProjectsPanel.refreshUnreadBadge();
+      if (!options.skipQueueCheck) {
+        setTimeout(() => StudentProjectsPanel.pollForFeedback(), 300);
+      }
+    });
+
+    overlay.querySelector('#admin-msg-cancel').addEventListener('click', () => {
+      StudentProjectsPanel.dismissFeedbackForSession(versionId);
+      closeModal();
+      if (!options.skipQueueCheck) {
+        setTimeout(() => StudentProjectsPanel.pollForFeedback(), 300);
+      }
+    });
+
+    overlay.querySelector('#admin-msg-open').addEventListener('click', async () => {
+      closeModal();
+      await StudentProjectsPanel.openVersionInEditor(versionId, null, { skipFeedbackModal: true });
+      await fetch(`/api/student/versions/${versionId}/seen`, {
+        method: 'POST',
+        credentials: 'include',
+      });
       StudentProjectsPanel.refreshUnreadBadge();
     });
+  }
+
+  static showFeedbackModal(version) {
+    StudentProjectsPanel.showAdminMessageModal(
+      {
+        versionId: version.id,
+        threadId: version.threadId,
+        projectName: version.projectName,
+        adminNote: version.adminNote,
+      },
+      { skipQueueCheck: true }
+    );
   }
 }
 
@@ -22364,7 +22529,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showPostAuthWelcomeIfPending();
       if (adminReview && reviewVersionId) {
         AdminReviewMode.init(reviewVersionId);
-      } else if (window.StudentProjectsPanel) {
+      } else if (window.StudentProjectsPanel && window.StudentProjectsPanel.isSignedInStudent()) {
         StudentProjectsPanel.bind();
       }
       if (window.__pendingPlaygroundSlug && typeof window.runPendingPlaygroundLoad === 'function') {

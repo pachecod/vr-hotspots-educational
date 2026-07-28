@@ -103,6 +103,30 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
     return finish();
   });
 
+  app.get('/api/student/unread-feedback', async (req, res) => {
+    const finish = async () => {
+      try {
+        res.setHeader('Cache-Control', 'no-store');
+        const sess = getStudentSession(req);
+        if (!sess || !sess.studentId) {
+          return res.status(401).json({ success: false, message: 'Not authenticated' });
+        }
+        if (!isDbEnabled()) {
+          return res.json({ success: true, items: [], dbEnabled: false });
+        }
+        const items = await projectVersionsDb.listUnreadFeedback(sess.studentId);
+        return res.json({ success: true, items, dbEnabled: true });
+      } catch (err) {
+        console.error('unread-feedback error:', err);
+        return res.status(500).json({ success: false, message: err.message });
+      }
+    };
+    if (isStudentAuthRequired()) {
+      return requireStudentStrict(req, res, finish);
+    }
+    return finish();
+  });
+
   app.get('/api/student/projects/:threadId/versions', async (req, res) => {
     const finish = async () => {
       try {

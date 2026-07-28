@@ -172,6 +172,7 @@ function beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, student) 
   showIntegratedWelcomeLoading(containerId);
   if (student) {
     window.editorAccessMode = 'student';
+    window.currentStudent = student;
     showStudentEditorSession(student);
   } else if (window.editorAccessMode === 'local_test') {
     showTestUserEditorSession();
@@ -181,6 +182,10 @@ function beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, student) 
 }
 
 function showStudentEditorSession(student) {
+  if (student) {
+    window.currentStudent = student;
+    window.editorAccessMode = 'student';
+  }
   hideTestUserEditorSession();
   const bar = document.getElementById('student-editor-session');
   const nameEl = document.getElementById('student-editor-name');
@@ -336,6 +341,9 @@ function bindStudentEditorLogout() {
   btn.addEventListener('click', async () => {
     if (!confirm('Log out and return to the sign-in screen?')) return;
     try {
+      if (window.StudentProjectsPanel && typeof window.StudentProjectsPanel.stopFeedbackPolling === 'function') {
+        window.StudentProjectsPanel.stopFeedbackPolling();
+      }
       await studentLogout();
       window.currentStudent = null;
       window.editorAccessMode = 'none';
@@ -834,6 +842,7 @@ async function requireStudentSession(containerId, onAuthenticated) {
   if (status.authenticated && status.student) {
     setEntryGateActive(false);
     window.editorAccessMode = 'student';
+    window.currentStudent = status.student;
     showStudentEditorSession(status.student);
     onAuthenticated(status.student);
     return;

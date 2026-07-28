@@ -29,6 +29,10 @@ function formatHostedLinks(sub) {
   return html;
 }
 
+function formatSubmittedBy(sub) {
+  return sub.studentUsername || sub.studentName || sub.studentDisplayName || 'Unknown';
+}
+
 function showHostSuccess(result) {
   let banner = document.getElementById('host-result');
   if (!banner) {
@@ -223,9 +227,8 @@ async function loadInbox() {
         return `
           <div class="submission-card" data-version-id="${versionId}" data-thread-id="${threadId}">
             <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}${legacy ? ' <span class="badge badge-draft">B2 only</span>' : ''}</h3>
+            <p class="submitted-by">Submitted by: <strong>${escapeHtml(formatSubmittedBy(sub))}</strong>${sub.className ? ` <span class="submitted-by-class">(${escapeHtml(sub.className)})</span>` : ''}</p>
             <div class="meta">
-              <strong>Team member or student:</strong> ${escapeHtml(sub.studentDisplayName || sub.studentName || 'Unknown')}
-              ${sub.className ? ` (${escapeHtml(sub.className)})` : ''}<br>
               <strong>Version:</strong> #${sub.versionNumber || 1}<br>
               <strong>Submitted:</strong> ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '—'}<br>
               <strong>File:</strong> ${escapeHtml(sub.fileName)}${hostedLink}

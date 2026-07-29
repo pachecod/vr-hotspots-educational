@@ -1281,6 +1281,10 @@ class HotspotEditor {
     // Apply loaded styles to ensure they take effect
     this.refreshAllHotspotStyles();
 
+    // Must run after loadScenesData(): this re-saves the project snapshot, so running it
+    // earlier would persist the empty default scene over the user's saved work.
+    this.checkForStyleUpdates();
+
     // Try to persist storage for larger assets
     this.requestPersistentStorage();
 
@@ -4093,9 +4097,6 @@ class HotspotEditor {
     document.getElementById('css-settings').addEventListener('click', () => {
       this.openStyleEditor();
     });
-
-    // Check if returning from style editor
-    this.checkForStyleUpdates();
 
     // Scene media click for placing or repositioning hotspots (skybox or video sphere)
     document.querySelector('a-scene').addEventListener('click', (evt) => {

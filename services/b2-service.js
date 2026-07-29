@@ -836,6 +836,60 @@ class B2Service {
     return this._uploadFileToBucket(localPath, remotePath, contentType, this.commonAssetsBucketId);
   }
 
+  async uploadCommonAssetBuffer(buffer, remotePath, contentType = 'application/octet-stream') {
+    await this.ensureCommonAssetsBucket();
+    this.invalidateCommonAssetsCaches();
+    if (!this.commonAssetsPublicAccess) {
+      return this.uploadBuffer(buffer, remotePath, contentType);
+    }
+    await this.authorize();
+    const uploadUrlResponse = await this._withReauthRetry('getUploadUrl', async () =>
+      this.b2.getUploadUrl({ bucketId: this.commonAssetsBucketId })
+    );
+    const uploadResponse = await this._withReauthRetry('uploadBuffer', async () =>
+      this.b2.uploadFile({
+        uploadUrl: uploadUrlResponse.data.uploadUrl,
+        uploadAuthToken: uploadUrlResponse.data.authorizationToken,
+        fileName: remotePath,
+        data: buffer,
+        contentLength: buffer.length,
+        hash: 'do_not_verify',
+        mime: contentType,
+      })
+    );
+    console.log(`✅ Uploaded buffer to B2 (${this.commonAssetsBucketId}): ${remotePath}`);
+    return uploadResponse.data;
+  }
+
+  async deleteCommonAssetPrefix(prefix) {
+    await this.ensureCommonAssetsBucket();
+    this.invalidateCommonAssetsCaches();
+    const bucketId = this.commonAssetsPublicAccess
+      ? this.commonAssetsBucketId
+      : this.bucketId;
+    if (!bucketId) return 0;
+    let deleted = 0;
+    let startFileName = prefix;
+    for (;;) {
+      const files = await this._listFilesInBucket(bucketId, prefix, {
+        startFileName,
+        maxFileCount: 1000,
+      });
+      if (!files.length) break;
+      for (const file of files) {
+        const remotePath = file.fileName || '';
+        if (!remotePath.startsWith(prefix)) continue;
+        await this._deleteFileInBucket(bucketId, remotePath);
+        deleted++;
+      }
+      const last = files[files.length - 1];
+      if (!last || files.length < 1000) break;
+      startFileName = last.fileName;
+      if (startFileName === prefix && files.length === 1) break;
+    }
+    return deleted;
+  }
+
   async listCommonAssetFiles(prefix = '') {
     await this.ensureCommonAssetsBucket();
     if (!this.commonAssetsPublicAccess) {
@@ -849,7 +903,9 @@ class B2Service {
     if (!this.commonAssetsPublicAccess) {
       return this.getFileInfo(remotePath);
     }
-    return this._getFileInfoInBucket(this.commonAssetsBucketId, remotePath);
+    const publicInfo = await this._getFileInfoInBucket(this.commonAssetsBucketId, remotePath);
+    if (publicInfo) return publicInfo;
+    return this.getFileInfo(remotePath);
   }
 
   async deleteCommonAsset(remotePath) {
@@ -877,7 +933,22 @@ class B2Service {
     if (!this.commonAssetsPublicAccess) {
       return this.downloadStream(remotePath, options);
     }
-    return this._downloadStreamFromBucket(this.commonAssetsBucketName, remotePath, options);
+    try {
+      const result = await this._downloadStreamFromBucket(
+        this.commonAssetsBucketName,
+        remotePath,
+        options
+      );
+      if (result.statusCode !== 404) {
+        return result;
+      }
+    } catch (err) {
+      const status = err && err.response && err.response.status;
+      if (status !== 404) {
+        throw err;
+      }
+    }
+    return this.downloadStream(remotePath, options);
   }
 
   async syncLegacyCommonAssetsToPublicBucket() {
@@ -887,26 +958,36 @@ class B2Service {
     await this.ensureCommonAssetsBucket();
     if (!this.commonAssetsPublicAccess) return;
 
-    const prefix = 'common-assets/';
-    let privateFiles = [];
+    const migrationPrefixes = [
+      'common-assets/',
+      'admin-assets/',
+      'playground-tours/',
+      'playground-thumbs/',
+      'hosted-projects/',
+    ];
+    let legacyFiles = [];
     try {
-      privateFiles = await this._listFilesInBucket(this.bucketId, prefix);
+      for (const prefix of migrationPrefixes) {
+        const privateFiles = await this._listFilesInBucket(this.bucketId, prefix);
+        for (const file of privateFiles) {
+          const name = file.fileName || '';
+          if (!name.startsWith(prefix) || name.length <= prefix.length) continue;
+          if (prefix === 'common-assets/') {
+            const rest = name.slice(prefix.length);
+            const parts = rest.split('/');
+            if (parts.length !== 2 || !parts[0] || !parts[1]) continue;
+          }
+          legacyFiles.push(file);
+        }
+      }
     } catch (err) {
-      console.warn('⚠️ Could not scan private bucket for legacy common assets:', err.message);
+      console.warn('⚠️ Could not scan private bucket for legacy public-bucket files:', err.message);
       return;
     }
 
-    const legacyFiles = privateFiles.filter((file) => {
-      const name = file.fileName || '';
-      if (!name.startsWith('common-assets/')) return false;
-      const rest = name.slice('common-assets/'.length);
-      const parts = rest.split('/');
-      return parts.length === 2 && parts[0] && parts[1];
-    });
-
     if (legacyFiles.length === 0) return;
 
-    console.log(`ℹ️  Migrating ${legacyFiles.length} legacy common asset(s) to public bucket...`);
+    console.log(`ℹ️  Migrating ${legacyFiles.length} legacy file(s) to public bucket...`);
     const os = require('os');
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'b2-common-assets-'));
 
@@ -928,9 +1009,9 @@ class B2Service {
           fs.unlinkSync(tempPath);
         } catch (_) {}
       }
-      console.log('✅ Legacy common assets migration complete');
+      console.log('✅ Legacy public-bucket migration complete');
     } catch (err) {
-      console.warn('⚠️ Legacy common assets migration failed:', err.message);
+      console.warn('⚠️ Legacy public-bucket migration failed:', err.message);
     } finally {
       try {
         fs.rmSync(tempDir, { recursive: true, force: true });

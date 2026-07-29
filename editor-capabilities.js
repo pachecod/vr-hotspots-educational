@@ -17,9 +17,12 @@ function getEditorCapabilities() {
     canUseMyAssets: isStudent,
     canUseRidey: isStudent || isAdmin,
     canPublishVrTour: isStudent,
+    canExportFlatPages: isStudent || isAdmin,
     canExport: true,
     canLoadZip: true,
     canUseSharedAssets: true,
+    /** Guest-only named multi-project library in this browser */
+    canSaveLocally: isTest,
   };
 }
 
@@ -32,8 +35,23 @@ function applyEditorCapabilities() {
   const cloudBtn = document.getElementById('save-cloud-draft');
   if (cloudBtn) cloudBtn.style.display = caps.canUseCloudSave ? '' : 'none';
 
+  document.querySelectorAll('.save-locally-trigger').forEach((btn) => {
+    btn.style.display = caps.canSaveLocally ? '' : 'none';
+  });
+
   const subsBtn = document.getElementById('student-my-submissions-btn');
   if (subsBtn) subsBtn.style.display = caps.canSubmit ? '' : 'none';
+
+  const cloudSavesBtn = document.getElementById('student-my-cloud-saves-btn');
+  if (cloudSavesBtn) cloudSavesBtn.style.display = caps.canUseCloudSave ? '' : 'none';
+
+  if (caps.canSubmit && window.StudentProjectsPanel && typeof window.StudentProjectsPanel.bind === 'function') {
+    window.StudentProjectsPanel.bind();
+  }
+
+  if (window.LocalProjects && typeof window.LocalProjects.refreshButtonVisibility === 'function') {
+    window.LocalProjects.refreshButtonVisibility();
+  }
 
   const githubBtn = document.getElementById('upload-github');
   if (githubBtn) githubBtn.style.display = caps.canUploadToServer ? '' : 'none';

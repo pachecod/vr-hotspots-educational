@@ -12,10 +12,10 @@ const { assertAllowedFlatFilename, contentTypeForFilename } = require('../lib/fl
 
 const {
   deleteFlatPageB2Files,
-  removeHostedFlatPageDir,
   studentHostedPrefix,
-  HOSTED_DIR,
+  removeHostedFlatPageDir,
 } = require('../lib/student-content/flat-page-purge');
+const { uploadHostedUtf8, getHostedDir } = require('../lib/hosted-b2-storage');
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
@@ -111,16 +111,17 @@ function humanizeSlug(slug) {
     .join(' ');
 }
 
-/** Hosted flat pages on disk (covers publishes even when DB upsert lagged or failed). */
+/** Hosted flat pages on disk/B2 (covers publishes even when DB upsert lagged or failed). */
 function listHostedFlatPagesFromDisk(studentId, baseUrl) {
-  if (!fs.existsSync(HOSTED_DIR)) return [];
+  const hostedDir = getHostedDir();
+  if (!fs.existsSync(hostedDir)) return [];
   const dirPrefix = studentHostedPrefix(studentId);
   const pages = [];
-  for (const entry of fs.readdirSync(HOSTED_DIR)) {
+  for (const entry of fs.readdirSync(hostedDir)) {
     if (!entry.startsWith(dirPrefix)) continue;
     const slug = entry.slice(dirPrefix.length);
     if (!slug) continue;
-    const indexPath = path.join(HOSTED_DIR, entry, 'index.html');
+    const indexPath = path.join(hostedDir, entry, 'index.html');
     if (!fs.existsSync(indexPath)) continue;
     let updatedAt = new Date().toISOString();
     try {
@@ -356,11 +357,9 @@ function registerFlatPageRoutes(app) {
     const classSlug = await resolveClassSlug(studentId, req.studentSession);
 
     const hostedPath = `${studentHostedPrefix(studentId)}${payload.slug}`;
-    const targetDir = path.join(HOSTED_DIR, hostedPath);
-    fs.mkdirSync(targetDir, { recursive: true });
 
     for (const file of payload.files) {
-      fs.writeFileSync(path.join(targetDir, file.name), file.content, 'utf8');
+      await uploadHostedUtf8(hostedPath, file.name, file.content);
     }
 
     const prefix = buildPrefix(classSlug, studentId, payload.slug);
@@ -441,7 +440,7 @@ function registerFlatPageRoutes(app) {
       }
 
       await deleteFlatPageB2Files(b2Prefix, manifest);
-      removeHostedFlatPageDir(studentId, slug, hostedPath);
+      await removeHostedFlatPageDir(studentId, slug, hostedPath);
 
       if (isDbEnabled()) {
         await query(`DELETE FROM flat_page_projects WHERE student_id = $1 AND slug = $2`, [

@@ -180,6 +180,54 @@ function isPlaygroundGuestTemplateFlow() {
   );
 }
 
+function isPostAuthWelcomePending() {
+  if (window.__integratedWelcomePending) return true;
+  try {
+    return sessionStorage.getItem('vr-hotspot-pending-welcome') === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+function clearPostAuthWelcomePending() {
+  window.__integratedWelcomePending = false;
+  try {
+    sessionStorage.removeItem('vr-hotspot-pending-welcome');
+  } catch (_) {}
+}
+
+/** Show the 360 vs flat picker after sign-in (called once editor is ready). */
+function showPostAuthWelcomeIfPending() {
+  if (window.__postAuthWelcomeMounted || !isPostAuthWelcomePending()) return false;
+  if (isPlaygroundGuestTemplateFlow()) {
+    clearPostAuthWelcomePending();
+    return false;
+  }
+  const editor = window.hotspotEditor;
+  if (!editor || typeof editor.mountIntegratedWelcome !== 'function') return false;
+
+  window.__postAuthWelcomeMounted = true;
+  clearPostAuthWelcomePending();
+  const containerId = window.__integratedWelcomeContainerId || 'student-login-gate';
+  editor.mountIntegratedWelcome(
+    containerId,
+    () => {
+      window.__integratedWelcomeContainerId = null;
+      if (
+        window.StudentProjectsPanel &&
+        typeof window.StudentProjectsPanel.startFeedbackPolling === 'function' &&
+        window.StudentProjectsPanel.isSignedInStudent()
+      ) {
+        window.StudentProjectsPanel.startFeedbackPolling();
+      }
+    },
+    { forceShow: true }
+  );
+  return true;
+}
+
+window.showPostAuthWelcomeIfPending = showPostAuthWelcomeIfPending;
+
 function isEditorVideoSkyboxScene() {
   try {
     const ed = window.hotspotEditor;
@@ -630,25 +678,147 @@ function imageMaskStyleKey(styleCfg) {
   return `${styleCfg.borderRadius || 0}|${styleCfg.borderWidth || 0}|${styleCfg.borderColor || ''}`;
 }
 
-function mergeAImageMaterial(aImgEl, patch) {
-  if (!aImgEl || !patch) return;
-  const current = aImgEl.getAttribute('material');
-  if (current && typeof current === 'object') {
-    aImgEl.setAttribute('material', Object.assign({}, current, patch));
+function imageHotspotTextureReady(aImgEl) {
+  try {
+    const mesh = aImgEl && aImgEl.getObject3D && aImgEl.getObject3D('mesh');
+    const texImg = mesh && mesh.material && mesh.material.map && mesh.material.map.image;
+    if (!texImg) return false;
+    const w = texImg.naturalWidth || texImg.videoWidth || texImg.width || 0;
+    const h = texImg.naturalHeight || texImg.videoHeight || texImg.height || 0;
+    return w > 0 && h > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+function applyImageHotspotCrossOrigin(aImgEl, src) {
+  if (!aImgEl || !src || typeof src !== 'string') return;
+  if (src.startsWith('data:')) {
+    aImgEl.removeAttribute('crossorigin');
     return;
   }
-  aImgEl.setAttribute(
-    'material',
-    Object.assign(
-      {
-        shader: 'flat',
-        side: 'double',
-        transparent: false,
-        opacity: 1,
-      },
-      patch
+  try {
+    const resolved = new URL(src, window.location.href);
+    if (resolved.origin === window.location.origin) {
+      aImgEl.removeAttribute('crossorigin');
+    } else {
+      aImgEl.setAttribute('crossorigin', 'anonymous');
+    }
+  } catch (_) {
+    aImgEl.removeAttribute('crossorigin');
+  }
+}
+
+function srcToImageHotspotDataUrl(src) {
+  if (!src || typeof src !== 'string') return Promise.resolve(null);
+  if (src.startsWith('data:')) return Promise.resolve(src);
+  return fetch(src)
+    .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('fetch failed'))))
+    .then(
+      (blob) =>
+        new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(fr.result);
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        })
     )
-  );
+    .catch(() => null);
+}
+
+function mergeAImageMaterial(aImgEl, patch) {
+  if (!aImgEl || !patch) return;
+  try {
+    const mesh = aImgEl.getObject3D('mesh');
+    const liveMat = mesh && mesh.material;
+    if (liveMat) {
+      const preservedMap = liveMat.map;
+      Object.assign(liveMat, patch);
+      if (preservedMap && !liveMat.map) liveMat.map = preservedMap;
+      liveMat.needsUpdate = true;
+      if (mesh.geometry && mesh.geometry.computeBoundingSphere) {
+        mesh.geometry.computeBoundingSphere();
+      }
+      return;
+    }
+  } catch (_) {}
+  const current = aImgEl.getAttribute('material');
+  const src = aImgEl.getAttribute('src');
+  const base =
+    current && typeof current === 'object'
+      ? Object.assign({}, current)
+      : {
+          shader: 'flat',
+          side: 'double',
+          transparent: false,
+          opacity: 1,
+        };
+  if (src && !base.src) base.src = src;
+  aImgEl.setAttribute('material', Object.assign(base, patch));
+}
+
+function whenImageHotspotTextureReady(aImgEl, callback) {
+  if (!aImgEl || typeof callback !== 'function') return;
+  if (imageHotspotTextureReady(aImgEl)) {
+    callback();
+    return;
+  }
+  let done = false;
+  const run = () => {
+    if (done || !document.body.contains(aImgEl)) return;
+    if (imageHotspotTextureReady(aImgEl)) {
+      done = true;
+      callback();
+    }
+  };
+  aImgEl.addEventListener('materialtextureloaded', run, { once: true });
+  aImgEl.addEventListener('load', run, { once: true });
+  setTimeout(run, 300);
+  setTimeout(run, 800);
+}
+
+function ensureImageHotspotTexture(aImgEl, srcHint) {
+  if (!aImgEl || !aImgEl.classList || !aImgEl.classList.contains('static-image-hotspot')) {
+    return Promise.resolve(false);
+  }
+  if (imageHotspotTextureReady(aImgEl)) return Promise.resolve(true);
+  const src = srcHint || aImgEl.dataset.originalSrc || aImgEl.getAttribute('src') || '';
+  if (!src || src.startsWith('data:image/gif')) return Promise.resolve(false);
+
+  applyImageHotspotCrossOrigin(aImgEl, src);
+
+  const applySrc = (nextSrc) => {
+    if (!nextSrc || !document.body.contains(aImgEl)) return Promise.resolve(false);
+    setAImageHotspotSrc(aImgEl, nextSrc);
+    disableImageHotspotCulling(aImgEl);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        resolve(!!ok);
+      };
+      whenImageHotspotTextureReady(aImgEl, () => finish(imageHotspotTextureReady(aImgEl)));
+      setTimeout(() => finish(imageHotspotTextureReady(aImgEl)), 2200);
+    });
+  };
+
+  if (src.startsWith('blob:') || src.startsWith('http://') || src.startsWith('https://')) {
+    return srcToImageHotspotDataUrl(src).then((dataUrl) => applySrc(dataUrl || src));
+  }
+  return applySrc(src);
+}
+
+function scheduleImageHotspotTextureRepair(aImgEl, srcHint) {
+  if (!aImgEl) return;
+  [250, 800, 2000].forEach((delay) => {
+    setTimeout(() => {
+      if (!document.body.contains(aImgEl)) return;
+      if (!imageHotspotTextureReady(aImgEl)) {
+        ensureImageHotspotTexture(aImgEl, srcHint).catch(() => {});
+      }
+    }, delay);
+  });
 }
 
 function normalizeImageFadeDurationMs(value, fallbackMs = 5000) {
@@ -799,6 +969,27 @@ function restoreUnmaskedImageMaterial(aImgEl) {
 function applyRoundedMaskToAImage(aImgEl, styleCfg, force = false) {
   try {
     if (!aImgEl || !styleCfg) return Promise.resolve();
+    if (
+      aImgEl.classList &&
+      aImgEl.classList.contains('static-image-hotspot') &&
+      !imageHotspotTextureReady(aImgEl)
+    ) {
+      return new Promise((resolve) => {
+        let settled = false;
+        const runMask = () => {
+          if (settled) return;
+          settled = true;
+          applyRoundedMaskToAImage(aImgEl, styleCfg, force).then(resolve).catch(() => resolve());
+        };
+        whenImageHotspotTextureReady(aImgEl, runMask);
+        setTimeout(() => {
+          if (!settled && !imageHotspotTextureReady(aImgEl)) {
+            settled = true;
+            resolve();
+          }
+        }, 2500);
+      });
+    }
     const src = aImgEl.getAttribute('src');
     if (!src || src.startsWith('data:image/gif')) return Promise.resolve();
     const styleKey = imageMaskStyleKey(styleCfg);
@@ -949,7 +1140,7 @@ function showAssetLibraryModal() {
 }
 
 // Hotspot Editor Manager
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.8.2';
 
 class HotspotEditor {
   constructor() {
@@ -1130,6 +1321,9 @@ class HotspotEditor {
   init() {
     this.updateInstructionsVersion();
     this.bindEvents();
+    if (window.LocalProjects && typeof window.LocalProjects.applyTemplateNameToEditor === 'function') {
+      window.LocalProjects.applyTemplateNameToEditor();
+    }
     this.setupEditorPanelToggle();
     this.setupEditModeBarToggle();
 
@@ -1156,6 +1350,10 @@ class HotspotEditor {
     // Apply loaded styles to ensure they take effect
     this.refreshAllHotspotStyles();
 
+    // Must run after loadScenesData(): this re-saves the project snapshot, so running it
+    // earlier would persist the empty default scene over the user's saved work.
+    this.checkForStyleUpdates();
+
     // Try to persist storage for larger assets
     this.requestPersistentStorage();
 
@@ -1163,7 +1361,7 @@ class HotspotEditor {
 
     const skipInitialSceneBootstrap = isPlaygroundGuestTemplateFlow();
     if (skipInitialSceneBootstrap) {
-      window.__integratedWelcomePending = false;
+      clearPostAuthWelcomePending();
     } else {
       // Rehydrate any image/video/audio blob URLs from IndexedDB, then load the scene
       this.rehydrateImageSourcesFromIDB()
@@ -1187,6 +1385,7 @@ class HotspotEditor {
 
     // Prompt to change default scene image (only if still using default)
     this.promptForSceneImageChange();
+    showPostAuthWelcomeIfPending();
 
     // Migrate any legacy image width/height fields to scale
     this.migrateLegacyImageDimensions();
@@ -1284,8 +1483,44 @@ class HotspotEditor {
     return Boolean(this._videoPipelineConfig?.videoSceneServerUpload);
   }
 
-  _shouldUseEditorLocalVideoCompression() {
+  _shouldUseEditorLocalVideoCompression(file) {
+    if (file && this._isMovVideoFile(file)) {
+      return Boolean(
+        this._videoPipelineConfig?.editorLocalMovConversion ||
+          this._videoPipelineConfig?.editorLocalVideoCompression
+      );
+    }
     return Boolean(this._videoPipelineConfig?.editorLocalVideoCompression);
+  }
+
+  _isMovVideoFile(file) {
+    if (!file) return false;
+    const name = String(file.name || '').toLowerCase();
+    const type = String(file.type || '').toLowerCase();
+    return name.endsWith('.mov') || type === 'video/quicktime' || type.includes('quicktime');
+  }
+
+  _isSupportedLocalVideoFile(file) {
+    if (!file) return false;
+    const name = String(file.name || '').toLowerCase();
+    const type = String(file.type || '').toLowerCase();
+    const validTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+    const validExtensions = ['.mp4', '.webm', '.mov'];
+    const hasValidExt = validExtensions.some((ext) => name.endsWith(ext));
+    if (type && validTypes.includes(type)) return true;
+    // Some browsers leave type empty for .mov; fall back to extension.
+    if (!type || type === 'application/octet-stream') return hasValidExt;
+    return type.startsWith('video/') && hasValidExt;
+  }
+
+  _assertMovConversionAvailable(file) {
+    if (!this._isMovVideoFile(file)) return true;
+    if (this._shouldUseEditorLocalVideoCompression(file)) return true;
+    alert(
+      'QuickTime (.mov) files must be converted to MP4 on the server.\n\n' +
+        'Video conversion is not available right now. Export/convert the video to MP4 or WebM, then try again.'
+    );
+    return false;
   }
 
   get _videoExportUrlModeEnabled() {
@@ -1453,11 +1688,38 @@ class HotspotEditor {
   }
 
   async _pollEditorLocalVideoCompressionJob(jobId) {
+    // Heavy FFmpeg work can make the server briefly unresponsive (proxy 502/503 or
+    // HTML error pages). Treat those as transient and keep polling.
+    let consecutiveFailures = 0;
+    const MAX_CONSECUTIVE_FAILURES = 40;
     for (let i = 0; i < 1200; i++) {
-      const res = await fetch(`/api/editor-video/compression-jobs/${encodeURIComponent(jobId)}`, {
-        credentials: 'include',
-      });
-      const data = await res.json();
+      let data = null;
+      try {
+        const res = await fetch(`/api/editor-video/compression-jobs/${encodeURIComponent(jobId)}`, {
+          credentials: 'include',
+        });
+        if (res.status === 404) {
+          throw Object.assign(
+            new Error('Video compression job not found — the server may have restarted. Please try again.'),
+            { fatal: true }
+          );
+        }
+        data = await res.json();
+      } catch (err) {
+        if (err && err.fatal) throw err;
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          throw new Error('Lost contact with the server while compressing the video. Please try again.');
+        }
+        this._updateEditorVideoCompressionProgress({
+          phase: 'transcoding',
+          transcodePercent: 0,
+          message: 'Server busy processing video… still waiting.',
+        });
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        continue;
+      }
+      consecutiveFailures = 0;
       if (!data.success) throw new Error(data.message || 'Could not check video compression status');
       this._updateEditorVideoCompressionProgress(data);
       if (data.phase === 'done') return data.asset;
@@ -1473,7 +1735,14 @@ class HotspotEditor {
       await this.loadVideoPipelineConfig();
     }
 
-    if (this._shouldUseEditorLocalVideoCompression()) {
+    const isMov = this._isMovVideoFile(file);
+    if (isMov && !this._shouldUseEditorLocalVideoCompression(file)) {
+      throw new Error(
+        'QuickTime (.mov) files require server conversion to MP4, which is not available.'
+      );
+    }
+
+    if (this._shouldUseEditorLocalVideoCompression(file)) {
       try {
         this._showEditorVideoProcessingProgress(file);
         const upload = await this._uploadEditorLocalVideoForCompression(file);
@@ -1507,7 +1776,14 @@ class HotspotEditor {
             };
           }
         }
+        if (isMov) {
+          throw new Error('QuickTime (.mov) conversion did not return a playable MP4.');
+        }
       } catch (err) {
+        if (isMov) {
+          this._hideEditorVideoProcessingProgress();
+          throw err;
+        }
         console.warn('Editor video compression failed; storing original video', err);
       } finally {
         this._hideEditorVideoProcessingProgress();
@@ -1531,8 +1807,14 @@ class HotspotEditor {
       await this.loadVideoPipelineConfig();
     }
 
-    if (this._shouldUseEditorLocalVideoCompression()) {
+    if (this._shouldUseEditorLocalVideoCompression(file)) {
       return this.processLocalVideoFileForEditor({ file, storageKey: storageKeyFinal });
+    }
+
+    if (this._isMovVideoFile(file)) {
+      throw new Error(
+        'QuickTime (.mov) files require server conversion to MP4, which is not available.'
+      );
     }
 
     if (this._shouldUseSceneVideoServerUpload() && (await this._isStudentAuthenticated())) {
@@ -1970,9 +2252,12 @@ class HotspotEditor {
       if (mouseCursor) mouseCursor.setAttribute('visible', 'false');
       return;
     }
-    // Desktop: one active cursor avoids duplicate raycasts that block edit clicks.
-    if (gazeCursor) gazeCursor.setAttribute('visible', 'false');
+    // Desktop: gaze ring in Navigation Mode; mouse ray always on for pointer clicks.
+    // Edit Mode hides gaze only — dual raycasters in Edit Mode block hotspot edit clicks.
+    const navMode = !!this.navigationMode;
+    if (gazeCursor) gazeCursor.setAttribute('visible', navMode ? 'true' : 'false');
     if (mouseCursor) mouseCursor.setAttribute('visible', 'true');
+    this.refreshSceneMediaRaycasters();
   }
 
   _pointerEventToNdc(sourceEvent) {
@@ -2035,6 +2320,12 @@ class HotspotEditor {
     const classes = hitEl.classList;
     const hotspotEl = hitEl.closest?.("[id^='hotspot-']");
     const hotspotId = hotspotEl ? parseInt(String(hotspotEl.id || '').slice(8), 10) : NaN;
+
+    const popupCloseBtn = hitEl.closest?.('.popup-close');
+    if (popupCloseBtn) {
+      this._emitSyntheticEntityClick(popupCloseBtn, sourceEvent);
+      return true;
+    }
 
     if (classes.contains('in-scene-edit-btn') && Number.isFinite(hotspotId)) {
       this.showEditHotspotDialog(hotspotId);
@@ -2849,8 +3140,8 @@ class HotspotEditor {
     if (this._videoDBPromise) return this._videoDBPromise;
     this._videoDBPromise = new Promise((resolve, reject) => {
       if (!('indexedDB' in window)) return resolve(null);
-      // Bump DB version to 4 to add 'models' store alongside 'videos', 'images', and 'audio'
-      const req = indexedDB.open('vr-hotspots', 4);
+      // v5: localProjects store for guest Save Locally library (media still in videos/images/audio/models)
+      const req = indexedDB.open('vr-hotspots', 5);
       req.onupgradeneeded = (e) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains('videos')) {
@@ -2864,6 +3155,9 @@ class HotspotEditor {
         }
         if (!db.objectStoreNames.contains('models')) {
           db.createObjectStore('models', { keyPath: 'key' });
+        }
+        if (!db.objectStoreNames.contains('localProjects')) {
+          db.createObjectStore('localProjects', { keyPath: 'key' });
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -3830,7 +4124,7 @@ class HotspotEditor {
     document.getElementById('clear-data').addEventListener('click', () => {
       if (
         confirm(
-          'This will clear all saved data (scenes, hotspots, and styles) and reload the page. Are you sure?'
+          'This will clear all saved data (scenes, hotspots, styles, and My Local Projects) and reload the page. Are you sure?'
         )
       ) {
         clearLocalStorage();
@@ -3841,6 +4135,14 @@ class HotspotEditor {
     document.getElementById('save-template').addEventListener('click', () => {
       this.saveTemplate();
     });
+
+    if (window.LocalProjects && typeof window.LocalProjects.bind === 'function') {
+      window.LocalProjects.bind();
+    }
+
+    if (window.SphericalTemplateGallery && typeof window.SphericalTemplateGallery.bind === 'function') {
+      window.SphericalTemplateGallery.bind();
+    }
 
     const saveCloudBtn = document.getElementById('save-cloud-draft');
     if (saveCloudBtn) {
@@ -3889,9 +4191,6 @@ class HotspotEditor {
     document.getElementById('css-settings').addEventListener('click', () => {
       this.openStyleEditor();
     });
-
-    // Check if returning from style editor
-    this.checkForStyleUpdates();
 
     // Scene media click for placing or repositioning hotspots (skybox or video sphere)
     document.querySelector('a-scene').addEventListener('click', (evt) => {
@@ -5550,6 +5849,7 @@ class HotspotEditor {
           }
         } catch (err) {
           console.warn('[VideoHotspot] Failed to save video to IndexedDB', err);
+          alert(err.message || 'Failed to process video file.');
         }
       })();
     }
@@ -6144,51 +6444,16 @@ class HotspotEditor {
         );
       } catch (_) {}
       // Schedule integrity check & fallback to data URL if texture fails to materialize
-      const fileForFallback =
-        data._imageFileForIDB instanceof File
-          ? data._imageFileForIDB
-          : data.image instanceof File
-          ? data.image
-          : null;
-      if (fileForFallback) {
-        const scheduleFallback = (delay) => {
-          setTimeout(() => {
-            const el = document.getElementById(`hotspot-${data.id}`);
-            if (!el) return;
-            const imgEnt = el.querySelector('.static-image-hotspot');
-            if (!imgEnt) return;
-            let needsFallback = false;
-            try {
-              const mesh = imgEnt.getObject3D('mesh');
-              const texImg = mesh && mesh.material && mesh.material.map && mesh.material.map.image;
-              if (!texImg || !texImg.naturalWidth) needsFallback = true;
-            } catch (err) {
-              needsFallback = true;
-            }
-            if (needsFallback) {
-              console.log(
-                '[ImageHotspot] Fallback triggered; converting file to data URL for',
-                fileForFallback.name
-              );
-              const fr2 = new FileReader();
-              fr2.onload = () => {
-                // only replace if still same id and still not loaded
-                const el2 = document.getElementById(`hotspot-${data.id}`);
-                const imgEnt2 = el2?.querySelector('.static-image-hotspot');
-                if (imgEnt2) setAImageHotspotSrc(imgEnt2, fr2.result);
-              };
-              try {
-                fr2.readAsDataURL(fileForFallback);
-              } catch (_) {}
-            } else {
-              // Texture fine
-              // Optionally revoke object URL later (not revoking to allow editing reuse)
-            }
-          }, delay);
-        };
-        scheduleFallback(800);
-        scheduleFallback(2000);
-      }
+      const srcHintForRepair =
+        imgSrc ||
+        (typeof data.image === 'string' ? data.image : '') ||
+        data.commonAssetUrl ||
+        '';
+      setTimeout(() => {
+        const el = document.getElementById(`hotspot-${data.id}`);
+        const imgEnt = el?.querySelector('.static-image-hotspot');
+        if (imgEnt) scheduleImageHotspotTextureRepair(imgEnt, srcHintForRepair);
+      }, 50);
     }
 
     if (data.type === 'model') {
@@ -6331,6 +6596,8 @@ class HotspotEditor {
               const imgEnt = hotspotEl.querySelector('.static-image-hotspot');
               if (imgEnt) {
                 setAImageHotspotSrc(imgEnt, url);
+                applyImageHotspotCrossOrigin(imgEnt, url);
+                scheduleImageHotspotTextureRepair(imgEnt, url);
                 // mark into data so subsequent saves can strip the blob (storageKey persisted separately)
                 data.image = url;
                 if (data.imageFadePulse) {
@@ -6343,7 +6610,9 @@ class HotspotEditor {
                 try {
                   const istyleNow = this.customStyles && this.customStyles.image;
                   if (istyleNow && istyleNow.borderRadius && istyleNow.borderRadius > 0) {
-                    applyRoundedMaskToAImage(imgEnt, istyleNow, true);
+                    whenImageHotspotTextureReady(imgEnt, () => {
+                      applyRoundedMaskToAImage(imgEnt, istyleNow, true).catch(() => {});
+                    });
                   }
                 } catch (_) {}
                 // Re-evaluate aspect ratio based on the real texture once it binds
@@ -8008,7 +8277,7 @@ class HotspotEditor {
             </div>
             <div>
               <div style="font-size:12px; color:#ccc; margin-bottom:6px;">Replace Video</div>
-              <input id="edit-video-file" type="file" accept="video/mp4,video/webm" style="display:block; margin-bottom:6px; color:#ddd;" />
+              <input id="edit-video-file" type="file" accept="video/mp4,video/webm,video/quicktime,.mov" style="display:block; margin-bottom:6px; color:#ddd;" />
               <input id="edit-video-url" type="url" placeholder="https://example.com/video.mp4" value="${
                 typeof hotspot.video === 'string' && !hotspot.video.startsWith('blob:')
                   ? this._escapeAttr(hotspot.video)
@@ -8711,6 +8980,7 @@ class HotspotEditor {
                 }
               } catch (err) {
                 console.warn('[VideoHotspot] Edit save to IDB failed', err);
+                alert(err.message || 'Failed to process video file.');
               }
             })();
           } else {
@@ -9450,9 +9720,58 @@ class HotspotEditor {
         description: 'Choose how media should be included in your exported ZIP.',
       });
       if (!exportMode) return;
+    } else {
+      const proceed = await this.showGuestExportDialog();
+      if (!proceed) return;
     }
 
     this.saveAsCompleteProject(templateName, exportMode);
+  }
+
+  showGuestExportDialog() {
+    return new Promise((resolve) => {
+      const dialog = document.createElement('div');
+      dialog.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85); z-index: ${EDITOR_LAYER.dialog}; display: flex;
+        align-items: center; justify-content: center; font-family: Arial;
+      `;
+
+      dialog.innerHTML = `
+        <div style="background: #2a2a2a; padding: 28px; border-radius: 12px; color: white; max-width: 520px; width: calc(100% - 40px); box-shadow: 0 12px 40px rgba(0,0,0,0.45);">
+          <h3 style="margin: 0 0 8px 0; color: #4CAF50;">Guest Export</h3>
+          <p style="color: #ccc; margin: 0 0 14px 0; line-height: 1.5; font-size: 14px;">
+            Only your <strong>360° tour</strong> will be included in the ZIP.
+          </p>
+          <p style="color: #ccc; margin: 0 0 14px 0; line-height: 1.5; font-size: 14px;">
+            The <strong>flat web page and QR code are not included</strong> in guest exports.
+          </p>
+          <p style="color: #ccc; margin: 0 0 22px 0; line-height: 1.5; font-size: 14px;">
+            <strong>Sign in</strong> to save and publish a permanent flat page with a working QR code.
+          </p>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button type="button" id="guest-export-cancel" style="
+              background: #666; color: white; border: none; padding: 12px 18px;
+              border-radius: 6px; cursor: pointer;
+            ">Cancel</button>
+            <button type="button" id="guest-export-continue" style="
+              background: #4CAF50; color: white; border: none; padding: 12px 18px;
+              border-radius: 6px; cursor: pointer; font-weight: bold;
+            ">Continue Export</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(dialog);
+      dialog.querySelector('#guest-export-cancel').onclick = () => {
+        if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
+        resolve(false);
+      };
+      dialog.querySelector('#guest-export-continue').onclick = () => {
+        if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
+        resolve(true);
+      };
+    });
   }
 
   showExportModeDialog(options = {}) {
@@ -9658,8 +9977,12 @@ class HotspotEditor {
     // Include the flat web page content (if any) so spherical + flat travel together
     // as one project. Source files are written under flat-pages/<id>/ and the full
     // content is also embedded in config.flatPages for robust round-tripping.
+    const caps =
+      typeof window.getEditorCapabilities === 'function'
+        ? window.getEditorCapabilities()
+        : { canExportFlatPages: true };
     try {
-      if (window.flatPageEditor) {
+      if (window.flatPageEditor && caps.canExportFlatPages !== false) {
         window.flatPageEditor.addToZip(zip, {
           exportMode,
           vrTourEmbed: this.vrTourEmbed,
@@ -10610,15 +10933,28 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
     input.type = 'file';
     input.accept = '.zip';
 
-    input.addEventListener('change', (e) => {
+    input.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      if (file.name.endsWith('.zip')) {
-        this.loadZIPTemplate(file);
-      } else {
+      if (!file.name.endsWith('.zip')) {
         alert('Please select a ZIP template file.');
+        return;
       }
+
+      const isGuest =
+        typeof window.getEditorCapabilities === 'function' &&
+        window.getEditorCapabilities().isTestUser;
+      if (isGuest && window.LocalProjects) {
+        const count = await window.LocalProjects.count().catch(() => 0);
+        const msg =
+          count > 0
+            ? 'Loading a ZIP replaces your current editor work. Save Locally first if you want to keep it. Continue?'
+            : 'Loading a ZIP replaces your current editor work. Continue?';
+        if (!window.confirm(msg)) return;
+      }
+
+      this.loadZIPTemplate(file);
     });
 
     input.click();
@@ -11223,11 +11559,15 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
       }
 
       this.updateSceneDropdown();
-      this.loadCurrentScene();
+      await this.rehydrateImageHotspotsFromIDB();
+      await this.loadCurrentScene();
       this.updateHotspotList();
       this.updateNavigationTargets();
       this.updateStartingPointInfo();
       this.applyStylesToExistingElements();
+      this.repairAllImageHotspotTextures();
+      setTimeout(() => this.repairAllImageHotspotTextures(), 500);
+      setTimeout(() => this.repairAllImageHotspotTextures(), 1200);
 
       // Playground / bundle ZIPs must not depend on ephemeral /hosted/ tour URLs.
       this.vrTourEmbed = {
@@ -11478,14 +11818,21 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
               imgEl.dataset.originalSrc = currentSrc;
             }
             if (appliedKey !== radiusKey) {
-              if (imgEl.dataset.originalSrc) {
-                setAImageHotspotSrc(imgEl, imgEl.dataset.originalSrc);
+              const applyMask = () => {
+                if (imgEl.dataset.originalSrc) {
+                  setAImageHotspotSrc(imgEl, imgEl.dataset.originalSrc);
+                }
+                applyRoundedMaskToAImage(imgEl, istyle, true)
+                  .then(() => {
+                    imgEl.dataset.roundedAppliedRadius = radiusKey;
+                  })
+                  .catch(() => {});
+              };
+              if (imgEl.classList.contains('static-image-hotspot')) {
+                whenImageHotspotTextureReady(imgEl, applyMask);
+              } else {
+                applyMask();
               }
-              applyRoundedMaskToAImage(imgEl, istyle, true)
-                .then(() => {
-                  imgEl.dataset.roundedAppliedRadius = radiusKey;
-                })
-                .catch(() => {});
             }
           } else {
             // If rounding disabled, restore original if stored
@@ -11509,6 +11856,13 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
               });
             }
           }
+
+          if (imgEl.classList.contains('static-image-hotspot')) {
+            scheduleImageHotspotTextureRepair(
+              imgEl,
+              imgEl.dataset.originalSrc || imgEl.getAttribute('src') || ''
+            );
+          }
         } catch (e) {
           /* ignore individual failures */
         }
@@ -11518,11 +11872,24 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
     console.log('✅ Applied custom styles to existing elements');
   }
 
+  repairAllImageHotspotTextures() {
+    document.querySelectorAll('.static-image-hotspot').forEach((imgEl) => {
+      try {
+        const srcHint = imgEl.dataset.originalSrc || imgEl.getAttribute('src') || '';
+        if (!imageHotspotTextureReady(imgEl)) {
+          ensureImageHotspotTexture(imgEl, srcHint).catch(() => {});
+        }
+        scheduleImageHotspotTextureRepair(imgEl, srcHint);
+      } catch (_) {}
+    });
+  }
+
   refreshAllHotspotStyles() {
     console.log('🎨 Refreshing all hotspot styles');
 
     // Refresh styles for all existing hotspots
     this.applyStylesToExistingElements();
+    this.repairAllImageHotspotTextures();
 
     // Also refresh any in-memory hotspot data
     // Apply navigation ring customizations to existing navigation hotspots
@@ -11603,44 +11970,63 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
     flatBtn.addEventListener('click', () => {
       void this.setContentMode('flat');
     });
-    // Restore last active mode from combined project state (defaults to spherical).
+    // After sign-in the welcome modal picks the starting mode; stay on spherical until then.
+    const initialMode = isPostAuthWelcomePending()
+      ? 'spherical'
+      : this.contentMode || 'spherical';
     this._initialContentModeApply = true;
-    this.setContentMode(this.contentMode || 'spherical', { skipVrGenerate: true });
+    this.setContentMode(initialMode, { skipVrGenerate: true });
     this._initialContentModeApply = false;
+  }
+
+  _flatVrGeneratingOverlayMarkup() {
+    const title = HotspotEditor.FLAT_VR_OVERLAY_TITLE;
+    const message = HotspotEditor.FLAT_VR_OVERLAY_MESSAGE;
+    return `
+      <div style="text-align:center;max-width:540px;padding:24px;">
+        <div style="width:64px;height:64px;border:5px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 24px;"></div>
+        <h2 id="flat-vr-generating-title" style="margin:0 0 14px;font-size:22px;font-weight:700;line-height:1.35;">${title}</h2>
+        <p id="flat-vr-generating-message" style="margin:0 0 12px;font-size:15px;opacity:0.92;line-height:1.55;text-align:left;">${message}</p>
+        <p id="flat-vr-generating-status" style="margin:0;font-size:14px;opacity:0.8;font-style:italic;"></p>
+      </div>`;
   }
 
   _ensureFlatVrGeneratingOverlay() {
     let el = document.getElementById('flat-vr-generating-overlay');
-    if (el) return el;
-    el = document.createElement('div');
-    el.id = 'flat-vr-generating-overlay';
-    el.setAttribute('aria-live', 'polite');
-    el.style.cssText = [
-      'position:fixed',
-      'inset:0',
-      'z-index:100002',
-      'display:none',
-      'align-items:center',
-      'justify-content:center',
-      'background:rgba(10,10,20,0.92)',
-      'font-family:Arial,sans-serif',
-      'color:#fff',
-    ].join(';');
-    el.innerHTML = `
-      <div style="text-align:center;max-width:420px;padding:24px;">
-        <div style="width:64px;height:64px;border:5px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 24px;"></div>
-        <h2 style="margin:0 0 10px;font-size:22px;font-weight:700;">Generating 360° tour</h2>
-        <p id="flat-vr-generating-message" style="margin:0;font-size:15px;opacity:0.9;line-height:1.5;">Building a standalone copy of your spherical content…</p>
-      </div>`;
-    document.body.appendChild(el);
+    const needsRebuild = !el || !document.getElementById('flat-vr-generating-title');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'flat-vr-generating-overlay';
+      el.setAttribute('aria-live', 'polite');
+      el.style.cssText = [
+        'position:fixed',
+        'inset:0',
+        'z-index:100002',
+        'display:none',
+        'align-items:center',
+        'justify-content:center',
+        'background:rgba(10,10,20,0.92)',
+        'font-family:Arial,sans-serif',
+        'color:#fff',
+      ].join(';');
+      document.body.appendChild(el);
+    }
+    if (needsRebuild) {
+      el.innerHTML = this._flatVrGeneratingOverlayMarkup();
+    }
     return el;
   }
 
-  _setFlatVrGeneratingOverlay(visible, message = '') {
+  _setFlatVrGeneratingOverlay(visible, statusMessage = '') {
     const el = this._ensureFlatVrGeneratingOverlay();
     el.style.display = visible ? 'flex' : 'none';
+    if (!visible) return;
+    const titleEl = document.getElementById('flat-vr-generating-title');
     const msgEl = document.getElementById('flat-vr-generating-message');
-    if (msgEl && message) msgEl.textContent = message;
+    const statusEl = document.getElementById('flat-vr-generating-status');
+    if (titleEl) titleEl.textContent = HotspotEditor.FLAT_VR_OVERLAY_TITLE;
+    if (msgEl) msgEl.textContent = HotspotEditor.FLAT_VR_OVERLAY_MESSAGE;
+    if (statusEl) statusEl.textContent = statusMessage || '';
   }
 
   /** Publish a fresh standalone tour for flat-page preview (works for guests). */
@@ -11689,7 +12075,26 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
     if (flatBtn) flatBtn.disabled = true;
     if (sphericalBtn) sphericalBtn.disabled = true;
 
+    const isGuestEditor = window.editorAccessMode === 'local_test';
+    const isAdminEditor =
+      !!window.adminAuthenticated ||
+      !!(window.flatPageEditor?.getState?.()?.adminTemplateMode);
+    const shouldPublishFlatEmbed =
+      !isAdminEditor &&
+      (isGuestEditor || window.editorAccessMode === 'student' || !!window.currentStudent);
+
     try {
+      if (!shouldPublishFlatEmbed) {
+        this._setFlatVrGeneratingOverlay(true, 'Updating your flat page embed…');
+        if (
+          window.flatPageEditor &&
+          typeof window.flatPageEditor.syncLocalVrTourEmbedToFlatPage === 'function'
+        ) {
+          window.flatPageEditor.syncLocalVrTourEmbedToFlatPage();
+        }
+        return true;
+      }
+
       this._setFlatVrGeneratingOverlay(true, 'Building a standalone copy of your spherical content…');
       await this.generateVrTourEmbedForFlatMode();
       this._setFlatVrGeneratingOverlay(true, 'Updating your flat page embed and QR code…');
@@ -17825,28 +18230,31 @@ document.addEventListener('DOMContentLoaded', () => {
       if (choose) {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = 'video/mp4,video/webm';
+        input.accept = 'video/mp4,video/webm,video/quicktime,.mov';
         input.onchange = async (e) => {
           const file = e.target.files && e.target.files[0];
           if (!file) return;
-          if (!file.type.startsWith('video/')) {
-            alert('Please select a valid MP4/WebM video.');
+          if (!this._isSupportedLocalVideoFile(file)) {
+            alert('Please select a valid MP4, WebM, or MOV video.');
             return;
           }
-          const key = scene.videoStorageKey || this.currentScene;
-          await this.saveVideoToIDB(key, file);
+          if (!this._assertMovConversionAvailable(file)) return;
           try {
-            const url = URL.createObjectURL(file);
+            const key = scene.videoStorageKey || this.currentScene;
+            const processed = await this.processLocalVideoFileForEditor({ file, storageKey: key });
             scene.type = 'video';
-            scene.videoSrc = url;
-            scene.videoStorageKey = key;
-            scene.videoFileName = file.name;
+            scene.videoSrc = processed.videoSrc;
+            scene.videoStorageKey = processed.videoStorageKey || key;
+            scene.videoFileName = processed.videoFileName || file.name;
             scene.videoVolume = scene.videoVolume || 0.5;
             if (scene.muteVideoAudio === undefined) scene.muteVideoAudio = true;
             this.saveScenesData();
             // reload scene now that source is available
             this.switchToScene(this.currentScene);
-          } catch (_) {}
+          } catch (err) {
+            console.error('Failed to restore video file', err);
+            alert(err.message || 'Failed to load video file.');
+          }
         };
         input.click();
       } else {
@@ -18123,6 +18531,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   static WELCOME_SEEN_KEY = 'vr-hotspot-welcome-seen';
+  static FLAT_VR_OVERLAY_TITLE = 'Please wait while we generate your 360 tour';
+  static FLAT_VR_OVERLAY_MESSAGE =
+    "Whenever you move from 360 to flat web page, we automatically embed a 360 tour into your page along with a QR code for mobile viewing. If you don't want it, just remove those embed tags from your flat web page. Your 360 tour will still exist, but it won't be easily accessible from your flat page.";
 
   _markWelcomeSeen() {
     try {
@@ -18187,20 +18598,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof onComplete === 'function') onComplete();
   }
 
-  mountIntegratedWelcome(containerId, onComplete) {
+  mountIntegratedWelcome(containerId, onComplete, options = {}) {
     if (isPlaygroundGuestTemplateFlow()) {
-      window.__integratedWelcomePending = false;
+      clearPostAuthWelcomePending();
       if (typeof onComplete === 'function') onComplete();
       return;
     }
 
-    try {
-      if (localStorage.getItem(HotspotEditor.WELCOME_SEEN_KEY)) {
-        if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
-        if (typeof onComplete === 'function') onComplete();
-        return;
-      }
-    } catch (_) {}
+    const forceShow = options.forceShow === true;
+    if (!forceShow) {
+      try {
+        if (localStorage.getItem(HotspotEditor.WELCOME_SEEN_KEY)) {
+          if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
+          if (typeof onComplete === 'function') onComplete();
+          return;
+        }
+      } catch (_) {}
+    }
+
+    if (typeof window.setEntryGateActive === 'function') {
+      window.setEntryGateActive(true);
+    }
 
     this._ensureWelcomeAnimationStyle();
     const container = document.getElementById(containerId);
@@ -18269,7 +18687,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('welcome-choose-flat-btn').onclick = () => {
       finish();
-      void this.setContentMode('flat');
+      // First-time flat choice: open the editor without auto-publishing a 360° embed.
+      // VR generation runs later when switching from Spherical Content → Flat Web Page.
+      void this.setContentMode('flat', { skipVrGenerate: true });
     };
 
     document.getElementById('welcome-choose-360-btn').onclick = () => {
@@ -18400,18 +18820,11 @@ document.addEventListener('DOMContentLoaded', () => {
   promptForSceneImageChange() {
     if (new URLSearchParams(window.location.search).get('adminReview') === '1') return;
     if (isPlaygroundGuestTemplateFlow()) {
-      window.__integratedWelcomePending = false;
+      clearPostAuthWelcomePending();
       return;
     }
 
-    if (window.__integratedWelcomePending && window.__integratedWelcomeContainerId) {
-      const containerId = window.__integratedWelcomeContainerId;
-      window.__integratedWelcomePending = false;
-      this.mountIntegratedWelcome(containerId, () => {
-        window.__integratedWelcomeContainerId = null;
-      });
-      return;
-    }
+    if (isPostAuthWelcomePending()) return;
 
     try {
       if (localStorage.getItem(HotspotEditor.WELCOME_SEEN_KEY)) return;
@@ -18492,7 +18905,7 @@ document.addEventListener('DOMContentLoaded', () => {
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
             ">🎥 Upload Video File</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-              MP4/WebM • 360° equirectangular format
+              MP4/WebM/MOV • 360° equirectangular format
             </div>
           </div>
           <div style="margin: 15px 0;">
@@ -18729,17 +19142,18 @@ document.addEventListener('DOMContentLoaded', () => {
   addSceneVideoFromFile(name) {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'video/mp4,video/webm';
+    input.accept = 'video/mp4,video/webm,video/quicktime,.mov';
 
     input.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
       // Validate file type
-      if (!file.type.startsWith('video/')) {
-        alert('Please select a valid video file (MP4 or WebM).');
+      if (!this._isSupportedLocalVideoFile(file)) {
+        alert('Please select a valid video file (MP4, WebM, or MOV).');
         return;
       }
+      if (!this._assertMovConversionAvailable(file)) return;
 
       // Warn if file is large
       if (file.size > 200 * 1024 * 1024) {
@@ -18794,7 +19208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         this.finalizeNewScene(sceneId, name);
       } catch (err) {
         console.error('Failed to add scene video', err);
-        alert('Failed to add video scene.');
+        alert(err.message || 'Failed to add video scene.');
       }
     });
 
@@ -19070,28 +19484,34 @@ document.addEventListener('DOMContentLoaded', () => {
   pickSceneVideoFromFile(sceneId) {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'video/mp4,video/webm';
+    input.accept = 'video/mp4,video/webm,video/quicktime,.mov';
     input.onchange = async (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
-      if (!file.type.startsWith('video/')) {
-        alert('Please select a valid MP4/WebM video.');
+      if (!this._isSupportedLocalVideoFile(file)) {
+        alert('Please select a valid MP4, WebM, or MOV video.');
         return;
       }
-      const storageKey = sceneId === 'scene1' ? 'video_scene1' : `video_${sceneId}`;
-      await this.saveVideoToIDB(storageKey, file);
-      const url = URL.createObjectURL(file);
-      const sc = this.scenes[sceneId] || {};
-      sc.type = 'video';
-      sc.videoSrc = url;
-      sc.videoStorageKey = storageKey;
-      sc.videoFileName = file.name;
-      sc.videoVolume = sc.videoVolume || 0.5;
-      if (sc.muteVideoAudio === undefined) sc.muteVideoAudio = true;
-      this.clearCommonAssetProvenance(sc);
-      this.scenes[sceneId] = sc;
-      this.saveScenesData();
-      this.switchToScene(sceneId);
+      if (!this._assertMovConversionAvailable(file)) return;
+      try {
+        const storageKey = sceneId === 'scene1' ? 'video_scene1' : `video_${sceneId}`;
+        const processed = await this.processLocalVideoFileForScene({ file, storageKey });
+        const sc = this.scenes[sceneId] || {};
+        sc.type = 'video';
+        sc.videoSrc = processed.videoSrc;
+        sc.videoStorageKey = processed.videoStorageKey || storageKey;
+        sc.videoFileName = processed.videoFileName || file.name;
+        sc.videoVolume = sc.videoVolume || 0.5;
+        if (sc.muteVideoAudio === undefined) sc.muteVideoAudio = true;
+        this.clearCommonAssetProvenance(sc);
+        this.applyHostedVideoProvenance(sc, processed);
+        this.scenes[sceneId] = sc;
+        this.saveScenesData();
+        this.switchToScene(sceneId);
+      } catch (err) {
+        console.error('Failed to pick scene video', err);
+        alert(err.message || 'Failed to load video file.');
+      }
     };
     input.click();
   }
@@ -19118,7 +19538,7 @@ document.addEventListener('DOMContentLoaded', () => {
             border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
           ">📁 Upload Video File</button>
           <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-            MP4/WebM from your computer
+            MP4/WebM/MOV from your computer
           </div>
         </div>
 
@@ -19249,7 +19669,7 @@ document.addEventListener('DOMContentLoaded', () => {
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
             ">🎥 Upload Video File</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
-              MP4/WebM • 360° equirectangular format
+              MP4/WebM/MOV • 360° equirectangular format
             </div>
           </div>
           <div style="margin: 15px 0;">
@@ -19402,29 +19822,19 @@ document.addEventListener('DOMContentLoaded', () => {
     dialog.querySelector('#upload-video-file').onclick = () => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'video/mp4,video/webm';
+      input.accept = 'video/mp4,video/webm,video/quicktime,.mov';
       input.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         // Validate file type - check both MIME type and extension
-        const validVideoTypes = ['video/mp4', 'video/webm'];
-        const validExtensions = ['.mp4', '.webm'];
-        const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-
-        if (!file.type.startsWith('video/') || !validVideoTypes.includes(file.type.toLowerCase())) {
+        if (!this._isSupportedLocalVideoFile(file)) {
           alert(
-            "❌ Can't be selected as it is not a video file.\n\nPlease select a valid video file (MP4 or WebM only)."
+            "❌ Can't be selected as it is not a video file.\n\nPlease select a valid video file (MP4, WebM, or MOV)."
           );
           return;
         }
-
-        if (!validExtensions.includes(fileExtension)) {
-          alert(
-            "❌ Can't be selected as it is not a video file.\n\nOnly MP4 and WebM formats are supported."
-          );
-          return;
-        }
+        if (!this._assertMovConversionAvailable(file)) return;
 
         // Warn if file is large
         if (file.size > 200 * 1024 * 1024) {
@@ -19718,7 +20128,7 @@ AFRAME.registerComponent('editor-spot', {
       }
       setAImageHotspotSrc(img, _src);
       disableImageHotspotCulling(img);
-      img.setAttribute('crossorigin', 'anonymous');
+      applyImageHotspotCrossOrigin(img, _src);
       if (!img.getAttribute('material'))
         img.setAttribute('material', 'transparent:true; side:double');
       const scl = data.imageScale || 1;
@@ -19929,6 +20339,7 @@ AFRAME.registerComponent('editor-spot', {
         img.addEventListener('materialtextureloaded', syncImageFade, { once: true });
       }
       el.appendChild(img);
+      scheduleImageHotspotTextureRepair(img, _src);
       try {
         const ed = window.hotspotEditor;
         if (ed && el._repositionEditButtons) el._repositionEditButtons();
@@ -20315,38 +20726,160 @@ AFRAME.registerComponent('editor-spot', {
 
 // Student submission functionality
 class StudentProjectsPanel {
+  static FEEDBACK_POLL_MS =
+    typeof location !== 'undefined' && location.hostname === 'localhost' ? 5000 : 15000;
+  static DISMISSED_FEEDBACK_KEY = 'vr-dismissed-feedback-ids';
+  static _feedbackPollTimer = null;
+  static _feedbackPollInFlight = false;
+  static _activeFeedbackModal = false;
+  static _shownFeedbackIds = new Set();
+  static _visibilityBound = false;
+
+  static isSignedInStudent() {
+    return !!(window.currentStudent && window.currentStudent.id);
+  }
+
   static bind() {
-    const btn = document.getElementById('student-my-submissions-btn');
-    if (!btn || btn.dataset.bound === '1') return;
-    if (typeof window.getEditorCapabilities === 'function' && !window.getEditorCapabilities().canSubmit) {
-      btn.style.display = 'none';
+    if (!StudentProjectsPanel.isSignedInStudent()) {
+      const hideBtn = (id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      };
+      hideBtn('student-my-submissions-btn');
+      hideBtn('student-my-cloud-saves-btn');
+      StudentProjectsPanel.stopFeedbackPolling();
       return;
     }
-    btn.dataset.bound = '1';
-    btn.style.display = '';
-    btn.addEventListener('click', () => StudentProjectsPanel.show());
+
+    const subsBtn = document.getElementById('student-my-submissions-btn');
+    if (subsBtn && subsBtn.dataset.bound !== '1') {
+      subsBtn.dataset.bound = '1';
+      subsBtn.style.display = '';
+      subsBtn.addEventListener('click', () => StudentProjectsPanel.show());
+    }
+
+    const cloudSavesBtn = document.getElementById('student-my-cloud-saves-btn');
+    if (cloudSavesBtn && cloudSavesBtn.dataset.bound !== '1') {
+      cloudSavesBtn.dataset.bound = '1';
+      cloudSavesBtn.style.display = '';
+      cloudSavesBtn.addEventListener('click', () =>
+        StudentProjectsPanel.show({ draftsOnly: true })
+      );
+    }
+
     StudentProjectsPanel.refreshUnreadBadge();
+    StudentProjectsPanel.startFeedbackPolling();
+  }
+
+  static startFeedbackPolling() {
+    StudentProjectsPanel.stopFeedbackPolling();
+    if (!StudentProjectsPanel.isSignedInStudent()) {
+      return;
+    }
+    const tick = () => StudentProjectsPanel.pollForFeedback();
+    tick();
+    StudentProjectsPanel._feedbackPollTimer = setInterval(tick, StudentProjectsPanel.FEEDBACK_POLL_MS);
+    if (!StudentProjectsPanel._visibilityBound) {
+      StudentProjectsPanel._visibilityBound = true;
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) StudentProjectsPanel.pollForFeedback();
+      });
+    }
+  }
+
+  static stopFeedbackPolling() {
+    if (StudentProjectsPanel._feedbackPollTimer) {
+      clearInterval(StudentProjectsPanel._feedbackPollTimer);
+      StudentProjectsPanel._feedbackPollTimer = null;
+    }
+  }
+
+  static getDismissedFeedbackIds() {
+    try {
+      const raw = sessionStorage.getItem(StudentProjectsPanel.DISMISSED_FEEDBACK_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch (_) {
+      return new Set();
+    }
+  }
+
+  static dismissFeedbackForSession(versionId) {
+    const ids = StudentProjectsPanel.getDismissedFeedbackIds();
+    ids.add(versionId);
+    try {
+      sessionStorage.setItem(StudentProjectsPanel.DISMISSED_FEEDBACK_KEY, JSON.stringify([...ids]));
+    } catch (_) {}
+  }
+
+  static setUnreadBadgeCount(count) {
+    const btn = document.getElementById('student-my-submissions-btn');
+    if (!btn) return;
+    let badge = btn.querySelector('.unread-badge');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'unread-badge';
+        btn.appendChild(badge);
+      }
+      badge.textContent = String(count);
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+
+  static async pollForFeedback() {
+    if (document.hidden || StudentProjectsPanel._feedbackPollInFlight) return;
+    if (StudentProjectsPanel._activeFeedbackModal) return;
+    if (!StudentProjectsPanel.isSignedInStudent()) return;
+    StudentProjectsPanel._feedbackPollInFlight = true;
+    try {
+      const res = await fetch('/api/student/unread-feedback', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (res.status === 401) {
+        StudentProjectsPanel.stopFeedbackPolling();
+        return;
+      }
+      if (!res.ok) return;
+      const data = await res.json();
+      const items = data.items || [];
+      StudentProjectsPanel.setUnreadBadgeCount(items.length);
+
+      const dismissed = StudentProjectsPanel.getDismissedFeedbackIds();
+      const candidate = items.find(
+        (item) =>
+          !StudentProjectsPanel._shownFeedbackIds.has(item.versionId) &&
+          !dismissed.has(item.versionId)
+      );
+      if (candidate) {
+        StudentProjectsPanel._shownFeedbackIds.add(candidate.versionId);
+        StudentProjectsPanel.showAdminMessageModal(candidate);
+      }
+    } catch (_) {
+    } finally {
+      StudentProjectsPanel._feedbackPollInFlight = false;
+    }
   }
 
   static async refreshUnreadBadge() {
     const btn = document.getElementById('student-my-submissions-btn');
     if (!btn) return;
     try {
-      const res = await fetch('/api/student/projects', { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
-      const count = data.unreadCount || 0;
-      let badge = btn.querySelector('.unread-badge');
-      if (count > 0) {
-        if (!badge) {
-          badge = document.createElement('span');
-          badge.className = 'unread-badge';
-          btn.appendChild(badge);
-        }
-        badge.textContent = String(count);
-      } else if (badge) {
-        badge.remove();
+      const res = await fetch('/api/student/unread-feedback', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        StudentProjectsPanel.setUnreadBadgeCount((data.items || []).length);
+        return;
       }
+      const fallback = await fetch('/api/student/projects', { credentials: 'include' });
+      if (!fallback.ok) return;
+      const data = await fallback.json();
+      StudentProjectsPanel.setUnreadBadgeCount(data.unreadCount || 0);
     } catch (_) {}
   }
 
@@ -20363,14 +20896,28 @@ class StudentProjectsPanel {
     return 'Submitted';
   }
 
-  static async show() {
+  static async show(options = {}) {
+    const draftsOnly = !!options.draftsOnly;
     const res = await fetch('/api/student/projects', { credentials: 'include' });
     if (!res.ok) {
-      alert('Please sign in to view your submissions.');
+      alert(draftsOnly ? 'Please sign in to view your cloud saves.' : 'Please sign in to view your submissions.');
       return;
     }
     const data = await res.json();
-    const projects = data.projects || [];
+    let projects = data.projects || [];
+    if (draftsOnly) {
+      projects = projects.filter((p) => p.latestKind === 'draft');
+    }
+
+    const title = draftsOnly ? 'My Cloud Saves' : 'My Submissions';
+    const titleColor = draftsOnly ? '#42a5f5' : '#4CAF50';
+    let emptyCopy = draftsOnly
+      ? 'No cloud drafts yet. Use <strong>Save to Cloud</strong> in the Template panel to keep a draft online.'
+      : 'No submissions yet.';
+    if (draftsOnly && data.dbEnabled === false) {
+      emptyCopy =
+        'This server is not using the project database, so cloud drafts cannot be listed here. Set <strong>DATABASE_URL</strong> on the server (hosted deployments usually have this). Your ZIP may still upload to cloud storage.';
+    }
 
     const dialog = document.createElement('div');
     dialog.style.cssText = `
@@ -20379,7 +20926,8 @@ class StudentProjectsPanel {
     `;
     dialog.innerHTML = `
       <div style="background:#2a2a2a;color:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:85vh;overflow:auto;">
-        <h3 style="margin:0 0 16px;color:#4CAF50;">My Submissions</h3>
+        <h3 style="margin:0 0 16px;color:${titleColor};">${title}</h3>
+        ${draftsOnly ? '<p style="margin:0 0 14px;color:#aaa;font-size:13px;line-height:1.45;">Projects whose latest save is a cloud draft. After you submit or get teacher feedback, they appear under My Submissions instead.</p>' : ''}
         <div id="my-submissions-list"></div>
         <button id="close-my-submissions" style="margin-top:16px;padding:10px 20px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;">Close</button>
       </div>`;
@@ -20388,22 +20936,27 @@ class StudentProjectsPanel {
 
     const list = dialog.querySelector('#my-submissions-list');
     if (!projects.length) {
-      list.innerHTML = '<p style="color:#aaa;">No submissions yet.</p>';
+      list.innerHTML = `<p style="color:#aaa;">${emptyCopy}</p>`;
       return;
     }
 
     list.innerHTML = projects
       .map((p) => {
-        const hasFeedback = p.latestKind === 'admin_return' && !p.studentSeenAt;
+        const hasFeedback = !draftsOnly && p.latestKind === 'admin_return' && !p.studentSeenAt;
         const badge = hasFeedback
           ? '<span style="background:#2196F3;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px;">New feedback</span>'
           : '';
         const note = p.studentNote
           ? `<div style="font-size:12px;color:#ccc;margin-top:4px;">Your note: ${StudentProjectsPanel.escapeHtml(p.studentNote)}</div>`
           : '';
-        const adminNote = p.adminNote
-          ? `<div style="font-size:12px;color:#90caf9;margin-top:4px;">Teacher: ${StudentProjectsPanel.escapeHtml(p.adminNote)}</div>`
-          : '';
+        const adminNote =
+          !draftsOnly && p.adminNote
+            ? `<div style="font-size:12px;color:#90caf9;margin-top:4px;">Teacher: ${StudentProjectsPanel.escapeHtml(p.adminNote)}</div>`
+            : '';
+        const secondaryBtns = draftsOnly
+          ? `<button data-dl="${p.latestVersionId}" style="padding:6px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Download</button>`
+          : `<button data-dl="${p.latestVersionId}" style="padding:6px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Download</button>
+              <button data-history="${p.threadId}" style="padding:6px 12px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">History</button>`;
         return `
           <div style="border:1px solid #555;border-radius:6px;padding:12px;margin-bottom:10px;">
             <strong>${StudentProjectsPanel.escapeHtml(p.projectName)}</strong>
@@ -20411,8 +20964,7 @@ class StudentProjectsPanel {
             ${note}${adminNote}
             <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
               <button data-open="${p.latestVersionId}" data-thread="${p.threadId}" style="padding:6px 12px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Open in editor</button>
-              <button data-dl="${p.latestVersionId}" style="padding:6px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Download</button>
-              <button data-history="${p.threadId}" style="padding:6px 12px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">History</button>
+              ${secondaryBtns}
             </div>
             <div id="thread-history-${p.threadId}" style="display:none;margin-top:8px;font-size:12px;color:#bbb;"></div>
           </div>`;
@@ -20459,7 +21011,7 @@ class StudentProjectsPanel {
     });
   }
 
-  static async openVersionInEditor(versionId, parentDialog) {
+  static async openVersionInEditor(versionId, parentDialog, options = {}) {
     try {
       const res = await fetch(`/api/student/versions/${versionId}/download`, { credentials: 'include' });
       if (!res.ok) throw new Error('Could not load project ZIP');
@@ -20476,13 +21028,8 @@ class StudentProjectsPanel {
         ver = (hd.versions || []).find((v) => v.id === versionId);
         if (ver) break;
       }
-      if (ver && ver.adminNote) {
+      if (ver && ver.adminNote && !options.skipFeedbackModal) {
         StudentProjectsPanel.showFeedbackModal(ver);
-        await fetch(`/api/student/versions/${versionId}/seen`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-        StudentProjectsPanel.refreshUnreadBadge();
       }
       if (parentDialog) parentDialog.remove();
     } catch (err) {
@@ -20490,27 +21037,85 @@ class StudentProjectsPanel {
     }
   }
 
-  static showFeedbackModal(version) {
+  static showAdminMessageModal(item, options = {}) {
+    StudentProjectsPanel._activeFeedbackModal = true;
     const existing = document.getElementById('teacher-feedback-modal');
     if (existing) existing.remove();
-    const modal = document.createElement('div');
-    modal.id = 'teacher-feedback-modal';
-    modal.style.cssText = `
-      position:fixed;bottom:24px;right:24px;max-width:360px;background:#1e3a5f;color:#fff;
-      padding:16px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:${EDITOR_LAYER.dialog + 1};
-      border-left:4px solid #2196F3;font-family:Arial;
+
+    const versionId = item.versionId || item.id;
+    const note = item.adminNote || item.admin_note || '';
+    const projectName = item.projectName || item.project_name || 'Your project';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'teacher-feedback-modal';
+    overlay.style.cssText = `
+      position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:${EDITOR_LAYER.dialog + 1};
+      display:flex;align-items:center;justify-content:center;font-family:Arial;padding:16px;box-sizing:border-box;
     `;
-    modal.innerHTML = `
-      <strong style="display:block;margin-bottom:8px;">Teacher feedback</strong>
-      <p style="margin:0 0 12px;font-size:14px;line-height:1.4;">${StudentProjectsPanel.escapeHtml(version.adminNote)}</p>
-      <button id="dismiss-feedback" style="padding:6px 14px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;">Got it</button>
-    `;
-    document.body.appendChild(modal);
-    modal.querySelector('#dismiss-feedback').addEventListener('click', async () => {
-      await fetch(`/api/student/versions/${version.id}/seen`, { method: 'POST', credentials: 'include' });
-      modal.remove();
+    overlay.innerHTML = `
+      <div role="dialog" aria-labelledby="admin-msg-title" style="background:#1e3a5f;color:#fff;border-radius:10px;padding:24px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.45);border-left:4px solid #2196F3;">
+        <h3 id="admin-msg-title" style="margin:0 0 8px;font-size:20px;">New message from admin</h3>
+        <p style="margin:0 0 12px;font-size:13px;color:#90caf9;">${StudentProjectsPanel.escapeHtml(projectName)}</p>
+        <p style="margin:0 0 20px;font-size:15px;line-height:1.5;">${
+          note
+            ? StudentProjectsPanel.escapeHtml(note)
+            : '<em style="opacity:0.85;">Your teacher returned an updated version of your project.</em>'
+        }</p>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+          <button type="button" id="admin-msg-ok" style="padding:10px 18px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">OK</button>
+          <button type="button" id="admin-msg-cancel" style="padding:10px 18px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
+          <button type="button" id="admin-msg-open" style="padding:10px 18px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;">Open in editor</button>
+        </div>
+      </div>`;
+
+    const closeModal = () => {
+      overlay.remove();
+      StudentProjectsPanel._activeFeedbackModal = false;
+    };
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#admin-msg-ok').addEventListener('click', async () => {
+      await fetch(`/api/student/versions/${versionId}/seen`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      closeModal();
+      StudentProjectsPanel.refreshUnreadBadge();
+      if (!options.skipQueueCheck) {
+        setTimeout(() => StudentProjectsPanel.pollForFeedback(), 300);
+      }
+    });
+
+    overlay.querySelector('#admin-msg-cancel').addEventListener('click', () => {
+      StudentProjectsPanel.dismissFeedbackForSession(versionId);
+      closeModal();
+      if (!options.skipQueueCheck) {
+        setTimeout(() => StudentProjectsPanel.pollForFeedback(), 300);
+      }
+    });
+
+    overlay.querySelector('#admin-msg-open').addEventListener('click', async () => {
+      closeModal();
+      await StudentProjectsPanel.openVersionInEditor(versionId, null, { skipFeedbackModal: true });
+      await fetch(`/api/student/versions/${versionId}/seen`, {
+        method: 'POST',
+        credentials: 'include',
+      });
       StudentProjectsPanel.refreshUnreadBadge();
     });
+  }
+
+  static showFeedbackModal(version) {
+    StudentProjectsPanel.showAdminMessageModal(
+      {
+        versionId: version.id,
+        threadId: version.threadId,
+        projectName: version.projectName,
+        adminNote: version.adminNote,
+      },
+      { skipQueueCheck: true }
+    );
   }
 }
 
@@ -20764,25 +21369,41 @@ class StudentSubmission {
     const studentNote = prompt('Optional note for this draft (or leave blank):') ?? '';
     const overlay = StudentSubmission.createStatusOverlay('☁️ Saving draft to cloud...');
     try {
-      await StudentSubmission.submitProject(projectName, {
+      if (
+        window.LocalProjects &&
+        typeof window.LocalProjects.ensureTrackedForCloudSave === 'function'
+      ) {
+        await window.LocalProjects.ensureTrackedForCloudSave(projectName);
+      }
+      const saved = await StudentSubmission.submitProject(projectName, {
         studentNote,
         kind: 'draft',
         successMessage: 'Draft saved to cloud!',
+        removeLocalAfterSave: true,
       });
+      if (!saved) {
+        const statusDiv = document.getElementById('submission-status');
+        if (statusDiv && !statusDiv.innerHTML.trim()) {
+          statusDiv.innerHTML = '<p style="color:#ccc;">Save cancelled.</p>';
+        }
+        setTimeout(() => overlay._remove && overlay._remove(), 3000);
+        return;
+      }
+      setTimeout(() => overlay._remove && overlay._remove(), 4000);
     } catch (_) {
       /* submitProject shows error in status */
+      setTimeout(() => overlay._remove && overlay._remove(), 4000);
     }
-    setTimeout(() => overlay._remove && overlay._remove(), 2500);
   }
 
   static async submitProject(projectDisplayName, options = {}) {
     if (typeof window.getEditorCapabilities === 'function' && !window.getEditorCapabilities().canSubmit) {
       alert('Sign in with your team or class account to submit or save projects online.');
-      return;
+      return false;
     }
     if (!projectDisplayName || !projectDisplayName.trim()) {
       alert('Please enter a project name!');
-      return;
+      return false;
     }
 
     const projectName = projectDisplayName.trim();
@@ -20793,7 +21414,7 @@ class StudentSubmission {
       const sess = await sessRes.json();
       if (sess.authRequired && !sess.authenticated) {
         alert('Please sign in before submitting your project.');
-        return;
+        return false;
       }
       if (sess.authenticated && sess.student) {
         studentName = sess.student.displayName;
@@ -20803,12 +21424,22 @@ class StudentSubmission {
       /* continue with project name */
     }
 
+    const kind = options.kind || 'submitted';
     const exportMode = await window.hotspotEditor.showExportModeDialog({
-      title: 'Submit to Admin',
-      description: 'Choose how media should be included in the package uploaded to admin.',
+      title: kind === 'draft' ? 'Save to Cloud' : 'Submit to Admin',
+      description:
+        kind === 'draft'
+          ? 'Choose how media should be included in your cloud draft.'
+          : 'Choose how media should be included in the package uploaded to admin.',
       defaultMode: window.hotspotEditor._getDefaultExportModeForProject(),
     });
-    if (!exportMode) return;
+    if (!exportMode) {
+      const statusDiv = document.getElementById('submission-status');
+      if (statusDiv && kind === 'draft') {
+        statusDiv.innerHTML = '<p style="color:#ccc;">Save cancelled.</p>';
+      }
+      return false;
+    }
 
     StudentSubmission.hideSubmissionFormControls();
 
@@ -20845,26 +21476,23 @@ class StudentSubmission {
       const content = await zip.generateAsync({ type: 'blob' });
 
       const studentNote = options.studentNote || '';
-      const kind = options.kind || 'submitted';
 
       let prepareData = { fileName: null, b2Path: null, threadId: null, versionNumber: null };
-      try {
-        const prepRes = await fetch('/api/student/projects/prepare-upload', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectName, kind, threadId: options.threadId || null }),
-        });
-        if (prepRes.status === 402) {
-          const quota = await prepRes.json();
-          throw new Error(quota.message || 'Usage limit reached.');
-        }
-        if (prepRes.ok) {
-          prepareData = await prepRes.json();
-        }
-      } catch (prepErr) {
-        if (prepErr.message && prepErr.message.includes('Usage limit')) throw prepErr;
+      const prepRes = await fetch('/api/student/projects/prepare-upload', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectName, kind, threadId: options.threadId || null }),
+      });
+      if (prepRes.status === 402) {
+        const quota = await prepRes.json();
+        throw new Error(quota.message || 'Usage limit reached.');
       }
+      if (!prepRes.ok) {
+        const errBody = await prepRes.json().catch(() => ({}));
+        throw new Error(errBody.message || 'Could not prepare cloud save.');
+      }
+      prepareData = await prepRes.json();
 
       if (statusDiv) {
         statusDiv.innerHTML = `
@@ -21020,8 +21648,9 @@ class StudentSubmission {
         if (statusDiv) {
         statusDiv.innerHTML = `
           <p style="color: #4CAF50;">✅ ${options.successMessage || 'Project submitted successfully!'}</p>
-          <p style="color: #ccc; font-size: 0.9em;">File: ${result.fileName}</p>
+          <p style="color: #ccc; font-size: 0.9em;">File: ${result.fileName || prepareData.fileName || 'uploaded'}</p>
           ${result.versionNumber ? `<p style="color: #ccc; font-size: 0.85em;">Version #${result.versionNumber}</p>` : ''}
+          ${result.dbEnabled === false ? '<p style="color:#ffb74d;font-size:0.85em;">This server has no project database, so the draft will not appear in My Cloud Saves.</p>' : ''}
           <button id="close-submission-dialog" style="
             background: #4CAF50; color: white; border: none; padding: 10px 20px;
             border-radius: 4px; cursor: pointer; margin-top: 10px;
@@ -21038,6 +21667,18 @@ class StudentSubmission {
         });
         }
         if (window.StudentProjectsPanel) StudentProjectsPanel.refreshUnreadBadge();
+        if (
+          options.removeLocalAfterSave &&
+          kind === 'draft' &&
+          window.LocalProjects &&
+          typeof window.LocalProjects.removeAfterCloudSave === 'function'
+        ) {
+          try {
+            await window.LocalProjects.removeAfterCloudSave(projectName);
+          } catch (err) {
+            console.warn('Could not remove local project after cloud save:', err);
+          }
+        }
       } else {
         throw new Error(result.message || 'Submission failed');
       }
@@ -21066,6 +21707,7 @@ class StudentSubmission {
         if (cancelBtn2) cancelBtn2.disabled = false;
       }
     }
+    return submissionSucceeded;
   }
 }
 
@@ -21111,7 +21753,10 @@ async function clearLocalStorage() {
       ) {
         await window.hotspotEditor.clearAllModelsFromIDB();
       }
-      console.log('✅ Cleared IndexedDB videos, images, audio, and models');
+      if (window.LocalProjects && typeof window.LocalProjects.clearAll === 'function') {
+        await window.LocalProjects.clearAll();
+      }
+      console.log('✅ Cleared IndexedDB videos, images, audio, models, and local projects');
     } catch (e) {
       console.warn('Warning: Failed to clear some IndexedDB stores', e);
     }
@@ -22077,12 +22722,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const startEditor = () => {
-    const delay = window.__integratedWelcomePending ? 150 : 1000;
+    const delay = isPostAuthWelcomePending() ? 150 : 1000;
     setTimeout(async () => {
       window.hotspotEditor = new HotspotEditor();
+      showPostAuthWelcomeIfPending();
       if (adminReview && reviewVersionId) {
         AdminReviewMode.init(reviewVersionId);
-      } else if (window.StudentProjectsPanel) {
+      } else if (window.StudentProjectsPanel && window.StudentProjectsPanel.isSignedInStudent()) {
         StudentProjectsPanel.bind();
       }
       if (window.__pendingPlaygroundSlug && typeof window.runPendingPlaygroundLoad === 'function') {
@@ -22141,8 +22787,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (student && window.StudentProjectsPanel) {
         const subsBtn = document.getElementById('student-my-submissions-btn');
+        const cloudSavesBtn = document.getElementById('student-my-cloud-saves-btn');
         const cloudBtn = document.getElementById('save-cloud-draft');
         if (subsBtn) subsBtn.style.display = '';
+        if (cloudSavesBtn) cloudSavesBtn.style.display = '';
         if (cloudBtn) cloudBtn.style.display = '';
       }
       if (student && window.flatPageEditor) {

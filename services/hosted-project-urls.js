@@ -1,9 +1,40 @@
 const path = require('path');
 const fs = require('fs');
+const { readHostedFileUtf8, hostedFileExists, localProjectDir } = require('../lib/hosted-b2-storage');
 
 const FLAT_PAGES_FOLDER = 'flat-pages';
 const DEFAULT_PAGE_ID = 'main';
 const HOSTED_ROOT = 'hosted-projects';
+
+async function findFlatPageRelativePathFromStorage(hostedPath) {
+  let pageId = null;
+  try {
+    const configRaw = await readHostedFileUtf8(hostedPath, 'config.json');
+    const config = JSON.parse(configRaw);
+    const flatPages = config.flatPages;
+    if (flatPages && typeof flatPages === 'object') {
+      if (flatPages.activePageId && flatPages.pages && flatPages.pages[flatPages.activePageId]) {
+        pageId = flatPages.activePageId;
+      } else if (flatPages.pages && typeof flatPages.pages === 'object') {
+        pageId = Object.keys(flatPages.pages)[0];
+      }
+    }
+  } catch (_) {}
+
+  if (pageId) {
+    const candidate = `${FLAT_PAGES_FOLDER}/${pageId}/index.html`;
+    if (await hostedFileExists(hostedPath, candidate)) {
+      return candidate;
+    }
+  }
+
+  const defaultPath = `${FLAT_PAGES_FOLDER}/${DEFAULT_PAGE_ID}/index.html`;
+  if (await hostedFileExists(hostedPath, defaultPath)) {
+    return defaultPath;
+  }
+
+  return null;
+}
 
 function findFlatPageRelativePath(hostedDir) {
   if (!hostedDir || !fs.existsSync(hostedDir)) return null;
@@ -51,7 +82,7 @@ function findFlatPageRelativePath(hostedDir) {
 }
 
 function resolveHostedProjectUrls(urlPath, hostedDirOptional) {
-  const dir = hostedDirOptional || path.join(process.cwd(), HOSTED_ROOT, urlPath);
+  const dir = hostedDirOptional || localProjectDir(urlPath) || path.join(process.cwd(), HOSTED_ROOT, urlPath);
   const tourUrl = `/hosted/${urlPath}/index.html`;
   const flatRel = findFlatPageRelativePath(dir);
   const flatPageUrl = flatRel ? `/hosted/${urlPath}/${flatRel.replace(/\\/g, '/')}` : null;
@@ -62,7 +93,21 @@ function resolveHostedProjectUrls(urlPath, hostedDirOptional) {
   };
 }
 
+async function resolveHostedProjectUrlsAsync(urlPath) {
+  const tourUrl = `/hosted/${urlPath}/index.html`;
+  const flatRel = await findFlatPageRelativePathFromStorage(urlPath);
+  const flatPageUrl = flatRel ? `/hosted/${urlPath}/${flatRel.replace(/\\/g, '/')}` : null;
+  return {
+    tourUrl,
+    flatPageUrl,
+    hostedPath: urlPath,
+  };
+}
+
 function enrichInboxItem(item) {
+  if (!item.isHosted) {
+    return { ...item, hostedUrl: null, tourUrl: null, flatPageUrl: null };
+  }
   if (!item.hostedPath && !item.hostedUrl) return item;
   const urlPath =
     item.hostedPath ||
@@ -83,6 +128,8 @@ function enrichInboxHosting(inbox) {
 
 module.exports = {
   resolveHostedProjectUrls,
+  resolveHostedProjectUrlsAsync,
   enrichInboxHosting,
   findFlatPageRelativePath,
+  findFlatPageRelativePathFromStorage,
 };

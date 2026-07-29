@@ -1,6 +1,7 @@
 /** Inject parsed config.json for live preview (fetch does not work in srcdoc). */
 import { resolveConfigAssetUrls } from './resolveConfigAssetUrls.js';
 import { PREVIEW_LIVE_CONFIG_BRIDGE } from './previewLiveConfigBridge.js';
+import { rewriteVrTourEmbedsForEditorPreview } from './vrTourEmbed.js';
 
 export function injectPreviewConfig(html, configJsonRaw, options = {}) {
   const trimmed = String(configJsonRaw || '').trim();
@@ -34,6 +35,9 @@ export function buildPreviewDocument(page, options = {}) {
   };
 
   let html = getContent('index.html') || '<!DOCTYPE html><html><head></head><body></body></html>';
+  if (options.editorPreview !== false) {
+    html = rewriteVrTourEmbedsForEditorPreview(html);
+  }
   const css = getContent('style.css');
   const js = getContent('script.js');
   const configJson = getContent('config.json');

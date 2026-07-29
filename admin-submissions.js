@@ -29,6 +29,10 @@ function formatHostedLinks(sub) {
   return html;
 }
 
+function formatSubmittedBy(sub) {
+  return sub.studentUsername || sub.studentName || sub.studentDisplayName || 'Unknown';
+}
+
 function showHostSuccess(result) {
   let banner = document.getElementById('host-result');
   if (!banner) {
@@ -53,6 +57,91 @@ function showHostSuccess(result) {
   }
   banner.innerHTML = html;
   banner.style.display = 'block';
+}
+
+const HOST_PROGRESS_STAGES = [
+  { percent: 8, label: 'Downloading project from storage…' },
+  { percent: 22, label: 'Extracting project files…' },
+  { percent: 45, label: 'Uploading files to cloud storage…' },
+  { percent: 68, label: 'Uploading media and assets…' },
+  { percent: 82, label: 'Almost done — finishing upload…' },
+];
+
+let hostProgressTimer = null;
+let hostProgressStageIndex = 0;
+let hostProgressValue = 0;
+
+function setHostProgressUi(percent, statusText) {
+  const bar = document.getElementById('host-progress-bar');
+  const status = document.getElementById('host-progress-status');
+  if (bar) bar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+  if (status && statusText) status.textContent = statusText;
+}
+
+function setSubmissionActionsDisabled(disabled) {
+  document.querySelectorAll('.submission-card .actions button').forEach((el) => {
+    el.disabled = disabled;
+  });
+}
+
+function startHostProgress(projectName, urlPath) {
+  const overlay = document.getElementById('host-progress-overlay');
+  const title = document.getElementById('host-progress-title');
+  if (title) {
+    const name = String(projectName || 'Project').trim();
+    const path = String(urlPath || '').trim();
+    title.textContent = path ? `Hosting ${name} at /${path}` : `Hosting ${name}`;
+  }
+  hostProgressStageIndex = 0;
+  hostProgressValue = 0;
+  setHostProgressUi(0, HOST_PROGRESS_STAGES[0].label);
+  if (overlay) {
+    overlay.hidden = false;
+    overlay.setAttribute('aria-busy', 'true');
+  }
+  setSubmissionActionsDisabled(true);
+
+  if (hostProgressTimer) clearInterval(hostProgressTimer);
+  hostProgressTimer = setInterval(() => {
+    const stage = HOST_PROGRESS_STAGES[hostProgressStageIndex];
+    const nextStage = HOST_PROGRESS_STAGES[hostProgressStageIndex + 1];
+    const target = nextStage ? nextStage.percent : 88;
+    if (hostProgressValue < target) {
+      hostProgressValue = Math.min(target, hostProgressValue + 1.5);
+      setHostProgressUi(hostProgressValue, stage.label);
+      return;
+    }
+    if (nextStage) {
+      hostProgressStageIndex += 1;
+      setHostProgressUi(hostProgressValue, nextStage.label);
+    }
+  }, 700);
+}
+
+async function finishHostProgress(success) {
+  if (hostProgressTimer) {
+    clearInterval(hostProgressTimer);
+    hostProgressTimer = null;
+  }
+  if (success) {
+    setHostProgressUi(100, 'Hosting complete.');
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  }
+  stopHostProgress();
+}
+
+function stopHostProgress() {
+  if (hostProgressTimer) {
+    clearInterval(hostProgressTimer);
+    hostProgressTimer = null;
+  }
+  const overlay = document.getElementById('host-progress-overlay');
+  if (overlay) {
+    overlay.hidden = true;
+    overlay.setAttribute('aria-busy', 'false');
+  }
+  setHostProgressUi(0, 'Starting…');
+  setSubmissionActionsDisabled(false);
 }
 
 function kindBadge(kind) {
@@ -108,8 +197,9 @@ async function loadInbox() {
     if (classId) params.set('classId', classId);
     if (studentId) params.set('studentId', studentId);
     if (filter && filter !== 'all') params.set('filter', filter);
+    params.set('_', String(Date.now()));
     const url = '/admin/submissions-inbox' + (params.toString() ? '?' + params.toString() : '');
-    const response = await adminFetch(url);
+    const response = await adminFetch(url, { cache: 'no-store' });
     const submissions = await response.json();
 
     if (!submissions.length) {
@@ -137,9 +227,8 @@ async function loadInbox() {
         return `
           <div class="submission-card" data-version-id="${versionId}" data-thread-id="${threadId}">
             <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}${legacy ? ' <span class="badge badge-draft">B2 only</span>' : ''}</h3>
+            <p class="submitted-by">Submitted by: <strong>${escapeHtml(formatSubmittedBy(sub))}</strong>${sub.className ? ` <span class="submitted-by-class">(${escapeHtml(sub.className)})</span>` : ''}</p>
             <div class="meta">
-              <strong>Team member or student:</strong> ${escapeHtml(sub.studentDisplayName || sub.studentName || 'Unknown')}
-              ${sub.className ? ` (${escapeHtml(sub.className)})` : ''}<br>
               <strong>Version:</strong> #${sub.versionNumber || 1}<br>
               <strong>Submitted:</strong> ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '—'}<br>
               <strong>File:</strong> ${escapeHtml(sub.fileName)}${hostedLink}
@@ -148,7 +237,7 @@ async function loadInbox() {
             ${noteBlock}
             <div class="actions">
               <button class="btn-download" onclick="downloadVersion('${versionId}', '${escapeHtml(sub.fileName)}')">📥 Download</button>
-              <button class="btn-host" onclick="hostVersion('${versionId}', '${escapeHtml(sub.studentDisplayName || sub.studentName || 'project')}')">🌐 Host</button>
+              <button class="btn-host" onclick="hostVersion('${versionId}', '${escapeHtml(sub.projectName || 'project')}')">🌐 Host</button>
               ${reviewLink}
               ${historyBtn}
               <button class="btn-delete" onclick="deleteVersion('${versionId}')">🗑️ Delete</button>
@@ -190,13 +279,18 @@ async function downloadVersion(versionId, fileName) {
   }
 }
 
-async function hostVersion(versionId, studentName) {
-  const suggestedPath = studentName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+async function hostVersion(versionId, projectName) {
+  const suggestedPath =
+    String(projectName || 'project')
+      .replace(/\s+/g, '')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .toLowerCase() || 'project';
   const urlPath = prompt('URL path for hosting (e.g. john_doe):', suggestedPath);
   if (!urlPath || !/^[a-zA-Z0-9_-]+$/.test(urlPath)) {
     if (urlPath) alert('Invalid URL path.');
     return;
   }
+  startHostProgress(projectName, urlPath);
   try {
     const hostUrl = isLegacyVersion(versionId)
       ? `/admin/host/${encodeURIComponent(legacyFileName(versionId))}`
@@ -208,13 +302,42 @@ async function hostVersion(versionId, studentName) {
     });
     const result = await response.json();
     if (result.success) {
+      await finishHostProgress(true);
       showHostSuccess(result);
-      loadInbox();
+      await loadInbox();
     } else {
-      alert(result.message || 'Hosting failed');
+      stopHostProgress();
+      alert(result.message || result.error || 'Hosting failed');
     }
   } catch (err) {
+    stopHostProgress();
     alert('Hosting failed: ' + err.message);
+  }
+}
+
+async function unhostEverything() {
+  const confirmed = confirm(
+    'This will make all public links to hosted projects inaccessible, but they will still appear in the submission queue.\n\nAre you sure?'
+  );
+  if (!confirmed) return;
+
+  const btn = document.getElementById('unhost-all-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const response = await adminFetch('/admin/unhost-all', { method: 'POST' });
+    const result = await response.json();
+    if (result.success) {
+      const banner = document.getElementById('host-result');
+      if (banner) banner.style.display = 'none';
+      await loadInbox();
+      alert(result.message || 'All hosted projects were unhosted.');
+    } else {
+      alert(result.message || 'Unhost failed');
+    }
+  } catch (err) {
+    alert('Unhost failed: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 

@@ -12,7 +12,8 @@ const {
 } = require('../student-auth');
 const { assertCanSubmit } = require('../services/usage-quota');
 const { listLegacyInbox, mergeB2OrphansIntoInbox } = require('../lib/legacy-submissions');
-const { resolveHostedProjectUrls, enrichInboxHosting } = require('../services/hosted-project-urls');
+const { resolveHostedProjectUrls, resolveHostedProjectUrlsAsync, enrichInboxHosting } = require('../services/hosted-project-urls');
+const { uploadHostedDirectory } = require('../lib/hosted-b2-storage');
 
 function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe }) {
   app.post('/api/student/projects/prepare-upload', async (req, res) => {
@@ -86,13 +87,37 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
           return res.status(401).json({ success: false, message: 'Not authenticated' });
         }
         if (!isDbEnabled()) {
-          return res.json({ success: true, projects: [], unreadCount: 0 });
+          return res.json({ success: true, projects: [], unreadCount: 0, dbEnabled: false });
         }
         const projects = await projectVersionsDb.listStudentProjects(sess.studentId);
         const unreadCount = await projectVersionsDb.getUnreadFeedbackCount(sess.studentId);
-        return res.json({ success: true, projects, unreadCount });
+        return res.json({ success: true, projects, unreadCount, dbEnabled: true });
       } catch (err) {
         console.error('list student projects error:', err);
+        return res.status(500).json({ success: false, message: err.message });
+      }
+    };
+    if (isStudentAuthRequired()) {
+      return requireStudentStrict(req, res, finish);
+    }
+    return finish();
+  });
+
+  app.get('/api/student/unread-feedback', async (req, res) => {
+    const finish = async () => {
+      try {
+        res.setHeader('Cache-Control', 'no-store');
+        const sess = getStudentSession(req);
+        if (!sess || !sess.studentId) {
+          return res.status(401).json({ success: false, message: 'Not authenticated' });
+        }
+        if (!isDbEnabled()) {
+          return res.json({ success: true, items: [], dbEnabled: false });
+        }
+        const items = await projectVersionsDb.listUnreadFeedback(sess.studentId);
+        return res.json({ success: true, items, dbEnabled: true });
+      } catch (err) {
+        console.error('unread-feedback error:', err);
         return res.status(500).json({ success: false, message: err.message });
       }
     };
@@ -192,7 +217,12 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
           return res.status(400).json({ success: false, message: 'Missing required fields' });
         }
         if (!isDbEnabled()) {
-          return res.json({ success: true, message: 'Draft saved (no database)' });
+          return res.json({
+            success: true,
+            message: 'Draft uploaded to cloud storage, but DATABASE_URL is not set so it cannot appear in My Cloud Saves.',
+            dbEnabled: false,
+            fileName,
+          });
         }
         const result = await projectVersionsDb.createVersion({
           studentId: sess.studentId,
@@ -211,6 +241,8 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
           versionId: result.version.id,
           threadId: result.thread.id,
           versionNumber: result.versionNumber,
+          fileName,
+          dbEnabled: true,
         });
       } catch (err) {
         console.error('save-draft error:', err);
@@ -225,6 +257,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
 
   app.get('/admin/submissions-inbox', async (req, res) => {
     try {
+      res.setHeader('Cache-Control', 'no-store');
       const { classId, studentId, filter } = req.query;
       const filterVal = filter || 'all';
 
@@ -373,21 +406,20 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       return res.status(400).json({ error: 'Invalid urlPath' });
     }
     let tempPath = null;
+    let tempExtractDir = null;
     try {
       const version = await projectVersionsDb.getVersionById(req.params.versionId);
       if (!version) {
         return res.status(404).json({ success: false, message: 'Version not found' });
       }
       tempPath = path.join('temp-uploads', `host_${Date.now()}_${version.fileName}`);
-      const hostedDir = path.join('hosted-projects', urlPath);
+      tempExtractDir = path.join('temp-uploads', `host_extract_${Date.now()}_${urlPath}`);
       await b2Service.downloadFile(version.b2Path, tempPath);
       assertValidZipFile(tempPath);
-      if (fs.existsSync(hostedDir)) {
-        fs.rmSync(hostedDir, { recursive: true, force: true });
-      }
-      fs.mkdirSync(hostedDir, { recursive: true });
-      await extractZipToDirSafe(tempPath, hostedDir);
-      const urls = resolveHostedProjectUrls(urlPath, hostedDir);
+      fs.mkdirSync(tempExtractDir, { recursive: true });
+      await extractZipToDirSafe(tempPath, tempExtractDir);
+      await uploadHostedDirectory(tempExtractDir, urlPath);
+      const urls = await resolveHostedProjectUrlsAsync(urlPath);
       await projectVersionsDb.updateVersionHosting(version.id, {
         hostedPath: urlPath,
         hostedUrl: urls.tourUrl,
@@ -405,6 +437,11 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       if (tempPath) {
         try {
           if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch (_) {}
+      }
+      if (tempExtractDir) {
+        try {
+          if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
         } catch (_) {}
       }
     }

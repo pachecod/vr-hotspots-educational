@@ -66,6 +66,11 @@ const DEFAULT_WELCOME_SCREEN_HTML = `<h2>Welcome to the WebXRIDE<br/>Immersive S
 <p>Choose how you'd like to get started.</p>`;
 
 let welcomeSystemTextCache = null;
+let noTeamsSigninTextCache = null;
+
+const DEFAULT_NO_TEAMS_SIGNIN_HTML = `<p>No teams or classes currently exist in this install.</p>
+<p>If you have admin access, open the <a href="/admin-users.html">Users</a> tab and add a team or class with a password. Then add users to that team or class.</p>
+<p>After that, your users can sign in, upload their own content, and submit it to you to review as a team leader or teacher.</p>`;
 
 async function fetchWelcomeSystemText() {
   if (welcomeSystemTextCache) return welcomeSystemTextCache;
@@ -81,6 +86,22 @@ async function fetchWelcomeSystemText() {
   }
   welcomeSystemTextCache = DEFAULT_WELCOME_SCREEN_HTML;
   return welcomeSystemTextCache;
+}
+
+async function fetchNoTeamsSigninText() {
+  if (noTeamsSigninTextCache) return noTeamsSigninTextCache;
+  try {
+    const res = await fetch('/api/system-text/no-teams-signin');
+    const data = await res.json();
+    if (data.success && data.text?.content_html) {
+      noTeamsSigninTextCache = data.text.content_html;
+      return noTeamsSigninTextCache;
+    }
+  } catch (_) {
+    /* use default */
+  }
+  noTeamsSigninTextCache = DEFAULT_NO_TEAMS_SIGNIN_HTML;
+  return noTeamsSigninTextCache;
 }
 
 function welcomeGithubFooterHtml() {
@@ -144,9 +165,14 @@ function showIntegratedWelcomeLoading(containerId) {
 function beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, student) {
   window.__integratedWelcomePending = true;
   window.__integratedWelcomeContainerId = containerId;
+  window.__postAuthWelcomeMounted = false;
+  try {
+    sessionStorage.setItem('vr-hotspot-pending-welcome', '1');
+  } catch (_) {}
   showIntegratedWelcomeLoading(containerId);
   if (student) {
     window.editorAccessMode = 'student';
+    window.currentStudent = student;
     showStudentEditorSession(student);
   } else if (window.editorAccessMode === 'local_test') {
     showTestUserEditorSession();
@@ -156,6 +182,10 @@ function beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, student) 
 }
 
 function showStudentEditorSession(student) {
+  if (student) {
+    window.currentStudent = student;
+    window.editorAccessMode = 'student';
+  }
   hideTestUserEditorSession();
   const bar = document.getElementById('student-editor-session');
   const nameEl = document.getElementById('student-editor-name');
@@ -169,11 +199,21 @@ function showStudentEditorSession(student) {
   bar.classList.add('visible');
   bindStudentEditorLogout();
   const subsBtn = document.getElementById('student-my-submissions-btn');
+  const cloudSavesBtn = document.getElementById('student-my-cloud-saves-btn');
   const cloudBtn = document.getElementById('save-cloud-draft');
   if (subsBtn) subsBtn.style.display = '';
+  if (cloudSavesBtn) cloudSavesBtn.style.display = '';
   if (cloudBtn) cloudBtn.style.display = '';
   if (window.StudentProjectsPanel) {
+    if (typeof window.StudentProjectsPanel.bind === 'function') {
+      window.StudentProjectsPanel.bind();
+    }
     setTimeout(() => window.StudentProjectsPanel.refreshUnreadBadge(), 300);
+  }
+  if (window.LocalProjects && typeof window.LocalProjects.bind === 'function') {
+    window.LocalProjects.bind();
+  } else if (window.LocalProjects && typeof window.LocalProjects.refreshButtonVisibility === 'function') {
+    window.LocalProjects.refreshButtonVisibility();
   }
 }
 
@@ -187,6 +227,11 @@ function showTestUserEditorSession() {
   const bar = document.getElementById('test-user-editor-session');
   if (bar) bar.classList.add('visible');
   bindTestUserGuestSessionButtons();
+  if (window.LocalProjects && typeof window.LocalProjects.bind === 'function') {
+    window.LocalProjects.bind();
+  } else if (window.LocalProjects && typeof window.LocalProjects.refreshButtonVisibility === 'function') {
+    window.LocalProjects.refreshButtonVisibility();
+  }
 }
 
 function hideTestUserEditorSession() {
@@ -235,8 +280,8 @@ function promptGuestSignInWarning() {
       <div class="guest-agreement-dialog">
         <h2 id="guest-signin-warning-title" class="guest-agreement-title">Sign in?</h2>
         <div class="guest-agreement-content">
-          <p>All work done as a guest will be deleted after signing in.</p>
-          <p>If you want to save your work, click <strong>Save Template</strong> to get a local ZIP. You can upload that to your 360° editor after you are signed in.</p>
+          <p>Signing in does not upload guest work automatically. Projects you <strong>Save Locally</strong> stay in this browser under <strong>My Local Projects</strong> so you can open them after you sign in, then use cloud save or submit.</p>
+          <p>You can also click <strong>Save Template</strong> for a ZIP backup before signing in.</p>
         </div>
         <div class="guest-agreement-actions">
           <button type="button" class="guest-agreement-btn guest-agreement-cancel" data-action="cancel">Cancel</button>
@@ -296,6 +341,9 @@ function bindStudentEditorLogout() {
   btn.addEventListener('click', async () => {
     if (!confirm('Log out and return to the sign-in screen?')) return;
     try {
+      if (window.StudentProjectsPanel && typeof window.StudentProjectsPanel.stopFeedbackPolling === 'function') {
+        window.StudentProjectsPanel.stopFeedbackPolling();
+      }
       await studentLogout();
       window.currentStudent = null;
       window.editorAccessMode = 'none';
@@ -448,6 +496,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   hideTestUserEditorSession();
 
   let classes = [];
+  let noTeamsMessageHtml = DEFAULT_NO_TEAMS_SIGNIN_HTML;
   let selectedClass = null;
   let selectedStudent = null;
   let students = [];
@@ -538,17 +587,42 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
     errorEl.style.display = 'none';
   }
 
+  function classRequiresSignInPassword(cls) {
+    if (!cls) return false;
+    const value = cls.require_sign_in_password ?? cls.requireSignInPassword;
+    return value === true || value === 'true' || value === 1 || value === '1';
+  }
+
+  function signInStepCount() {
+    return selectedClass && classRequiresSignInPassword(selectedClass) ? 4 : 3;
+  }
+
+  function afterClassSelected() {
+    if (classRequiresSignInPassword(selectedClass)) {
+      renderClassPasswordStep();
+      return;
+    }
+    loadStudents(selectedClass.id)
+      .then(() => {
+        clearError();
+        renderStudentStep();
+      })
+      .catch((err) => showError(err.message));
+  }
+
   function renderClassStep() {
     selectedStudent = null;
     students = [];
-    subtitleEl.textContent = 'Step 1 of 4 — Choose your team or class';
+    const total = 4;
+    subtitleEl.textContent = `Step 1 of ${total} — Choose your team or class`;
     const backBtn =
       options.showBackToEntry && !useWelcomeShell
         ? `<button type="button" id="student-back-entry" style="background:none;border:none;color:#4caf50;cursor:pointer;margin-bottom:12px;padding:0;">← Back</button>`
         : '';
     if (!classes.length) {
       stepEl.innerHTML =
-        backBtn + '<p style="color:#f0f0f0;">No teams or classes available. Ask your team leader or teacher to add you.</p>';
+        backBtn +
+        `<div class="no-teams-signin-message welcome-system-text">${noTeamsMessageHtml}</div>`;
       return;
     }
     stepEl.innerHTML =
@@ -571,7 +645,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
       btn.addEventListener('click', () => {
         selectedClass = classes.find((c) => c.id === btn.dataset.id);
         clearError();
-        renderClassPasswordStep();
+        afterClassSelected();
       });
     });
   }
@@ -579,7 +653,8 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   function renderClassPasswordStep() {
     selectedStudent = null;
     students = [];
-    subtitleEl.textContent = `Step 2 of 4 — Enter team or class password (${selectedClass.name})`;
+    const total = signInStepCount();
+    subtitleEl.textContent = `Step 2 of ${total} — Enter team or class password (${selectedClass.name})`;
     stepEl.innerHTML = `
       <button type="button" id="student-back-class" style="background:none;border:none;color:rgba(255,255,255,0.9);cursor:pointer;margin-bottom:12px;padding:0;">← Back to teams or classes</button>
       <p style="color:rgba(255,255,255,0.75);font-size:13px;margin:0 0 12px;">
@@ -618,10 +693,12 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   }
 
   function renderStudentStep() {
-    subtitleEl.textContent = `Step 3 of 4 — Choose your name (${selectedClass.name})`;
+    const total = signInStepCount();
+    const stepNum = classRequiresSignInPassword(selectedClass) ? 3 : 2;
+    subtitleEl.textContent = `Step ${stepNum} of ${total} — Choose your name (${selectedClass.name})`;
     stepEl.innerHTML = `
       <button type="button" id="student-back-class" style="background:none;border:none;color:rgba(255,255,255,0.9);cursor:pointer;margin-bottom:12px;padding:0;">← Back to teams or classes</button>
-      <div style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto;">
+      <div class="student-login-step-list">
         ${students.length
           ? students
               .map(
@@ -636,7 +713,13 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
       </div>
     `;
 
-    document.getElementById('student-back-class').addEventListener('click', renderClassPasswordStep);
+    document.getElementById('student-back-class').addEventListener('click', () => {
+      if (classRequiresSignInPassword(selectedClass)) {
+        renderClassPasswordStep();
+      } else {
+        renderClassStep();
+      }
+    });
     stepEl.querySelectorAll('.student-name-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         selectedStudent = students.find((s) => s.id === btn.dataset.id);
@@ -646,7 +729,9 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
   }
 
   function renderPasswordStep() {
-    subtitleEl.textContent = `Step 4 of 4 — Enter your password`;
+    const total = signInStepCount();
+    const stepNum = classRequiresSignInPassword(selectedClass) ? 4 : 3;
+    subtitleEl.textContent = `Step ${stepNum} of ${total} — Enter your password`;
     stepEl.innerHTML = `
       <button type="button" id="student-back-student" style="background:none;border:none;color:rgba(255,255,255,0.9);cursor:pointer;margin-bottom:12px;padding:0;">← Back to names</button>
       <div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:12px;margin-bottom:16px;">
@@ -679,13 +764,8 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
           showStudentEditorSession(info);
           if (typeof window.applyEditorCapabilities === 'function') window.applyEditorCapabilities();
           onAuthenticated(info);
-        } else if (window.__integratedWelcomePending || options.integratedWelcome) {
-          beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, info);
         } else {
-          clearEntryGateOverlay();
-          showStudentEditorSession(info);
-          if (typeof window.applyEditorCapabilities === 'function') window.applyEditorCapabilities();
-          onAuthenticated(info);
+          beginIntegratedWelcomeAfterAuth(containerId, onAuthenticated, info);
         }
       } catch (err) {
         showError(err.message);
@@ -733,8 +813,11 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
     students = Array.isArray(data) ? data : [];
   }
 
-  loadClasses()
-    .then(renderClassStep)
+  Promise.all([loadClasses(), fetchNoTeamsSigninText()])
+    .then(([, messageHtml]) => {
+      noTeamsMessageHtml = messageHtml;
+      renderClassStep();
+    })
     .catch((err) => {
       showError(err.message || 'Could not load teams or classes. Try again later.');
       subtitleEl.textContent = 'Choose your team or class';
@@ -759,6 +842,7 @@ async function requireStudentSession(containerId, onAuthenticated) {
   if (status.authenticated && status.student) {
     setEntryGateActive(false);
     window.editorAccessMode = 'student';
+    window.currentStudent = status.student;
     showStudentEditorSession(status.student);
     onAuthenticated(status.student);
     return;

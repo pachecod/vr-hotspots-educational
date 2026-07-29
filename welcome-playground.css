@@ -162,6 +162,29 @@ body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay)
   margin-bottom: 28px;
 }
 
+.no-teams-signin-message {
+  text-align: left;
+}
+
+.no-teams-signin-message p {
+  margin: 0 0 14px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.no-teams-signin-message p:last-child {
+  margin-bottom: 0;
+}
+
+.no-teams-signin-message a {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.no-teams-signin-message a:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 #integrated-welcome-inner {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 40px 36px;
@@ -203,6 +226,12 @@ body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay)
 .student-login-step .student-name-btn {
   width: 100%;
   box-sizing: border-box;
+}
+
+.student-login-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 #integrated-welcome-inner.integrated-welcome-with-playground .integrated-welcome-layout {

@@ -114,6 +114,113 @@ button:hover { background: #1d4ed8; }`;
       .replace(/>/g, '&gt;');
   }
 
+  function extractHostedTourUrl(divAttrs, inner) {
+    const blob = `${divAttrs || ''} ${inner || ''}`;
+    const match = blob.match(
+      /(?:data-vr-tour-url|\ssrc)=(["'])(https?:\/\/[^"']+\/index\.html(?:\?[^"']*)?)\1/i
+    );
+    return match ? match[2] : '';
+  }
+
+  function tourQrPreviewSrc(tourUrl) {
+    if (!tourUrl || !/\/hosted\/[^"']+\/index\.html/i.test(tourUrl)) return '';
+    return `/api/vr-tour/qr?url=${encodeURIComponent(tourUrl)}`;
+  }
+
+  function rewriteVrTourEmbedsForEditorPreview(html) {
+    if (!html || !/data-vr-tour-embed=["']1["']/i.test(html)) return html;
+    if (typeof window === 'undefined' || !window.hotspotEditor) return html;
+    const embedSrc =
+      (window.location?.origin ? window.location.origin : '') + '/index.html?embed=1';
+    if (!embedSrc) return html;
+
+    const wrapperRe = /<div\b([^>]*\sdata-vr-tour-embed=["']1["'][^>]*)>([\s\S]*?)<\/div>/gi;
+    let out = html.replace(wrapperRe, (match, divAttrs, inner) => {
+      const tourUrl = extractHostedTourUrl(divAttrs, inner);
+      const previewQr = tourQrPreviewSrc(tourUrl);
+      let updatedInner = inner.replace(
+        /(<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*\s)src=(["'])[^"']*\2/gi,
+        `$1src="${embedSrc}"`
+      );
+      if (previewQr) {
+        if (!/vr-tour-mobile-qr-img/i.test(updatedInner)) {
+          updatedInner = [
+            updatedInner.trimEnd(),
+            '<p class="vr-tour-mobile-label">View on Your Phone</p>',
+            `<img class="vr-tour-mobile-qr-img" src="${previewQr}" alt="Scan to open this 360° tour on your phone" width="160" height="160" />`,
+          ].join('\n');
+        } else {
+          updatedInner = updatedInner.replace(
+            /(<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*\ssrc=)(["'])[^"']*\2/i,
+            `$1"${previewQr}"`
+          );
+        }
+        updatedInner = updatedInner.replace(
+          /(<p\b[^>]*\bvr-tour-mobile-label\b[^>]*)(>)/gi,
+          (m, start, end) => start.replace(/\sstyle=(["'])[^"']*\1/i, '') + end
+        );
+        updatedInner = updatedInner.replace(
+          /(<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*)(>)/gi,
+          (m, start, end) => start.replace(/\sstyle=(["'])[^"']*\1/i, '') + end
+        );
+      } else {
+        updatedInner = updatedInner.replace(
+          /(<p\b[^>]*\bvr-tour-mobile-label\b[^>]*)(>)/gi,
+          '$1 style="display:none"$2'
+        );
+        updatedInner = updatedInner.replace(
+          /(<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*)(>)/gi,
+          '$1 style="display:none"$2'
+        );
+      }
+      const updatedDivAttrs = divAttrs
+        .replace(/\sdata-vr-tour-url=(["'])[^"']*\1/i, '')
+        .trim();
+      return `<div ${updatedDivAttrs} data-vr-tour-url="${embedSrc}">${updatedInner}</div>`;
+    });
+
+    out = out.replace(
+      /(<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*\s)src=(["'])[^"']*\2/gi,
+      `$1src="${embedSrc}"`
+    );
+    return out;
+  }
+
+  const LOCAL_VR_TOUR_EMBED_PATH = '../../index.html';
+  const VR_TOUR_EMBED_STYLES =
+    '.vr-tour-embed{margin:1rem auto;max-width:100%;text-align:center;}' +
+    '.vr-tour-embed iframe{width:100%;min-height:480px;height:70vh;border:0;display:block;border-radius:8px;background:#111;}';
+
+  function buildLocalBundleVrInsertHtml(name) {
+    const title = String(name || '360° VR Tour')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
+    return [
+      '<!-- 360° VR tour from this project (Spherical Content) -->',
+      '<style>' + VR_TOUR_EMBED_STYLES + '</style>',
+      '<div class="vr-tour-embed" data-vr-tour-embed="1" data-vr-tour-url="' + LOCAL_VR_TOUR_EMBED_PATH + '">',
+      '<iframe src="' + LOCAL_VR_TOUR_EMBED_PATH + '" title="' + title + '" allow="fullscreen; vr; accelerometer; gyroscope"></iframe>',
+      '</div>',
+    ].join('\n');
+  }
+
+  function stripExistingVrTourEmbeds(html) {
+    if (!html) return html;
+    return html
+      .replace(
+        /<!--\s*360° VR tour from this project \(Spherical Content\)\s*-->\s*<style>[\s\S]*?<\/style>\s*<div\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>[\s\S]*?<\/div>\s*/gi,
+        ''
+      )
+      .replace(/<iframe\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>\s*<\/iframe>\s*/gi, '');
+  }
+
+  function defaultHtmlInsertPos(html) {
+    const bodyClose = /<\/body>/i.exec(html);
+    if (bodyClose) return bodyClose.index;
+    return html.length;
+  }
+
   class FlatPageEditor {
     constructor() {
       this.project = createDefaultProject();
@@ -121,7 +228,7 @@ button:hover { background: #1d4ed8; }`;
       this._mounted = false;
       this._visible = false;
       this._previewTimer = null;
-      this._autoReloadPreview = false;
+      this._autoReloadPreview = true;
       this._els = {};
       this._loadFromStorage();
     }
@@ -245,6 +352,9 @@ button:hover { background: #1d4ed8; }`;
         return f ? f.content || '' : '';
       };
       let html = getContent('index.html') || '<!DOCTYPE html><html><head></head><body></body></html>';
+      if (typeof window !== 'undefined' && window.hotspotEditor) {
+        html = rewriteVrTourEmbedsForEditorPreview(html);
+      }
       const css = getContent('style.css');
       const js = getContent('script.js');
       const configJson = getContent('config.json');
@@ -354,6 +464,7 @@ button:hover { background: #1d4ed8; }`;
       const cloudSaveBtn = document.createElement('button');
       cloudSaveBtn.type = 'button';
       cloudSaveBtn.textContent = '☁️ Save to Cloud';
+      cloudSaveBtn.title = 'Save your full VR project (scenes + flat page) as a cloud draft';
       cloudSaveBtn.style.cssText =
         'padding:6px 10px;border:none;border-radius:4px;background:#3d5a80;color:#fff;cursor:pointer;font-size:12px;';
       cloudSaveBtn.addEventListener('click', () => this.cloudSave());
@@ -472,7 +583,7 @@ button:hover { background: #1d4ed8; }`;
         'display:flex;align-items:center;gap:5px;cursor:pointer;color:#ccc;user-select:none;';
       const autoReloadCb = document.createElement('input');
       autoReloadCb.type = 'checkbox';
-      autoReloadCb.checked = false;
+      autoReloadCb.checked = true;
       autoReloadCb.addEventListener('change', () => {
         this._autoReloadPreview = autoReloadCb.checked;
       });
@@ -530,8 +641,8 @@ button:hover { background: #1d4ed8; }`;
     show() {
       this.ensureMounted();
       this._visible = true;
-      this._autoReloadPreview = false;
-      if (this._els.autoReloadCb) this._els.autoReloadCb.checked = false;
+      this._autoReloadPreview = true;
+      if (this._els.autoReloadCb) this._els.autoReloadCb.checked = true;
       if (this._els.root) this._els.root.style.display = 'flex';
       // Refresh content from current state in case it was imported while hidden.
       if (this._els.nameInput) this._els.nameInput.value = this.getActivePage().name;
@@ -688,28 +799,28 @@ button:hover { background: #1d4ed8; }`;
       };
     }
 
-    // Save the current flat page to Render Postgres + Backblaze (no spherical content).
+    // Save the full VR project draft (same as Template panel → Save to Cloud).
     async cloudSave() {
-      this._setCloudStatus('Saving…');
-      try {
-        const page = this.getActivePage();
-        const resp = await fetch('/api/student/flat-pages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify(this._filesPayload()),
-        });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok || !data.success) {
-          throw new Error(data.message || `Save failed (${resp.status})`);
-        }
-        await this._syncSavedPagesToAssets(data, page);
-        this._setCloudStatus('Saved to cloud ✓ — find it under Online Assets → My Saved Pages');
-      } catch (err) {
-        console.warn('[FlatPage] cloud save failed', err);
-        this._setCloudStatus(err.message || 'Save failed', true);
-        alert('Could not save flat page to the cloud: ' + (err.message || 'unknown error'));
+      this._setCloudStatus('');
+      this.save();
+      if (window.hotspotEditor && typeof window.hotspotEditor.saveScenesData === 'function') {
+        try {
+          window.hotspotEditor.saveScenesData();
+        } catch (_) {}
       }
+
+      const templateInput = document.getElementById('template-name');
+      const resolvedName = this._resolveCloudPageName();
+      if (templateInput && resolvedName && !templateInput.value.trim()) {
+        templateInput.value = resolvedName;
+      }
+
+      if (window.StudentSubmission && typeof window.StudentSubmission.saveCloudDraft === 'function') {
+        await window.StudentSubmission.saveCloudDraft();
+        return;
+      }
+
+      alert('Cloud save is not available yet. Please wait for the editor to finish loading.');
     }
 
     async _syncSavedPagesToAssets(data, page, slugHint, { published = false } = {}) {
@@ -776,6 +887,22 @@ button:hover { background: #1d4ed8; }`;
         this._setCloudStatus(err.message || 'Publish failed', true);
         alert('Could not publish flat page: ' + (err.message || 'unknown error'));
       }
+    }
+
+    syncLocalVrTourEmbedToFlatPage() {
+      const name =
+        (window.hotspotEditor &&
+          typeof window.hotspotEditor.getProjectVrEmbedInfo === 'function' &&
+          window.hotspotEditor.getProjectVrEmbedInfo().name) ||
+        '360° VR Tour';
+      let html = this.getFileContent('index.html');
+      html = stripExistingVrTourEmbeds(html);
+      const snippet = buildLocalBundleVrInsertHtml(name);
+      const insertAt = defaultHtmlInsertPos(html);
+      html = html.slice(0, insertAt) + '\n' + snippet + '\n' + html.slice(insertAt);
+      this.setFileContent('index.html', html);
+      if (this._mounted) this.refreshPreview();
+      return true;
     }
 
     // Resets flat page content (used by "Clear Data").

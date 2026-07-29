@@ -20,7 +20,7 @@ const SPLIT_PRESETS = {
 
 const SPLIT_STORAGE_KEY = 'flat-editor-split-preset';
 const CONFIG_MODE_STORAGE_KEY = 'flat-editor-config-mode';
-const AUTO_RELOAD_PREVIEW_DEFAULT = false;
+const AUTO_RELOAD_PREVIEW_DEFAULT = true;
 
 function initialConfigMode(bridge) {
   try {
@@ -186,7 +186,12 @@ export default function FlatPageEditorUI({ bridge }) {
         )}
         {!state.adminTemplateMode && state.showCloudActions && (
           <div className="flat-cloud-actions">
-            <button type="button" className="flat-btn flat-btn-cloud" onClick={() => bridge.cloudSave()}>
+            <button
+              type="button"
+              className="flat-btn flat-btn-cloud"
+              onClick={() => bridge.cloudSave()}
+              title="Save your full VR project (scenes + flat page) as a cloud draft"
+            >
               ☁️ Save to Cloud
             </button>
             <button type="button" className="flat-btn flat-btn-publish" onClick={() => bridge.publish()}>

@@ -4,13 +4,22 @@
  */
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const crypto = require('crypto');
 const { slugify, query, isDbEnabled } = require('../services/db-service');
-const { writeTourQrPng, tourUrlToQrUrl } = require('../services/qr-service');
+const { tourUrlToQrUrl } = require('../services/qr-service');
 const { requireStudentStrict } = require('../student-auth');
 const { parseCookies } = require('../lib/session');
+const { isLocalTestUser } = require('../lib/local-test-user');
+const { getGuestPreviewTimeoutMs, getGuestPreviewTimeoutSeconds } = require('../lib/app-settings');
+const {
+  markGuestPreviewExpiry,
+  isExpiredGuestPreviewTourUrl,
+  deleteGuestPreviewDir,
+  hostedPathFromTourUrl,
+} = require('../lib/guest-preview-cleanup');
+const { uploadHostedDirectory } = require('../lib/hosted-b2-storage');
 
-const HOSTED_DIR = path.join(process.cwd(), 'hosted-projects');
 const PREVIEW_COOKIE = 'vr_preview_sid';
 const PREVIEW_COOKIE_MAX_AGE_SEC = 7 * 24 * 60 * 60;
 
@@ -36,29 +45,65 @@ function getOrSetPreviewSessionId(req, res) {
 async function publishZipToHostedDir({ zipPath, hostedPath, req, assertValidZipFile, extractZipToDirSafe }) {
   assertValidZipFile(zipPath);
 
-  const targetDir = path.join(HOSTED_DIR, hostedPath);
-  if (fs.existsSync(targetDir)) {
-    fs.rmSync(targetDir, { recursive: true, force: true });
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hosted-publish-'));
+  try {
+    await extractZipToDirSafe(zipPath, tempDir);
+
+    const indexPath = path.join(tempDir, 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      const err = new Error('Invalid project ZIP — expected index.html at the root of the package.');
+      err.status = 400;
+      throw err;
+    }
+
+    await uploadHostedDirectory(tempDir, hostedPath);
+
+    const url = `${getServerBaseUrl(req)}/hosted/${hostedPath}/index.html`;
+    const qrUrl = tourUrlToQrUrl(url);
+
+    return { url, hostedPath, hostedUrl: url, qrUrl };
+  } finally {
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch (_) {}
   }
-  fs.mkdirSync(targetDir, { recursive: true });
+}
 
-  await extractZipToDirSafe(zipPath, targetDir);
-
-  const indexPath = path.join(targetDir, 'index.html');
-  if (!fs.existsSync(indexPath)) {
-    const err = new Error('Invalid project ZIP — expected index.html at the root of the package.');
-    err.status = 400;
-    throw err;
+function isAllowedTourQrUrl(url, req) {
+  if (!url || !/^https?:\/\//i.test(url)) return false;
+  try {
+    const parsed = new URL(url);
+    const allowed = new URL(getServerBaseUrl(req));
+    return parsed.origin === allowed.origin && /\/hosted\/[^/]+\/index\.html$/i.test(parsed.pathname);
+  } catch {
+    return false;
   }
-
-  const url = `${getServerBaseUrl(req)}/hosted/${hostedPath}/index.html`;
-  await writeTourQrPng(targetDir, url);
-  const qrUrl = tourUrlToQrUrl(url);
-
-  return { url, hostedPath, hostedUrl: url, qrUrl };
 }
 
 function registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe }) {
+  /** Dynamic QR image for flat-page preview (avoids stale/corrupt qr.png on disk). */
+  app.get('/api/vr-tour/qr', async (req, res) => {
+    const url = typeof req.query.url === 'string' ? req.query.url.trim() : '';
+    if (!isAllowedTourQrUrl(url, req)) {
+      return res.status(400).json({ success: false, message: 'Invalid tour URL' });
+    }
+    const hostedPath = hostedPathFromTourUrl(url);
+    if (hostedPath && (await isExpiredGuestPreviewTourUrl(url))) {
+      await deleteGuestPreviewDir(hostedPath);
+      return res.status(404).json({ success: false, message: 'Guest preview expired' });
+    }
+    try {
+      const { renderTourQrBuffer } = require('../services/qr-service');
+      const buffer = await renderTourQrBuffer(url);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      res.send(buffer);
+    } catch (err) {
+      console.error('VR tour QR render error:', err);
+      res.status(500).json({ success: false, message: 'Could not generate QR code' });
+    }
+  });
+
   /** Ephemeral preview tour for flat-page editing (guests + students, no sign-in). */
   app.post('/api/vr-tour/preview-publish', upload.single('project'), async (req, res) => {
     const tempPath = req.file?.path;
@@ -82,7 +127,19 @@ function registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDir
         extractZipToDirSafe,
       });
 
-      res.json({ success: true, preview: true, ...result });
+      let expiresAt = null;
+      if (isLocalTestUser(req)) {
+        const ttlMs = await getGuestPreviewTimeoutMs();
+        if (ttlMs != null) {
+          expiresAt = Date.now() + ttlMs;
+          const timeoutSeconds = await getGuestPreviewTimeoutSeconds();
+          await markGuestPreviewExpiry(hostedPath, { expiresAt, timeoutSeconds });
+        } else {
+          await markGuestPreviewExpiry(hostedPath, {});
+        }
+      }
+
+      res.json({ success: true, preview: true, expiresAt, ...result });
     } catch (err) {
       console.error('VR tour preview publish error:', err);
       res.status(err.status || 500).json({ success: false, message: err.message || 'Publish failed' });

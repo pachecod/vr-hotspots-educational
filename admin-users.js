@@ -2,6 +2,8 @@ let classes = [];
 let students = [];
 let filterClassId = 'all';
 let passwordModalStudentId = null;
+let renameModalStudentId = null;
+let renameUsernameManuallyEdited = false;
 let classPasswordModalClassId = null;
 let passwordReportRows = [];
 let passwordsVisible = false;
@@ -18,9 +20,18 @@ async function initAdminUsers() {
   const billingLink = document.getElementById('billing-link-wrap');
   if (billingLink) billingLink.style.display = '';
 
-  await loadClasses();
-  await loadStudents();
   bindEvents();
+
+  try {
+    await loadClasses();
+    await loadStudents();
+  } catch (err) {
+    console.error('Admin users init error:', err);
+    const classesList = document.getElementById('classes-list');
+    if (classesList) {
+      classesList.innerHTML = `<p class="error">Could not load teams/classes: ${escapeHtml(err.message || 'Unknown error')}</p>`;
+    }
+  }
 
   const peekId = new URLSearchParams(window.location.search).get('peek');
   if (peekId && window.StudentPeek) {
@@ -32,13 +43,6 @@ async function initAdminUsers() {
 
 function bindEvents() {
   document.getElementById('add-class-btn').addEventListener('click', addClass);
-  document.getElementById('generate-new-class-password-btn').addEventListener('click', async () => {
-    try {
-      document.getElementById('new-class-password').value = await fetchSamplePassword();
-    } catch (err) {
-      alert(err.message);
-    }
-  });
   document.getElementById('add-student-btn').addEventListener('click', addStudent);
   document.getElementById('generate-new-password-btn').addEventListener('click', async () => {
     try {
@@ -58,6 +62,7 @@ function bindEvents() {
   document.getElementById('toggle-password-visibility-btn').addEventListener('click', togglePasswordVisibility);
   document.getElementById('refresh-passwords-btn').addEventListener('click', loadPasswordReport);
   bindPasswordModal();
+  bindRenameModal();
   bindClassPasswordModal();
 }
 
@@ -130,10 +135,132 @@ async function savePasswordFromModal() {
   if (passwordsPanelOpen) loadPasswordReport();
 }
 
+function suggestUsernameFromDisplayName(displayName) {
+  const base = String(displayName || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-/g, '') || 'student';
+  return base.slice(0, 40);
+}
+
+function bindRenameModal() {
+  const modal = document.getElementById('rename-modal');
+  const nameInput = document.getElementById('rename-modal-name-input');
+  const usernameInput = document.getElementById('rename-modal-username-input');
+  const msg = document.getElementById('rename-modal-msg');
+
+  document.getElementById('rename-modal-cancel-btn').addEventListener('click', closeRenameModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeRenameModal();
+  });
+  document.getElementById('rename-modal-save-btn').addEventListener('click', saveRenameFromModal);
+  document.getElementById('rename-modal-reset-username-btn').addEventListener('click', () => {
+    renameUsernameManuallyEdited = false;
+    usernameInput.value = suggestUsernameFromDisplayName(nameInput.value);
+    usernameInput.focus();
+    usernameInput.select();
+  });
+  nameInput.addEventListener('input', () => {
+    if (!renameUsernameManuallyEdited) {
+      usernameInput.value = suggestUsernameFromDisplayName(nameInput.value);
+    }
+  });
+  usernameInput.addEventListener('input', () => {
+    renameUsernameManuallyEdited = true;
+  });
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveRenameFromModal();
+    if (e.key === 'Escape') closeRenameModal();
+  });
+  usernameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveRenameFromModal();
+    if (e.key === 'Escape') closeRenameModal();
+  });
+}
+
+function openRenameModal(studentId) {
+  const student = students.find((s) => s.id === studentId);
+  if (!student) return;
+  renameModalStudentId = studentId;
+  renameUsernameManuallyEdited = false;
+  document.getElementById('rename-modal-student').textContent =
+    `Rename ${student.display_name} (username: ${student.username}).`;
+  document.getElementById('rename-modal-name-input').value = student.display_name || '';
+  document.getElementById('rename-modal-username-input').value = student.username || '';
+  document.getElementById('rename-modal-msg').style.display = 'none';
+  document.getElementById('rename-modal').classList.add('open');
+  const nameInput = document.getElementById('rename-modal-name-input');
+  nameInput.focus();
+  nameInput.select();
+}
+
+function closeRenameModal() {
+  renameModalStudentId = null;
+  renameUsernameManuallyEdited = false;
+  document.getElementById('rename-modal').classList.remove('open');
+}
+
+async function saveRenameFromModal() {
+  const nameInput = document.getElementById('rename-modal-name-input');
+  const usernameInput = document.getElementById('rename-modal-username-input');
+  const msg = document.getElementById('rename-modal-msg');
+  const displayName = nameInput.value.trim();
+  const username = usernameInput.value.trim();
+  if (!renameModalStudentId) return;
+  if (!displayName) {
+    msg.textContent = 'Name is required';
+    msg.style.display = 'block';
+    return;
+  }
+  if (!username) {
+    msg.textContent = 'Username is required';
+    msg.style.display = 'block';
+    return;
+  }
+  msg.style.display = 'none';
+  const res = await adminFetch(`/admin/students/${renameModalStudentId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ displayName, username }),
+  });
+  const data = await res.json();
+  if (!data.success) {
+    msg.textContent = data.message || 'Could not save name';
+    msg.style.display = 'block';
+    return;
+  }
+  closeRenameModal();
+  const studentsMsg = document.getElementById('students-msg');
+  studentsMsg.className = 'success';
+  studentsMsg.textContent = `Renamed to ${data.student.display_name} (username: ${data.student.username}).`;
+  await loadStudents();
+  if (passwordsPanelOpen) loadPasswordReport();
+}
+
+function classPasswordRequired(cls) {
+  return !!(cls && cls.require_sign_in_password);
+}
+
 function bindClassPasswordModal() {
   const modal = document.getElementById('class-password-modal');
   const input = document.getElementById('class-password-modal-input');
   const msg = document.getElementById('class-password-modal-msg');
+  const requireCheckbox = document.getElementById('class-password-modal-require');
+  const passwordRow = document.getElementById('class-password-modal-password-row');
+
+  const syncModalPasswordRow = () => {
+    if (!requireCheckbox || !passwordRow) return;
+    passwordRow.style.display = requireCheckbox.checked ? 'block' : 'none';
+    const disableBtn = document.getElementById('class-password-modal-disable-btn');
+    if (disableBtn) {
+      disableBtn.style.display = requireCheckbox.checked ? '' : 'none';
+    }
+  };
+  if (requireCheckbox) {
+    requireCheckbox.addEventListener('change', syncModalPasswordRow);
+  }
 
   document.getElementById('class-password-modal-cancel-btn').addEventListener('click', closeClassPasswordModal);
   modal.addEventListener('click', (e) => {
@@ -151,6 +278,7 @@ function bindClassPasswordModal() {
     }
   });
   document.getElementById('class-password-modal-save-btn').addEventListener('click', saveClassPasswordFromModal);
+  document.getElementById('class-password-modal-disable-btn').addEventListener('click', disableClassPasswordFromModal);
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') saveClassPasswordFromModal();
     if (e.key === 'Escape') closeClassPasswordModal();
@@ -161,16 +289,37 @@ async function openClassPasswordModal(classId) {
   const cls = classes.find((c) => c.id === classId);
   if (!cls) return;
   classPasswordModalClassId = classId;
+  const requireCheckbox = document.getElementById('class-password-modal-require');
+  const passwordRow = document.getElementById('class-password-modal-password-row');
+  const disableBtn = document.getElementById('class-password-modal-disable-btn');
   document.getElementById('class-password-modal-class').textContent =
-    `Set the sign-in password for ${cls.name}. Students must enter this before they can see names on the sign-in page.`;
+    `Settings for ${cls.name}. This only affects this team or class — other classes keep their own setting.`;
   document.getElementById('class-password-modal-input').value = '';
+  if (requireCheckbox) {
+    requireCheckbox.checked = classPasswordRequired(cls);
+  }
+  if (passwordRow && requireCheckbox) {
+    passwordRow.style.display = requireCheckbox.checked ? 'block' : 'none';
+  }
+  if (disableBtn) {
+    disableBtn.style.display = classPasswordRequired(cls) ? '' : 'none';
+  }
   document.getElementById('class-password-modal-msg').style.display = 'none';
   document.getElementById('class-password-modal').classList.add('open');
   try {
     const res = await adminFetch(`/admin/classes/${classId}/sign-in-password`);
     const data = await res.json();
-    if (data.success && data.password) {
-      document.getElementById('class-password-modal-input').value = data.password;
+    if (data.success) {
+      if (requireCheckbox) requireCheckbox.checked = !!data.requireSignInPassword;
+      if (passwordRow && requireCheckbox) {
+        passwordRow.style.display = requireCheckbox.checked ? 'block' : 'none';
+      }
+      if (disableBtn) {
+        disableBtn.style.display = data.requireSignInPassword ? '' : 'none';
+      }
+      if (data.password) {
+        document.getElementById('class-password-modal-input').value = data.password;
+      }
     }
   } catch (_) {
     /* optional preload */
@@ -181,15 +330,25 @@ async function openClassPasswordModal(classId) {
 function closeClassPasswordModal() {
   classPasswordModalClassId = null;
   document.getElementById('class-password-modal').classList.remove('open');
+  loadClasses().catch(() => {});
 }
 
 async function saveClassPasswordFromModal() {
   const input = document.getElementById('class-password-modal-input');
   const msg = document.getElementById('class-password-modal-msg');
+  const requireCheckbox = document.getElementById('class-password-modal-require');
   const password = input.value.trim();
   if (!classPasswordModalClassId) return;
+  const requireSignInPassword = !!(requireCheckbox && requireCheckbox.checked);
   msg.style.display = 'none';
-  const body = password ? { password } : {};
+
+  if (!requireSignInPassword) {
+    await disableClassPasswordFromModal();
+    return;
+  }
+
+  const body = { requireSignInPassword: true };
+  if (password) body.password = password;
   const res = await adminFetch(`/admin/classes/${classPasswordModalClassId}/sign-in-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -197,7 +356,7 @@ async function saveClassPasswordFromModal() {
   });
   const data = await res.json();
   if (!data.success) {
-    msg.textContent = data.message || 'Could not save password';
+    msg.textContent = data.message || 'Could not save settings';
     msg.style.display = 'block';
     return;
   }
@@ -206,6 +365,56 @@ async function saveClassPasswordFromModal() {
     `Class sign-in password saved for ${data.class.name}: ${data.signInPassword}\n\nShare this with students so they can unlock the roster.`
   );
   await loadClasses();
+}
+
+async function disableClassPasswordFromModal() {
+  if (!classPasswordModalClassId) return;
+  const cls = classes.find((c) => c.id === classPasswordModalClassId);
+  if (
+    !confirm(
+      `Turn off the class password for ${cls ? cls.name : 'this class'}?\n\nStudents will go straight to the name list for this class only.`
+    )
+  ) {
+    return;
+  }
+  const res = await adminFetch(`/admin/classes/${classPasswordModalClassId}/sign-in-password`, {
+    method: 'DELETE',
+  });
+  const data = await res.json();
+  if (!data.success) {
+    alert(data.message || 'Could not turn off class password');
+    return;
+  }
+  closeClassPasswordModal();
+  alert(`Class password turned off for ${data.class.name}.`);
+  await loadClasses();
+}
+
+async function setClassPasswordRequired(classId, required) {
+  const cls = classes.find((c) => c.id === classId);
+  if (!cls) return;
+
+  if (!required) {
+    if (classPasswordRequired(cls)) {
+      if (
+        !confirm(
+          `Turn off the class password for ${cls.name}?\n\nStudents will go straight to the name list for this class.`
+        )
+      ) {
+        await loadClasses();
+        return;
+      }
+      const res = await adminFetch(`/admin/classes/${classId}/sign-in-password`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.message || 'Could not turn off class password');
+      }
+    }
+    await loadClasses();
+    return;
+  }
+
+  openClassPasswordModal(classId);
 }
 
 async function togglePasswordsPanel() {
@@ -322,7 +531,14 @@ function renderPasswordReport() {
 
 async function loadClasses() {
   const res = await adminFetch('/admin/classes');
-  classes = await res.json();
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || `Could not load classes (${res.status})`);
+  }
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected response loading classes');
+  }
+  classes = data;
   renderClasses();
   const filter = document.getElementById('filter-class');
   filter.innerHTML = '<option value="all">All teams or classes</option>' +
@@ -336,15 +552,20 @@ function renderClasses() {
     return;
   }
   el.innerHTML = `<table>
-    <thead><tr><th>Name</th><th>Team members or students</th><th>Sign-in password</th><th>Plan</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Name</th><th>Team members or students</th><th>Require password</th><th>Plan</th><th>Actions</th></tr></thead>
     <tbody>${classes.map((c) => `
       <tr>
         <td><strong>${escapeHtml(c.name)}</strong><br><small style="color:#888;">${escapeHtml(c.description || '')}</small></td>
         <td>${c.student_count || 0}</td>
-        <td>${c.has_sign_in_password ? 'Set' : '<span style="color:#dc3545;">Not set</span>'}</td>
+        <td>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;white-space:nowrap;">
+            <input type="checkbox" ${classPasswordRequired(c) ? 'checked' : ''} onchange="setClassPasswordRequired('${c.id}', this.checked)" />
+            ${classPasswordRequired(c) ? 'On' : 'Off'}
+          </label>
+        </td>
         <td>${escapeHtml(c.plan_tier || 'free')}</td>
         <td>
-          <button type="button" class="btn-secondary" onclick="openClassPasswordModal('${c.id}')">Class Password</button>
+          <button type="button" class="btn-secondary" onclick="openClassPasswordModal('${c.id}')">Edit Password</button>
           <a class="btn btn-secondary" href="admin-billing.html?classId=${encodeURIComponent(c.id)}">Limits</a>
           <button class="btn-danger" onclick="deleteClass('${c.id}')">Delete</button>
         </td>
@@ -352,26 +573,31 @@ function renderClasses() {
 }
 
 async function addClass() {
+  const btn = document.getElementById('add-class-btn');
   const name = document.getElementById('new-class-name').value.trim();
   const description = document.getElementById('new-class-desc').value.trim();
-  const password = document.getElementById('new-class-password').value.trim();
-  if (!name) return alert('Team or Class name required');
-  const body = { name, description };
-  if (password) body.password = password;
-  const res = await adminFetch('/admin/classes', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!data.success) return alert(data.message);
-  document.getElementById('new-class-name').value = '';
-  document.getElementById('new-class-desc').value = '';
-  document.getElementById('new-class-password').value = '';
-  alert(
-    `Created ${data.class.name}.\n\nClass sign-in password: ${data.signInPassword}\n\nStudents need this before they can see the roster.`
-  );
-  await loadClasses();
+  if (!name) return alert('Team or Class name is required');
+  if (btn) btn.disabled = true;
+  try {
+    const body = { name, description, requireSignInPassword: false };
+    const res = await adminFetch('/admin/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return alert(data.message || `Could not create class (${res.status})`);
+    }
+    document.getElementById('new-class-name').value = '';
+    document.getElementById('new-class-desc').value = '';
+    alert(`Created ${data.class.name}. Class password is off — use the per-class checkbox to enable it for this class only.`);
+    await loadClasses();
+  } catch (err) {
+    alert('Could not create class: ' + (err.message || 'Unknown error'));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function deleteClass(id) {
@@ -405,6 +631,7 @@ function renderStudents() {
         <td>
           <a class="btn btn-secondary" href="admin-common-assets.html?view=content&studentId=${encodeURIComponent(s.id)}&classId=${encodeURIComponent(s.class_id || '')}">Content</a>
           <button class="btn-peek" onclick="openStudentPeek('${s.id}')">Peek</button>
+          <button class="btn-secondary" onclick="openRenameModal('${s.id}')">Rename</button>
           <button class="btn-secondary" onclick="openPasswordModal('${s.id}')">Set Password</button>
           <button class="btn-danger" onclick="deleteStudent('${s.id}')">Delete</button>
         </td>
@@ -476,7 +703,9 @@ window.deleteClass = deleteClass;
 window.deleteStudent = deleteStudent;
 window.resetPassword = resetPassword;
 window.openPasswordModal = openPasswordModal;
+window.openRenameModal = openRenameModal;
 window.openClassPasswordModal = openClassPasswordModal;
+window.setClassPasswordRequired = setClassPasswordRequired;
 
 requireAdminSession('admin-gate', () => {
   document.getElementById('admin-gate').style.display = 'none';

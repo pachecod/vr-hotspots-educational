@@ -16,7 +16,8 @@
     "setup-b2-cors": "node set_cors.js",
     "db:migrate": "node -e \"require('dotenv').config(); require('./db/migrate').runMigrations().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })\"",
     "test:security": "node test/security-regression.js",
-    "test:content": "node test/student-content-purge.js"
+    "test:content": "node test/student-content-purge.js",
+    "test:guest-preview": "node test/guest-preview-cleanup.js"
   },
   "engines": {
     "node": ">=18"

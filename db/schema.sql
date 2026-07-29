@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS classes (
   password_hash TEXT,
   password_encrypted TEXT,
   password_set_at TIMESTAMPTZ,
+  require_sign_in_password BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

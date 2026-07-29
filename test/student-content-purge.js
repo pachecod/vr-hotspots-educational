@@ -30,9 +30,9 @@ function testStudentHostedPrefix() {
   console.log('✓ student hosted prefix');
 }
 
-function testRemoveHostedDirSafety() {
-  assert.strictEqual(removeHostedDir('../etc/passwd'), false);
-  assert.strictEqual(removeHostedDir('foo/bar'), false);
+async function testRemoveHostedDirSafety() {
+  assert.strictEqual(await removeHostedDir('../etc/passwd'), false);
+  assert.strictEqual(await removeHostedDir('foo/bar'), false);
   console.log('✓ hosted dir path safety');
 }
 
@@ -65,7 +65,7 @@ async function testPurgeContentItemUnknownType() {
 async function run() {
   testExports();
   testStudentHostedPrefix();
-  testRemoveHostedDirSafety();
+  await testRemoveHostedDirSafety();
   await testDescribePurgeProjectPreservesAssets();
   await testPurgeContentItemUnknownType();
   console.log('\nAll student content purge tests passed.');

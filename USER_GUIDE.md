@@ -75,11 +75,23 @@ Ask your team leader or teacher to reset your password from **Users** if you for
 
 ---
 
+## Guest mode (try without signing in)
+
+If your site allows guest mode, you can explore the editor without an account. Guests can build and preview both spherical and flat content, but:
+
+- **Save Locally** keeps named projects in **this browser** only (not on our servers). Use **My Local Projects** to switch between them. Cap is a small number of projects; **Clear Data** wipes them.
+- **Hosted preview tours and QR codes** created when switching to Flat Web Page mode may be **auto-deleted** after a timeout (admins configure this in **Editor Settings**; default is 1200 seconds / 20 minutes).
+- **Export (Save Template)** includes only the **360° tour** — not the flat web page or QR code. Sign in to export or publish a permanent flat page with a working QR code.
+
+Signed-in students and admins are not affected by guest preview timeouts or guest export limits. If you previously saved locally as a guest on this browser, **My Local Projects** appears so you can open those leftovers; then use the normal cloud save and submit flow.
+
+---
+
 ## Editor layout
 
 - **Center:** the 360° scene (spherical mode) or the flat page code editor with live preview (flat mode)
 - **Top left:** **Edit Mode** panel — switch between editing and preview/navigation (spherical mode only)
-- **Right side:** **Editing Tools** panel — content mode toggle, scenes, hotspots, Online Assets, export, and submit
+- **Right side:** **Editing Tools** panel — content mode toggle, **Templates** (spherical mode; same gallery as Flat Web Page), scenes, hotspots, Online Assets, export, and submit
 - **ℹ️ icon** next to “Hotspot Editor” — collapsible instructions that update based on your current mode
 
 In **Flat Web Page** mode, spherical-only sections hide automatically. The flat editor fills the main area; **Editing Tools** stays open for Online Assets and related actions.
@@ -224,7 +236,7 @@ The preview pane shows your page as you edit. Use the layout buttons:
 | **50/50** | Balanced split (default) |
 | **Preview** | Mostly preview, small code |
 
-Click **↻ Refresh** if the preview looks out of date. By default the preview does **not** auto-reload on every keystroke — enable **Reload preview automatically** in the preview toolbar if you want live updates while typing.
+Click **↻ Refresh** if the preview looks out of date. By default the preview **auto-reloads** as you edit — disable **Reload preview automatically** in the preview toolbar if you prefer manual refresh only.
 
 ### Snippets
 
@@ -416,7 +428,7 @@ Sign in at `/admin-submissions.html` (or any admin page — same password).
 1. Filter by **team or class**, **team member or student**, or whether they left a **note**
 2. For each submission:
    - **Download** — get the ZIP
-   - **🌐 Host** — publish a live preview URL (re-host after server redeploy if using ephemeral disk — see [RENDER_DEPLOY.md](RENDER_DEPLOY.md))
+   - **🌐 Host** — publish a live preview URL (stored in B2; survives redeploy)
    - **✏️ Review in Editor** — load the project in the editor with an **Admin Review** bar
    - **Version history** — expand to see all versions; download, review, or delete individual versions
    - **🗑️ Delete** — remove a specific version
@@ -568,7 +580,7 @@ If media was exported as **online URLs**, stay connected to the internet. If med
 | **Submit failed** | Confirm you are on the instructor’s server URL, not a local file. Retry; ask admin to check the server. |
 | **Shared asset URL broken** | Ask admin to re-open the asset library (signed links may expire after several days). Re-export with **Include media in the package** for long-term archives. |
 | **Can’t find an asset** | Add tag chips or type part of the filename in the filter bar; try **Show All Tags**. |
-| **Hosted project link dead after redeploy** | Admin must **Host** again — hosted URLs on ephemeral disk do not survive redeploy. |
+| **Hosted project link dead after redeploy** | Should not happen — hosted files live in B2. If a link fails, use **Host** again from Submissions or check B2 public bucket `hosted-projects/`. |
 | **Lost work** | Use **Save Template** often. Avoid **Clear Data** unless you mean to reset. |
 | **Ask Ridey missing** | Instructor must enable Ridey under **Editor Settings** and set `OPENAI_API_KEY` on the server. |
 | **Ridey put CSS inline** | Use **Ridey 1.0** or ensure **2.0** is enabled — both route CSS to `style.css` and JS to `script.js`. |

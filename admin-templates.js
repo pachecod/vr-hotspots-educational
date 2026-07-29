@@ -41,83 +41,94 @@ function renderOrderControls(t, index) {
 function render() {
   const el = document.getElementById('template-list');
   if (!templates.length) {
-    el.innerHTML = '<p style="color:#666">No templates yet.</p>';
+    el.innerHTML = '<p style="color:#666;margin:0">No templates yet.</p>';
     return;
   }
   el.innerHTML = templates
     .map(
       (t, index) => `
-    <div class="template-card" data-id="${t.id}">
-      ${renderOrderControls(t, index)}
-      <div class="template-details">
-        <p class="template-details-hint">Title and description appear on the welcome screen and in the template list.</p>
-        <label>
-          Title
-          <input type="text" class="tpl-title-input" data-id="${t.id}" value="${escapeAttr(t.title)}" placeholder="Template title" />
-        </label>
-        <label>
-          Description
-          <textarea class="tpl-desc-input" data-id="${t.id}" placeholder="Short description for the welcome screen">${escapeHtml(t.description || '')}</textarea>
-        </label>
-        <div>
-          <button type="button" class="btn btn-primary btn-save-details" data-id="${t.id}">Save title &amp; description</button>
+    <article class="template-card" data-id="${t.id}">
+      <header class="template-card-header">
+        ${renderOrderControls(t, index)}
+        <h3 class="template-card-title">${escapeHtml(t.title)}</h3>
+        <div class="template-badges">
+          ${t.is_default ? '<span class="badge badge-default">Default</span>' : ''}
+          ${t.is_playground ? '<span class="badge badge-playground">Welcome screen</span>' : ''}
+          ${t.bundle_b2_key ? '<span class="badge badge-bundle">Bundle uploaded</span>' : ''}
         </div>
-      </div>
-      ${t.is_default ? '<span style="background:#ffc107;padding:2px 6px;border-radius:4px;font-size:11px;margin:8px 0 0;display:inline-block">Default</span>' : ''}
-      <div class="template-meta">${t.is_public ? 'Public' : 'Private'} · ${escapeHtml(t.slug)} · ${scopeLabel(t.scope)}</div>
-      <div class="template-badges">
-        ${t.is_playground ? '<span class="badge badge-playground">Welcome screen</span>' : ''}
-        ${t.bundle_b2_key ? '<span class="badge badge-bundle">Bundle uploaded</span>' : ''}
-      </div>
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <div class="template-meta">${t.is_public ? 'Public' : 'Private'} · ${escapeHtml(t.slug)} · ${scopeLabel(t.scope)}</div>
+      </header>
+      <div class="template-card-body">
+        <section class="template-card-section">
+          <h3>Welcome screen text</h3>
+          <p class="template-details-hint">Title and description appear on the welcome screen and in the template list.</p>
+          <div class="template-details">
+            <label>
+              Title
+              <input type="text" class="tpl-title-input" data-id="${t.id}" value="${escapeAttr(t.title)}" placeholder="Template title" />
+            </label>
+            <label>
+              Description
+              <textarea class="tpl-desc-input" data-id="${t.id}" placeholder="Short description for the welcome screen">${escapeHtml(t.description || '')}</textarea>
+            </label>
+            <div>
+              <button type="button" class="btn btn-primary btn-save-details" data-id="${t.id}">Save title &amp; description</button>
+            </div>
+          </div>
+        </section>
+        <section class="template-card-section">
+          <h3>Actions</h3>
+          <div class="template-actions">
+            ${
+              t.scope === 'flat'
+                ? `<a href="admin-template-editor.html?edit=${t.id}" class="btn btn-primary">Edit in Editor</a>`
+                : `<a href="index.html?adminTemplate=${t.id}" class="btn btn-primary">Edit in Editor</a>`
+            }
+            <button class="btn btn-secondary btn-toggle-public" data-id="${t.id}">${t.is_public ? 'Make Private' : 'Make Public'}</button>
+            <button class="btn btn-secondary btn-toggle-playground" data-id="${t.id}">${t.is_playground ? 'Remove from Welcome' : 'Show on Welcome'}</button>
+            <button class="btn btn-secondary btn-toggle-default" data-id="${t.id}">${t.is_default ? 'Unset Default' : 'Set Default'}</button>
+            <button class="btn btn-danger btn-delete" data-id="${t.id}">Delete</button>
+          </div>
+        </section>
         ${
-          t.scope === 'flat'
-            ? `<a href="admin-template-editor.html?edit=${t.id}" class="btn btn-primary">Edit in Editor</a>`
-            : `<a href="index.html?adminTemplate=${t.id}" class="btn btn-primary">Edit in Editor</a>`
-        }
-        <button class="btn btn-secondary btn-toggle-public" data-id="${t.id}">${t.is_public ? 'Make Private' : 'Make Public'}</button>
-        <button class="btn btn-secondary btn-toggle-playground" data-id="${t.id}">${t.is_playground ? 'Remove from Welcome' : 'Show on Welcome'}</button>
-        <button class="btn btn-secondary btn-toggle-default" data-id="${t.id}">${t.is_default ? 'Unset Default' : 'Set Default'}</button>
-        <button class="btn btn-danger btn-delete" data-id="${t.id}">Delete</button>
-      </div>
-      ${
-        t.scope === 'combined'
-          ? `
-      <div class="bundle-row">
-        <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:6px">Project bundle ZIP (optional)</label>
-        <p style="font-size:12px;color:#666;margin:0 0 8px">Usually not needed — use <strong>Edit in Editor</strong> and <strong>Save to Welcome Sample</strong>. Upload here only to replace the bundle manually.</p>
-        <input type="file" accept=".zip,application/zip" class="bundle-file-input" data-id="${t.id}" />
-        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-          <button type="button" class="btn btn-primary btn-upload-bundle" data-id="${t.id}">Upload bundle</button>
-          ${
-            t.bundle_b2_key
-              ? `<button type="button" class="btn btn-secondary btn-delete-bundle" data-id="${t.id}">Remove bundle</button>`
-              : ''
-          }
-        </div>
-      </div>
-      `
-          : ''
-      }
-      <div class="bundle-row" style="margin-top:10px">
-        <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:4px">Thumbnail</label>
-        ${
-          displayThumbnailUrl(t)
-            ? `<img class="thumb-preview" src="${escapeAttr(displayThumbnailUrl(t))}" alt="Thumbnail preview for ${escapeAttr(t.title)}" />`
+          t.scope === 'combined'
+            ? `
+        <section class="template-card-section">
+          <h3>Project bundle</h3>
+          <p class="field-hint">Usually not needed — use <strong>Edit in Editor</strong> and <strong>Save to Welcome Sample</strong>. Upload here only to replace the bundle manually.</p>
+          <input type="file" accept=".zip,application/zip" class="bundle-file-input" data-id="${t.id}" />
+          <div class="template-actions" style="margin-top:10px">
+            <button type="button" class="btn btn-primary btn-upload-bundle" data-id="${t.id}">Upload bundle</button>
+            ${
+              t.bundle_b2_key
+                ? `<button type="button" class="btn btn-secondary btn-delete-bundle" data-id="${t.id}">Remove bundle</button>`
+                : ''
+            }
+          </div>
+        </section>
+        `
             : ''
         }
-        <p style="font-size:12px;color:#666;margin:0 0 6px">Upload a custom image, paste an external URL, or auto-generate. The thumbnail URL stays under <code>/api/playground/thumbnails/&lt;slug&gt;</code> (the file extension may change after upload).</p>
-        <div class="thumb-upload-row">
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" class="thumb-file-input" data-id="${t.id}" />
-          <button type="button" class="btn btn-primary btn-upload-thumb" data-id="${t.id}">Upload image</button>
-        </div>
-        <input type="text" class="thumb-url-input" data-id="${t.id}" value="${escapeAttr(t.thumbnail_url || '')}" placeholder="Or paste a custom image URL" style="width:100%;max-width:480px;padding:6px;border:1px solid #ccc;border-radius:4px;margin-top:8px" />
-        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
-          <button type="button" class="btn btn-secondary btn-regen-thumb" data-id="${t.id}">Regenerate thumbnail</button>
-          <button type="button" class="btn btn-secondary btn-save-thumb" data-id="${t.id}">Save custom URL</button>
-        </div>
+        <section class="template-card-section">
+          <h3>Thumbnail</h3>
+          ${
+            displayThumbnailUrl(t)
+              ? `<img class="thumb-preview" src="${escapeAttr(displayThumbnailUrl(t))}" alt="Thumbnail preview for ${escapeAttr(t.title)}" />`
+              : ''
+          }
+          <p class="field-hint">Upload a custom image, paste an external URL, or auto-generate. The thumbnail URL stays under <code>/api/playground/thumbnails/&lt;slug&gt;</code> (the file extension may change after upload).</p>
+          <div class="thumb-upload-row">
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" class="thumb-file-input" data-id="${t.id}" />
+            <button type="button" class="btn btn-primary btn-upload-thumb" data-id="${t.id}">Upload image</button>
+          </div>
+          <input type="text" class="thumb-url-input" data-id="${t.id}" value="${escapeAttr(t.thumbnail_url || '')}" placeholder="Or paste a custom image URL" />
+          <div class="template-actions" style="margin-top:10px">
+            <button type="button" class="btn btn-secondary btn-regen-thumb" data-id="${t.id}">Regenerate thumbnail</button>
+            <button type="button" class="btn btn-secondary btn-save-thumb" data-id="${t.id}">Save custom URL</button>
+          </div>
+        </section>
       </div>
-    </div>
+    </article>
   `
     )
     .join('');

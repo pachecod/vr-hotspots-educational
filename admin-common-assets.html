@@ -266,6 +266,21 @@
         word-break: break-all;
         margin-bottom: 4px;
       }
+      .asset-visibility-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: #fff3cd;
+        color: #856404;
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .asset-visibility-badge.is-shared {
+        background: #d4edda;
+        color: #155724;
+        vertical-align: middle;
+      }
       .asset-meta {
         font-size: 12px;
         color: #666;
@@ -294,6 +309,14 @@
       .btn-delete {
         background: #dc3545;
         color: #fff;
+      }
+      .btn-share {
+        background: #28a745;
+        color: #fff;
+      }
+      .btn-unshare {
+        background: #ffc107;
+        color: #212529;
       }
       #preview-modal {
         display: none;
@@ -429,10 +452,9 @@
 
         <h1>Assets</h1>
         <p style="color: #666">
-          Upload online flat images, 360° photos/videos, audio, and 3D models. New uploads go to your
-          <strong>admin library</strong> (Review All Content). Check <strong>Share with students immediately</strong>
-          to add them to Shared Online Assets below, or share later from Review All Content. To see assets a team member
-          or student has uploaded, select their name in the pulldown.
+          Upload online flat images, 360° photos/videos, audio, and 3D models. Files appear in the category
+          tabs below. By default they are <strong>admin-only</strong> until you check
+          <strong>Share with students immediately</strong> or share them later from Review All Content.
         </p>
 
         <div id="assets-library-view">
@@ -456,8 +478,8 @@
         <div class="upload-zone" id="upload-zone">
           <p><strong>Drag & drop files here</strong> or click to browse</p>
           <p style="font-size: 12px; color: #666">
-            Uploads go to the active tab below. Flat images (10MB), flat videos (50MB), 360 photos (50MB), 360 videos
-            (200MB), Audio (50MB), 3D (100MB), Other (25MB)
+            Uploads go to the active tab below. Flat images (10MB), flat videos (50MB; mp4/webm/mov), 360 photos (50MB), 360 videos
+            (200MB; mp4/webm/mov → mp4), Audio (50MB), 3D (100MB), Other (25MB)
           </p>
           <input type="file" id="file-input" multiple style="display: none" />
           <input type="text" id="upload-tags-input" placeholder="Tags (optional, comma-separated)" style="width:100%;max-width:400px;margin-top:8px;padding:8px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;" />
@@ -572,6 +594,6 @@
     <script src="asset-tags-ui.js"></script>
     <script src="admin-content-hub.js"></script>
     <script src="admin-common-asset-upload.js"></script>
-    <script src="admin-common-assets.js?v=3"></script>
+    <script src="admin-common-assets.js?v=4"></script>
   </body>
 </html>

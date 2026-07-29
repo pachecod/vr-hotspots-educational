@@ -23,7 +23,7 @@ A comprehensive VR Hotspot Editor with built-in student submission system for ed
 - **Host projects**: Publish live preview URLs for sharing
 - **Online Assets library**: Upload shared media to Backblaze B2 with tags and stable URLs
 - **Editor Settings**: Manage code snippets, enable Ridey AI (**1.0** or **2.0 beta**), and block risky file extensions
-- **Starter templates**: Create and publish flat-page templates (including immersive museum starters with visual **config.json** editing)
+- **Starter templates**: Create and publish flat-page templates (immersive museum, daily reflection journal, and others with visual **config.json** editing)
 - **Team member or student Peek**: Browse uploads and submission history from Users or Assets
 - **Users & Teams/Classes**: Roster management, password CSV export, reset password
 - **Review All Content**: Site-wide content hub for projects, uploads, tours, and orphaned files
@@ -80,15 +80,18 @@ LOCAL_TEST_USER_ENABLED=true
 
 Then run `npm run dev` and open the editor. You will see an entry gate:
 
-- **Continue as Guest** — build 360° tours and flat pages locally, pick **local files** (preview + ZIP export), browse **Shared Online Assets**, load a ZIP template, and **Save Template**. No cloud save or submit to admin.
+- **Continue as Guest** — build 360° tours and flat pages locally, pick **local files** (preview + ZIP export), browse **Shared Online Assets**, **Save Locally** (named projects in this browser), load a ZIP template, and **Save Template**. No cloud save or submit to admin. After you sign in on the same browser, leftover local saves appear under **My Local Projects** so you can open them; cloud save/submit stay unchanged.
 - **Sign in to a team or class account** — full student features if you have a password from your team leader or teacher.
 
-Test User mode is off on production by default. For a **demo/staging** deploy on Render, set both:
+On **Render**, the blueprint (`render.yaml`) enables guest mode and welcome-screen samples by default:
 
 ```bash
 LOCAL_TEST_USER_ENABLED=true
 LOCAL_TEST_USER_ALLOW_PRODUCTION=true
+PUBLIC_PLAYGROUND_ENABLED=true
 ```
+
+For local `.env` demos, set at least `LOCAL_TEST_USER_ENABLED=true` (production also needs `LOCAL_TEST_USER_ALLOW_PRODUCTION=true`).
 
 Guest mode still blocks cloud save, submit, and server uploads.
 
@@ -119,7 +122,7 @@ Students switch **Editing Tools → 📄 Flat Web Page** to open a full code edi
 |---------|-------------|
 | **Multi-file tabs** | `index.html`, `style.css`, `script.js`, `config.json` (on starter templates), plus optional custom files |
 | **Visual / Code config** | When a template includes a config schema, edit `config.json` in a visual form or raw JSON (Code mode) |
-| **Live preview** | Split view with **Editor**, **50/50**, and **Preview** layout presets; optional auto-reload (off by default) |
+| **Live preview** | Split view with **Editor**, **50/50**, and **Preview** layout presets; preview auto-reloads on edit by default (toggle **automatically** in the preview toolbar to turn off) |
 | **Copy / Format** | Copy the active file; auto-format HTML, CSS, or JavaScript |
 | **Snippets** | Insert admin-curated code blocks at the cursor |
 | **Templates** | Load public starter templates from the gallery (e.g. immersive museum) |
@@ -157,6 +160,10 @@ B2_BUCKET_NAME=your_bucket_name
 # Admin authentication (required for dashboard + asset uploads)
 ADMIN_PASSWORD=your_secure_password
 ADMIN_SESSION_SECRET=random_long_secret_string
+
+# Optional: site-wide password for private instances (leave unset for open sites)
+# SITE_PASSWORD=shared-instance-password
+# SITE_PASSWORD_SECRET=random_long_secret_string
 
 # Optional Ridey AI (flat page editor)
 # OPENAI_API_KEY=sk-...
@@ -204,7 +211,7 @@ vr_hotspots/
 ├── script.js                       # Spherical editor + CommonAssetsPicker + submissions UI
 ├── flat-editor/                    # Flat page editor source (React + CodeMirror)
 ├── flat-editor/configForm/         # Visual config.json editor (ConfigFormPanel, schema helpers)
-├── starter-templates/              # Disk-based starter templates (immersive museum, scrollytelling, …)
+├── starter-templates/              # Disk-based starters (immersive museum, dailyreflection journal, scrollytelling, …)
 ├── flat-editor.bundle.js           # Built flat editor bundle (commit after npm run build:flat-editor)
 ├── vr-hotspots-educational.css     # Flat editor styles (built)
 ├── asset-tags-ui.js / .css         # Tag chips, filter bar, Edit Tags modal
@@ -330,6 +337,8 @@ vr_hotspots/
 - **Ask Ridey missing**: Admin must enable Ridey, set `OPENAI_API_KEY`, and choose version under **Editor Settings** (see [RENDER_DEPLOY.md](RENDER_DEPLOY.md))
 - **Ridey 2.0 issues**: Switch back to **Ridey 1.0** in **Editor Settings** for legacy behavior
 - **Snippets/templates empty on Render**: Run database migration (`npm run db:migrate`) and ensure `DATABASE_URL` is set
+- **No Continue as Guest on Render**: Blueprint must set `LOCAL_TEST_USER_ENABLED` and `LOCAL_TEST_USER_ALLOW_PRODUCTION` (preset in `render.yaml`). Check `/api/student/session` for `testUserModeAvailable: true`
+- **Render build exit 127**: Use build command `npm install` only — see [RENDER_DEPLOY.md](RENDER_DEPLOY.md#build-command-notes)
 
 ### Support:
 
@@ -346,6 +355,7 @@ vr_hotspots/
 - **Ridey 2.0 (beta)** — admin-selectable; holistic multi-file editing including `config.json`, multi-file preview diffs, JSON apply validation
 - **Visual config editor** — Visual/Code toggle for `config.json` on templates with `config.ui.json` schema; live preview updates for transforms
 - **Immersive museum starter templates** — `immersive-museum` and `new-immersive-museum` with config-driven exhibits
+- **Daily reflection journal starter** — `dailyreflection` flat journal with Visual prompts + richtext student responses (`config.ui.json`)
 - **Admin overview** (`/admin`) and **Review All Content** hub on Assets
 - **Welcome screen** polish — sample projects grid, MIT license footer, sign-in copy updates
 - **`main` branch** aligned with `2.8` for production deploys

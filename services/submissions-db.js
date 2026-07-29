@@ -21,7 +21,8 @@ async function createSubmission({
 
 async function listSubmissions({ classId, studentId } = {}) {
   if (!isDbEnabled()) return [];
-  let sql = `SELECT sub.*, s.display_name AS student_display_name, c.name AS class_name, c.id AS class_id
+  let sql = `SELECT sub.*, s.display_name AS student_display_name, s.username AS student_username,
+             c.name AS class_name, c.id AS class_id
              FROM submissions sub
              LEFT JOIN students s ON s.id = sub.student_id
              LEFT JOIN classes c ON c.id = s.class_id`;
@@ -47,6 +48,7 @@ function formatSubmissionRow(row) {
     studentId: row.student_id,
     studentName: row.student_name,
     studentDisplayName: row.student_display_name || row.student_name,
+    studentUsername: row.student_username,
     className: row.class_name || null,
     classId: row.class_id || null,
     projectName: row.project_name,

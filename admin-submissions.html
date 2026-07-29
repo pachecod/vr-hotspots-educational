@@ -59,6 +59,15 @@
       .submission-card h3 {
         margin: 0 0 8px;
       }
+      .submitted-by {
+        margin: 0 0 10px;
+        color: #333;
+        font-size: 15px;
+      }
+      .submitted-by-class {
+        color: #666;
+        font-weight: normal;
+      }
       .meta {
         color: #555;
         font-size: 14px;
@@ -162,6 +171,98 @@
       .host-result a {
         color: #0b5ed7;
       }
+      .danger-zone {
+        margin-top: 40px;
+        padding: 20px;
+        border: 2px solid #f5c6cb;
+        border-radius: 8px;
+        background: #fff5f5;
+      }
+      .danger-zone h2 {
+        margin: 0 0 8px;
+        color: #842029;
+        font-size: 1.1em;
+      }
+      .danger-zone p {
+        margin: 0 0 16px;
+        color: #58151c;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .btn-unhost-all {
+        background: #dc3545;
+        color: #fff;
+        padding: 10px 18px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+      }
+      .btn-unhost-all:hover {
+        background: #bb2d3b;
+      }
+      .btn-unhost-all:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+      .host-progress-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.55);
+        padding: 20px;
+      }
+      .host-progress-overlay[hidden] {
+        display: none !important;
+      }
+      .host-progress-card {
+        width: min(420px, 100%);
+        background: #fff;
+        border-radius: 10px;
+        padding: 24px 28px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+      }
+      .host-progress-card h2 {
+        margin: 0 0 8px;
+        font-size: 1.15em;
+        color: #212529;
+      }
+      .host-progress-card p {
+        margin: 0;
+        color: #495057;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      .host-progress-status {
+        min-height: 2.9em;
+        margin-bottom: 16px;
+      }
+      .host-progress-track {
+        height: 10px;
+        background: #e9ecef;
+        border-radius: 999px;
+        overflow: hidden;
+        margin-bottom: 12px;
+      }
+      .host-progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #28a745, #20c997);
+        border-radius: 999px;
+        transition: width 0.45s ease;
+      }
+      .host-progress-hint {
+        font-size: 12px !important;
+        color: #6c757d !important;
+      }
+      .actions button:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
     </style>
     <script src="admin-auth-ui.js"></script>
     <script src="admin-nav.js"></script>
@@ -205,8 +306,30 @@
     </div>
 
     <div id="inbox-list">Loading submissions...</div>
+
+    <section class="danger-zone" aria-labelledby="danger-zone-heading">
+      <h2 id="danger-zone-heading">Danger zone</h2>
+      <p>
+        Remove every hosted public tour from the server. Submission ZIPs stay in the queue; you can
+        host them again later.
+      </p>
+      <button type="button" class="btn-unhost-all" id="unhost-all-btn" onclick="unhostEverything()">
+        Unhost Everything
+      </button>
+    </section>
     </div>
 
     <script src="admin-submissions.js"></script>
+
+    <div id="host-progress-overlay" class="host-progress-overlay" hidden aria-live="polite" aria-busy="false">
+      <div class="host-progress-card" role="status">
+        <h2 id="host-progress-title">Hosting project</h2>
+        <p id="host-progress-status" class="host-progress-status">Starting…</p>
+        <div class="host-progress-track" aria-hidden="true">
+          <div id="host-progress-bar" class="host-progress-bar"></div>
+        </div>
+        <p class="host-progress-hint">Large tours with videos may take a few minutes. Please keep this tab open.</p>
+      </div>
+    </div>
   </body>
 </html>

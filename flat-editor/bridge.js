@@ -20,7 +20,10 @@ import {
   isAdminOnlyFile,
 } from './file-utils.js';
 import {
+  buildLocalBundleVrInsertHtml,
   buildProjectVrInsertHtml,
+  buildGuestProjectVrInsertHtml,
+  isGuestEditor,
   deriveQrUrlFromTourUrl,
   hasVrTourEmbed,
   resolveAbsoluteUrl,
@@ -430,13 +433,38 @@ export class FlatPageEditorBridge {
           typeof window.hotspotEditor.getProjectVrEmbedInfo === 'function' &&
           window.hotspotEditor.getProjectVrEmbedInfo().name) ||
         '360° VR Tour';
-      const snippet = buildProjectVrInsertHtml(name, embedUrl, qrUrl);
+      const snippet = isGuestEditor()
+        ? buildGuestProjectVrInsertHtml(name, embedUrl, qrUrl)
+        : buildProjectVrInsertHtml(name, embedUrl, qrUrl);
       const insertAt = defaultHtmlInsertPos(html);
       html = `${html.slice(0, insertAt)}\n${snippet}\n${html.slice(insertAt)}`;
     } else {
-      html = rewriteVrTourEmbedsInHtml(html, { hostedUrl: embedUrl, useOnlineUrl: true });
+      html = rewriteVrTourEmbedsInHtml(html, {
+        hostedUrl: embedUrl,
+        useOnlineUrl: true,
+        guestMode: isGuestEditor(),
+      });
     }
 
+    this.setFileContent('index.html', html);
+    this._syncScenesData();
+    this._notify();
+    return true;
+  }
+
+  /** Insert or refresh the VR tour block using the bundle-relative viewer (guest / in-editor). */
+  syncLocalVrTourEmbedToFlatPage() {
+    const name =
+      (window.hotspotEditor &&
+        typeof window.hotspotEditor.getProjectVrEmbedInfo === 'function' &&
+        window.hotspotEditor.getProjectVrEmbedInfo().name) ||
+      '360° VR Tour';
+
+    let html = this.getFileContent('index.html');
+    html = stripExistingVrTourEmbeds(html);
+    const snippet = buildLocalBundleVrInsertHtml(name);
+    const insertAt = defaultHtmlInsertPos(html);
+    html = `${html.slice(0, insertAt)}\n${snippet}\n${html.slice(insertAt)}`;
     this.setFileContent('index.html', html);
     this._syncScenesData();
     this._notify();
@@ -457,7 +485,9 @@ export class FlatPageEditorBridge {
 
     let html = this.getFileContent('index.html');
     html = stripExistingVrTourEmbeds(html);
-    const snippet = buildProjectVrInsertHtml(name, embedUrl, qrUrl);
+    const snippet = isGuestEditor()
+      ? buildGuestProjectVrInsertHtml(name, embedUrl, qrUrl)
+      : buildProjectVrInsertHtml(name, embedUrl, qrUrl);
     const insertAt = defaultHtmlInsertPos(html);
     html = `${html.slice(0, insertAt)}\n${snippet}\n${html.slice(insertAt)}`;
     this.setFileContent('index.html', html);
@@ -612,7 +642,13 @@ export class FlatPageEditorBridge {
   }
 
   buildPreviewDocument(page) {
-    return buildPreviewDocument(page || this.getActivePage());
+    const useEditorPreview =
+      !this._adminTemplateMode &&
+      typeof window !== 'undefined' &&
+      !!window.hotspotEditor;
+    return buildPreviewDocument(page || this.getActivePage(), {
+      editorPreview: useEditorPreview,
+    });
   }
 
   show() {
@@ -850,20 +886,26 @@ export class FlatPageEditorBridge {
   }
 
   async cloudSave() {
-    this._setCloudStatus('Saving…');
-    try {
-      const page = this.getActivePage();
-      const cloudName = this._resolveCloudPageName();
-      page.name = cloudName;
-      this.save();
-      const data = await saveFlatPage(this._filesPayload());
-      await this._syncSavedPagesToAssets(data, page);
-      this._setCloudStatus('Saved to cloud ✓ — find it under Online Assets → My Saved Pages');
-      return data;
-    } catch (err) {
-      this._setCloudStatus(err.message || 'Save failed', true);
-      alert('Could not save flat page to the cloud: ' + (err.message || 'unknown error'));
+    this._setCloudStatus('');
+    this.save();
+    if (window.hotspotEditor && typeof window.hotspotEditor.saveScenesData === 'function') {
+      try {
+        window.hotspotEditor.saveScenesData();
+      } catch (_) {}
     }
+
+    const templateInput = document.getElementById('template-name');
+    const resolvedName = this._resolveCloudPageName();
+    if (templateInput && resolvedName && !templateInput.value.trim()) {
+      templateInput.value = resolvedName;
+    }
+
+    if (window.StudentSubmission && typeof window.StudentSubmission.saveCloudDraft === 'function') {
+      await window.StudentSubmission.saveCloudDraft();
+      return;
+    }
+
+    alert('Cloud save is not available yet. Please wait for the editor to finish loading.');
   }
 
   async publish() {

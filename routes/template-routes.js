@@ -13,6 +13,7 @@ const {
   buildCombinedStarterZipBuffer,
 } = require('../lib/combined-starter-bundle');
 const b2Service = require('../services/b2-service');
+const { streamTemplateBundle } = require('./playground-routes');
 
 async function maybeRefreshPlaygroundThumbnail(template, body = {}) {
   if (!template?.is_playground) return template;
@@ -85,14 +86,7 @@ function registerTemplateRoutes(app) {
         return res.status(404).json({ success: false, message: 'Bundle not found' });
       }
       await b2Service.ensureCommonAssetsBucket();
-      if (b2Service.commonAssetsPublicAccess) {
-        const url = b2Service.getCommonAssetPublicUrl(template.bundle_b2_key);
-        return res.redirect(302, url);
-      }
-      const streamResult = await b2Service.downloadCommonAssetStream(template.bundle_b2_key);
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="${template.slug}.zip"`);
-      streamResult.stream.pipe(res);
+      await streamTemplateBundle(res, template.bundle_b2_key, `${template.slug}.zip`);
     } catch (err) {
       console.error('Template bundle download error:', err);
       res.status(500).json({ success: false, message: 'Could not download bundle' });
@@ -148,14 +142,7 @@ function registerTemplateRoutes(app) {
         return res.status(404).json({ success: false, message: 'Bundle not found' });
       }
       await b2Service.ensureCommonAssetsBucket();
-      if (b2Service.commonAssetsPublicAccess) {
-        const url = b2Service.getCommonAssetPublicUrl(template.bundle_b2_key);
-        return res.redirect(302, url);
-      }
-      const streamResult = await b2Service.downloadCommonAssetStream(template.bundle_b2_key);
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="${template.slug}.zip"`);
-      streamResult.stream.pipe(res);
+      await streamTemplateBundle(res, template.bundle_b2_key, `${template.slug}.zip`);
     } catch (err) {
       console.error('Admin bundle download error:', err);
       res.status(500).json({ success: false, message: 'Could not download bundle' });

@@ -11,6 +11,8 @@
     <script src="asset-preview-modal.js"></script>
     <script src="asset-tags-ui.js"></script>
     <script src="editor-capabilities.js"></script>
+    <script src="local-projects.js"></script>
+    <script src="template-gallery-ui.js"></script>
     <script src="playground-templates-ui.js"></script>
     <script src="student-auth-ui.js"></script>
     <script>
@@ -168,6 +170,32 @@
         background: rgba(76, 175, 80, 0.2);
         border-color: #4caf50;
         color: #fff;
+      }
+
+      /* Templates gallery — spherical Editing Tools only (flat editor has its own) */
+      #spherical-templates-section {
+        margin: 0 0 10px;
+        padding: 0;
+      }
+
+      body.content-mode-flat #spherical-templates-section {
+        display: none !important;
+      }
+
+      #spherical-templates-btn {
+        width: 100%;
+        padding: 10px 12px;
+        background: #3d5a80;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: bold;
+      }
+
+      #spherical-templates-btn:hover {
+        background: #4a6fa5;
       }
 
       /* Side Panel Styles */
@@ -616,6 +644,55 @@
         font-size: 12px;
         flex-shrink: 0;
         position: relative;
+      }
+
+      .student-my-cloud-saves-btn {
+        background: #1565c0;
+        color: #fff;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+
+      .student-my-cloud-saves-btn:hover {
+        background: #1976d2;
+      }
+
+      .my-local-projects-btn {
+        background: #e65100;
+        color: #fff;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: bold;
+        flex-shrink: 0;
+        position: relative;
+      }
+
+      .my-local-projects-btn:hover {
+        background: #ff9800;
+        color: #111;
+      }
+
+      .guest-save-locally-btn {
+        background: #2e7d32;
+        color: #fff;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: bold;
+        flex-shrink: 0;
+      }
+
+      .guest-save-locally-btn:hover {
+        background: #43a047;
       }
 
       .student-my-submissions-btn .unread-badge {
@@ -1107,7 +1184,7 @@
             margin: 0 auto 30px;
           "
         ></div>
-        <h2 style="margin: 0 0 10px 0; font-size: 28px; font-weight: bold">Loading VR Scene...</h2>
+        <h2 style="margin: 0 0 10px 0; font-size: 28px; font-weight: bold">Loading</h2>
         <p style="margin: 0; font-size: 16px; opacity: 0.9">
           Please wait while we prepare your experience
         </p>
@@ -1221,9 +1298,11 @@
       <div id="hotspot-editor-content">
       <div id="test-user-editor-session" class="test-user-editor-session" aria-live="polite">
         <div class="student-editor-session-text">
-          <span><strong>Guest</strong> (local only) — pick local files, use shared assets, export ZIP. Sign in for cloud save and submit.</span>
+          <span><strong>Guest</strong> (local only) — pick local files, use shared assets, Save Locally, export ZIP. Sign in for cloud save and submit.</span>
         </div>
         <div class="student-editor-session-actions">
+          <button type="button" id="guest-save-locally-btn" class="guest-save-locally-btn save-locally-trigger">💾 Save Locally</button>
+          <button type="button" id="my-local-projects-btn" class="my-local-projects-btn">My Local Projects</button>
           <button type="button" id="test-user-signout-btn" class="test-user-signout-btn">Sign out</button>
           <button type="button" id="test-user-signin-btn" class="test-user-signin-btn">Sign in for full features</button>
         </div>
@@ -1234,6 +1313,12 @@
         </div>
         <div class="student-editor-session-actions">
           <button type="button" id="student-editor-logout-btn" class="student-editor-logout-btn">Logout</button>
+          <button type="button" id="student-my-local-projects-btn" class="my-local-projects-btn" style="display:none;">
+            My Local Projects
+          </button>
+          <button type="button" id="student-my-cloud-saves-btn" class="student-my-cloud-saves-btn" style="display:none;">
+            My Cloud Saves
+          </button>
           <button type="button" id="student-my-submissions-btn" class="student-my-submissions-btn" style="display:none;">
             My Submissions
           </button>
@@ -1290,6 +1375,13 @@
           >
             📄 Flat Web Page
           </button>
+        </div>
+      </div>
+
+      <div class="panel-section" id="spherical-templates-section">
+        <button type="button" class="btn" id="spherical-templates-btn">Templates</button>
+        <div style="font-size: 12px; color: #999; margin-top: 6px">
+          Browse published templates (same list as Flat Web Page)
         </div>
       </div>
 
@@ -1574,7 +1666,7 @@
           </div>
           <div class="form-group" id="video-file-group" style="display: none">
             <label for="hotspot-video-file">Video File:</label>
-            <input type="file" id="hotspot-video-file" accept="video/mp4,video/webm" />
+            <input type="file" id="hotspot-video-file" accept="video/mp4,video/webm,video/quicktime,.mov" />
           </div>
           <div class="form-group" id="video-url-group" style="display: none">
             <label for="hotspot-video-url">Or Video URL:</label>
@@ -1593,7 +1685,7 @@
               "
             />
             <small style="color: #888; font-size: 11px"
-              >Provide a video file or URL (mp4, webm). One is required.</small
+              >Provide a video file or URL (mp4, webm; mov files are converted to mp4). One is required.</small
             >
             <button
               type="button"
@@ -1999,6 +2091,7 @@
           <input type="text" id="template-name" placeholder="Enter template name" />
         </div>
         <button class="btn btn-primary" id="save-template">Save Template</button>
+        <button class="btn btn-secondary save-locally-trigger" id="save-locally" style="display:none;">💾 Save Locally</button>
         <button class="btn btn-secondary" id="save-cloud-draft" style="display:none;">☁️ Save to Cloud</button>
         <button class="btn btn-secondary" id="load-template">Load Template</button>
         <!-- Temporarily hidden — GitHub upload still wired in script.js -->

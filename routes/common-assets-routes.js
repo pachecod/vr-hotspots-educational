@@ -30,8 +30,14 @@ const {
   listTagsForScope,
   parseTagSortParam,
 } = require('../lib/asset-tags');
-const { registerSiteAsset } = require('../lib/site-assets');
-const { prepareVideoForStorage, cleanupTempFiles, VIDEO_CATEGORY } = require('../lib/video-pipeline');
+const { registerSiteAsset, listAdminAssetFilesFromB2 } = require('../lib/site-assets');
+const {
+  prepareVideoForStorage,
+  cleanupTempFiles,
+  VIDEO_CATEGORY,
+  isMovUpload,
+  isVideoCategory,
+} = require('../lib/video-pipeline');
 const { isTranscodeEnabledFor } = require('../lib/video-config');
 const { isFfmpegAvailable } = require('../lib/video-transcode');
 const {
@@ -44,9 +50,11 @@ const {
 
 const COMMON_ASSETS_LIST_CACHE_MS = 2 * 60 * 1000;
 let commonAssetsListCache = { data: null, expiresAt: 0 };
+let adminLibraryListCache = { data: null, expiresAt: 0 };
 
 function invalidateCommonAssetsListCache() {
   commonAssetsListCache = { data: null, expiresAt: 0 };
+  adminLibraryListCache = { data: null, expiresAt: 0 };
   b2Service.invalidateCommonAssetsCaches();
 }
 
@@ -131,12 +139,91 @@ async function getCachedCommonAssets() {
   return data;
 }
 
-function shouldAsyncTranscodeCommonVideo(category) {
-  return (
-    category === VIDEO_CATEGORY &&
-    isTranscodeEnabledFor('admin-common') &&
-    isFfmpegAvailable()
-  );
+/** Shared + admin-only assets for the admin Assets page. */
+async function listAdminLibraryAssets() {
+  const sharedGrouped = await listCommonAssets();
+  const adminGrouped = await listAdminAssetFilesFromB2();
+  await attachTagsToAdminAssets(adminGrouped);
+
+  const merged = {};
+  for (const category of COMMON_ASSET_CATEGORIES) {
+    const shared = (sharedGrouped[category] || []).map((asset) => ({
+      ...asset,
+      visibility: 'shared',
+    }));
+    const adminOnly = (adminGrouped[category] || []).map((file) => ({
+      name: file.name,
+      category: file.category,
+      size: file.size,
+      uploadedAt: file.uploadedAt,
+      contentType: file.contentType,
+      tags: file.tags || [],
+      visibility: 'admin',
+    }));
+    merged[category] = [...shared, ...adminOnly].sort(
+      (a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)
+    );
+  }
+  return merged;
+}
+
+async function getCachedAdminLibraryAssets() {
+  const now = Date.now();
+  if (adminLibraryListCache.data && now < adminLibraryListCache.expiresAt) {
+    return adminLibraryListCache.data;
+  }
+  const data = await listAdminLibraryAssets();
+  adminLibraryListCache = {
+    data,
+    expiresAt: now + COMMON_ASSETS_LIST_CACHE_MS,
+  };
+  return data;
+}
+
+async function resolveStoredAssetPath(category, filename) {
+  const sharedPath = buildRemotePath(category, filename);
+  const sharedInfo = await b2Service.getCommonAssetFileInfo(sharedPath);
+  if (sharedInfo) {
+    return {
+      remotePath: sharedPath,
+      assetKey: buildCommonAssetKey(category, filename),
+      visibility: 'shared',
+    };
+  }
+
+  const adminPath = buildAdminRemotePath(category, filename);
+  const adminInfo = await b2Service.getCommonAssetFileInfo(adminPath);
+  if (adminInfo) {
+    return {
+      remotePath: adminPath,
+      assetKey: buildAdminAssetKey(category, filename),
+      visibility: 'admin',
+    };
+  }
+
+  return null;
+}
+
+function decorateAdminLibraryAssetUrls(req, assets) {
+  const baseUrl = getServerBaseUrl(req);
+  for (const category of Object.keys(assets)) {
+    for (const asset of assets[category]) {
+      if (asset.visibility === 'admin') {
+        asset.proxyUrl = `/admin/admin-assets/${encodeURIComponent(asset.category)}/${encodeURIComponent(asset.name)}`;
+        asset.url = `${baseUrl}${asset.proxyUrl}`;
+      } else {
+        asset.proxyUrl = buildProxyAssetUrl(req, asset.category, asset.name);
+      }
+    }
+  }
+  return assets;
+}
+
+function shouldAsyncTranscodeCommonVideo(category, originalName) {
+  if (!isFfmpegAvailable()) return false;
+  // .mov must always convert to MP4 before storage (same FFmpeg path as compression).
+  if (isMovUpload(originalName) && isVideoCategory(category)) return true;
+  return category === VIDEO_CATEGORY && isTranscodeEnabledFor('admin-common');
 }
 
 function parseShareWithStudents(body) {
@@ -308,12 +395,7 @@ function registerCommonAssetRoutes(app, upload) {
 
   app.get('/admin/common-assets', requireAdmin, async (req, res) => {
     try {
-      const assets = await getCachedCommonAssets();
-      for (const category of Object.keys(assets)) {
-        for (const asset of assets[category]) {
-          asset.proxyUrl = buildProxyAssetUrl(req, asset.category, asset.name);
-        }
-      }
+      const assets = decorateAdminLibraryAssetUrls(req, await getCachedAdminLibraryAssets());
       res.json({ success: true, assets });
     } catch (err) {
       console.error('Admin list common assets error:', err);
@@ -386,7 +468,7 @@ function registerCommonAssetRoutes(app, upload) {
       const shareWithStudents = parseShareWithStudents(req.body);
       const visibility = shareWithStudents ? 'shared' : 'admin';
 
-      if (shouldAsyncTranscodeCommonVideo(validation.category)) {
+      if (shouldAsyncTranscodeCommonVideo(validation.category, req.file.originalname)) {
         const job = createUploadJob({
           fileName: req.file.originalname,
           category: validation.category,
@@ -439,7 +521,12 @@ function registerCommonAssetRoutes(app, upload) {
         return res.status(400).json({ success: false, message: 'Invalid category or filename' });
       }
 
-      const tags = await setTagsForKey(buildCommonAssetKey(category, filename), req.body && req.body.tags);
+      const resolved = await resolveStoredAssetPath(category, filename);
+      if (!resolved) {
+        return res.status(404).json({ success: false, message: 'Asset not found' });
+      }
+
+      const tags = await setTagsForKey(resolved.assetKey, req.body && req.body.tags);
       invalidateCommonAssetsListCache();
       res.json({ success: true, tags });
     } catch (err) {
@@ -459,11 +546,15 @@ function registerCommonAssetRoutes(app, upload) {
         return res.status(400).json({ success: false, message: 'Invalid category or filename' });
       }
 
-      const remotePath = buildRemotePath(category, filename);
-      await b2Service.deleteCommonAsset(remotePath);
-      await deleteTagsForKey(buildCommonAssetKey(category, filename));
+      const resolved = await resolveStoredAssetPath(category, filename);
+      if (!resolved) {
+        return res.status(404).json({ success: false, message: 'Asset not found' });
+      }
+
+      await b2Service.deleteCommonAsset(resolved.remotePath);
+      await deleteTagsForKey(resolved.assetKey);
       const { deleteSiteAssetRecord } = require('../lib/site-assets');
-      await deleteSiteAssetRecord(remotePath);
+      await deleteSiteAssetRecord(resolved.remotePath);
       invalidateCommonAssetsListCache();
       res.json({ success: true, message: 'Asset deleted' });
     } catch (err) {

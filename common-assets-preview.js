@@ -30,10 +30,14 @@ const CommonAssetsPreview = {
     return false;
   },
 
+  getAssetMediaUrl(asset) {
+    if (!asset) return '';
+    return asset.proxyUrl || asset.url || '';
+  },
+
   get3dModelProxyUrl(asset) {
-    if (asset && asset.url) {
-      return asset.url;
-    }
+    const direct = this.getAssetMediaUrl(asset);
+    if (direct) return direct;
     if (asset && asset.category && asset.name) {
       return `/common-assets/${encodeURIComponent(asset.category)}/${encodeURIComponent(asset.name)}`;
     }
@@ -71,7 +75,7 @@ const CommonAssetsPreview = {
 
   renderListThumb(category, asset, options = {}) {
     const context = options.context || 'grid';
-    const url = asset.url;
+    const url = this.getAssetMediaUrl(asset);
     const name = asset.name || '';
     const thumbClass = this.getThumbClass(context);
     const fallbackClass = context === 'picker' ? `${thumbClass} ${thumbClass}-fallback` : `${thumbClass} ${thumbClass}-fallback`;
@@ -127,7 +131,7 @@ const CommonAssetsPreview = {
   },
 
   renderModalBody(category, asset, options = {}) {
-    const url = asset.url;
+    const url = this.getAssetMediaUrl(asset);
     const name = asset.name || '';
 
     if (category === 'images' || category === '360-images') {
@@ -154,9 +158,9 @@ const CommonAssetsPreview = {
       if (!this.is3dModelPreviewable(name)) {
         return `<p class="preview-unavailable">Preview not available for this 3D format. Use .glb or .gltf files.</p>`;
       }
-      return `<div class="preview-3d-wrap preview-3d">
+        return `<div class="preview-3d-wrap preview-3d">
         <iframe title="3D model preview" class="preview-3d-frame" src="${this.escapeAttr(
-          this.get3dPreviewPageUrl({ category, name, url })
+          this.get3dPreviewPageUrl(asset)
         )}"></iframe>
         ${this.render3dControlsOverlay()}
         <p class="preview-hint">WASD move · drag look · pinch zoom · R reset</p>

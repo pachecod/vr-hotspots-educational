@@ -1,7 +1,7 @@
 const { requireAdmin } = require('../admin-auth');
 const { isDbEnabled } = require('../services/db-service');
 const snippetsDb = require('../lib/snippets');
-const { getRideyEnabled, setRideyEnabled, getRideyVersion, setRideyVersion, getBlockedExtensions, setBlockedExtensions } = require('../lib/app-settings');
+const { getRideyEnabled, setRideyEnabled, getRideyVersion, setRideyVersion, getBlockedExtensions, setBlockedExtensions, getGuestPreviewTimeoutEnabled, getGuestPreviewTimeoutSeconds, setGuestPreviewTimeout } = require('../lib/app-settings');
 const {
   getAnalyticsEnabledFlag,
   setAnalyticsEnabled,
@@ -81,6 +81,8 @@ function registerSnippetRoutes(app) {
       const hasApiKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim());
       const analyticsEnabled = await getAnalyticsEnabledFlag();
       const analyticsConfigured = !!getEnvMeasurementId();
+      const guestPreviewTimeoutEnabled = await getGuestPreviewTimeoutEnabled();
+      const guestPreviewTimeoutSeconds = await getGuestPreviewTimeoutSeconds();
       res.json({
         success: true,
         rideyEnabled,
@@ -89,6 +91,8 @@ function registerSnippetRoutes(app) {
         hasApiKey,
         analyticsEnabled,
         analyticsConfigured,
+        guestPreviewTimeoutEnabled,
+        guestPreviewTimeoutSeconds,
         dbEnabled: isDbEnabled(),
       });
     } catch (err) {
@@ -137,6 +141,25 @@ function registerSnippetRoutes(app) {
         success: true,
         analyticsEnabled: await getAnalyticsEnabledFlag(),
         analyticsConfigured: !!getEnvMeasurementId(),
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.put('/admin/editor-settings/guest-preview', requireAdmin, async (req, res) => {
+    try {
+      if (!isDbEnabled()) {
+        return res.status(503).json({ success: false, message: 'Database not configured' });
+      }
+      await setGuestPreviewTimeout({
+        enabled: !!req.body?.enabled,
+        seconds: req.body?.seconds,
+      });
+      res.json({
+        success: true,
+        guestPreviewTimeoutEnabled: await getGuestPreviewTimeoutEnabled(),
+        guestPreviewTimeoutSeconds: await getGuestPreviewTimeoutSeconds(),
       });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });

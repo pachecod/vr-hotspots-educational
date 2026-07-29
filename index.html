@@ -413,8 +413,8 @@
       }
 
       .hotspot-list {
-        max-height: 200px;
-        overflow-y: auto;
+        /* No height cap: every hotspot stays visible and #hotspot-editor-content scrolls. */
+        overflow-x: hidden;
       }
 
       .hotspot-item {
@@ -1464,16 +1464,7 @@
 
       <!-- Hotspot Type Selection -->
       <div class="panel-section" id="hotspot-type-section">
-        <div
-          class="section-title"
-          id="hotspot-type-title"
-          style="cursor: pointer; user-select: none"
-        >
-          Hotspot Type
-          <span id="hotspot-type-caret" style="opacity: 0.8; font-size: 12px; margin-left: 6px"
-            >▼</span
-          >
-        </div>
+        <div class="section-title" id="hotspot-type-title">Hotspot Type</div>
         <div class="hotspot-type selected" data-type="text">
           <input type="radio" name="hotspot-type" value="text" checked />
           <span>📝 Text Popup Only</span>

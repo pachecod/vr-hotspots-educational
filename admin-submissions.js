@@ -148,9 +148,17 @@ function kindBadge(kind) {
   const labels = {
     submitted: 'Submitted',
     admin_return: 'Teacher feedback',
+    admin_assigned: 'Assigned project',
     draft: 'Draft',
   };
-  const cls = kind === 'admin_return' ? 'badge-return' : kind === 'draft' ? 'badge-draft' : 'badge-submitted';
+  const cls =
+    kind === 'admin_return'
+      ? 'badge-return'
+      : kind === 'admin_assigned'
+      ? 'badge-return'
+      : kind === 'draft'
+      ? 'badge-draft'
+      : 'badge-submitted';
   return `<span class="badge ${cls}">${labels[kind] || kind}</span>`;
 }
 
@@ -396,14 +404,6 @@ function initInbox() {
   if (main) main.style.display = 'block';
 
   renderAdminNav('submissions');
-
-  const importInput = document.getElementById('import-project-zip-input');
-  if (importInput && importInput.dataset.bound !== '1') {
-    importInput.dataset.bound = '1';
-    importInput.addEventListener('change', (e) => {
-      importProjectZip(e.target.files[0]);
-    });
-  }
 
   loadClassesAndStudents();
   loadInbox();

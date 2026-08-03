@@ -61,6 +61,7 @@
       html.vr-tour-embed-mode #edit-indicator,
       html.vr-tour-embed-mode #admin-combined-bar,
       html.vr-tour-embed-mode #admin-review-bar,
+      html.vr-tour-embed-mode #admin-assign-bar,
       html.vr-tour-embed-mode #flat-page-editor,
       html.vr-tour-embed-mode #flat-page-editor-mount {
         display: none !important;
@@ -736,6 +737,35 @@
         font-weight: bold;
       }
 
+      #admin-assign-bar {
+        display: none;
+        background: #1565c0;
+        color: #fff;
+        padding: 10px 14px;
+        margin: 12px 16px 0;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+
+      #admin-assign-bar.visible {
+        display: block;
+      }
+
+      #admin-assign-bar .review-actions {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      #admin-assign-bar button {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+
       #admin-combined-bar {
         display: none;
         background: #1565c0;
@@ -1330,6 +1360,13 @@
         <div class="review-actions">
           <button type="button" id="admin-save-send-btn">💾 Save and Send to Team Member or Student</button>
           <button type="button" id="admin-review-close-btn">Close</button>
+        </div>
+      </div>
+      <div id="admin-assign-bar" aria-live="polite">
+        <div><strong>Assign Project</strong> — <span id="admin-assign-meta"></span></div>
+        <div class="review-actions">
+          <button type="button" id="admin-assign-send-btn">📤 Send to Student</button>
+          <button type="button" id="admin-assign-close-btn">Cancel</button>
         </div>
       </div>
       <div id="admin-combined-bar" aria-live="polite">

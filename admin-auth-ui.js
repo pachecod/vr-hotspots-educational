@@ -189,7 +189,7 @@ async function requireAdminSession(containerId, onAuthenticated) {
   try {
     if (window.adminAuthenticated) return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('adminReview') !== '1' && !params.get('adminTemplate')) return;
+    if (params.get('adminReview') !== '1' && !params.get('adminTemplate') && params.get('adminAssign') !== '1') return;
     if (!(await checkAdminSession())) return;
     setAdminAuthenticated(true);
   } catch (_) {}

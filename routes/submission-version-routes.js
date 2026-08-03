@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { purgeProjectThread } = require('../lib/purge-project-thread');
 const { purgeContentItem } = require('../lib/student-content/purge');
 const projectVersionsDb = require('../services/project-versions-db');
@@ -14,6 +15,34 @@ const { assertCanSubmit } = require('../services/usage-quota');
 const { listLegacyInbox, mergeB2OrphansIntoInbox } = require('../lib/legacy-submissions');
 const { resolveHostedProjectUrls, resolveHostedProjectUrlsAsync, enrichInboxHosting } = require('../services/hosted-project-urls');
 const { uploadHostedDirectory } = require('../lib/hosted-b2-storage');
+const { query } = require('../services/db-service');
+
+const STAGED_PROJECT_TTL_MS = 60 * 60 * 1000;
+
+function cleanupStagedProjects() {
+  const dir = path.join(process.cwd(), 'temp-uploads', 'staged');
+  if (!fs.existsSync(dir)) return;
+  const cutoff = Date.now() - STAGED_PROJECT_TTL_MS;
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.endsWith('.zip')) continue;
+    const full = path.join(dir, name);
+    try {
+      const stat = fs.statSync(full);
+      if (stat.mtimeMs < cutoff) fs.unlinkSync(full);
+    } catch (_) {}
+  }
+}
+
+async function getActiveStudentWithClass(studentId) {
+  const { rows } = await query(
+    `SELECT s.id, s.display_name, s.is_active, c.slug AS class_slug, c.name AS class_name
+     FROM students s
+     JOIN classes c ON c.id = s.class_id
+     WHERE s.id = $1`,
+    [studentId]
+  );
+  return rows[0] || null;
+}
 
 function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe }) {
   app.post('/api/student/projects/prepare-upload', async (req, res) => {
@@ -457,6 +486,129 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       return res.json({ success: true, removedVersions: removed.removedVersions ?? removed });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/admin/projects/stage-zip', upload.single('project'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'ZIP file required' });
+      }
+      assertValidZipFile(req.file.path);
+      cleanupStagedProjects();
+      const stagingId = crypto.randomUUID();
+      const stagedDir = path.join(process.cwd(), 'temp-uploads', 'staged');
+      fs.mkdirSync(stagedDir, { recursive: true });
+      const stagedPath = path.join(stagedDir, `${stagingId}.zip`);
+      fs.renameSync(req.file.path, stagedPath);
+      return res.json({ success: true, stagingId });
+    } catch (err) {
+      console.error('stage-zip error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.get('/admin/projects/staged/:stagingId/zip', async (req, res) => {
+    try {
+      const stagingId = req.params.stagingId;
+      if (!/^[0-9a-f-]{36}$/i.test(stagingId)) {
+        return res.status(400).json({ success: false, message: 'Invalid staging id' });
+      }
+      const stagedPath = path.join(process.cwd(), 'temp-uploads', 'staged', `${stagingId}.zip`);
+      if (!fs.existsSync(stagedPath)) {
+        return res.status(404).json({ success: false, message: 'Staged project not found or expired' });
+      }
+      assertValidZipFile(stagedPath);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `inline; filename="staged_${stagingId}.zip"`);
+      res.send(fs.readFileSync(stagedPath));
+    } catch (err) {
+      console.error('staged zip error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/admin/projects/assign', upload.single('project'), async (req, res) => {
+    let tempPath = null;
+    try {
+      if (!isDbEnabled()) {
+        return res.status(503).json({ success: false, message: 'Database required for project assignment' });
+      }
+
+      const studentId = req.body?.studentId;
+      const projectName = (req.body?.projectName || '').trim();
+      const adminNote = projectVersionsDb.trimNote(req.body?.adminNote || req.body?.admin_note);
+      const stagingId = req.body?.stagingId;
+
+      if (!studentId) {
+        return res.status(400).json({ success: false, message: 'studentId required' });
+      }
+      if (!projectName) {
+        return res.status(400).json({ success: false, message: 'Project name required' });
+      }
+
+      const student = await getActiveStudentWithClass(studentId);
+      if (!student || !student.is_active) {
+        return res.status(404).json({ success: false, message: 'Student not found or inactive' });
+      }
+
+      if (req.file) {
+        tempPath = req.file.path;
+        assertValidZipFile(tempPath);
+      } else if (stagingId && /^[0-9a-f-]{36}$/i.test(stagingId)) {
+        const stagedPath = path.join(process.cwd(), 'temp-uploads', 'staged', `${stagingId}.zip`);
+        if (!fs.existsSync(stagedPath)) {
+          return res.status(404).json({ success: false, message: 'Staged project not found or expired' });
+        }
+        tempPath = stagedPath;
+        assertValidZipFile(tempPath);
+      } else {
+        return res.status(400).json({ success: false, message: 'ZIP file or stagingId required' });
+      }
+
+      const classSlug = student.class_slug || 'default';
+      const reserved = await projectVersionsDb.reserveVersionPath({
+        studentId,
+        classSlug,
+        projectName,
+      });
+
+      await b2Service.uploadFile(tempPath, reserved.b2Path);
+
+      const result = await projectVersionsDb.createVersion({
+        studentId,
+        projectName,
+        fileName: reserved.fileName,
+        b2Path: reserved.b2Path,
+        kind: 'admin_assigned',
+        createdBy: 'admin',
+        adminNote,
+        threadId: reserved.threadId,
+        versionNumber: reserved.versionNumber,
+      });
+
+      if (stagingId && tempPath.includes('staged')) {
+        try {
+          fs.unlinkSync(tempPath);
+        } catch (_) {}
+      }
+
+      return res.json({
+        success: true,
+        message: 'Project assigned to student',
+        versionId: result.version.id,
+        threadId: reserved.threadId,
+        versionNumber: result.versionNumber,
+      });
+    } catch (err) {
+      console.error('admin assign error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    } finally {
+      if (req.file?.path && tempPath === req.file.path) {
+        try {
+          if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        } catch (_) {}
+      }
     }
   });
 }

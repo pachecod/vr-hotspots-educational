@@ -186,10 +186,10 @@ button:hover { background: #1d4ed8; }`;
     return out;
   }
 
-  const LOCAL_VR_TOUR_EMBED_PATH = '../../index.html';
+  const LOCAL_VR_TOUR_EMBED_PATH = '../../index.html?embed=1';
   const VR_TOUR_EMBED_STYLES =
-    '.vr-tour-embed{margin:1rem auto;max-width:100%;text-align:center;}' +
-    '.vr-tour-embed iframe{width:100%;min-height:480px;height:70vh;border:0;display:block;border-radius:8px;background:#111;}';
+    '.vr-tour-embed{margin:0 auto;max-width:100%;text-align:center;}' +
+    '.vr-tour-embed iframe{width:100%;height:100dvh;min-height:100dvh;border:0;display:block;border-radius:8px;background:#111;}';
 
   function buildLocalBundleVrInsertHtml(name) {
     const title = String(name || '360° VR Tour')

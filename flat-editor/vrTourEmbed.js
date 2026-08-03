@@ -1,5 +1,5 @@
 /** Relative path from flat-pages/<id>/index.html to the exported VR viewer at project root. */
-export const LOCAL_VR_TOUR_EMBED_PATH = '../../index.html';
+export const LOCAL_VR_TOUR_EMBED_PATH = '../../index.html?embed=1';
 
 /** Same-origin viewer URL when flat preview runs inside the live editor (not a bundle ZIP). */
 export const EDITOR_PREVIEW_VR_TOUR_EMBED_PATH = '/index.html?embed=1';
@@ -54,17 +54,26 @@ export function deriveQrUrlFromTourUrl(embedUrl) {
   return resolveAbsoluteUrl(embedUrl).replace(/index\.html(\?.*)?$/i, 'qr.png');
 }
 
+export function withEmbedQuery(url) {
+  if (!url) return url;
+  if (/[?&]embed=1(?:&|$)/i.test(url)) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}embed=1`;
+}
+
+const VR_TOUR_EMBED_IFRAME_CSS =
+  'width:100%;height:100dvh;min-height:100dvh;border:0;display:block;border-radius:8px;background:#111;';
+
 const GUEST_VR_TOUR_EMBED_STYLES = [
-  '.vr-tour-embed{margin:1rem auto;max-width:100%;text-align:center;}',
-  '.vr-tour-embed iframe{width:100%;min-height:480px;height:70vh;border:0;display:block;border-radius:8px;background:#111;}',
+  '.vr-tour-embed{margin:0 auto;max-width:100%;text-align:center;}',
+  `.vr-tour-embed iframe{${VR_TOUR_EMBED_IFRAME_CSS}}`,
   '.vr-tour-mobile-label{margin:1rem 0 0.5rem;font-size:1rem;font-weight:600;color:#333;}',
   '.vr-tour-mobile-qr-img{display:inline-block;border-radius:4px;margin-bottom:1rem;}',
 ].join('');
 
 function buildSignedInStyleBlock() {
   return `<style>
-  .vr-tour-embed { margin: 1rem auto; max-width: 100%; text-align: center; }
-  .vr-tour-embed iframe { width: 100%; min-height: 480px; height: 70vh; border: 0; border-radius: 8px; background: #111; }
+  .vr-tour-embed { margin: 0 auto; max-width: 100%; text-align: center; }
+  .vr-tour-embed iframe { ${VR_TOUR_EMBED_IFRAME_CSS} }
   .vr-tour-mobile-section { margin-top: 1.5rem; text-align: center; }
   .vr-tour-mobile-label { margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600; color: #333; }
   .vr-tour-mobile-qr-img { display: inline-block; border-radius: 4px; }
@@ -95,7 +104,7 @@ function rewriteIframeOpenTag(attrs, targetSrc) {
 
 function buildSignedInEmbedDivHtml(name, iframeSrc, tourUrl) {
   const title = escapeAttr(name || '360° VR Tour');
-  const src = escapeAttr(iframeSrc);
+  const src = escapeAttr(withEmbedQuery(iframeSrc));
   const url = escapeAttr(tourUrl || iframeSrc);
   return [
     `<div class="vr-tour-embed" data-vr-tour-embed="1" data-vr-tour-url="${url}">`,
@@ -287,7 +296,7 @@ export function buildLocalBundleVrInsertHtml(name) {
 /** Guest flat-page embed — unchanged legacy format (QR inside embed wrapper). */
 export function buildGuestProjectVrInsertHtml(name, embedUrl, qrUrl) {
   const title = escapeAttr(name || '360° VR Tour');
-  const src = escapeAttr(resolveAbsoluteUrl(embedUrl));
+  const src = escapeAttr(withEmbedQuery(resolveAbsoluteUrl(embedUrl)));
   if (!src) return '';
   const qrSrc = escapeAttr(qrUrl ? resolveAbsoluteUrl(qrUrl) : deriveQrUrlFromTourUrl(embedUrl));
   return [
@@ -328,8 +337,9 @@ export function rewriteVrTourEmbedsInHtml(
 ) {
   if (!html) return html;
   const onlineSrc = resolveAbsoluteUrl(hostedUrl);
-  const targetSrc = useOnlineUrl && onlineSrc ? onlineSrc : LOCAL_VR_TOUR_EMBED_PATH;
-  const tourUrl = useOnlineUrl && onlineSrc ? onlineSrc : targetSrc;
+  const rawTarget = useOnlineUrl && onlineSrc ? onlineSrc : LOCAL_VR_TOUR_EMBED_PATH;
+  const targetSrc = withEmbedQuery(rawTarget);
+  const tourUrl = useOnlineUrl && onlineSrc ? onlineSrc : rawTarget;
   const qrSrc = !hideQr && useOnlineUrl && onlineSrc ? deriveQrUrlFromTourUrl(onlineSrc) : '';
   const showQr = Boolean(qrSrc);
 

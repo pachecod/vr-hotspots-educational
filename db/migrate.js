@@ -200,6 +200,14 @@ async function applyIncrementalMigrations(pool) {
         WHERE password_hash IS NOT NULL;
       `,
     },
+    {
+      name: 'project_versions_admin_assigned_v1',
+      sql: `
+        ALTER TABLE project_versions DROP CONSTRAINT IF EXISTS project_versions_kind_check;
+        ALTER TABLE project_versions ADD CONSTRAINT project_versions_kind_check
+          CHECK (kind IN ('draft', 'submitted', 'admin_return', 'admin_assigned'));
+      `,
+    },
   ];
 
   for (const migration of migrations) {

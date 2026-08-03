@@ -212,7 +212,9 @@ async function listStudentProjects(studentId) {
             lv.kind AS latest_kind, lv.student_note, lv.admin_note, lv.submitted_at, lv.created_at AS latest_created_at,
             lv.student_seen_at,
             (SELECT COUNT(*)::int FROM project_versions pv2
-             WHERE pv2.thread_id = pt.id AND pv2.kind = 'admin_return' AND pv2.student_seen_at IS NULL) AS unread_feedback
+             WHERE pv2.thread_id = pt.id
+               AND pv2.kind IN ('admin_return', 'admin_assigned')
+               AND pv2.student_seen_at IS NULL) AS unread_feedback
      FROM project_threads pt
      INNER JOIN LATERAL (
        SELECT * FROM project_versions pv
@@ -330,7 +332,9 @@ async function getUnreadFeedbackCount(studentId) {
   const { rows } = await query(
     `SELECT COUNT(*)::int AS count FROM project_versions pv
      JOIN project_threads pt ON pt.id = pv.thread_id
-     WHERE pt.student_id = $1 AND pv.kind = 'admin_return' AND pv.student_seen_at IS NULL`,
+     WHERE pt.student_id = $1
+       AND pv.kind IN ('admin_return', 'admin_assigned')
+       AND pv.student_seen_at IS NULL`,
     [studentId]
   );
   return rows[0]?.count || 0;
@@ -338,12 +342,12 @@ async function getUnreadFeedbackCount(studentId) {
 
 async function listUnreadFeedback(studentId) {
   const { rows } = await query(
-    `SELECT pv.id, pv.admin_note, pv.submitted_at, pv.created_at,
+    `SELECT pv.id, pv.admin_note, pv.submitted_at, pv.created_at, pv.kind,
             pt.id AS thread_id, pt.project_name
      FROM project_versions pv
      JOIN project_threads pt ON pt.id = pv.thread_id
      WHERE pt.student_id = $1
-       AND pv.kind = 'admin_return'
+       AND pv.kind IN ('admin_return', 'admin_assigned')
        AND pv.student_seen_at IS NULL
      ORDER BY COALESCE(pv.submitted_at, pv.created_at) DESC`,
     [studentId]
@@ -353,6 +357,7 @@ async function listUnreadFeedback(studentId) {
     threadId: row.thread_id,
     projectName: row.project_name,
     adminNote: row.admin_note,
+    kind: row.kind,
     submittedAt: row.submitted_at || row.created_at,
   }));
 }

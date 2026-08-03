@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Assign Project — WebXRIDE Admin</title>
+    <link rel="stylesheet" href="admin-nav.css" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        max-width: 720px;
+      }
+      .assign-panel {
+        background: #f8f9fa;
+        padding: 24px;
+        border-radius: 8px;
+        border: 2px solid #dee2e6;
+      }
+      .assign-panel h1 {
+        margin-top: 0;
+        font-size: 1.4em;
+      }
+      .field {
+        margin-bottom: 16px;
+      }
+      .field label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: bold;
+        color: #333;
+      }
+      .field input,
+      .field select,
+      .field textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 20px;
+      }
+      .btn-primary {
+        background: #4caf50;
+        color: #fff;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .btn-secondary {
+        background: #2196f3;
+        color: #fff;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .btn-primary:disabled,
+      .btn-secondary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      #assign-status {
+        margin-top: 16px;
+        padding: 10px;
+        border-radius: 5px;
+        display: none;
+        font-size: 14px;
+      }
+      .hint {
+        color: #666;
+        font-size: 13px;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="admin-auth-ui.js"></script>
+    <script src="admin-nav.js"></script>
+    <div id="login-root"></div>
+    <div id="main-content" style="display: none">
+      <nav id="admin-nav" data-active="assign"></nav>
+
+      <div class="assign-panel">
+        <h1>Assign Project to Student</h1>
+        <p class="hint">
+          Upload a project ZIP, preview it in the editor, then send it to a specific student. The
+          student will see it in <strong>My Submissions</strong> as an editable project.
+        </p>
+
+        <div class="field">
+          <label for="assign-class">Team or Class</label>
+          <select id="assign-class">
+            <option value="">Select a team or class…</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="assign-student">Team member or student</label>
+          <select id="assign-student" disabled>
+            <option value="">Select a class first…</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="assign-project-name">Project name</label>
+          <input type="text" id="assign-project-name" placeholder="e.g. Museum Tour Starter" />
+        </div>
+
+        <div class="field">
+          <label for="assign-admin-note">Note for student (optional)</label>
+          <textarea id="assign-admin-note" rows="3" placeholder="Instructions or context for this project…"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="assign-zip-input">Project ZIP</label>
+          <input type="file" id="assign-zip-input" accept=".zip" />
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn-secondary" id="assign-preview-btn" disabled>
+            Preview in Editor
+          </button>
+          <button type="button" class="btn-primary" id="assign-send-btn" disabled>
+            Send to Student
+          </button>
+        </div>
+
+        <div id="assign-status"></div>
+      </div>
+    </div>
+
+    <script src="admin-assign-project.js"></script>
+  </body>
+</html>

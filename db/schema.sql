@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS project_versions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   thread_id UUID NOT NULL REFERENCES project_threads(id) ON DELETE CASCADE,
   version_number INT NOT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('draft', 'submitted', 'admin_return')),
+  kind TEXT NOT NULL CHECK (kind IN ('draft', 'submitted', 'admin_return', 'admin_assigned')),
   b2_path TEXT NOT NULL UNIQUE,
   file_name TEXT NOT NULL UNIQUE,
   student_note TEXT,

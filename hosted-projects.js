@@ -22,6 +22,248 @@
   const HOSTED_GALLERY_PRIVACY_NOTE =
     'Anyone who can open this page with the classroom password can view the featured hosted projects listed here.';
 
+  const PAGE_SIZE = 12;
+
+  let galleryState = null;
+
+  function getPaginationView(state) {
+    const total = state.projects.length;
+    if (state.viewAll || total <= PAGE_SIZE) {
+      return {
+        items: state.projects,
+        page: 1,
+        totalPages: 1,
+        startIndex: 0,
+        showControls: total > PAGE_SIZE,
+      };
+    }
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+    const page = Math.min(Math.max(1, state.currentPage), totalPages);
+    const startIndex = (page - 1) * PAGE_SIZE;
+    return {
+      items: state.projects.slice(startIndex, startIndex + PAGE_SIZE),
+      page,
+      totalPages,
+      startIndex,
+      showControls: true,
+    };
+  }
+
+  function renderProjectCard(project, projectIndex) {
+    const metaParts = [];
+    if (project.studentName) metaParts.push(project.studentName);
+    const date = formatDate(project.updatedAt);
+    if (date) metaParts.push(`Updated ${date}`);
+    const tourUrl =
+      project.tourUrl || (project.hostedPath ? `/hosted/${project.hostedPath}/index.html` : '#');
+    const qrUrl =
+      project.qrUrl ||
+      (project.hostedPath
+        ? `/hosted/${project.hostedPath}/qr.png`
+        : tourUrl.replace(/index\.html(\?.*)?$/i, 'qr.png'));
+    return `
+      <article class="hosted-project-card">
+        <h2>${escapeHtml(project.title || 'Untitled project')}</h2>
+        ${
+          metaParts.length
+            ? `<p class="hosted-project-meta">${escapeHtml(metaParts.join(' · '))}</p>`
+            : ''
+        }
+        ${
+          qrUrl
+            ? `<div class="hosted-project-qr">
+            <img
+              src="${escapeHtml(qrUrl)}"
+              alt="QR code to open ${escapeHtml(project.title || 'this project')} on your phone"
+              width="120"
+              height="120"
+              loading="lazy"
+            />
+            <p class="hosted-project-qr-hint">Scan to open on your phone</p>
+            <button
+              type="button"
+              class="hosted-projects-btn hosted-projects-btn-secondary hosted-project-qr-fullscreen-btn"
+              data-project-index="${projectIndex}"
+            >Open QR full screen</button>
+          </div>`
+            : ''
+        }
+        <a
+          class="hosted-projects-btn hosted-projects-btn-primary"
+          href="${escapeHtml(tourUrl)}"
+          target="_blank"
+          rel="noopener noreferrer"
+        >View project</a>
+      </article>`;
+  }
+
+  function renderPaginationControls(view) {
+    if (!view.showControls) return '';
+
+    const { page, totalPages } = view;
+    const total = galleryState.projects.length;
+
+    if (galleryState.viewAll) {
+      return `
+        <div class="hosted-projects-pagination" aria-label="Gallery pagination">
+          <p class="hosted-projects-page-info">Showing all ${total} featured projects</p>
+          <button
+            type="button"
+            class="hosted-projects-btn hosted-projects-btn-secondary"
+            id="hosted-projects-show-pages-btn"
+          >Show pages</button>
+        </div>`;
+    }
+
+    const rangeStart = view.startIndex + 1;
+    const rangeEnd = view.startIndex + view.items.length;
+
+    return `
+      <div class="hosted-projects-pagination" aria-label="Gallery pagination">
+        <button
+          type="button"
+          class="hosted-projects-btn hosted-projects-btn-secondary"
+          id="hosted-projects-prev-btn"
+          ${page <= 1 ? 'disabled' : ''}
+        >Previous</button>
+        <p class="hosted-projects-page-info">
+          Showing ${rangeStart}–${rangeEnd} of ${total}
+          <span class="hosted-projects-page-divider">·</span>
+          Page ${page} of ${totalPages}
+        </p>
+        <button
+          type="button"
+          class="hosted-projects-btn hosted-projects-btn-secondary"
+          id="hosted-projects-next-btn"
+          ${page >= totalPages ? 'disabled' : ''}
+        >Next</button>
+        <button
+          type="button"
+          class="hosted-projects-btn hosted-projects-btn-secondary"
+          id="hosted-projects-view-all-btn"
+        >View All</button>
+      </div>`;
+  }
+
+  function bindProjectListInteractions(root) {
+    const { classSlug, projects } = galleryState;
+
+    document.getElementById('hosted-projects-lock-btn')?.addEventListener('click', async () => {
+      try {
+        await lockGallery(classSlug);
+      } catch (_) {}
+      window.location.reload();
+    });
+
+    document.getElementById('hosted-projects-prev-btn')?.addEventListener('click', () => {
+      requestGalleryPageChange(() => {
+        galleryState.currentPage = Math.max(1, galleryState.currentPage - 1);
+        galleryState.viewAll = false;
+      });
+    });
+
+    document.getElementById('hosted-projects-next-btn')?.addEventListener('click', () => {
+      requestGalleryPageChange(() => {
+        const totalPages = Math.ceil(galleryState.projects.length / PAGE_SIZE);
+        galleryState.currentPage = Math.min(totalPages, galleryState.currentPage + 1);
+        galleryState.viewAll = false;
+      });
+    });
+
+    document.getElementById('hosted-projects-view-all-btn')?.addEventListener('click', () => {
+      requestGalleryPageChange(() => {
+        galleryState.viewAll = true;
+      });
+    });
+
+    document.getElementById('hosted-projects-show-pages-btn')?.addEventListener('click', () => {
+      requestGalleryPageChange(() => {
+        galleryState.viewAll = false;
+        galleryState.currentPage = 1;
+      });
+    });
+
+    root.querySelectorAll('.hosted-project-qr-fullscreen-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.projectIndex);
+        const project = projects[idx];
+        if (!project) return;
+        const tourUrl =
+          project.tourUrl ||
+          (project.hostedPath ? `/hosted/${project.hostedPath}/index.html` : '');
+        const qrUrl =
+          project.qrUrl ||
+          (project.hostedPath
+            ? `/hosted/${project.hostedPath}/qr.png`
+            : tourUrl.replace(/index\.html(\?.*)?$/i, 'qr.png'));
+        if (!qrUrl) return;
+        showQrFullscreen({
+          title: project.title || 'Hosted project',
+          qrUrl,
+        });
+      });
+    });
+  }
+
+  function renderProjectListView() {
+    const { root, classSlug, payload, projects } = galleryState;
+    const pageTitle = payload.pageTitle || featuredHostedPagesTitle(payload.className);
+    const view = getPaginationView(galleryState);
+    const paginationHtml = renderPaginationControls(view);
+
+    const cards =
+      projects.length > 0
+        ? view.items
+            .map((project, index) => renderProjectCard(project, view.startIndex + index))
+            .join('')
+        : '<p class="hosted-projects-empty">No featured hosted projects are available for this class yet.</p>';
+
+    root.innerHTML = `
+      <div class="hosted-projects-list-wrap">
+        <div class="hosted-projects-list-header">
+          <div>
+            <div class="hosted-projects-brand">WebXRIDE</div>
+            <h1>${escapeHtml(pageTitle)}</h1>
+            <p>${escapeHtml(HOSTED_GALLERY_PRIVACY_NOTE)}</p>
+          </div>
+          <button type="button" class="hosted-projects-btn hosted-projects-btn-secondary" id="hosted-projects-lock-btn">
+            Lock gallery
+          </button>
+        </div>
+        <div class="hosted-projects-grid" id="hosted-projects-grid">${cards}</div>
+        ${paginationHtml}
+        <p class="hosted-projects-footer">
+          <a href="/index.html">Back to WebXRIDE editor</a>
+        </p>
+      </div>`;
+
+    bindProjectListInteractions(root);
+
+    if (galleryState._scrollOnRender) {
+      galleryState._scrollOnRender = false;
+      document.getElementById('hosted-projects-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function renderProjectList(root, classSlug, payload) {
+    galleryState = {
+      root,
+      classSlug,
+      payload,
+      projects: payload.projects || [],
+      viewAll: false,
+      currentPage: 1,
+      _scrollOnRender: false,
+    };
+    renderProjectListView();
+  }
+
+  function requestGalleryPageChange(updateFn) {
+    updateFn();
+    galleryState._scrollOnRender = true;
+    renderProjectListView();
+  }
+
   function getClassSlugFromPath() {
     const parts = window.location.pathname.split('/').filter(Boolean);
     if (parts.length >= 2 && parts[parts.length - 1] === 'hosted-projects.html') {
@@ -191,107 +433,6 @@
     overlay.onclick = (e) => {
       if (e.target === overlay) close();
     };
-  }
-
-  function renderProjectList(root, classSlug, payload) {
-    const projects = payload.projects || [];
-    const pageTitle = payload.pageTitle || featuredHostedPagesTitle(payload.className);
-
-    const cards =
-      projects.length > 0
-        ? projects
-            .map((p, projectIndex) => {
-              const metaParts = [];
-              if (p.studentName) metaParts.push(p.studentName);
-              const date = formatDate(p.updatedAt);
-              if (date) metaParts.push(`Updated ${date}`);
-              const tourUrl = p.tourUrl || (p.hostedPath ? `/hosted/${p.hostedPath}/index.html` : '#');
-              const qrUrl =
-                p.qrUrl ||
-                (p.hostedPath ? `/hosted/${p.hostedPath}/qr.png` : tourUrl.replace(/index\.html(\?.*)?$/i, 'qr.png'));
-              return `
-              <article class="hosted-project-card">
-                <h2>${escapeHtml(p.title || 'Untitled project')}</h2>
-                ${
-                  metaParts.length
-                    ? `<p class="hosted-project-meta">${escapeHtml(metaParts.join(' · '))}</p>`
-                    : ''
-                }
-                ${
-                  qrUrl
-                    ? `<div class="hosted-project-qr">
-                    <img
-                      src="${escapeHtml(qrUrl)}"
-                      alt="QR code to open ${escapeHtml(p.title || 'this project')} on your phone"
-                      width="120"
-                      height="120"
-                      loading="lazy"
-                    />
-                    <p class="hosted-project-qr-hint">Scan to open on your phone</p>
-                    <button
-                      type="button"
-                      class="hosted-projects-btn hosted-projects-btn-secondary hosted-project-qr-fullscreen-btn"
-                      data-project-index="${projectIndex}"
-                    >Open QR full screen</button>
-                  </div>`
-                    : ''
-                }
-                <a
-                  class="hosted-projects-btn hosted-projects-btn-primary"
-                  href="${escapeHtml(tourUrl)}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >View project</a>
-              </article>`;
-            })
-            .join('')
-        : '<p class="hosted-projects-empty">No featured hosted projects are available for this class yet.</p>';
-
-    root.innerHTML = `
-      <div class="hosted-projects-list-wrap">
-        <div class="hosted-projects-list-header">
-          <div>
-            <div class="hosted-projects-brand">WebXRIDE</div>
-            <h1>${escapeHtml(pageTitle)}</h1>
-            <p>${escapeHtml(HOSTED_GALLERY_PRIVACY_NOTE)}</p>
-          </div>
-          <button type="button" class="hosted-projects-btn hosted-projects-btn-secondary" id="hosted-projects-lock-btn">
-            Lock gallery
-          </button>
-        </div>
-        <div class="hosted-projects-grid">${cards}</div>
-        <p class="hosted-projects-footer">
-          <a href="/index.html">Back to WebXRIDE editor</a>
-        </p>
-      </div>`;
-
-    document.getElementById('hosted-projects-lock-btn')?.addEventListener('click', async () => {
-      try {
-        await lockGallery(classSlug);
-      } catch (_) {}
-      window.location.reload();
-    });
-
-    root.querySelectorAll('.hosted-project-qr-fullscreen-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = Number(btn.dataset.projectIndex);
-        const project = projects[idx];
-        if (!project) return;
-        const tourUrl =
-          project.tourUrl ||
-          (project.hostedPath ? `/hosted/${project.hostedPath}/index.html` : '');
-        const qrUrl =
-          project.qrUrl ||
-          (project.hostedPath
-            ? `/hosted/${project.hostedPath}/qr.png`
-            : tourUrl.replace(/index\.html(\?.*)?$/i, 'qr.png'));
-        if (!qrUrl) return;
-        showQrFullscreen({
-          title: project.title || 'Hosted project',
-          qrUrl,
-        });
-      });
-    });
   }
 
   async function boot() {

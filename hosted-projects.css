@@ -148,6 +148,38 @@ body {
   gap: 16px;
 }
 
+.hosted-projects-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  background: #141414;
+  border: 1px solid #333;
+  border-radius: 10px;
+}
+
+.hosted-projects-page-info {
+  margin: 0;
+  font-size: 14px;
+  color: #bbb;
+  text-align: center;
+}
+
+.hosted-projects-page-divider {
+  color: #666;
+}
+
+.hosted-projects-pagination .hosted-projects-btn {
+  min-width: 96px;
+}
+
+#hosted-projects-view-all-btn {
+  background: #2e7d32;
+}
+
 .hosted-project-card {
   background: #1a1a1a;
   border: 1px solid #333;

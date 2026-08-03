@@ -286,6 +286,40 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
     return finish();
   });
 
+  app.patch('/api/student/projects/:threadId', async (req, res) => {
+    const finish = async () => {
+      try {
+        const sess = getStudentSession(req);
+        if (!sess || !sess.studentId) {
+          return res.status(401).json({ success: false, message: 'Not authenticated' });
+        }
+        if (!isDbEnabled()) {
+          return res.status(503).json({ success: false, message: 'Database not configured' });
+        }
+        const { projectName } = req.body || {};
+        const updated = await projectVersionsDb.updateThreadDisplayName({
+          studentId: sess.studentId,
+          threadId: req.params.threadId,
+          projectName,
+        });
+        return res.json({
+          success: true,
+          threadId: updated.id,
+          projectName: updated.project_name,
+          projectSlug: updated.project_slug,
+        });
+      } catch (err) {
+        const status = err.message === 'Project not found' ? 404 : 400;
+        console.error('rename project error:', err);
+        return res.status(status).json({ success: false, message: err.message || 'Server error' });
+      }
+    };
+    if (isStudentAuthRequired()) {
+      return requireStudentStrict(req, res, finish);
+    }
+    return finish();
+  });
+
   app.get('/api/student/unread-feedback', async (req, res) => {
     const finish = async () => {
       try {

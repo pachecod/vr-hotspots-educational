@@ -1,6 +1,18 @@
 const { query, slugify, withClient, isDbEnabled } = require('./db-service');
 
 const NOTE_MAX_LEN = 2000;
+const DISPLAY_NAME_MAX_LEN = 120;
+
+function normalizeDisplayName(projectName) {
+  const trimmed = String(projectName || '').trim();
+  if (!trimmed) {
+    throw new Error('Project name required');
+  }
+  if (trimmed.length > DISPLAY_NAME_MAX_LEN) {
+    throw new Error(`Project name must be ${DISPLAY_NAME_MAX_LEN} characters or fewer`);
+  }
+  return trimmed;
+}
 
 function trimNote(note) {
   if (note == null || note === '') return null;
@@ -91,6 +103,15 @@ async function reserveVersionPath({ studentId, classSlug, projectName, threadId 
         throw new Error('Invalid project thread');
       }
       thread = rows[0];
+      const trimmedName = projectName && String(projectName).trim();
+      if (trimmedName && trimmedName !== thread.project_name) {
+        const displayName = normalizeDisplayName(trimmedName);
+        await client.query(`UPDATE project_threads SET project_name = $1 WHERE id = $2`, [
+          displayName,
+          thread.id,
+        ]);
+        thread.project_name = displayName;
+      }
     } else {
       thread = await findOrCreateThread(client, { studentId, projectName });
       await client.query(`SELECT * FROM project_threads WHERE id = $1 FOR UPDATE`, [thread.id]);
@@ -418,8 +439,28 @@ async function importLegacySubmissions() {
   return { imported };
 }
 
+async function updateThreadDisplayName({ studentId, threadId, projectName }) {
+  if (!isDbEnabled()) {
+    throw new Error('Database not configured');
+  }
+  const displayName = normalizeDisplayName(projectName);
+  const { rows } = await query(
+    `UPDATE project_threads
+     SET project_name = $1
+     WHERE id = $2 AND student_id = $3
+     RETURNING id, project_name, project_slug, student_id`,
+    [displayName, threadId, studentId]
+  );
+  if (!rows.length) {
+    throw new Error('Project not found');
+  }
+  return rows[0];
+}
+
 module.exports = {
   NOTE_MAX_LEN,
+  DISPLAY_NAME_MAX_LEN,
+  normalizeDisplayName,
   trimNote,
   buildVersionedB2Path,
   reserveVersionPath,
@@ -439,5 +480,6 @@ module.exports = {
   getUnreadFeedbackCount,
   listUnreadFeedback,
   importLegacySubmissions,
+  updateThreadDisplayName,
   formatVersionRow,
 };

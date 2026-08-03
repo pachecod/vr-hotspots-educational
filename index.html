@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <title>WebXRIDE Immersive Storytelling Tool</title>
     <meta name="description" content="WebXRIDE Immersive Storytelling Tool — Create interactive 360° tours and flat web pages" />
     <link rel="stylesheet" href="welcome-playground.css" />
@@ -81,6 +82,12 @@
       a-text {
         font-family: Arial;
         font-weight: bold;
+      }
+
+      a-scene canvas {
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
       }
 
       @keyframes fadeInOut {
@@ -2115,8 +2122,12 @@
       <div class="panel-section">
         <div class="section-title">Template</div>
         <div class="form-group">
-          <label for="template-name">Template Name:</label>
-          <input type="text" id="template-name" placeholder="Enter template name" />
+          <label for="template-name">Project name:</label>
+          <input type="text" id="template-name" placeholder="Enter project name" maxlength="120" />
+          <div id="project-name-hint" style="font-size: 12px; color: #999; margin-top: 6px;">
+            Shown in your inbox and exports. Cloud file paths stay the same after your first save.
+          </div>
+          <div id="project-name-save-status" style="font-size: 12px; color: #888; margin-top: 4px; min-height: 16px;" aria-live="polite"></div>
         </div>
         <button class="btn btn-primary" id="save-template">Save Template</button>
         <button class="btn btn-secondary save-locally-trigger" id="save-locally" style="display:none;">💾 Save Locally</button>

@@ -409,45 +409,4 @@ function initInbox() {
   loadInbox();
 }
 
-async function importProjectZip(file) {
-  if (!file) return;
-  const statusDiv = document.getElementById('import-status');
-  if (!statusDiv) return;
-  statusDiv.style.display = 'block';
-  statusDiv.style.background = '#d1ecf1';
-  statusDiv.style.color = '#0c5460';
-  statusDiv.style.border = '1px solid #bee5eb';
-  statusDiv.innerHTML = 'Importing project ZIP...';
-  try {
-    const fd = new FormData();
-    fd.append('project', file);
-    const res = await fetch('/submit-project', { method: 'POST', body: fd });
-    const ct = (res.headers.get('content-type') || '').toLowerCase();
-    const data = ct.includes('application/json')
-      ? await res.json()
-      : { success: false, message: await res.text() };
-    if (!data.success) throw new Error(data.message || 'Import failed');
-    statusDiv.style.background = '#d4edda';
-    statusDiv.style.color = '#155724';
-    statusDiv.style.border = '1px solid #c3e6cb';
-    statusDiv.innerHTML =
-      'Imported: ' +
-      (data.projectName || 'Project') +
-      ' (File: ' +
-      data.fileName +
-      '). Refreshing list...';
-    setTimeout(() => {
-      loadInbox();
-      statusDiv.style.display = 'none';
-    }, 1500);
-  } catch (e) {
-    statusDiv.style.background = '#f8d7da';
-    statusDiv.style.color = '#721c24';
-    statusDiv.style.border = '1px solid #f5c6cb';
-    statusDiv.textContent = 'Import failed: ' + (e.message || 'Unknown error');
-  }
-  const input = document.getElementById('import-project-zip-input');
-  if (input) input.value = '';
-}
-
 requireAdminSession('login-root', initInbox);

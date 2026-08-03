@@ -8,7 +8,7 @@
       body {
         font-family: Arial, sans-serif;
         margin: 20px;
-        max-width: 720px;
+        max-width: 860px;
       }
       .assign-panel {
         background: #f8f9fa;
@@ -38,6 +38,33 @@
         border: 1px solid #ccc;
         border-radius: 4px;
         font-size: 14px;
+      }
+      .source-toggle {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 8px;
+      }
+      .source-toggle label {
+        font-weight: normal;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+      .source-panel {
+        display: none;
+      }
+      .source-panel.active {
+        display: block;
+      }
+      .hosted-meta {
+        margin-top: 8px;
+        font-size: 13px;
+        color: #555;
+        line-height: 1.5;
+      }
+      .hosted-meta a {
+        color: #1565c0;
       }
       .actions {
         display: flex;
@@ -92,8 +119,9 @@
       <div class="assign-panel">
         <h1>Assign Project to Student</h1>
         <p class="hint">
-          Upload a project ZIP, preview it in the editor, then send it to a specific student. The
-          student will see it in <strong>My Submissions</strong> as an editable project.
+          Choose a project ZIP or an already-hosted VR tour, preview it in the editor if you like,
+          then send it to a specific student. The student will see it in
+          <strong>My Inbox</strong> as an editable project.
         </p>
 
         <div class="field">
@@ -121,8 +149,27 @@
         </div>
 
         <div class="field">
-          <label for="assign-zip-input">Project ZIP</label>
-          <input type="file" id="assign-zip-input" accept=".zip" />
+          <label>Project source</label>
+          <div class="source-toggle">
+            <label><input type="radio" name="assign-source" value="zip" checked /> Upload ZIP</label>
+            <label><input type="radio" name="assign-source" value="hosted" /> Choose hosted project</label>
+          </div>
+
+          <div id="assign-source-zip" class="source-panel active">
+            <input type="file" id="assign-zip-input" accept=".zip" />
+            <p class="hint">Upload an exported VR hotspot project ZIP.</p>
+          </div>
+
+          <div id="assign-source-hosted" class="source-panel">
+            <select id="assign-hosted-select">
+              <option value="">Loading hosted projects…</option>
+            </select>
+            <div id="assign-hosted-meta" class="hosted-meta"></div>
+            <p class="hint">
+              Includes hosted submissions, published student tours, and other hosted VR projects
+              with a <code>config.json</code>.
+            </p>
+          </div>
         </div>
 
         <div class="actions">

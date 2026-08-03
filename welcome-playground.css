@@ -198,6 +198,249 @@ body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay)
   position: relative;
 }
 
+#integrated-welcome-inner.resume-inbox-inner {
+  max-width: 640px;
+  text-align: left;
+}
+
+.resume-inbox-panel {
+  text-align: left;
+}
+
+.resume-inbox-heading {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.resume-inbox-lead {
+  margin: 0 0 24px;
+  color: #f0f0f0;
+  font-size: 16px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.resume-section-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: bold;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.resume-local-section {
+  margin-bottom: 22px;
+  padding-top: 8px;
+}
+
+.resume-local-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.resume-local-card--last {
+  position: relative;
+  border-color: rgba(255, 193, 7, 0.75);
+  background: rgba(255, 193, 7, 0.12);
+  box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.25);
+}
+
+.resume-last-local-badge {
+  position: absolute;
+  top: -11px;
+  left: 16px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #ffc107;
+  color: #1a1200;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.resume-local-leftoff,
+.resume-local-edited {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.resume-local-edited {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  font-style: italic;
+}
+
+.resume-local-card--last .resume-local-main {
+  padding-top: 6px;
+}
+
+.resume-local-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.resume-local-name {
+  font-size: 18px;
+}
+
+.resume-local-meta,
+.resume-local-note,
+.resume-inbox-item-meta {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.resume-local-note {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.resume-inbox-section {
+  margin-bottom: 20px;
+}
+
+.resume-inbox-count {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.resume-inbox-unread {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #2196f3;
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.resume-inbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.resume-inbox-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.resume-inbox-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.resume-item-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: bold;
+  width: fit-content;
+}
+
+.resume-item-badge--assigned {
+  background: #7b1fa2;
+  color: #fff;
+}
+
+.resume-item-badge--feedback {
+  background: #2196f3;
+  color: #fff;
+}
+
+.resume-inbox-empty {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.resume-primary-btn,
+.resume-inbox-open-btn,
+.resume-secondary-btn {
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  padding: 10px 18px;
+  white-space: nowrap;
+}
+
+.resume-primary-btn,
+.resume-inbox-open-btn {
+  background: #4caf50;
+  color: #fff;
+}
+
+.resume-inbox-open-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.resume-inbox-open-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.resume-inbox-footer {
+  margin-top: 8px;
+  text-align: center;
+}
+
+.resume-secondary-btn {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.resume-secondary-btn:hover,
+.resume-primary-btn:hover,
+.resume-inbox-open-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+#integrated-welcome-inner.resume-inbox-inner .welcome-github-footer {
+  text-align: center;
+}
+
 .integrated-welcome-layout {
   display: block;
 }

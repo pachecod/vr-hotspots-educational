@@ -1,6 +1,8 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const crypto = require('crypto');
+const archiver = require('archiver');
 const { purgeProjectThread } = require('../lib/purge-project-thread');
 const { purgeContentItem } = require('../lib/student-content/purge');
 const projectVersionsDb = require('../services/project-versions-db');
@@ -14,7 +16,15 @@ const {
 const { assertCanSubmit } = require('../services/usage-quota');
 const { listLegacyInbox, mergeB2OrphansIntoInbox } = require('../lib/legacy-submissions');
 const { resolveHostedProjectUrls, resolveHostedProjectUrlsAsync, enrichInboxHosting } = require('../services/hosted-project-urls');
-const { uploadHostedDirectory } = require('../lib/hosted-b2-storage');
+const {
+  uploadHostedDirectory,
+  materializeHostedProjectToDir,
+  hostedProjectExists,
+  hostedFileExists,
+  listHostedProjectPaths,
+  validateHostedPath,
+  getHostedProjectUpdatedAt,
+} = require('../lib/hosted-b2-storage');
 const { query } = require('../services/db-service');
 
 const STAGED_PROJECT_TTL_MS = 60 * 60 * 1000;
@@ -44,7 +54,151 @@ async function getActiveStudentWithClass(studentId) {
   return rows[0] || null;
 }
 
+function formatHostedSlugTitle(slug) {
+  return String(slug || '')
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+async function isVrHotspotHostedProject(hostedPath) {
+  if (!validateHostedPath(hostedPath)) return false;
+  if (!(await hostedProjectExists(hostedPath))) return false;
+  return hostedFileExists(hostedPath, 'config.json');
+}
+
+async function listHostedAssignableProjects() {
+  const byPath = new Map();
+
+  const addItem = (item) => {
+    if (!item?.hostedPath || !validateHostedPath(item.hostedPath)) return;
+    const existing = byPath.get(item.hostedPath);
+    if (!existing || new Date(item.updatedAt || 0) > new Date(existing.updatedAt || 0)) {
+      byPath.set(item.hostedPath, item);
+    }
+  };
+
+  if (isDbEnabled()) {
+    const { rows: submissionRows } = await query(
+      `SELECT DISTINCT ON (pv.hosted_path)
+              pv.hosted_path, pv.hosted_url, pv.hosted_at,
+              pt.project_name, s.display_name AS student_name, c.name AS class_name
+       FROM project_versions pv
+       JOIN project_threads pt ON pt.id = pv.thread_id
+       JOIN students s ON s.id = pt.student_id
+       JOIN classes c ON c.id = s.class_id
+       WHERE pv.is_hosted = TRUE AND pv.hosted_path IS NOT NULL
+       ORDER BY pv.hosted_path, pv.version_number DESC`
+    );
+    for (const row of submissionRows) {
+      addItem({
+        hostedPath: row.hosted_path,
+        tourUrl: row.hosted_url,
+        title: row.project_name,
+        source: 'submission',
+        sourceLabel: 'Hosted submission',
+        studentName: row.student_name,
+        className: row.class_name,
+        updatedAt: row.hosted_at,
+      });
+    }
+
+    const { rows: tourRows } = await query(
+      `SELECT t.hosted_path, t.hosted_url, t.slug, t.published_at,
+              s.display_name AS student_name, c.name AS class_name
+       FROM student_published_tours t
+       JOIN students s ON s.id = t.student_id
+       JOIN classes c ON c.id = s.class_id
+       ORDER BY t.published_at DESC`
+    );
+    for (const row of tourRows) {
+      addItem({
+        hostedPath: row.hosted_path,
+        tourUrl: row.hosted_url,
+        title: formatHostedSlugTitle(row.slug),
+        source: 'published_tour',
+        sourceLabel: 'Published tour',
+        studentName: row.student_name,
+        className: row.class_name,
+        updatedAt: row.published_at,
+      });
+    }
+  }
+
+  for (const hostedPath of await listHostedProjectPaths()) {
+    if (byPath.has(hostedPath)) continue;
+    if (!(await isVrHotspotHostedProject(hostedPath))) continue;
+    let tourUrl = null;
+    try {
+      tourUrl = resolveHostedProjectUrls(hostedPath).tourUrl;
+    } catch (_) {}
+    addItem({
+      hostedPath,
+      tourUrl,
+      title: formatHostedSlugTitle(hostedPath.replace(/^vr-preview-[^-]+-/, '').replace(/^vr-[^-]+-/, '')),
+      source: 'hosted',
+      sourceLabel: 'Hosted project',
+      studentName: null,
+      className: null,
+      updatedAt: await getHostedProjectUpdatedAt(hostedPath),
+    });
+  }
+
+  const items = [];
+  for (const item of byPath.values()) {
+    if (!(await isVrHotspotHostedProject(item.hostedPath))) continue;
+    items.push(item);
+  }
+
+  items.sort(
+    (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+  );
+  return items;
+}
+
 function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe }) {
+  function zipDirectoryToFile(sourceDir, zipPath) {
+    return new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(zipPath);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      output.on('close', resolve);
+      output.on('error', reject);
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.directory(sourceDir, false);
+      archive.finalize();
+    });
+  }
+
+  async function stageHostedProjectZip(hostedPath) {
+    if (!validateHostedPath(hostedPath)) {
+      throw new Error('Invalid hosted path');
+    }
+    if (!(await isVrHotspotHostedProject(hostedPath))) {
+      throw new Error('Hosted path is not a VR hotspot project');
+    }
+
+    cleanupStagedProjects();
+    const stagingId = crypto.randomUUID();
+    const stagedDir = path.join(process.cwd(), 'temp-uploads', 'staged');
+    const extractDir = path.join(
+      os.tmpdir(),
+      `vr-hotspot-hosted-assign_${Date.now()}_${hostedPath.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    );
+    const stagedPath = path.join(stagedDir, `${stagingId}.zip`);
+    fs.mkdirSync(stagedDir, { recursive: true });
+
+    try {
+      await materializeHostedProjectToDir(hostedPath, extractDir);
+      await zipDirectoryToFile(extractDir, stagedPath);
+      assertValidZipFile(stagedPath);
+      return stagingId;
+    } finally {
+      try {
+        if (fs.existsSync(extractDir)) fs.rmSync(extractDir, { recursive: true, force: true });
+      } catch (_) {}
+    }
+  }
+
   app.post('/api/student/projects/prepare-upload', async (req, res) => {
     const finish = async () => {
       try {
@@ -489,6 +643,30 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
     }
   });
 
+  app.get('/admin/projects/hosted-assignable', async (req, res) => {
+    try {
+      const projects = await listHostedAssignableProjects();
+      return res.json({ success: true, projects });
+    } catch (err) {
+      console.error('hosted-assignable error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/admin/projects/stage-hosted', async (req, res) => {
+    try {
+      const hostedPath = (req.body?.hostedPath || '').trim();
+      if (!hostedPath) {
+        return res.status(400).json({ success: false, message: 'hostedPath required' });
+      }
+      const stagingId = await stageHostedProjectZip(hostedPath);
+      return res.json({ success: true, stagingId });
+    } catch (err) {
+      console.error('stage-hosted error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.post('/admin/projects/stage-zip', upload.single('project'), async (req, res) => {
     try {
       if (!req.file) {
@@ -539,6 +717,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       const projectName = (req.body?.projectName || '').trim();
       const adminNote = projectVersionsDb.trimNote(req.body?.adminNote || req.body?.admin_note);
       const stagingId = req.body?.stagingId;
+      const hostedPath = (req.body?.hostedPath || '').trim();
 
       if (!studentId) {
         return res.status(400).json({ success: false, message: 'studentId required' });
@@ -552,18 +731,22 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         return res.status(404).json({ success: false, message: 'Student not found or inactive' });
       }
 
+      let resolvedStagingId = stagingId;
       if (req.file) {
         tempPath = req.file.path;
         assertValidZipFile(tempPath);
+      } else if (hostedPath && validateHostedPath(hostedPath)) {
+        resolvedStagingId = await stageHostedProjectZip(hostedPath);
+        tempPath = path.join(process.cwd(), 'temp-uploads', 'staged', `${resolvedStagingId}.zip`);
+        assertValidZipFile(tempPath);
       } else if (stagingId && /^[0-9a-f-]{36}$/i.test(stagingId)) {
-        const stagedPath = path.join(process.cwd(), 'temp-uploads', 'staged', `${stagingId}.zip`);
-        if (!fs.existsSync(stagedPath)) {
+        tempPath = path.join(process.cwd(), 'temp-uploads', 'staged', `${stagingId}.zip`);
+        if (!fs.existsSync(tempPath)) {
           return res.status(404).json({ success: false, message: 'Staged project not found or expired' });
         }
-        tempPath = stagedPath;
         assertValidZipFile(tempPath);
       } else {
-        return res.status(400).json({ success: false, message: 'ZIP file or stagingId required' });
+        return res.status(400).json({ success: false, message: 'ZIP file, stagingId, or hostedPath required' });
       }
 
       const classSlug = student.class_slug || 'default';
@@ -587,7 +770,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         versionNumber: reserved.versionNumber,
       });
 
-      if (stagingId && tempPath.includes('staged')) {
+      if (resolvedStagingId && tempPath.includes('staged')) {
         try {
           fs.unlinkSync(tempPath);
         } catch (_) {}

@@ -13,8 +13,16 @@ export default defineConfig({
     port: VITE_PORT,
     strictPort: true,
     open: '/index.html',
+    watch: {
+      ignored: ['**/temp-uploads/**', '**/hosted/**'],
+    },
     proxy: {
-      '/admin': { target: API_TARGET, changeOrigin: true },
+      '/admin': {
+        target: API_TARGET,
+        changeOrigin: true,
+        timeout: 300000,
+        proxyTimeout: 300000,
+      },
       '/api': { target: API_TARGET, changeOrigin: true },
       '/common-assets': { target: API_TARGET, changeOrigin: true },
       '/student-assets': { target: API_TARGET, changeOrigin: true },

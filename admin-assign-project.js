@@ -1,4 +1,7 @@
 let selectedZipFile = null;
+let selectedHostedPath = null;
+let hostedProjects = [];
+let assignSource = 'zip';
 
 function setAssignStatus(message, type) {
   const el = document.getElementById('assign-status');
@@ -29,13 +32,85 @@ function getAssignFormValues() {
   return { studentId, studentName, projectName, adminNote };
 }
 
+function getSelectedHostedProject() {
+  if (!selectedHostedPath) return null;
+  return hostedProjects.find((p) => p.hostedPath === selectedHostedPath) || null;
+}
+
+function hasProjectSource() {
+  if (assignSource === 'zip') return !!selectedZipFile;
+  return !!selectedHostedPath;
+}
+
 function updateAssignButtons() {
   const { studentId, projectName } = getAssignFormValues();
-  const ready = !!(studentId && projectName && selectedZipFile);
+  const ready = !!(studentId && projectName && hasProjectSource());
   const previewBtn = document.getElementById('assign-preview-btn');
   const sendBtn = document.getElementById('assign-send-btn');
   if (previewBtn) previewBtn.disabled = !ready;
   if (sendBtn) sendBtn.disabled = !ready;
+}
+
+function updateHostedMeta() {
+  const meta = document.getElementById('assign-hosted-meta');
+  if (!meta) return;
+  const project = getSelectedHostedProject();
+  if (!project) {
+    meta.innerHTML = '';
+    return;
+  }
+  const parts = [
+    `<strong>${escapeHtml(project.sourceLabel || project.source)}</strong>`,
+  ];
+  if (project.studentName) {
+    parts.push(`Originally by ${escapeHtml(project.studentName)}${project.className ? ` (${escapeHtml(project.className)})` : ''}`);
+  }
+  if (project.tourUrl) {
+    parts.push(`<a href="${escapeHtml(project.tourUrl)}" target="_blank" rel="noopener noreferrer">View hosted tour</a>`);
+  }
+  meta.innerHTML = parts.join(' · ');
+}
+
+function escapeHtml(text) {
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function readAdminJson(res, fallbackMessage) {
+  const text = await res.text();
+  if (!text.trim()) {
+    throw new Error(
+      fallbackMessage ||
+        (res.ok
+          ? 'Server returned an empty response'
+          : `Request failed (${res.status}). The server may have restarted while preparing the project.`)
+    );
+  }
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    throw new Error(fallbackMessage || `Invalid server response (${res.status})`);
+  }
+}
+
+function setAssignSource(source) {
+  assignSource = source === 'hosted' ? 'hosted' : 'zip';
+  document.getElementById('assign-source-zip')?.classList.toggle('active', assignSource === 'zip');
+  document.getElementById('assign-source-hosted')?.classList.toggle('active', assignSource === 'hosted');
+  if (assignSource === 'zip') {
+    selectedHostedPath = null;
+    const hostedSelect = document.getElementById('assign-hosted-select');
+    if (hostedSelect) hostedSelect.value = '';
+    updateHostedMeta();
+  } else {
+    selectedZipFile = null;
+    const zipInput = document.getElementById('assign-zip-input');
+    if (zipInput) zipInput.value = '';
+  }
+  updateAssignButtons();
 }
 
 async function loadAssignClasses() {
@@ -79,28 +154,78 @@ async function loadAssignClasses() {
   document.getElementById('assign-project-name')?.addEventListener('input', updateAssignButtons);
 }
 
-async function stageSelectedZip() {
-  if (!selectedZipFile) throw new Error('Choose a project ZIP first');
-  const fd = new FormData();
-  fd.append('project', selectedZipFile);
-  const res = await adminFetch('/admin/projects/stage-zip', { method: 'POST', body: fd });
-  const data = await res.json();
-  if (!data.success) throw new Error(data.message || 'Could not stage ZIP');
+async function loadHostedAssignableProjects() {
+  const select = document.getElementById('assign-hosted-select');
+  if (!select) return;
+
+  try {
+    const res = await adminFetch('/admin/projects/hosted-assignable');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Could not load hosted projects');
+    hostedProjects = data.projects || [];
+    select.innerHTML = '<option value="">Select a hosted project…</option>';
+    if (!hostedProjects.length) {
+      select.innerHTML = '<option value="">No hosted VR projects found</option>';
+      return;
+    }
+    hostedProjects.forEach((project) => {
+      const opt = document.createElement('option');
+      opt.value = project.hostedPath;
+      const owner = project.studentName ? ` — ${project.studentName}` : '';
+      opt.textContent = `${project.title}${owner} (${project.sourceLabel || project.source})`;
+      opt.dataset.title = project.title;
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    select.innerHTML = '<option value="">Could not load hosted projects</option>';
+    setAssignStatus('Could not load hosted projects: ' + err.message, 'error');
+  }
+}
+
+async function stageCurrentProject() {
+  if (assignSource === 'zip') {
+    if (!selectedZipFile) throw new Error('Choose a project ZIP first');
+    const fd = new FormData();
+    fd.append('project', selectedZipFile);
+    const res = await adminFetch('/admin/projects/stage-zip', { method: 'POST', body: fd });
+    const data = await readAdminJson(res, 'Could not stage ZIP');
+    if (!data.success) throw new Error(data.message || 'Could not stage ZIP');
+    return data.stagingId;
+  }
+
+  if (!selectedHostedPath) throw new Error('Choose a hosted project first');
+  const res = await adminFetch('/admin/projects/stage-hosted', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hostedPath: selectedHostedPath }),
+  });
+  const data = await readAdminJson(
+    res,
+    'Could not prepare hosted project for preview. Large projects may take a minute — try again if the dev server restarted.'
+  );
+  if (!data.success) throw new Error(data.message || 'Could not stage hosted project');
   return data.stagingId;
 }
 
-async function sendAssignedProject({ useEditorZip = false, stagingId = null } = {}) {
+async function sendAssignedProject({ stagingId = null } = {}) {
   const { studentId, projectName, adminNote } = getAssignFormValues();
   if (!studentId) throw new Error('Select a student');
   if (!projectName) throw new Error('Enter a project name');
-  if (!selectedZipFile && !stagingId) throw new Error('Choose a project ZIP');
+  if (!stagingId && !selectedZipFile && !selectedHostedPath) {
+    throw new Error('Choose a project ZIP or hosted project');
+  }
 
   const fd = new FormData();
   fd.append('studentId', studentId);
   fd.append('projectName', projectName);
   if (adminNote) fd.append('adminNote', adminNote);
-  if (stagingId) fd.append('stagingId', stagingId);
-  else fd.append('project', selectedZipFile);
+  if (stagingId) {
+    fd.append('stagingId', stagingId);
+  } else if (assignSource === 'hosted' && selectedHostedPath) {
+    fd.append('hostedPath', selectedHostedPath);
+  } else if (selectedZipFile) {
+    fd.append('project', selectedZipFile);
+  }
 
   const res = await adminFetch('/admin/projects/assign', { method: 'POST', body: fd });
   const data = await res.json();
@@ -110,14 +235,14 @@ async function sendAssignedProject({ useEditorZip = false, stagingId = null } = 
 
 async function previewAssignedProject() {
   const { studentId, studentName, projectName } = getAssignFormValues();
-  if (!studentId || !projectName || !selectedZipFile) return;
+  if (!studentId || !projectName || !hasProjectSource()) return;
 
   const previewBtn = document.getElementById('assign-preview-btn');
   if (previewBtn) previewBtn.disabled = true;
-  setAssignStatus('Staging project for preview…', 'info');
+  setAssignStatus('Preparing project for preview…', 'info');
 
   try {
-    const stagingId = await stageSelectedZip();
+    const stagingId = await stageCurrentProject();
     const params = new URLSearchParams({
       adminAssign: '1',
       stagingId,
@@ -141,8 +266,12 @@ async function sendFromAssignPage() {
     await sendAssignedProject();
     setAssignStatus('Project sent successfully.', 'success');
     selectedZipFile = null;
+    selectedHostedPath = null;
     const zipInput = document.getElementById('assign-zip-input');
     if (zipInput) zipInput.value = '';
+    const hostedSelect = document.getElementById('assign-hosted-select');
+    if (hostedSelect) hostedSelect.value = '';
+    updateHostedMeta();
     document.getElementById('assign-admin-note').value = '';
     updateAssignButtons();
   } catch (err) {
@@ -163,9 +292,26 @@ function initAssignPage() {
   }
 
   loadAssignClasses();
+  loadHostedAssignableProjects();
+
+  document.querySelectorAll('input[name="assign-source"]').forEach((radio) => {
+    radio.addEventListener('change', (e) => setAssignSource(e.target.value));
+  });
 
   document.getElementById('assign-zip-input')?.addEventListener('change', (e) => {
     selectedZipFile = e.target.files?.[0] || null;
+    updateAssignButtons();
+  });
+
+  document.getElementById('assign-hosted-select')?.addEventListener('change', (e) => {
+    selectedHostedPath = e.target.value || null;
+    const selectedOption = e.target.selectedOptions?.[0];
+    const title = selectedOption?.dataset?.title;
+    const nameInput = document.getElementById('assign-project-name');
+    if (title && nameInput && !nameInput.value.trim()) {
+      nameInput.value = title;
+    }
+    updateHostedMeta();
     updateAssignButtons();
   });
 

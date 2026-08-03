@@ -1,0 +1,5 @@
+{
+  "watch": ["*.js", "routes", "services", "lib", "db"],
+  "ignore": ["temp-uploads/**", "hosted/**", "node_modules/**"],
+  "ext": "js,json"
+}

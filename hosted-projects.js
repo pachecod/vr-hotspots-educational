@@ -143,6 +143,44 @@
     });
   }
 
+  function showQrFullscreen({ title, qrUrl }) {
+    let overlay = document.getElementById('hosted-project-qr-fullscreen');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'hosted-project-qr-fullscreen';
+      overlay.className = 'hosted-project-qr-fullscreen';
+      document.body.appendChild(overlay);
+    }
+
+    overlay.innerHTML = `
+      <div class="hosted-project-qr-fullscreen-panel" role="dialog" aria-modal="true" aria-labelledby="hosted-qr-fullscreen-title">
+        <div class="hosted-projects-brand">WebXRIDE</div>
+        <h2 id="hosted-qr-fullscreen-title">${escapeHtml(title || 'Hosted project')}</h2>
+        <p class="hosted-project-qr-fullscreen-lead">Scan this code to open the tour on your phone.</p>
+        <img
+          class="hosted-project-qr-fullscreen-image"
+          src="${escapeHtml(qrUrl)}"
+          alt="QR code to open ${escapeHtml(title || 'this project')} on your phone"
+        />
+        <button type="button" class="hosted-projects-btn hosted-projects-btn-secondary" id="hosted-qr-fullscreen-back">
+          Back to List
+        </button>
+      </div>`;
+
+    overlay.classList.add('visible');
+    document.body.classList.add('hosted-qr-fullscreen-open');
+
+    const close = () => {
+      overlay.classList.remove('visible');
+      document.body.classList.remove('hosted-qr-fullscreen-open');
+    };
+
+    overlay.querySelector('#hosted-qr-fullscreen-back')?.addEventListener('click', close, { once: true });
+    overlay.onclick = (e) => {
+      if (e.target === overlay) close();
+    };
+  }
+
   function renderProjectList(root, classSlug, payload) {
     const projects = payload.projects || [];
     const className = payload.className || 'Hosted Projects';
@@ -150,18 +188,40 @@
     const cards =
       projects.length > 0
         ? projects
-            .map((p) => {
+            .map((p, projectIndex) => {
               const metaParts = [];
               if (p.studentName) metaParts.push(p.studentName);
               const date = formatDate(p.updatedAt);
               if (date) metaParts.push(`Updated ${date}`);
               const tourUrl = p.tourUrl || (p.hostedPath ? `/hosted/${p.hostedPath}/index.html` : '#');
+              const qrUrl =
+                p.qrUrl ||
+                (p.hostedPath ? `/hosted/${p.hostedPath}/qr.png` : tourUrl.replace(/index\.html(\?.*)?$/i, 'qr.png'));
               return `
               <article class="hosted-project-card">
                 <h2>${escapeHtml(p.title || 'Untitled project')}</h2>
                 ${
                   metaParts.length
                     ? `<p class="hosted-project-meta">${escapeHtml(metaParts.join(' · '))}</p>`
+                    : ''
+                }
+                ${
+                  qrUrl
+                    ? `<div class="hosted-project-qr">
+                    <img
+                      src="${escapeHtml(qrUrl)}"
+                      alt="QR code to open ${escapeHtml(p.title || 'this project')} on your phone"
+                      width="120"
+                      height="120"
+                      loading="lazy"
+                    />
+                    <p class="hosted-project-qr-hint">Scan to open on your phone</p>
+                    <button
+                      type="button"
+                      class="hosted-projects-btn hosted-projects-btn-secondary hosted-project-qr-fullscreen-btn"
+                      data-project-index="${projectIndex}"
+                    >Open QR full screen</button>
+                  </div>`
                     : ''
                 }
                 <a
@@ -198,6 +258,27 @@
         await lockGallery(classSlug);
       } catch (_) {}
       window.location.reload();
+    });
+
+    root.querySelectorAll('.hosted-project-qr-fullscreen-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.projectIndex);
+        const project = projects[idx];
+        if (!project) return;
+        const tourUrl =
+          project.tourUrl ||
+          (project.hostedPath ? `/hosted/${project.hostedPath}/index.html` : '');
+        const qrUrl =
+          project.qrUrl ||
+          (project.hostedPath
+            ? `/hosted/${project.hostedPath}/qr.png`
+            : tourUrl.replace(/index\.html(\?.*)?$/i, 'qr.png'));
+        if (!qrUrl) return;
+        showQrFullscreen({
+          title: project.title || 'Hosted project',
+          qrUrl,
+        });
+      });
     });
   }
 

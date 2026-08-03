@@ -4,6 +4,12 @@ const {
   hostedFileExists,
 } = require('../lib/hosted-b2-storage');
 const { resolveHostedProjectUrls } = require('./hosted-project-urls');
+const { tourUrlToQrUrl } = require('./qr-service');
+
+function resolveGalleryQrUrl(hostedPath, tourUrl) {
+  if (hostedPath) return `/hosted/${hostedPath}/qr.png`;
+  return tourUrlToQrUrl(tourUrl || '');
+}
 
 function validateHostedPath(hostedPath) {
   return typeof hostedPath === 'string' && /^[a-zA-Z0-9_-]+$/.test(hostedPath);
@@ -119,6 +125,7 @@ async function listClassHostedGalleryProjects(classId) {
         item.tourUrl = resolveHostedProjectUrls(item.hostedPath).tourUrl;
       } catch (_) {}
     }
+    item.qrUrl = resolveGalleryQrUrl(item.hostedPath, item.tourUrl);
     items.push(item);
   }
 

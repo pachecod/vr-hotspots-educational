@@ -107,6 +107,7 @@ function registerHostedProjectsRoutes(app) {
         projects: projects.map((p) => ({
           title: p.title,
           tourUrl: p.tourUrl,
+          qrUrl: p.qrUrl,
           hostedPath: p.hostedPath,
           studentName: p.studentName,
           className: p.className,

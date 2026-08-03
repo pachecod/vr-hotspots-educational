@@ -208,6 +208,15 @@ async function applyIncrementalMigrations(pool) {
           CHECK (kind IN ('draft', 'submitted', 'admin_return', 'admin_assigned'));
       `,
     },
+    {
+      name: 'hosted_gallery_featured_v1',
+      sql: `
+        ALTER TABLE project_versions
+          ADD COLUMN IF NOT EXISTS featured_on_hosted_gallery BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE submissions
+          ADD COLUMN IF NOT EXISTS featured_on_hosted_gallery BOOLEAN NOT NULL DEFAULT FALSE;
+      `,
+    },
   ];
 
   for (const migration of migrations) {

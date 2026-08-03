@@ -46,6 +46,11 @@ body {
   font-size: 15px;
 }
 
+.hosted-projects-privacy-note {
+  color: #b8daff;
+  font-size: 13px;
+}
+
 .hosted-projects-field {
   margin-bottom: 16px;
 }

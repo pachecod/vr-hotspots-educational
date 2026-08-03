@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS submissions (
   hosted_url TEXT,
   hosted_at TIMESTAMPTZ,
   is_hosted BOOLEAN NOT NULL DEFAULT FALSE,
+  featured_on_hosted_gallery BOOLEAN NOT NULL DEFAULT FALSE,
   submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ,
   synced_from_b2 BOOLEAN NOT NULL DEFAULT FALSE
@@ -79,6 +80,7 @@ CREATE TABLE IF NOT EXISTS project_versions (
   hosted_url TEXT,
   hosted_at TIMESTAMPTZ,
   is_hosted BOOLEAN NOT NULL DEFAULT FALSE,
+  featured_on_hosted_gallery BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (thread_id, version_number)
 );

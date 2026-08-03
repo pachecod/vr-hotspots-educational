@@ -33,6 +33,10 @@ function formatSubmittedBy(sub) {
   return sub.studentUsername || sub.studentName || sub.studentDisplayName || 'Unknown';
 }
 
+function isSubmissionHosted(sub) {
+  return !!(sub.isHosted || sub.hostedUrl || sub.tourUrl || sub.hostedPath);
+}
+
 function showHostSuccess(result) {
   let banner = document.getElementById('host-result');
   if (!banner) {
@@ -223,6 +227,8 @@ async function loadInbox() {
           ? `<div class="note-block"><strong>Team member or student note:</strong>${escapeHtml(sub.studentNote)}</div>`
           : '';
         const hostedLink = formatHostedLinks(sub);
+        const hosted = isSubmissionHosted(sub);
+        const featured = !!sub.featuredOnHostedGallery;
 
         const legacy = isLegacyVersion(versionId);
         const historyBtn = legacy
@@ -234,7 +240,7 @@ async function loadInbox() {
 
         return `
           <div class="submission-card" data-version-id="${versionId}" data-thread-id="${threadId}">
-            <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}${legacy ? ' <span class="badge badge-draft">B2 only</span>' : ''}</h3>
+            <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}${featured ? ' <span class="badge badge-featured">Featured</span>' : ''}${legacy ? ' <span class="badge badge-draft">B2 only</span>' : ''}</h3>
             <p class="submitted-by">Submitted by: <strong>${escapeHtml(formatSubmittedBy(sub))}</strong>${sub.className ? ` <span class="submitted-by-class">(${escapeHtml(sub.className)})</span>` : ''}</p>
             <div class="meta">
               <strong>Version:</strong> #${sub.versionNumber || 1}<br>
@@ -245,7 +251,18 @@ async function loadInbox() {
             ${noteBlock}
             <div class="actions">
               <button class="btn-download" onclick="downloadVersion('${versionId}', '${escapeHtml(sub.fileName)}')">📥 Download</button>
-              <button class="btn-host" onclick="hostVersion('${versionId}', '${escapeHtml(sub.projectName || 'project')}')">🌐 Host</button>
+              ${
+                hosted
+                  ? `<button class="btn-unhost" onclick="unhostVersion('${versionId}', '${escapeHtml(sub.fileName)}', '${escapeHtml(sub.projectName || 'project')}')">🚫 Unhost</button>`
+                  : `<button class="btn-host" onclick="hostVersion('${versionId}', '${escapeHtml(sub.projectName || 'project')}')">🌐 Host</button>`
+              }
+              ${
+                hosted
+                  ? featured
+                    ? `<button class="btn-unfeature" onclick="setHostedGalleryFeature('${versionId}', '${escapeHtml(sub.fileName)}', false)">Remove from Hosted List</button>`
+                    : `<button class="btn-feature" onclick="setHostedGalleryFeature('${versionId}', '${escapeHtml(sub.fileName)}', true)">Feature on Hosted List</button>`
+                  : ''
+              }
               ${reviewLink}
               ${historyBtn}
               <button class="btn-delete" onclick="deleteVersion('${versionId}')">🗑️ Delete</button>
@@ -320,6 +337,61 @@ async function hostVersion(versionId, projectName) {
   } catch (err) {
     stopHostProgress();
     alert('Hosting failed: ' + err.message);
+  }
+}
+
+async function setHostedGalleryFeature(versionId, fileName, featured) {
+  if (featured) {
+    const confirmed = confirm(
+      'Feature this project on the class Hosted List?\n\nAnyone who can open that class gallery page with the classroom password will be able to see it.'
+    );
+    if (!confirmed) return;
+  } else {
+    const confirmed = confirm('Remove this project from the class Featured Hosted List?');
+    if (!confirmed) return;
+  }
+
+  try {
+    const response = await adminFetch(`/admin/hosted-gallery-feature/${encodeURIComponent(versionId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ featured, fileName }),
+    });
+    const result = await response.json();
+    if (result.success) {
+      await loadInbox();
+      alert(result.message || (featured ? 'Project featured.' : 'Project unfeatured.'));
+    } else {
+      alert(result.message || 'Could not update featured status');
+    }
+  } catch (err) {
+    alert('Could not update featured status: ' + err.message);
+  }
+}
+
+async function unhostVersion(versionId, fileName, projectName) {
+  const label = String(projectName || fileName || 'this project').trim();
+  const confirmed = confirm(
+    `Remove public hosting for "${label}"?\n\nThe submission will stay in the queue. You can host it again later.`
+  );
+  if (!confirmed) return;
+
+  try {
+    const unhostUrl = isLegacyVersion(versionId)
+      ? `/admin/unhost/${encodeURIComponent(legacyFileName(versionId, fileName))}`
+      : `/admin/unhost-version/${versionId}`;
+    const response = await adminFetch(unhostUrl, { method: 'POST' });
+    const result = await response.json();
+    if (result.success) {
+      const banner = document.getElementById('host-result');
+      if (banner) banner.style.display = 'none';
+      await loadInbox();
+      alert(result.message || 'Project unhosted successfully.');
+    } else {
+      alert(result.message || 'Unhost failed');
+    }
+  } catch (err) {
+    alert('Unhost failed: ' + err.message);
   }
 }
 

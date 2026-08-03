@@ -566,7 +566,7 @@ function renderClasses() {
         <td>${escapeHtml(c.plan_tier || 'free')}</td>
         <td>
           <button type="button" class="btn-secondary" onclick="openClassPasswordModal('${c.id}')">Edit Password</button>
-          <a class="btn btn-secondary" href="/${encodeURIComponent(c.slug || '')}/hosted-projects.html" target="_blank" rel="noopener noreferrer">Hosted gallery</a>
+          <a class="btn btn-secondary" href="/${encodeURIComponent(c.slug || '')}/hosted-projects.html" target="_blank" rel="noopener noreferrer">Featured hosted pages</a>
           <a class="btn btn-secondary" href="admin-billing.html?classId=${encodeURIComponent(c.id)}">Limits</a>
           <button class="btn-danger" onclick="deleteClass('${c.id}')">Delete</button>
         </td>

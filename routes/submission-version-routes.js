@@ -4,7 +4,8 @@ const os = require('os');
 const crypto = require('crypto');
 const archiver = require('archiver');
 const { purgeProjectThread } = require('../lib/purge-project-thread');
-const { purgeContentItem } = require('../lib/student-content/purge');
+const { purgeContentItem, purgeHostedSubmission } = require('../lib/student-content/purge');
+const { setHostedGalleryFeatured } = require('../services/hosted-projects-gallery');
 const projectVersionsDb = require('../services/project-versions-db');
 const b2Service = require('../services/b2-service');
 const { isDbEnabled } = require('../services/db-service');
@@ -661,6 +662,50 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
           if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
         } catch (_) {}
       }
+    }
+  });
+
+  app.post('/admin/unhost-version/:versionId', async (req, res) => {
+    try {
+      const version = await projectVersionsDb.getVersionById(req.params.versionId);
+      if (!version) {
+        return res.status(404).json({ success: false, message: 'Version not found' });
+      }
+      if (!version.hostedPath && !version.isHosted && !version.hostedUrl) {
+        return res.status(400).json({ success: false, message: 'This version is not hosted' });
+      }
+      const result = await purgeHostedSubmission({ versionId: version.id, fileName: version.fileName });
+      const removed = Array.isArray(result.diskPaths) && result.diskPaths.length > 0;
+      return res.json({
+        success: true,
+        message: removed
+          ? 'Project unhosted successfully'
+          : 'Hosting metadata cleared (no public files were found)',
+        result,
+      });
+    } catch (err) {
+      console.error('unhost-version error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/admin/hosted-gallery-feature/:versionId', async (req, res) => {
+    try {
+      const featured = !!req.body?.featured;
+      const versionId = req.params.versionId;
+      const fileName = req.body?.fileName || null;
+      const result = await setHostedGalleryFeatured({ versionId, fileName, featured });
+      return res.json({
+        success: true,
+        featuredOnHostedGallery: result.featuredOnHostedGallery,
+        message: result.featuredOnHostedGallery
+          ? 'Project featured on the class hosted list'
+          : 'Project removed from the class hosted list',
+      });
+    } catch (err) {
+      console.error('hosted-gallery-feature error:', err);
+      const status = /not found/i.test(err.message) ? 404 : 400;
+      return res.status(status).json({ success: false, message: err.message });
     }
   });
 

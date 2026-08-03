@@ -38,6 +38,7 @@ function formatVersionRow(row) {
     hostedUrl: row.hosted_url,
     hostedAt: row.hosted_at,
     isHosted: row.is_hosted,
+    featuredOnHostedGallery: row.featured_on_hosted_gallery,
     createdAt: row.created_at,
     projectName: row.project_name,
     projectSlug: row.project_slug,
@@ -325,9 +326,17 @@ async function markVersionSeen(versionId, studentId) {
 async function updateVersionHosting(versionId, { hostedPath, hostedUrl, isHosted }) {
   await query(
     `UPDATE project_versions SET hosted_path = $1, hosted_url = $2, is_hosted = $3,
+     featured_on_hosted_gallery = CASE WHEN $3 THEN featured_on_hosted_gallery ELSE FALSE END,
      hosted_at = CASE WHEN $3 THEN NOW() ELSE NULL END
      WHERE id = $4`,
     [hostedPath || null, hostedUrl || null, !!isHosted, versionId]
+  );
+}
+
+async function updateVersionGalleryFeature(versionId, featured) {
+  await query(
+    `UPDATE project_versions SET featured_on_hosted_gallery = $1 WHERE id = $2`,
+    [!!featured, versionId]
   );
 }
 
@@ -474,6 +483,7 @@ module.exports = {
   listAllVersionsForStudent,
   markVersionSeen,
   updateVersionHosting,
+  updateVersionGalleryFeature,
   deleteVersion,
   deleteThread,
   listRawVersionsForThread,

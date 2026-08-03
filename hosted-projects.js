@@ -14,6 +14,14 @@
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
+  function featuredHostedPagesTitle(className) {
+    const name = String(className || '').trim() || 'Your Class';
+    return `Featured Hosted Pages for Class ${name}`;
+  }
+
+  const HOSTED_GALLERY_PRIVACY_NOTE =
+    'Anyone who can open this page with the classroom password can view the featured hosted projects listed here.';
+
   function getClassSlugFromPath() {
     const parts = window.location.pathname.split('/').filter(Boolean);
     if (parts.length >= 2 && parts[parts.length - 1] === 'hosted-projects.html') {
@@ -73,7 +81,7 @@
       <div class="hosted-projects-shell">
         <div class="hosted-projects-card">
           <div class="hosted-projects-brand">WebXRIDE</div>
-          <h1>Hosted Projects</h1>
+          <h1>Featured Hosted Pages</h1>
           <p class="hosted-projects-lead">
             Open your class gallery at
             <code>/{class-slug}/hosted-projects.html</code>
@@ -88,14 +96,18 @@
 
   function renderPasswordGate(root, gate, onSubmit) {
     const cls = gate.class || {};
+    const pageTitle = gate.pageTitle || featuredHostedPagesTitle(cls.name);
     root.innerHTML = `
       <div class="hosted-projects-shell">
         <div class="hosted-projects-card">
           <div class="hosted-projects-brand">WebXRIDE</div>
-          <h1>${escapeHtml(cls.name || 'Hosted Projects')}</h1>
+          <h1>${escapeHtml(pageTitle)}</h1>
           <p class="hosted-projects-lead">
-            Enter the classroom password to view hosted immersive projects for this class. This page
-            is for viewing only — open a project to explore it in your browser.
+            Enter the classroom password to view featured hosted immersive projects for this class.
+            This page is for viewing only — open a project to explore it in your browser.
+          </p>
+          <p class="hosted-projects-lead hosted-projects-privacy-note">
+            ${escapeHtml(HOSTED_GALLERY_PRIVACY_NOTE)}
           </p>
           ${
             cls.description
@@ -183,7 +195,7 @@
 
   function renderProjectList(root, classSlug, payload) {
     const projects = payload.projects || [];
-    const className = payload.className || 'Hosted Projects';
+    const pageTitle = payload.pageTitle || featuredHostedPagesTitle(payload.className);
 
     const cards =
       projects.length > 0
@@ -233,15 +245,15 @@
               </article>`;
             })
             .join('')
-        : '<p class="hosted-projects-empty">No hosted projects are available for this class yet.</p>';
+        : '<p class="hosted-projects-empty">No featured hosted projects are available for this class yet.</p>';
 
     root.innerHTML = `
       <div class="hosted-projects-list-wrap">
         <div class="hosted-projects-list-header">
           <div>
             <div class="hosted-projects-brand">WebXRIDE</div>
-            <h1>${escapeHtml(className)}</h1>
-            <p>View-only gallery of hosted immersive projects.</p>
+            <h1>${escapeHtml(pageTitle)}</h1>
+            <p>${escapeHtml(HOSTED_GALLERY_PRIVACY_NOTE)}</p>
           </div>
           <button type="button" class="hosted-projects-btn hosted-projects-btn-secondary" id="hosted-projects-lock-btn">
             Lock gallery
@@ -294,6 +306,7 @@
 
     try {
       const gate = await fetchGate(classSlug);
+      document.title = `${gate.pageTitle || featuredHostedPagesTitle(gate.class?.name)} — WebXRIDE`;
       const listResult = await fetchProjects(classSlug);
 
       if (!listResult.needsPassword) {
@@ -322,7 +335,7 @@
         <div class="hosted-projects-shell">
           <div class="hosted-projects-card">
             <div class="hosted-projects-brand">WebXRIDE</div>
-            <h1>Hosted Projects</h1>
+            <h1>Featured Hosted Pages</h1>
             <p class="hosted-projects-status error">${escapeHtml(err.message || 'Something went wrong')}</p>
             <p class="hosted-projects-footer" style="margin-top:20px;">
               <a href="/index.html">Back to editor</a>

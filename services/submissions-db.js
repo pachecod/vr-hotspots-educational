@@ -58,6 +58,7 @@ function formatSubmissionRow(row) {
     hostedUrl: row.hosted_url,
     hostedAt: row.hosted_at,
     isHosted: row.is_hosted,
+    featuredOnHostedGallery: row.featured_on_hosted_gallery,
     submittedAt: row.submitted_at,
     updatedAt: row.updated_at,
     syncedFromB2: row.synced_from_b2,
@@ -74,9 +75,18 @@ async function updateSubmissionHosting(fileName, { hostedPath, hostedUrl, isHost
   if (!isDbEnabled()) return;
   await query(
     `UPDATE submissions SET hosted_path = $1, hosted_url = $2, is_hosted = $3,
+     featured_on_hosted_gallery = CASE WHEN $3 THEN featured_on_hosted_gallery ELSE FALSE END,
      hosted_at = CASE WHEN $3 THEN NOW() ELSE NULL END, updated_at = NOW()
      WHERE file_name = $4`,
     [hostedPath || null, hostedUrl || null, !!isHosted, fileName]
+  );
+}
+
+async function updateSubmissionGalleryFeature(fileName, featured) {
+  if (!isDbEnabled()) return;
+  await query(
+    `UPDATE submissions SET featured_on_hosted_gallery = $1, updated_at = NOW() WHERE file_name = $2`,
+    [!!featured, fileName]
   );
 }
 
@@ -90,6 +100,7 @@ module.exports = {
   listSubmissions,
   getSubmissionByFileName,
   updateSubmissionHosting,
+  updateSubmissionGalleryFeature,
   deleteSubmission,
   formatSubmissionRow,
 };

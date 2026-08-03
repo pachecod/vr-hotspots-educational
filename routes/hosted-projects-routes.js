@@ -9,6 +9,8 @@ const {
 const {
   resolveClassBySlug,
   listClassHostedGalleryProjects,
+  setHostedGalleryFeatured,
+  featuredHostedPagesTitle,
 } = require('../services/hosted-projects-gallery');
 
 function registerHostedProjectsRoutes(app) {
@@ -38,6 +40,7 @@ function registerHostedProjectsRoutes(app) {
           slug: cls.slug,
           description: cls.description,
         },
+        pageTitle: featuredHostedPagesTitle(cls.name),
         authenticated: hasClassRosterAccess(req, cls.id),
       });
     } catch (err) {
@@ -104,6 +107,7 @@ function registerHostedProjectsRoutes(app) {
         success: true,
         className: cls.name,
         classSlug: cls.slug,
+        pageTitle: featuredHostedPagesTitle(cls.name),
         projects: projects.map((p) => ({
           title: p.title,
           tourUrl: p.tourUrl,

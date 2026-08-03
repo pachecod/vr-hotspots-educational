@@ -1,37 +1,78 @@
 // A-Frame look-controls only rotates yaw on touch (not pitch). Patch so iPad editors
 // can drag up/down to look at hotspots above/below the horizon.
 (function patchLookControlsTouchPitch() {
-  if (typeof AFRAME === 'undefined') return;
-  const lookControlsDef = AFRAME.components['look-controls'];
-  if (!lookControlsDef || lookControlsDef.__touchPitchPatched) return;
-  const proto = lookControlsDef.Component && lookControlsDef.Component.prototype;
-  if (!proto || typeof proto.onTouchMove !== 'function') return;
-
   const PI_2 = Math.PI / 2;
-  proto.onTouchMove = function (evt) {
-    const canvas = this.el.sceneEl && this.el.sceneEl.canvas;
-    const pitchObject = this.pitchObject;
-    const yawObject = this.yawObject;
 
-    if (!this.touchStarted || !this.data.touchEnabled) return;
-    if (!canvas || !evt.touches || !evt.touches.length) return;
+  function resolveLookControlsProto() {
+    if (typeof AFRAME === 'undefined') return null;
+    const def = AFRAME.components && AFRAME.components['look-controls'];
+    if (!def) return null;
+    if (def.Component && def.Component.prototype) return def.Component.prototype;
+    if (typeof def === 'function' && def.prototype) return def.prototype;
+    if (def.prototype) return def.prototype;
+    return null;
+  }
 
-    const deltaX =
-      (2 * Math.PI * (evt.touches[0].pageX - this.touchStart.x)) / canvas.clientWidth;
-    const deltaY =
-      (2 * Math.PI * (evt.touches[0].pageY - this.touchStart.y)) / canvas.clientHeight;
-    const direction = this.data.reverseTouchDrag ? 1 : -1;
+  function applyPatch() {
+    try {
+      const def = AFRAME.components && AFRAME.components['look-controls'];
+      if (!def || def.__touchPitchPatched) return !!def?.__touchPitchPatched;
+      const proto = resolveLookControlsProto();
+      if (!proto || typeof proto.onTouchMove !== 'function') return false;
 
-    yawObject.rotation.y -= deltaX * 0.5 * direction;
-    pitchObject.rotation.x += deltaY * 0.5 * direction;
-    pitchObject.rotation.x = Math.max(-PI_2, Math.min(PI_2, pitchObject.rotation.x));
+      proto.onTouchMove = function (evt) {
+        const canvas = this.el.sceneEl && this.el.sceneEl.canvas;
+        const pitchObject = this.pitchObject;
+        const yawObject = this.yawObject;
 
-    this.touchStart = {
-      x: evt.touches[0].pageX,
-      y: evt.touches[0].pageY,
+        if (!this.touchStarted || !this.data.touchEnabled) return;
+        if (!canvas || !evt.touches || !evt.touches.length) return;
+
+        const deltaX =
+          (2 * Math.PI * (evt.touches[0].pageX - this.touchStart.x)) / canvas.clientWidth;
+        const deltaY =
+          (2 * Math.PI * (evt.touches[0].pageY - this.touchStart.y)) / canvas.clientHeight;
+        const direction = this.data.reverseTouchDrag ? 1 : -1;
+
+        yawObject.rotation.y -= deltaX * 0.5 * direction;
+        pitchObject.rotation.x += deltaY * 0.5 * direction;
+        pitchObject.rotation.x = Math.max(-PI_2, Math.min(PI_2, pitchObject.rotation.x));
+
+        this.touchStart = {
+          x: evt.touches[0].pageX,
+          y: evt.touches[0].pageY,
+        };
+      };
+      def.__touchPitchPatched = true;
+      return true;
+    } catch (err) {
+      console.warn('[look-controls] touch pitch patch skipped:', err);
+      return false;
+    }
+  }
+
+  if (!applyPatch()) {
+    const retry = () => {
+      applyPatch();
     };
-  };
-  lookControlsDef.__touchPitchPatched = true;
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', retry, { once: true });
+    }
+    const sceneEl = document.querySelector('a-scene');
+    if (sceneEl) {
+      sceneEl.addEventListener('loaded', retry, { once: true });
+    } else {
+      document.addEventListener(
+        'DOMContentLoaded',
+        () => {
+          const scene = document.querySelector('a-scene');
+          if (scene) scene.addEventListener('loaded', retry, { once: true });
+          else retry();
+        },
+        { once: true }
+      );
+    }
+  }
 })();
 
 // Face camera component with robust camera resolution and world-space alignment
@@ -14093,27 +14134,37 @@ html.vr-tour-embed-mode #global-sound-control {
 // Generated from WebXRIDE Immersive Storytelling Tool
 
 (function patchLookControlsTouchPitch() {
-  if (typeof AFRAME === 'undefined') return;
-  var lookControlsDef = AFRAME.components['look-controls'];
-  if (!lookControlsDef || lookControlsDef.__touchPitchPatched) return;
-  var proto = lookControlsDef.Component && lookControlsDef.Component.prototype;
-  if (!proto || typeof proto.onTouchMove !== 'function') return;
   var PI_2 = Math.PI / 2;
-  proto.onTouchMove = function (evt) {
-    var canvas = this.el.sceneEl && this.el.sceneEl.canvas;
-    var pitchObject = this.pitchObject;
-    var yawObject = this.yawObject;
-    if (!this.touchStarted || !this.data.touchEnabled) return;
-    if (!canvas || !evt.touches || !evt.touches.length) return;
-    var deltaX = (2 * Math.PI * (evt.touches[0].pageX - this.touchStart.x)) / canvas.clientWidth;
-    var deltaY = (2 * Math.PI * (evt.touches[0].pageY - this.touchStart.y)) / canvas.clientHeight;
-    var direction = this.data.reverseTouchDrag ? 1 : -1;
-    yawObject.rotation.y -= deltaX * 0.5 * direction;
-    pitchObject.rotation.x += deltaY * 0.5 * direction;
-    pitchObject.rotation.x = Math.max(-PI_2, Math.min(PI_2, pitchObject.rotation.x));
-    this.touchStart = { x: evt.touches[0].pageX, y: evt.touches[0].pageY };
-  };
-  lookControlsDef.__touchPitchPatched = true;
+  function applyPatch() {
+    try {
+      if (typeof AFRAME === 'undefined') return false;
+      var def = AFRAME.components && AFRAME.components['look-controls'];
+      if (!def || def.__touchPitchPatched) return !!(def && def.__touchPitchPatched);
+      var proto = (def.Component && def.Component.prototype) || def.prototype || null;
+      if (!proto || typeof proto.onTouchMove !== 'function') return false;
+      proto.onTouchMove = function (evt) {
+        var canvas = this.el.sceneEl && this.el.sceneEl.canvas;
+        var pitchObject = this.pitchObject;
+        var yawObject = this.yawObject;
+        if (!this.touchStarted || !this.data.touchEnabled) return;
+        if (!canvas || !evt.touches || !evt.touches.length) return;
+        var deltaX = (2 * Math.PI * (evt.touches[0].pageX - this.touchStart.x)) / canvas.clientWidth;
+        var deltaY = (2 * Math.PI * (evt.touches[0].pageY - this.touchStart.y)) / canvas.clientHeight;
+        var direction = this.data.reverseTouchDrag ? 1 : -1;
+        yawObject.rotation.y -= deltaX * 0.5 * direction;
+        pitchObject.rotation.x += deltaY * 0.5 * direction;
+        pitchObject.rotation.x = Math.max(-PI_2, Math.min(PI_2, pitchObject.rotation.x));
+        this.touchStart = { x: evt.touches[0].pageX, y: evt.touches[0].pageY };
+      };
+      def.__touchPitchPatched = true;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  if (!applyPatch()) {
+    document.addEventListener('DOMContentLoaded', applyPatch, { once: true });
+  }
 })();
 
 // Custom Styles Configuration

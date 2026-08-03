@@ -98,6 +98,14 @@
       .status { font-size: 13px; margin-top: 8px; }
       .status.ok { color: #28a745; }
       .status.err { color: #dc3545; }
+      .upload-limits-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .upload-limits-grid .form-row { margin-bottom: 0; }
+      .upload-limits-grid input { max-width: 120px; }
       #toast {
         position: fixed;
         bottom: 20px;
@@ -121,8 +129,22 @@
 
         <h1>Editor Settings</h1>
         <p class="hint">
-          Manage code snippets, Ridey AI, Google Analytics, guest preview hosting, and blocked file extensions for the flat web page editor.
+          Manage code snippets, Ridey AI, Google Analytics, guest preview hosting, upload size limits, and blocked file extensions for the flat web page editor.
         </p>
+
+        <div class="section" id="upload-limits-section">
+          <h2>Upload Size Limits</h2>
+          <p class="hint">
+            Maximum file sizes (in megabytes) for common assets, student uploads, 360° scene videos, remote video fetch, and playground template bundles.
+            Changes apply immediately on the server after saving.
+          </p>
+          <div id="upload-limits-db-warn" class="warn" style="display: none">
+            Database not configured — limits cannot be saved. Built-in defaults apply.
+          </div>
+          <div id="upload-limits-fields" class="upload-limits-grid"></div>
+          <button type="button" class="btn btn-primary" id="save-upload-limits-btn">Save Upload Limits</button>
+          <div id="upload-limits-status" class="status"></div>
+        </div>
 
         <div class="section" id="guest-preview-section">
           <h2>Guest Preview Hosting</h2>

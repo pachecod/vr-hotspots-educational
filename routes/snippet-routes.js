@@ -3,6 +3,13 @@ const { isDbEnabled } = require('../services/db-service');
 const snippetsDb = require('../lib/snippets');
 const { getRideyEnabled, setRideyEnabled, getRideyVersion, setRideyVersion, getBlockedExtensions, setBlockedExtensions, getGuestPreviewTimeoutEnabled, getGuestPreviewTimeoutSeconds, setGuestPreviewTimeout } = require('../lib/app-settings');
 const {
+  getUploadLimits,
+  setUploadLimits,
+  getAdminUploadLimitsView,
+  LIMIT_MB_MIN,
+  LIMIT_MB_MAX,
+} = require('../lib/upload-limits');
+const {
   getAnalyticsEnabledFlag,
   setAnalyticsEnabled,
   getEnvMeasurementId,
@@ -83,6 +90,7 @@ function registerSnippetRoutes(app) {
       const analyticsConfigured = !!getEnvMeasurementId();
       const guestPreviewTimeoutEnabled = await getGuestPreviewTimeoutEnabled();
       const guestPreviewTimeoutSeconds = await getGuestPreviewTimeoutSeconds();
+      const uploadLimits = getAdminUploadLimitsView(await getUploadLimits());
       res.json({
         success: true,
         rideyEnabled,
@@ -93,6 +101,9 @@ function registerSnippetRoutes(app) {
         analyticsConfigured,
         guestPreviewTimeoutEnabled,
         guestPreviewTimeoutSeconds,
+        uploadLimits,
+        uploadLimitsMbMin: LIMIT_MB_MIN,
+        uploadLimitsMbMax: LIMIT_MB_MAX,
         dbEnabled: isDbEnabled(),
       });
     } catch (err) {
@@ -160,6 +171,21 @@ function registerSnippetRoutes(app) {
         success: true,
         guestPreviewTimeoutEnabled: await getGuestPreviewTimeoutEnabled(),
         guestPreviewTimeoutSeconds: await getGuestPreviewTimeoutSeconds(),
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.put('/admin/editor-settings/upload-limits', requireAdmin, async (req, res) => {
+    try {
+      if (!isDbEnabled()) {
+        return res.status(503).json({ success: false, message: 'Database not configured' });
+      }
+      const limits = await setUploadLimits(req.body || {}, req.adminSession?.username || 'admin');
+      res.json({
+        success: true,
+        uploadLimits: getAdminUploadLimitsView(limits),
       });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });

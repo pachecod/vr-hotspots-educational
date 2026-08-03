@@ -6,12 +6,13 @@ const { isDbEnabled, query } = require('../services/db-service');
 const {
   getExtension,
   isExtensionAllowedForCategory,
-  FILE_SIZE_LIMITS,
+  getCategoryLabel,
   getContentType,
 } = require('../lib/common-assets');
 const { assertCanUploadAsset } = require('../services/usage-quota');
 const { getVideoPipelineConfig } = require('../lib/video-config');
 const { getAnalyticsConfig } = require('../lib/analytics-config');
+const { getUploadLimits } = require('../lib/upload-limits');
 const { prepareVideoForStorage, cleanupTempFiles, VIDEO_CATEGORY, isMovUpload } = require('../lib/video-pipeline');
 const { buildStudentAssetPath } = require('./student-assets-routes');
 const { isTranscodeEnabledFor } = require('../lib/video-config');
@@ -119,6 +120,7 @@ function registerSceneVideoRoutes(app, upload) {
   app.get('/api/app-config', async (req, res) => {
     const videoPipeline = getVideoPipelineConfig();
     const analytics = await getAnalyticsConfig(req);
+    const uploadLimits = await getUploadLimits();
     res.json({
       success: true,
       videoPipeline: {
@@ -128,6 +130,9 @@ function registerSceneVideoRoutes(app, upload) {
         editorLocalVideoCompression: canCompressEditorLocalVideo(),
         // .mov conversion uses the same FFmpeg path; available whenever the binary is present.
         editorLocalMovConversion: isFfmpegAvailable(),
+      },
+      uploadLimits: {
+        categoriesMb: uploadLimits.categoriesMb,
       },
       analytics: {
         enabled: analytics.enabled,
@@ -217,7 +222,8 @@ function registerSceneVideoRoutes(app, upload) {
         return res.status(400).json({ success: false, message: 'File type not allowed for video' });
       }
 
-      const limit = FILE_SIZE_LIMITS[VIDEO_CATEGORY];
+      const limits = await getUploadLimits();
+      const limit = limits.categories[VIDEO_CATEGORY];
       if (req.file.size > limit) {
         return res.status(400).json({ success: false, message: 'File too large for video compression' });
       }
@@ -276,7 +282,8 @@ function registerSceneVideoRoutes(app, upload) {
           return res.status(400).json({ success: false, message: 'File type not allowed for 360° video' });
         }
 
-        const limit = FILE_SIZE_LIMITS[VIDEO_CATEGORY];
+        const limits = await getUploadLimits();
+        const limit = limits.categories[VIDEO_CATEGORY];
         if (req.file.size > limit) {
           return res.status(400).json({ success: false, message: 'File too large for 360° video' });
         }

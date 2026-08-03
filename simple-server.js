@@ -1468,8 +1468,12 @@ app.post('/fetch-video', requireAuthForVideoFetch, express.json(), async (req, r
   const targetUrl = safeUrl.toString();
   console.log(`📹 Fetching video from: ${targetUrl}`);
 
+  const { getUploadLimits } = require('./lib/upload-limits');
+  const uploadLimits = await getUploadLimits();
+  const MAX_BYTES = uploadLimits.fetchVideo;
+  const MAX_MB = uploadLimits.fetchVideoMb;
+
   const protocol = safeUrl.protocol === 'https:' ? https : require('http');
-  const MAX_BYTES = 500 * 1024 * 1024;
   let bytesReceived = 0;
 
   const request = protocol.get(targetUrl, { timeout: 60000 }, (videoRes) => {
@@ -1496,7 +1500,7 @@ app.post('/fetch-video', requireAuthForVideoFetch, express.json(), async (req, r
       videoRes.destroy();
       return res.status(413).json({
         success: false,
-        error: 'Video file too large (max 500MB).',
+        error: `Video file too large (max ${MAX_MB}MB).`,
       });
     }
 
@@ -1512,7 +1516,7 @@ app.post('/fetch-video', requireAuthForVideoFetch, express.json(), async (req, r
         if (!res.headersSent) {
           res.status(413).json({
             success: false,
-            error: 'Video file too large (max 500MB).',
+            error: `Video file too large (max ${MAX_MB}MB).`,
           });
         } else {
           res.destroy();
@@ -2240,6 +2244,7 @@ async function startServer() {
       try {
         await require('./lib/snippets').seedSnippetsIfEmpty();
         await require('./lib/legal-pages').seedLegalPagesIfEmpty();
+        await require('./lib/upload-limits').refreshUploadLimitsCache();
       } catch (seedErr) {
         console.warn('⚠️ Snippet seed skipped:', seedErr.message);
       }

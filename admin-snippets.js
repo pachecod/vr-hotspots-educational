@@ -1,6 +1,77 @@
 let snippets = [];
 let blockedExtensions = [];
 let editingId = null;
+let uploadLimitsConfig = null;
+let uploadLimitsMbMin = 1;
+let uploadLimitsMbMax = 2048;
+
+function renderUploadLimitFields() {
+  const container = document.getElementById('upload-limits-fields');
+  if (!container || !uploadLimitsConfig) return;
+
+  const labels = uploadLimitsConfig.categoryLabels || {};
+  const categories = uploadLimitsConfig.categoriesMb || {};
+  const defaults = uploadLimitsConfig.defaultsMb?.categories || {};
+  const categoryKeys = Object.keys(labels);
+
+  const categoryFields = categoryKeys
+    .map((key) => {
+      const label = labels[key] || key;
+      const value = categories[key] ?? defaults[key] ?? '';
+      const defaultMb = defaults[key] ?? '';
+      return `
+        <div class="form-row">
+          <label for="upload-limit-${key}">${escapeHtml(label)} (MB)</label>
+          <input type="number" id="upload-limit-${key}" min="${uploadLimitsMbMin}" max="${uploadLimitsMbMax}" step="1" value="${value}" data-default="${defaultMb}" />
+        </div>
+      `;
+    })
+    .join('');
+
+  const fetchDefault = uploadLimitsConfig.defaultsMb?.fetchVideo ?? 500;
+  const bundleDefault = uploadLimitsConfig.defaultsMb?.playgroundBundle ?? 120;
+
+  container.innerHTML =
+    categoryFields +
+    `
+    <div class="form-row">
+      <label for="upload-limit-fetchVideo">Remote video fetch (MB)</label>
+      <input type="number" id="upload-limit-fetchVideo" min="${uploadLimitsMbMin}" max="${uploadLimitsMbMax}" step="1" value="${uploadLimitsConfig.fetchVideoMb ?? fetchDefault}" data-default="${fetchDefault}" />
+    </div>
+    <div class="form-row">
+      <label for="upload-limit-playgroundBundle">Playground template bundle (MB)</label>
+      <input type="number" id="upload-limit-playgroundBundle" min="${uploadLimitsMbMin}" max="${uploadLimitsMbMax}" step="1" value="${uploadLimitsConfig.playgroundBundleMb ?? bundleDefault}" data-default="${bundleDefault}" />
+    </div>
+  `;
+}
+
+function collectUploadLimitsPayload() {
+  const labels = uploadLimitsConfig?.categoryLabels || {};
+  const categories = {};
+  for (const key of Object.keys(labels)) {
+    const input = document.getElementById(`upload-limit-${key}`);
+    if (input) categories[key] = Number(input.value);
+  }
+  return {
+    categories,
+    fetchVideoMb: Number(document.getElementById('upload-limit-fetchVideo')?.value),
+    playgroundBundleMb: Number(document.getElementById('upload-limit-playgroundBundle')?.value),
+  };
+}
+
+async function saveUploadLimitsSettings() {
+  const res = await adminFetch('/admin/editor-settings/upload-limits', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(collectUploadLimitsPayload()),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message);
+  uploadLimitsConfig = data.uploadLimits || uploadLimitsConfig;
+  renderUploadLimitFields();
+  setStatus('upload-limits-status', 'Upload limits saved.');
+  showToast('Upload limits saved');
+}
 
 function showToast(msg) {
   const toast = document.getElementById('toast');
@@ -150,6 +221,13 @@ async function loadSettings() {
   blockedExtensions = data.blockedExtensions || [];
   renderExtChips();
 
+  uploadLimitsConfig = data.uploadLimits || null;
+  uploadLimitsMbMin = data.uploadLimitsMbMin ?? 1;
+  uploadLimitsMbMax = data.uploadLimitsMbMax ?? 2048;
+  renderUploadLimitFields();
+  document.getElementById('upload-limits-db-warn').style.display = data.dbEnabled ? 'none' : 'block';
+  document.getElementById('save-upload-limits-btn').disabled = !data.dbEnabled;
+
   if (!data.dbEnabled) {
     setStatus('snippet-status', 'Database not configured — snippet admin unavailable.', true);
     document.getElementById('add-snippet-btn').disabled = true;
@@ -279,6 +357,14 @@ document.getElementById('ext-chips').addEventListener('click', (e) => {
   const ext = btn.dataset.ext;
   blockedExtensions = blockedExtensions.filter((x) => x !== ext);
   renderExtChips();
+});
+
+document.getElementById('save-upload-limits-btn').addEventListener('click', async () => {
+  try {
+    await saveUploadLimitsSettings();
+  } catch (err) {
+    setStatus('upload-limits-status', err.message, true);
+  }
 });
 
 document.getElementById('save-ext-btn').addEventListener('click', async () => {

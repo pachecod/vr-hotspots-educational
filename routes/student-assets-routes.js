@@ -9,8 +9,8 @@ const {
   getContentType,
   isExtensionAllowedForCategory,
   getExtension,
-  FILE_SIZE_LIMITS,
 } = require('../lib/common-assets');
+const { getUploadLimits } = require('../lib/upload-limits');
 const { assertCanUploadAsset } = require('../services/usage-quota');
 const {
   buildStudentAssetKey,
@@ -110,7 +110,8 @@ function registerStudentAssetRoutes(app, upload) {
         if (await isExtensionBlocked(req.file.originalname)) {
           return res.status(400).json({ success: false, message: `File type ".${ext}" is not allowed.` });
         }
-        const limit = FILE_SIZE_LIMITS[category] || 25 * 1024 * 1024;
+        const limits = await getUploadLimits();
+        const limit = limits.categories[category] || limits.categories.other;
         if (req.file.size > limit) {
           return res.status(400).json({ success: false, message: 'File too large for category' });
         }

@@ -1663,9 +1663,20 @@ class HotspotEditor {
       if (!res.ok) return;
       const data = await res.json();
       this._videoPipelineConfig = data.videoPipeline || {};
+      this._uploadLimits = data.uploadLimits || {};
     } catch (_) {
       this._videoPipelineConfig = {};
+      this._uploadLimits = {};
     }
+  }
+
+  _get360VideoWarningLimitBytes() {
+    const mb = this._uploadLimits?.categoriesMb?.['360-videos'] ?? 200;
+    return mb * 1024 * 1024;
+  }
+
+  _get360VideoWarningLimitMb() {
+    return this._uploadLimits?.categoriesMb?.['360-videos'] ?? 200;
   }
 
   _shouldUseSceneVideoServerUpload() {
@@ -19078,6 +19089,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   static WELCOME_SEEN_KEY = 'vr-hotspot-welcome-seen';
+  static SCENE_NAME_MAX_LENGTH = 30;
   static DEFAULT_SCENE_IMAGES = ['./images/scene1.jpg', 'images/scene1.jpg', '/images/scene1.jpg'];
   static FLAT_VR_OVERLAY_TITLE = 'Please wait while we generate your 360 tour';
   static FLAT_VR_OVERLAY_MESSAGE =
@@ -19682,8 +19694,113 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000);
   }
 
-  addNewScene() {
-    const name = prompt('Enter scene name:');
+  isSceneNameTaken(name, excludeSceneId = null) {
+    const normalized = String(name || '').trim().toLowerCase();
+    if (!normalized) return false;
+    for (const [id, scene] of Object.entries(this.scenes || {})) {
+      if (excludeSceneId && id === excludeSceneId) continue;
+      if (String(scene?.name || '').trim().toLowerCase() === normalized) return true;
+    }
+    return false;
+  }
+
+  getSceneNameValidationError(name, excludeSceneId = null) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return 'Scene name cannot be empty.';
+    if (trimmed.length > HotspotEditor.SCENE_NAME_MAX_LENGTH) {
+      return `Scene name must be ${HotspotEditor.SCENE_NAME_MAX_LENGTH} characters or fewer.`;
+    }
+    if (this.isSceneNameTaken(trimmed, excludeSceneId)) {
+      return `"${trimmed}" is already used by another scene. Please enter a unique name.`;
+    }
+    return null;
+  }
+
+  promptSceneName({ title = 'Scene name', defaultValue = '', excludeSceneId = null } = {}) {
+    const maxLen = HotspotEditor.SCENE_NAME_MAX_LENGTH;
+    return new Promise((resolve) => {
+      const dialog = document.createElement('div');
+      dialog.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8); z-index: ${EDITOR_LAYER.dialog}; display: flex;
+        align-items: center; justify-content: center; font-family: Arial;
+      `;
+
+      dialog.innerHTML = `
+        <div style="background: #2a2a2a; padding: 24px; border-radius: 10px; color: white; width: min(420px, 92vw); box-sizing: border-box;">
+          <h3 style="margin: 0 0 12px; color: #4CAF50;">${title}</h3>
+          <label for="scene-name-input" style="display: block; margin-bottom: 6px; font-size: 13px; color: #ccc;">
+            Scene name (max ${maxLen} characters)
+          </label>
+          <input type="text" id="scene-name-input" maxlength="${maxLen}" style="
+            width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px;
+            border: 1px solid #555; background: #333; color: white; font-size: 14px;
+          " />
+          <div id="scene-name-counter" style="font-size: 11px; color: #999; margin-top: 6px; text-align: right;"></div>
+          <div id="scene-name-error" style="font-size: 12px; color: #f44336; margin-top: 8px; min-height: 16px;"></div>
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button type="button" id="scene-name-cancel" style="
+              flex: 1; background: #666; color: white; border: none; padding: 10px 16px;
+              border-radius: 6px; cursor: pointer; font-weight: bold;
+            ">Cancel</button>
+            <button type="button" id="scene-name-save" style="
+              flex: 1; background: #4CAF50; color: white; border: none; padding: 10px 16px;
+              border-radius: 6px; cursor: pointer; font-weight: bold;
+            ">Save</button>
+          </div>
+        </div>
+      `;
+
+      const input = dialog.querySelector('#scene-name-input');
+      const errorEl = dialog.querySelector('#scene-name-error');
+      const counterEl = dialog.querySelector('#scene-name-counter');
+
+      const updateCounter = () => {
+        counterEl.textContent = `${input.value.length}/${maxLen}`;
+      };
+
+      input.value = String(defaultValue || '').slice(0, maxLen);
+      updateCounter();
+      input.addEventListener('input', () => {
+        errorEl.textContent = '';
+        updateCounter();
+      });
+
+      const close = (result) => {
+        dialog.remove();
+        resolve(result);
+      };
+
+      dialog.querySelector('#scene-name-cancel').addEventListener('click', () => close(null));
+
+      const trySave = () => {
+        const trimmed = input.value.trim();
+        const error = this.getSceneNameValidationError(trimmed, excludeSceneId);
+        if (error) {
+          errorEl.textContent = error;
+          return;
+        }
+        close(trimmed);
+      };
+
+      dialog.querySelector('#scene-name-save').addEventListener('click', trySave);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          trySave();
+        } else if (e.key === 'Escape') {
+          close(null);
+        }
+      });
+
+      document.body.appendChild(dialog);
+      input.focus();
+      input.select();
+    });
+  }
+
+  async addNewScene() {
+    const name = await this.promptSceneName({ title: 'Add New Scene' });
     if (!name) return;
 
     // Show dialog for choosing between file upload or URL
@@ -20003,10 +20120,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!this._assertMovConversionAvailable(file)) return;
 
       // Warn if file is large
-      if (file.size > 200 * 1024 * 1024) {
+      const largeVideoLimit = this._get360VideoWarningLimitBytes();
+      const largeVideoLimitMb = this._get360VideoWarningLimitMb();
+      if (file.size > largeVideoLimit) {
         if (
           !confirm(
-            'Warning: This video is very large (>200MB). This may cause slow loading. Continue?'
+            `Warning: This video is very large (>${largeVideoLimitMb}MB). This may cause slow loading. Continue?`
           )
         ) {
           return;
@@ -20689,10 +20808,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!this._assertMovConversionAvailable(file)) return;
 
         // Warn if file is large
-        if (file.size > 200 * 1024 * 1024) {
+        const largeVideoLimit = this._get360VideoWarningLimitBytes();
+        const largeVideoLimitMb = this._get360VideoWarningLimitMb();
+        if (file.size > largeVideoLimit) {
           if (
             !confirm(
-              'Warning: This video is very large (>200MB). This may cause slow loading. Continue?'
+              `Warning: This video is very large (>${largeVideoLimitMb}MB). This may cause slow loading. Continue?`
             )
           ) {
             return;
@@ -20809,12 +20930,17 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  renameScene(sceneId) {
+  async renameScene(sceneId) {
     const scene = this.scenes[sceneId];
     if (!scene) return;
-    const newName = prompt('Enter new scene name:', scene.name);
-    const trimmed = newName?.trim();
+
+    const trimmed = await this.promptSceneName({
+      title: 'Rename Scene',
+      defaultValue: scene.name,
+      excludeSceneId: sceneId,
+    });
     if (!trimmed || trimmed === scene.name) return;
+
     scene.name = trimmed;
     this.updateSceneDropdown();
     this.updateNavigationTargets();

@@ -4,6 +4,7 @@ const AdmZip = require('adm-zip');
 const multer = require('multer');
 const { requireAdmin } = require('../admin-auth');
 const { isDbEnabled } = require('../services/db-service');
+const { getUploadLimitsSync, LIMIT_MB_MAX } = require('../lib/upload-limits');
 const templatesDb = require('../lib/templates');
 const { isPublicPlaygroundEnabled } = require('../lib/playground-config');
 const b2Service = require('../services/b2-service');
@@ -11,10 +12,38 @@ const { refreshPlaygroundThumbnail, resolvePlaygroundThumbnailUrl, playgroundThu
 const { templateForStudent } = require('../lib/template-manifest');
 
 const upload = multer({ dest: 'temp-uploads/' });
-const bundleUpload = multer({
-  dest: 'temp-uploads/',
-  limits: { fileSize: 120 * 1024 * 1024 },
-});
+function mbToBytes(mb) {
+  return Math.round(mb * 1024 * 1024);
+}
+function bundleUploadMiddleware(req, res, next) {
+  const limit = getUploadLimitsSync().playgroundBundle;
+  const limitMb = Math.round(limit / (1024 * 1024));
+  multer({
+    dest: 'temp-uploads/',
+    limits: { fileSize: mbToBytes(LIMIT_MB_MAX) },
+  }).single('bundle')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          success: false,
+          message: `Bundle too large (max ${limitMb}MB).`,
+        });
+      }
+      return next(err);
+    }
+    if (req.file && req.file.size > limit) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (_) {}
+      req.file = undefined;
+      return res.status(400).json({
+        success: false,
+        message: `Bundle too large (max ${limitMb}MB).`,
+      });
+    }
+    next();
+  });
+}
 const thumbUpload = multer({
   dest: 'temp-uploads/',
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -140,7 +169,7 @@ function registerPlaygroundRoutes(app) {
     }
   });
 
-  app.post('/admin/templates/:id/bundle', requireAdmin, bundleUpload.single('bundle'), async (req, res) => {
+  app.post('/admin/templates/:id/bundle', requireAdmin, bundleUploadMiddleware, async (req, res) => {
     if (!isDbEnabled()) {
       return res.status(503).json({ success: false, message: 'Database not configured' });
     }

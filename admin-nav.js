@@ -11,7 +11,7 @@ function renderAdminNav(activeTab) {
     { id: 'legal', label: 'Legal Pages', href: '/admin-legal.html' },
     { id: 'system-text', label: 'System Text', href: '/admin-system-text.html' },
     { id: 'templates', label: 'Templates', href: '/admin-templates.html' },
-    { id: 'users', label: 'Users', href: '/admin-users.html' },
+    { id: 'users', label: 'Users and Classes', href: '/admin-users.html' },
     { id: 'billing', label: 'Billing & Limits', href: '/admin-billing.html' },
   ];
 

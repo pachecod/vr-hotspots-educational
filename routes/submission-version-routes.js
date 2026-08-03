@@ -476,11 +476,17 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
   app.get('/admin/submissions-inbox', async (req, res) => {
     try {
       res.setHeader('Cache-Control', 'no-store');
-      const { classId, studentId, filter } = req.query;
+      const { classId, studentId, filter, hostedFilter, featuredFilter } = req.query;
       const filterVal = filter || 'all';
+      const hostedFilterVal = hostedFilter || 'all';
+      const featuredFilterVal = featuredFilter || 'all';
 
       if (!isDbEnabled()) {
-        const inbox = await listLegacyInbox(b2Service, { filter: filterVal });
+        const inbox = await listLegacyInbox(b2Service, {
+          filter: filterVal,
+          hostedFilter: hostedFilterVal,
+          featuredFilter: featuredFilterVal,
+        });
         return res.json(enrichInboxHosting(inbox));
       }
 
@@ -488,11 +494,17 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         classId: classId || null,
         studentId: studentId || null,
         filter: filterVal,
+        hostedFilter: hostedFilterVal,
+        featuredFilter: featuredFilterVal,
       });
 
       // Include B2 uploads that never received a DB row (e.g. local dev without DATABASE_URL).
       if (!classId && !studentId) {
-        inbox = await mergeB2OrphansIntoInbox(inbox, b2Service, { filter: filterVal });
+        inbox = await mergeB2OrphansIntoInbox(inbox, b2Service, {
+          filter: filterVal,
+          hostedFilter: hostedFilterVal,
+          featuredFilter: featuredFilterVal,
+        });
       }
 
       return res.json(enrichInboxHosting(inbox));

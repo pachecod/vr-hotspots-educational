@@ -284,7 +284,7 @@ async function listThreadVersions(threadId, { studentId } = {}) {
   return rows.map(formatVersionRow);
 }
 
-async function listAdminInbox({ classId, studentId, filter } = {}) {
+async function listAdminInbox({ classId, studentId, filter, hostedFilter, featuredFilter } = {}) {
   let sql = `SELECT DISTINCT ON (pt.id)
                pv.*, pt.project_name, pt.project_slug, pt.student_id,
                s.display_name AS student_display_name, s.username AS student_username, c.name AS class_name, c.id AS class_id,
@@ -307,6 +307,16 @@ async function listAdminInbox({ classId, studentId, filter } = {}) {
     sql += ` AND pv.student_note IS NOT NULL AND TRIM(pv.student_note) <> ''`;
   } else if (filter === 'without_notes') {
     sql += ` AND (pv.student_note IS NULL OR TRIM(pv.student_note) = '')`;
+  }
+  if (hostedFilter === 'hosted') {
+    sql += ` AND pv.is_hosted = TRUE`;
+  } else if (hostedFilter === 'not_hosted') {
+    sql += ` AND pv.is_hosted = FALSE`;
+  }
+  if (featuredFilter === 'featured') {
+    sql += ` AND pv.featured_on_hosted_gallery = TRUE`;
+  } else if (featuredFilter === 'not_featured') {
+    sql += ` AND pv.featured_on_hosted_gallery = FALSE`;
   }
   sql += ` ORDER BY pt.id, pv.version_number DESC, pv.submitted_at DESC NULLS LAST`;
   const { rows } = await query(sql, params);

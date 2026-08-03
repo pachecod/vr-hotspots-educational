@@ -205,17 +205,29 @@ async function loadInbox() {
     const classId = document.getElementById('filter-class')?.value || '';
     const studentId = document.getElementById('filter-student')?.value || '';
     const filter = document.getElementById('filter-notes')?.value || 'all';
+    const hostedFilter = document.getElementById('filter-hosted')?.value || 'all';
+    const featuredFilter = document.getElementById('filter-featured')?.value || 'all';
     const params = new URLSearchParams();
     if (classId) params.set('classId', classId);
     if (studentId) params.set('studentId', studentId);
     if (filter && filter !== 'all') params.set('filter', filter);
+    if (hostedFilter && hostedFilter !== 'all') params.set('hostedFilter', hostedFilter);
+    if (featuredFilter && featuredFilter !== 'all') params.set('featuredFilter', featuredFilter);
     params.set('_', String(Date.now()));
     const url = '/admin/submissions-inbox' + (params.toString() ? '?' + params.toString() : '');
     const response = await adminFetch(url, { cache: 'no-store' });
     const submissions = await response.json();
 
     if (!submissions.length) {
-      container.innerHTML = '<p>No submissions yet.</p>';
+      const hasFilters =
+        document.getElementById('filter-class')?.value ||
+        document.getElementById('filter-student')?.value ||
+        (document.getElementById('filter-notes')?.value || 'all') !== 'all' ||
+        (document.getElementById('filter-hosted')?.value || 'all') !== 'all' ||
+        (document.getElementById('filter-featured')?.value || 'all') !== 'all';
+      container.innerHTML = hasFilters
+        ? '<p>No submissions match the current filters.</p>'
+        : '<p>No submissions yet.</p>';
       return;
     }
 

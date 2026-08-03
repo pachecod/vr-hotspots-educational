@@ -2,11 +2,13 @@
 // can drag up/down to look at hotspots above/below the horizon.
 (function patchLookControlsTouchPitch() {
   if (typeof AFRAME === 'undefined') return;
-  const lookControls = AFRAME.components['look-controls'];
-  if (!lookControls || lookControls.__touchPitchPatched) return;
+  const lookControlsDef = AFRAME.components['look-controls'];
+  if (!lookControlsDef || lookControlsDef.__touchPitchPatched) return;
+  const proto = lookControlsDef.Component && lookControlsDef.Component.prototype;
+  if (!proto || typeof proto.onTouchMove !== 'function') return;
 
   const PI_2 = Math.PI / 2;
-  lookControls.prototype.onTouchMove = function (evt) {
+  proto.onTouchMove = function (evt) {
     const canvas = this.el.sceneEl && this.el.sceneEl.canvas;
     const pitchObject = this.pitchObject;
     const yawObject = this.yawObject;
@@ -29,7 +31,7 @@
       y: evt.touches[0].pageY,
     };
   };
-  lookControls.__touchPitchPatched = true;
+  lookControlsDef.__touchPitchPatched = true;
 })();
 
 // Face camera component with robust camera resolution and world-space alignment
@@ -14092,10 +14094,12 @@ html.vr-tour-embed-mode #global-sound-control {
 
 (function patchLookControlsTouchPitch() {
   if (typeof AFRAME === 'undefined') return;
-  var lookControls = AFRAME.components['look-controls'];
-  if (!lookControls || lookControls.__touchPitchPatched) return;
+  var lookControlsDef = AFRAME.components['look-controls'];
+  if (!lookControlsDef || lookControlsDef.__touchPitchPatched) return;
+  var proto = lookControlsDef.Component && lookControlsDef.Component.prototype;
+  if (!proto || typeof proto.onTouchMove !== 'function') return;
   var PI_2 = Math.PI / 2;
-  lookControls.prototype.onTouchMove = function (evt) {
+  proto.onTouchMove = function (evt) {
     var canvas = this.el.sceneEl && this.el.sceneEl.canvas;
     var pitchObject = this.pitchObject;
     var yawObject = this.yawObject;
@@ -14109,7 +14113,7 @@ html.vr-tour-embed-mode #global-sound-control {
     pitchObject.rotation.x = Math.max(-PI_2, Math.min(PI_2, pitchObject.rotation.x));
     this.touchStart = { x: evt.touches[0].pageX, y: evt.touches[0].pageY };
   };
-  lookControls.__touchPitchPatched = true;
+  lookControlsDef.__touchPitchPatched = true;
 })();
 
 // Custom Styles Configuration

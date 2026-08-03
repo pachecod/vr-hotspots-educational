@@ -236,11 +236,55 @@ function showStudentEditorSession(student) {
   } else if (window.LocalProjects && typeof window.LocalProjects.refreshButtonVisibility === 'function') {
     window.LocalProjects.refreshButtonVisibility();
   }
+  refreshClassHostedProjectsPromo();
 }
 
 function hideStudentEditorSession() {
   const bar = document.getElementById('student-editor-session');
   if (bar) bar.classList.remove('visible');
+  hideClassHostedProjectsPromo();
+}
+
+async function refreshClassHostedProjectsPromo() {
+  const promo = document.getElementById('class-hosted-projects-promo');
+  const btn = document.getElementById('class-hosted-projects-btn');
+  if (!promo || !btn) return;
+
+  const params = new URLSearchParams(window.location.search);
+  if (
+    window.editorAccessMode !== 'student' ||
+    !window.currentStudent ||
+    params.get('adminReview') === '1' ||
+    params.get('adminAssign') === '1' ||
+    params.get('adminCombined') === '1'
+  ) {
+    hideClassHostedProjectsPromo();
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/student/class-hosted-gallery', { credentials: 'include' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.show || !data.url) {
+      hideClassHostedProjectsPromo();
+      return;
+    }
+    if (btn.dataset.bound !== '1') {
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', () => {
+        window.open(btn.dataset.galleryUrl || data.url, '_blank', 'noopener,noreferrer');
+      });
+    }
+    btn.dataset.galleryUrl = data.url;
+    promo.classList.add('visible');
+  } catch (_) {
+    hideClassHostedProjectsPromo();
+  }
+}
+
+function hideClassHostedProjectsPromo() {
+  const promo = document.getElementById('class-hosted-projects-promo');
+  if (promo) promo.classList.remove('visible');
 }
 
 function showTestUserEditorSession() {

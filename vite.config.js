@@ -5,8 +5,25 @@ import { resolve } from 'path';
 const API_TARGET = process.env.API_TARGET || 'http://localhost:3000';
 const VITE_PORT = Number(process.env.VITE_PORT) || 5173;
 
+function classHostedProjectsDevPlugin() {
+  return {
+    name: 'class-hosted-projects-dev',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const raw = req.url || '';
+        const pathOnly = raw.split('?')[0];
+        if (/^\/[^/]+\/hosted-projects\.html$/.test(pathOnly)) {
+          const query = raw.includes('?') ? raw.slice(raw.indexOf('?')) : '';
+          req.url = `/hosted-projects.html${query}`;
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), classHostedProjectsDevPlugin()],
   root: '.',
   publicDir: false,
   server: {
@@ -52,6 +69,7 @@ export default defineConfig({
         privacyPolicy: resolve(__dirname, 'privacy-policy.html'),
         aboutWebxride: resolve(__dirname, 'about-webxride.html'),
         styleEditor: resolve(__dirname, 'style-editor.html'),
+        hostedProjects: resolve(__dirname, 'hosted-projects.html'),
       },
     },
   },

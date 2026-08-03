@@ -1,0 +1,190 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #000;
+  color: #fff;
+  min-height: 100vh;
+}
+
+.hosted-projects-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px 48px;
+  box-sizing: border-box;
+}
+
+.hosted-projects-card {
+  width: 100%;
+  max-width: 720px;
+  background: linear-gradient(145deg, #1f1f1f, #141414);
+  border: 1px solid #333;
+  border-radius: 14px;
+  padding: 32px 28px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.hosted-projects-brand {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 10px;
+}
+
+.hosted-projects-card h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  color: #4caf50;
+}
+
+.hosted-projects-lead {
+  margin: 0 0 24px;
+  color: #ccc;
+  line-height: 1.5;
+  font-size: 15px;
+}
+
+.hosted-projects-field {
+  margin-bottom: 16px;
+}
+
+.hosted-projects-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: #ddd;
+}
+
+.hosted-projects-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background: #2a2a2a;
+  color: #fff;
+  font-size: 16px;
+}
+
+.hosted-projects-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.hosted-projects-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.hosted-projects-btn-primary {
+  background: #4caf50;
+  color: #fff;
+}
+
+.hosted-projects-btn-secondary {
+  background: #444;
+  color: #fff;
+}
+
+.hosted-projects-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hosted-projects-status {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #ffb74d;
+}
+
+.hosted-projects-status.error {
+  color: #ff8a80;
+}
+
+.hosted-projects-list-wrap {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 28px 16px 48px;
+}
+
+.hosted-projects-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.hosted-projects-list-header h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  color: #4caf50;
+}
+
+.hosted-projects-list-header p {
+  margin: 0;
+  color: #bbb;
+  font-size: 14px;
+}
+
+.hosted-projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.hosted-project-card {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hosted-project-card h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #fff;
+}
+
+.hosted-project-meta {
+  margin: 0;
+  font-size: 13px;
+  color: #999;
+  line-height: 1.45;
+}
+
+.hosted-project-card .hosted-projects-btn {
+  align-self: flex-start;
+  margin-top: auto;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.hosted-projects-empty {
+  color: #aaa;
+  font-size: 15px;
+  padding: 24px 0;
+}
+
+.hosted-projects-footer {
+  margin-top: 28px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.hosted-projects-footer a {
+  color: #fff;
+}

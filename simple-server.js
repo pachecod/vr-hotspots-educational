@@ -45,6 +45,7 @@ const { registerPlaygroundRoutes } = require('./routes/playground-routes');
 const { registerWelcomeNewsRoutes } = require('./routes/welcome-news-routes');
 const { registerLegalRoutes } = require('./routes/legal-routes');
 const { registerSystemTextRoutes } = require('./routes/system-text-routes');
+const { registerHostedProjectsRoutes } = require('./routes/hosted-projects-routes');
 const { runMigrations, importSubmissionsFromJson } = require('./db/migrate');
 const { isDbEnabled } = require('./services/db-service');
 const {
@@ -353,6 +354,9 @@ app.use(
   })
 );
 app.use(createAnalyticsHtmlMiddleware());
+app.get('/:classSlug/hosted-projects.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'hosted-projects.html'));
+});
 app.use(express.static('.', staticNoStaleOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(rejectLocalTestUserWrites);
@@ -397,6 +401,7 @@ registerPlaygroundRoutes(app);
 registerWelcomeNewsRoutes(app);
 registerLegalRoutes(app);
 registerSystemTextRoutes(app);
+registerHostedProjectsRoutes(app);
 
 if (process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_BUCKET_NAME) {
   b2Service

@@ -32,8 +32,28 @@ body.entry-gate-active {
   overflow: hidden;
 }
 
-body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay) {
+body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay):not(#scene-loading-overlay) {
   display: none !important;
+}
+
+/* Full-screen project bootstrap — hide editor until the first scene is ready. */
+body.project-loading-active {
+  background: #000;
+  overflow: hidden;
+}
+
+body.project-loading-active > :not(#scene-loading-overlay):not(#guest-agreement-overlay) {
+  display: none !important;
+}
+
+body.project-loading-active #scene-loading-overlay {
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.project-loading-overlay {
+  background: #000 !important;
 }
 
 .welcome-github-footer {

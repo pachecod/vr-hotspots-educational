@@ -52,13 +52,34 @@ function setEntryGateActive(active) {
   }
 }
 
-function hideSceneLoadingOverlay() {
+function showProjectLoadingOverlay(message = 'Loading Project.') {
+  const overlay = document.getElementById('scene-loading-overlay');
+  if (overlay) {
+    const titleEl = overlay.querySelector('[data-project-loading-title]');
+    if (titleEl && message) titleEl.textContent = message;
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
+    overlay.style.pointerEvents = 'auto';
+  }
+  if (document.body) {
+    document.body.classList.add('project-loading-active');
+  }
+}
+
+function hideProjectLoadingOverlay() {
   const overlay = document.getElementById('scene-loading-overlay');
   if (overlay) {
     overlay.style.pointerEvents = 'none';
     overlay.style.opacity = '0';
     overlay.style.display = 'none';
   }
+  if (document.body) {
+    document.body.classList.remove('project-loading-active');
+  }
+}
+
+function hideSceneLoadingOverlay() {
+  hideProjectLoadingOverlay();
 }
 
 const DEFAULT_WELCOME_SCREEN_HTML = `<h2>Welcome to the WebXRIDE<br/>Immersive Storytelling Tool</h2>
@@ -840,6 +861,7 @@ async function requireStudentSession(containerId, onAuthenticated) {
   const status = await checkStudentSession();
 
   if (status.authenticated && status.student) {
+    showProjectLoadingOverlay('Loading Project.');
     setEntryGateActive(false);
     window.editorAccessMode = 'student';
     window.currentStudent = status.student;
@@ -849,6 +871,7 @@ async function requireStudentSession(containerId, onAuthenticated) {
   }
 
   if (status.localTestUser || status.mode === 'local_test') {
+    showProjectLoadingOverlay('Loading Project.');
     setEntryGateActive(false);
     window.editorAccessMode = 'local_test';
     window.currentStudent = null;
@@ -870,6 +893,7 @@ async function requireStudentSession(containerId, onAuthenticated) {
   }
 
   window.editorAccessMode = 'anonymous';
+  showProjectLoadingOverlay('Loading Project.');
   setEntryGateActive(false);
   hideStudentEditorSession();
   hideTestUserEditorSession();
@@ -887,3 +911,5 @@ window.returnToWelcomeScreen = returnToWelcomeScreen;
 window.renderIntegratedAuthStep = renderIntegratedAuthStep;
 window.beginIntegratedWelcomeAfterAuth = beginIntegratedWelcomeAfterAuth;
 window.hideSceneLoadingOverlay = hideSceneLoadingOverlay;
+window.showProjectLoadingOverlay = showProjectLoadingOverlay;
+window.hideProjectLoadingOverlay = hideProjectLoadingOverlay;

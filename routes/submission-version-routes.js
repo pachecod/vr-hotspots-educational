@@ -429,8 +429,16 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         if (!sess || !sess.studentId) {
           return res.status(401).json({ success: false, message: 'Team member or student authentication required' });
         }
-        const { projectName, fileName, remotePath, studentNote, threadId, versionNumber } =
-          req.body || {};
+        const {
+          projectName,
+          fileName,
+          remotePath,
+          studentNote,
+          threadId,
+          versionNumber,
+          byteSize,
+          contentLength,
+        } = req.body || {};
         if (!projectName || !fileName || !remotePath) {
           return res.status(400).json({ success: false, message: 'Missing required fields' });
         }
@@ -453,6 +461,20 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
           threadId: threadId || null,
           versionNumber: versionNumber || null,
         });
+        try {
+          const { recordProjectUploadBytes } = require('../lib/usage/record-upload');
+          await recordProjectUploadBytes({
+            kind: 'draft',
+            byteSize: byteSize != null ? byteSize : contentLength,
+            remotePath,
+            fileName,
+            projectName,
+            studentId: sess.studentId,
+            classSlug: sess.classSlug || null,
+          });
+        } catch (_) {
+          /* non-fatal */
+        }
         return res.json({
           success: true,
           message: 'Draft saved to cloud',

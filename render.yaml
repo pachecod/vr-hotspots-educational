@@ -76,4 +76,10 @@ services:
         value: "true"
       - key: GOOGLE_ANALYTICS_MEASUREMENT_ID
         sync: false
+      # Admin → Usage & Infra: Render Metrics API (Account Settings → API Keys)
+      - key: RENDER_API_KEY
+        sync: false
+      # Optional B2 storage ceiling for Usage dashboard max-line (GB)
+      - key: USAGE_B2_MAX_GB
+        sync: false
 # deploy-trigger: 2026-08-03T13:10Z branch 3.6 look-controls patch fix

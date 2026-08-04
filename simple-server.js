@@ -33,6 +33,9 @@ const { registerSceneVideoRoutes } = require('./routes/scene-video-routes');
 const { registerBillingRoutes } = require('./routes/billing-routes');
 const { registerSubmissionVersionRoutes } = require('./routes/submission-version-routes');
 const { registerErrorLogRoutes } = require('./routes/error-log-routes');
+const { registerAdminUsageRoutes } = require('./routes/admin-usage-routes');
+const { startUsageSnapshotJob } = require('./lib/usage/snapshot-job');
+const { recordProjectUploadBytes } = require('./lib/usage/record-upload');
 const { registerAdminStudentPeekRoutes } = require('./routes/admin-student-peek-routes');
 const { registerAdminContentRoutes } = require('./routes/admin-content-routes');
 const { registerFlatPageRoutes } = require('./routes/flat-page-routes');
@@ -397,6 +400,7 @@ registerFlatPageRoutes(app);
 registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe });
 registerSnippetRoutes(app);
 registerErrorLogRoutes(app);
+registerAdminUsageRoutes(app);
 registerRideyRoutes(app);
 registerTemplateRoutes(app);
 registerPlaygroundRoutes(app);
@@ -1372,6 +1376,8 @@ app.post('/api/submit-project-meta', requireAuthForCloudWrites, express.json(), 
         threadId,
         versionNumber,
         kind = 'submitted',
+        byteSize,
+        contentLength,
       } = req.body || {};
       const safeProject = projectName || 'VR_Project';
 
@@ -1404,6 +1410,16 @@ app.post('/api/submit-project-meta', requireAuthForCloudWrites, express.json(), 
           remotePath,
         });
       }
+
+      await recordProjectUploadBytes({
+        kind: kind === 'draft' ? 'draft' : 'submitted',
+        byteSize: byteSize != null ? byteSize : contentLength,
+        remotePath,
+        fileName,
+        projectName: safeProject,
+        studentId,
+        classSlug,
+      });
 
       const submission = {
         studentId,
@@ -2253,6 +2269,12 @@ async function startServer() {
     }
   } catch (err) {
     console.error('⚠️ Database startup error:', err.message);
+  }
+
+  try {
+    startUsageSnapshotJob();
+  } catch (jobErr) {
+    console.warn('⚠️ Usage snapshot job not started:', jobErr.message);
   }
 
   if (useHTTPS) {

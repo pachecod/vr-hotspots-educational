@@ -13,6 +13,7 @@ function renderAdminNav(activeTab) {
     { id: 'templates', label: 'Templates', href: '/admin-templates.html' },
     { id: 'users', label: 'Users and Classes', href: '/admin-users.html' },
     { id: 'billing', label: 'Billing & Limits', href: '/admin-billing.html' },
+    { id: 'usage', label: 'Usage & Infra', href: '/admin-usage.html' },
     { id: 'errors', label: 'Error Log', href: '/admin-error-log.html' },
   ];
 

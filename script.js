@@ -22840,6 +22840,12 @@ class StudentSubmission {
                     threadId: prepareData.threadId || null,
                     versionNumber: prepareData.versionNumber || null,
                     kind,
+                    byteSize:
+                      content && typeof content.size === 'number'
+                        ? content.size
+                        : content && content.byteLength != null
+                          ? content.byteLength
+                          : null,
                   })
                 });
                 

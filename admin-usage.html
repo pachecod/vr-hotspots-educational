@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Usage &amp; Infrastructure — WebXRIDE Admin</title>
+    <link rel="stylesheet" href="admin-nav.css" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        color: #333;
+        max-width: 1200px;
+      }
+      h1 { margin-bottom: 4px; }
+      h2 { margin: 0 0 10px; font-size: 1.05em; }
+      .hint { color: #666; font-size: 14px; margin-bottom: 16px; }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .toolbar select, .toolbar button {
+        padding: 8px 12px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        font-size: 13px;
+      }
+      .toolbar button {
+        background: #007bff;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+      }
+      .toolbar button.secondary { background: #6c757d; }
+      .toolbar button:disabled { opacity: 0.6; cursor: default; }
+      .status { font-size: 13px; margin-left: 4px; }
+      .status.err { color: #dc3545; }
+      .status.ok { color: #198754; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .stat {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 12px 14px;
+      }
+      .stat .label { font-size: 12px; color: #666; margin-bottom: 4px; }
+      .stat .value { font-size: 1.35em; font-weight: bold; }
+      .stat .sub { font-size: 11px; color: #888; margin-top: 4px; }
+      .panel {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+      }
+      .warn {
+        background: #fff3cd;
+        border: 1px solid #ffecb5;
+        color: #856404;
+        padding: 10px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        margin-bottom: 14px;
+      }
+      .charts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 14px;
+      }
+      .chart-box {
+        border: 1px solid #eee;
+        border-radius: 6px;
+        padding: 10px;
+        background: #fafafa;
+      }
+      .chart-box h3 {
+        margin: 0 0 6px;
+        font-size: 13px;
+        color: #555;
+        font-weight: normal;
+      }
+      .chart-box { position: relative; }
+      canvas { width: 100%; height: 120px; display: block; background: #fff; border-radius: 4px; cursor: crosshair; }
+      .chart-tip {
+        position: absolute;
+        z-index: 5;
+        pointer-events: none;
+        display: none;
+        max-width: 220px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        background: rgba(33, 37, 41, 0.92);
+        color: #fff;
+        font-size: 11px;
+        line-height: 1.35;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        white-space: nowrap;
+      }
+      .chart-tip .tip-val { font-weight: bold; }
+      .chart-tip .tip-time { opacity: 0.9; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th, td {
+        border: 1px solid #dee2e6;
+        padding: 7px 9px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th { background: #f8f9fa; }
+      tr:nth-child(even) { background: #fafafa; }
+      .code { font-family: monospace; font-size: 12px; }
+      .empty { color: #666; padding: 12px; background: #f8f9fa; border-radius: 6px; }
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 800px) {
+        .two-col { grid-template-columns: 1fr; }
+      }
+    </style>
+    <script src="admin-auth-ui.js"></script>
+    <script src="admin-nav.js"></script>
+  </head>
+  <body>
+    <div id="login-root"></div>
+    <div id="usage-app" style="display: none">
+      <nav id="admin-nav" data-active="usage"></nav>
+      <h1>Usage &amp; Infrastructure</h1>
+      <p class="hint">
+        Render traffic/CPU/memory (last N hours), B2 file storage totals and growth, hosted disk on this instance,
+        and recent cloud uploads. Times for upload history use Eastern Time where noted.
+      </p>
+
+      <div class="toolbar">
+        <label>
+          Render window
+          <select id="hours">
+            <option value="6">6 hours</option>
+            <option value="24" selected>24 hours</option>
+            <option value="72">3 days</option>
+            <option value="168">7 days</option>
+          </select>
+        </label>
+        <label>
+          Storage history
+          <select id="days">
+            <option value="7">7 days</option>
+            <option value="30" selected>30 days</option>
+            <option value="90">90 days</option>
+          </select>
+        </label>
+        <button type="button" id="btn-refresh">Refresh</button>
+        <button type="button" id="btn-scan" class="secondary">Scan storage now</button>
+        <span id="status" class="status"></span>
+      </div>
+
+      <div id="config-warn" class="warn" style="display: none"></div>
+      <div id="stat-grid" class="grid"></div>
+
+      <div class="panel">
+        <h2>Render — CPU, memory, traffic</h2>
+        <div id="render-meta" class="hint" style="margin-bottom: 10px"></div>
+        <div id="render-charts" class="charts"></div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <h2>B2 &amp; hosted storage (latest snapshot)</h2>
+          <div id="storage-latest"></div>
+        </div>
+        <div class="panel">
+          <h2>B2 total growth</h2>
+          <div class="chart-box">
+            <h3>student-projects + hosted + other (B2 total)</h3>
+            <canvas id="chart-b2-growth" width="560" height="120"></canvas>
+          </div>
+          <div class="chart-box" style="margin-top: 10px">
+            <h3>Upload bytes by day (tracked saves)</h3>
+            <canvas id="chart-uploads" width="560" height="120"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>This instance (live)</h2>
+        <div id="memory-panel"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Recent cloud uploads</h2>
+        <div id="recent-uploads"></div>
+      </div>
+    </div>
+    <script src="admin-usage.js"></script>
+  </body>
+</html>

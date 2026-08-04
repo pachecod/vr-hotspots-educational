@@ -239,6 +239,43 @@ async function applyIncrementalMigrations(pool) {
           ON admin_error_logs (code, created_at DESC);
       `,
     },
+    {
+      name: 'usage_infra_v1',
+      sql: `
+        CREATE TABLE IF NOT EXISTS usage_storage_snapshots (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          source TEXT NOT NULL,
+          scope TEXT NOT NULL,
+          byte_size BIGINT NOT NULL DEFAULT 0,
+          file_count INT NOT NULL DEFAULT 0,
+          details JSONB NOT NULL DEFAULT '{}'::jsonb
+        );
+        CREATE INDEX IF NOT EXISTS idx_usage_storage_snapshots_captured
+          ON usage_storage_snapshots (captured_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_usage_storage_snapshots_source_scope
+          ON usage_storage_snapshots (source, scope, captured_at DESC);
+
+        CREATE TABLE IF NOT EXISTS usage_upload_events (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          kind TEXT NOT NULL,
+          byte_size BIGINT NOT NULL DEFAULT 0,
+          b2_path TEXT,
+          class_slug TEXT,
+          student_id UUID,
+          project_name TEXT,
+          file_name TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_usage_upload_events_created
+          ON usage_upload_events (created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_usage_upload_events_kind
+          ON usage_upload_events (kind, created_at DESC);
+
+        ALTER TABLE project_versions
+          ADD COLUMN IF NOT EXISTS byte_size BIGINT;
+      `,
+    },
   ];
 
   for (const migration of migrations) {

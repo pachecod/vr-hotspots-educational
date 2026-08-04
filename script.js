@@ -18995,53 +18995,56 @@ document.addEventListener('DOMContentLoaded', () => {
       this.editorGlobalSoundEnabled
     );
     if (!this.scenes[sceneId]) return;
-    this._startCrossfadeOverlay()
-      .then(() => {
-        // Save current scene hotspots and global sound
-        this.scenes[this.currentScene].hotspots = [...this.hotspots];
-        this.updateGlobalSound(); // Save current global sound settings
-        this.updateVideoAudioSettings();
-        this.saveScenesData(); // Save when switching scenes
 
-        // Stop current global sound and editor sound
-        this.stopGlobalSound();
-        this.stopEditorGlobalSound();
+    const fromSceneId = this.currentScene;
 
-        // Switch to new scene
-        this.currentScene = sceneId;
+    // Persist source + adopt destination BEFORE any await. Overlapping portal navigations
+    // used to write stale this.hotspots into the wrong scene after the crossfade delay.
+    if (this.scenes[fromSceneId]) {
+      this.scenes[fromSceneId].hotspots = [...(this.hotspots || [])];
+    }
+    try {
+      this.updateGlobalSound();
+      this.updateVideoAudioSettings();
+    } catch (_) {
+      /* ignore */
+    }
 
-        // End overlay when scene reports loaded
-        const onLoaded = () => {
-          window.removeEventListener('vrhotspots:scene-loaded', onLoaded);
-          this._endCrossfadeOverlay();
-        };
-        window.addEventListener('vrhotspots:scene-loaded', onLoaded, {
-          once: true,
-        });
+    this.currentScene = sceneId;
+    const destScene = this.scenes[sceneId];
+    this.hotspots = Array.isArray(destScene.hotspots) ? [...destScene.hotspots] : [];
+    this.saveScenesData();
 
-        // Safety timeout
-        setTimeout(() => {
-          window.removeEventListener('vrhotspots:scene-loaded', onLoaded);
-          this._endCrossfadeOverlay();
-        }, 1500);
+    this.stopGlobalSound();
+    this.stopEditorGlobalSound();
 
-        this.loadCurrentScene().then(() => {
-          this.updateNavigationTargets();
-        });
-      })
-      .catch(() => {
-        // Fallback to direct switch
-        this.scenes[this.currentScene].hotspots = [...this.hotspots];
-        this.updateGlobalSound();
-        this.updateVideoAudioSettings();
-        this.saveScenesData();
-        this.stopGlobalSound();
-        this.stopEditorGlobalSound();
-        this.currentScene = sceneId;
-        this.loadCurrentScene().then(() => {
-          this.updateNavigationTargets();
-        });
+    const committedGen = (this._sceneSwitchCommitted = (this._sceneSwitchCommitted || 0) + 1);
+
+    const runLoad = () => {
+      if (this._sceneSwitchCommitted !== committedGen) return;
+
+      const onLoaded = () => {
+        window.removeEventListener('vrhotspots:scene-loaded', onLoaded);
+        this._endCrossfadeOverlay();
+      };
+      window.addEventListener('vrhotspots:scene-loaded', onLoaded, {
+        once: true,
       });
+      setTimeout(() => {
+        window.removeEventListener('vrhotspots:scene-loaded', onLoaded);
+        this._endCrossfadeOverlay();
+      }, 1500);
+
+      this.loadCurrentScene().then(() => {
+        if (this._sceneSwitchCommitted === committedGen) {
+          this.updateNavigationTargets();
+        }
+      });
+    };
+
+    this._startCrossfadeOverlay()
+      .then(runLoad)
+      .catch(runLoad);
   }
 
   navigateToScene(sceneId) {

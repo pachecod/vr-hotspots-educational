@@ -217,6 +217,28 @@ async function applyIncrementalMigrations(pool) {
           ADD COLUMN IF NOT EXISTS featured_on_hosted_gallery BOOLEAN NOT NULL DEFAULT FALSE;
       `,
     },
+    {
+      name: 'admin_error_logs_v1',
+      sql: `
+        CREATE TABLE IF NOT EXISTS admin_error_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          timestamp_edt TEXT NOT NULL,
+          level TEXT NOT NULL DEFAULT 'error',
+          code TEXT NOT NULL,
+          message TEXT NOT NULL,
+          user_name TEXT NOT NULL DEFAULT 'unknown',
+          student_id UUID,
+          source TEXT,
+          app_version TEXT,
+          details JSONB NOT NULL DEFAULT '{}'::jsonb
+        );
+        CREATE INDEX IF NOT EXISTS idx_admin_error_logs_created_at
+          ON admin_error_logs (created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_admin_error_logs_code
+          ON admin_error_logs (code, created_at DESC);
+      `,
+    },
   ];
 
   for (const migration of migrations) {

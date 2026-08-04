@@ -10102,6 +10102,13 @@ class HotspotEditor {
   }
 
   async buildCompleteProjectZipBlob(templateName, exportMode = 'bundle') {
+    try {
+      if (window.ErrorReporter && typeof window.ErrorReporter.checkEditorProjectIntegrity === 'function') {
+        window.ErrorReporter.checkEditorProjectIntegrity('save_template_export').catch(() => {});
+      }
+    } catch (_) {
+      /* ignore */
+    }
     const JSZip = window.JSZip || (await this.loadJSZip());
     const zip = new JSZip();
     const skyboxImg = document.querySelector('#main-panorama');
@@ -22676,6 +22683,17 @@ class StudentSubmission {
 
       // Add files to zip using existing method
       await window.hotspotEditor.addFilesToZip(zip, safeProjectName, skyboxSrc, exportMode);
+
+      // Integrity check (non-blocking): report cross-scene hotspot cloning to admin Error Log
+      try {
+        if (window.ErrorReporter && typeof window.ErrorReporter.checkEditorProjectIntegrity === 'function') {
+          window.ErrorReporter.checkEditorProjectIntegrity(
+            kind === 'draft' ? 'cloud_draft' : 'submit_to_admin'
+          ).catch(() => {});
+        }
+      } catch (_) {
+        /* ignore */
+      }
 
       // Generate blob
       const content = await zip.generateAsync({ type: 'blob' });

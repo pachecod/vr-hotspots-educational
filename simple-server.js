@@ -32,6 +32,7 @@ const { registerStudentAssetRoutes } = require('./routes/student-assets-routes')
 const { registerSceneVideoRoutes } = require('./routes/scene-video-routes');
 const { registerBillingRoutes } = require('./routes/billing-routes');
 const { registerSubmissionVersionRoutes } = require('./routes/submission-version-routes');
+const { registerErrorLogRoutes } = require('./routes/error-log-routes');
 const { registerAdminStudentPeekRoutes } = require('./routes/admin-student-peek-routes');
 const { registerAdminContentRoutes } = require('./routes/admin-content-routes');
 const { registerFlatPageRoutes } = require('./routes/flat-page-routes');
@@ -395,6 +396,7 @@ registerAdminContentRoutes(app, { requireAdmin });
 registerFlatPageRoutes(app);
 registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe });
 registerSnippetRoutes(app);
+registerErrorLogRoutes(app);
 registerRideyRoutes(app);
 registerTemplateRoutes(app);
 registerPlaygroundRoutes(app);

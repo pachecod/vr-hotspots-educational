@@ -1,3 +1,10 @@
+const ALL_PAGE_LIMIT = 5000;
+
+let authPage = 0;
+let uploadsPage = 0;
+let lastAuthTotal = 0;
+let lastUploadsTotal = 0;
+
 function escapeHtml(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;')
@@ -65,6 +72,23 @@ function currentTab() {
   return (active && active.dataset.tab) || 'all';
 }
 
+function pageSizeValue() {
+  const raw = document.getElementById('page-size')?.value || '50';
+  if (raw === 'all') return 'all';
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 50;
+}
+
+function effectiveLimit() {
+  const size = pageSizeValue();
+  return size === 'all' ? ALL_PAGE_LIMIT : size;
+}
+
+function resetPages() {
+  authPage = 0;
+  uploadsPage = 0;
+}
+
 function updateSectionVisibility(tab) {
   const auth = document.getElementById('section-auth');
   const uploads = document.getElementById('section-uploads');
@@ -74,6 +98,71 @@ function updateSectionVisibility(tab) {
   auth.classList.toggle('visible', showAuth);
   uploads.classList.toggle('visible', showUploads);
   kindWrap.style.display = tab === 'uploads' ? '' : 'none';
+}
+
+function pageCount(total, limit) {
+  if (!total) return 1;
+  if (pageSizeValue() === 'all') return 1;
+  return Math.max(1, Math.ceil(total / limit));
+}
+
+function renderPager(ids, { total, page, limit, which }) {
+  const nodes = ids.map((id) => document.getElementById(id)).filter(Boolean);
+  if (!nodes.length) return;
+
+  const size = pageSizeValue();
+  if (!total || size === 'all' || total <= limit) {
+    const label =
+      total > 0
+        ? size === 'all'
+          ? `Showing all ${total}`
+          : `Showing ${total}`
+        : '';
+    nodes.forEach((el) => {
+      if (!label) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        return;
+      }
+      el.style.display = 'flex';
+      el.innerHTML = `<span class="pager-range">${escapeHtml(label)}</span>`;
+    });
+    return;
+  }
+
+  const pages = pageCount(total, limit);
+  const safePage = Math.min(Math.max(0, page), pages - 1);
+  const start = safePage * limit + 1;
+  const end = Math.min(total, (safePage + 1) * limit);
+  const html = `
+    <button type="button" class="pager-prev" data-which="${which}" ${
+      safePage <= 0 ? 'disabled' : ''
+    }>Previous</button>
+    <span class="pager-range">Showing ${start}–${end} of ${total} · Page ${
+      safePage + 1
+    } of ${pages}</span>
+    <button type="button" class="pager-next" data-which="${which}" ${
+      safePage >= pages - 1 ? 'disabled' : ''
+    }>Next</button>
+  `;
+  nodes.forEach((el) => {
+    el.style.display = 'flex';
+    el.innerHTML = html;
+    el.querySelectorAll('.pager-prev').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (which === 'auth') authPage = Math.max(0, authPage - 1);
+        else uploadsPage = Math.max(0, uploadsPage - 1);
+        loadActivity({ preservePage: true });
+      });
+    });
+    el.querySelectorAll('.pager-next').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (which === 'auth') authPage += 1;
+        else uploadsPage += 1;
+        loadActivity({ preservePage: true });
+      });
+    });
+  });
 }
 
 function renderAuthTable(events) {
@@ -211,7 +300,14 @@ function renderUploadsTable(events) {
   bindDownloadButtons(el);
 }
 
-async function loadActivity() {
+function clampPages(limit) {
+  const authPages = pageCount(lastAuthTotal, limit);
+  const uploadPages = pageCount(lastUploadsTotal, limit);
+  if (authPage >= authPages) authPage = Math.max(0, authPages - 1);
+  if (uploadsPage >= uploadPages) uploadsPage = Math.max(0, uploadPages - 1);
+}
+
+async function loadActivity(options = {}) {
   const status = document.getElementById('status');
   const meta = document.getElementById('meta');
   const dbWarn = document.getElementById('db-warn');
@@ -220,21 +316,45 @@ async function loadActivity() {
   const days = document.getElementById('days').value;
   const tab = currentTab();
   const kind = document.getElementById('kind').value;
+  const limit = effectiveLimit();
+  if (!options.preservePage) resetPages();
   updateSectionVisibility(tab);
 
   try {
-    const qs = new URLSearchParams({ days, tab, limit: '200' });
+    clampPages(limit);
+    const qs = new URLSearchParams({
+      days,
+      tab,
+      limit: String(limit),
+      authOffset: String(authPage * (pageSizeValue() === 'all' ? 0 : limit)),
+      uploadsOffset: String(uploadsPage * (pageSizeValue() === 'all' ? 0 : limit)),
+    });
     if (tab === 'uploads' && kind) qs.set('kind', kind);
     const res = await adminFetch(`/admin/activity/overview?${qs.toString()}`);
     const data = await readJsonResponse(res, 'Activity');
 
     dbWarn.style.display = data.dbEnabled === false ? 'block' : 'none';
-    meta.textContent = `Showing last ${data.days} day(s) · ${
-      data.auth?.total || 0
-    } auth event(s) · ${data.uploads?.total || 0} upload event(s)`;
+    lastAuthTotal = data.auth?.total || 0;
+    lastUploadsTotal = data.uploads?.total || 0;
+    clampPages(limit);
+
+    const sizeLabel = pageSizeValue() === 'all' ? 'all rows' : `${limit} per page`;
+    meta.textContent = `Showing last ${data.days} day(s) · ${sizeLabel} · ${lastAuthTotal} auth event(s) · ${lastUploadsTotal} upload event(s)`;
 
     renderAuthTable(data.auth?.events || []);
     renderUploadsTable(data.uploads?.events || []);
+    renderPager(['auth-pager', 'auth-pager-bottom'], {
+      total: lastAuthTotal,
+      page: authPage,
+      limit,
+      which: 'auth',
+    });
+    renderPager(['uploads-pager', 'uploads-pager-bottom'], {
+      total: lastUploadsTotal,
+      page: uploadsPage,
+      limit,
+      which: 'uploads',
+    });
 
     status.textContent = 'Updated';
     status.className = 'status ok';
@@ -246,9 +366,10 @@ async function loadActivity() {
 
 function initMainApp() {
   document.getElementById('activity-app').style.display = 'block';
-  document.getElementById('btn-refresh').addEventListener('click', loadActivity);
-  document.getElementById('days').addEventListener('change', loadActivity);
-  document.getElementById('kind').addEventListener('change', loadActivity);
+  document.getElementById('btn-refresh').addEventListener('click', () => loadActivity());
+  document.getElementById('days').addEventListener('change', () => loadActivity());
+  document.getElementById('kind').addEventListener('change', () => loadActivity());
+  document.getElementById('page-size').addEventListener('change', () => loadActivity());
   document.querySelectorAll('.toolbar button.tab').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.toolbar button.tab').forEach((b) => b.classList.remove('active'));

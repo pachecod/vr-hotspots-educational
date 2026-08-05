@@ -82,10 +82,11 @@ function registerAdminActivityRoutes(app) {
   app.get('/admin/activity/auth', requireAdmin, async (req, res) => {
     try {
       const days = Math.max(1, Math.min(90, Number(req.query.days) || 30));
-      const limit = Math.max(1, Math.min(500, Number(req.query.limit) || 200));
+      const limit = Math.max(1, Math.min(5000, Number(req.query.limit) || 200));
+      const offset = Math.max(0, Number(req.query.offset) || 0);
       const event = req.query.event || null;
       const role = req.query.role || null;
-      const data = await listAuthEvents({ days, limit, event, role });
+      const data = await listAuthEvents({ days, limit, offset, event, role });
       res.json({
         success: true,
         dbEnabled: isDbEnabled(),
@@ -100,9 +101,10 @@ function registerAdminActivityRoutes(app) {
   app.get('/admin/activity/uploads', requireAdmin, async (req, res) => {
     try {
       const days = Math.max(1, Math.min(90, Number(req.query.days) || 30));
-      const limit = Math.max(1, Math.min(500, Number(req.query.limit) || 200));
+      const limit = Math.max(1, Math.min(5000, Number(req.query.limit) || 200));
+      const offset = Math.max(0, Number(req.query.offset) || 0);
       const kind = req.query.kind || null;
-      const data = await usageDb.listUploadEvents({ days, limit, kind });
+      const data = await usageDb.listUploadEvents({ days, limit, offset, kind });
       res.json({
         success: true,
         dbEnabled: isDbEnabled(),
@@ -117,17 +119,20 @@ function registerAdminActivityRoutes(app) {
   app.get('/admin/activity/overview', requireAdmin, async (req, res) => {
     try {
       const days = Math.max(1, Math.min(90, Number(req.query.days) || 30));
-      const limit = Math.max(1, Math.min(500, Number(req.query.limit) || 200));
+      const limit = Math.max(1, Math.min(5000, Number(req.query.limit) || 50));
       const tab = String(req.query.tab || 'all');
       const uploadKind = req.query.kind || null;
+      const authOffset = Math.max(0, Number(req.query.authOffset) || 0);
+      const uploadsOffset = Math.max(0, Number(req.query.uploadsOffset) || 0);
 
-      let auth = { days, total: 0, events: [] };
-      let uploads = { days, total: 0, events: [] };
+      let auth = { days, total: 0, limit, offset: 0, events: [] };
+      let uploads = { days, total: 0, limit, offset: 0, events: [] };
 
       if (tab === 'all' || tab === 'logins' || tab === 'logouts') {
         auth = await listAuthEvents({
           days,
           limit,
+          offset: authOffset,
           event: tab === 'logins' ? 'login' : tab === 'logouts' ? 'logout' : null,
         });
       }
@@ -135,6 +140,7 @@ function registerAdminActivityRoutes(app) {
         uploads = await usageDb.listUploadEvents({
           days,
           limit,
+          offset: uploadsOffset,
           kind: uploadKind || null,
         });
       }
@@ -143,6 +149,7 @@ function registerAdminActivityRoutes(app) {
         success: true,
         dbEnabled: isDbEnabled(),
         days,
+        limit,
         auth,
         uploads,
       });

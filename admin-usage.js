@@ -721,7 +721,6 @@ function renderAnalyticsCharts(data, sharedRange) {
       pagesEl.innerHTML = '<div class="empty">No top pages yet.</div>';
     } else {
       pagesEl.innerHTML = `
-        <h3 style="margin:0 0 8px;font-size:13px;color:#555;font-weight:normal;">Top pages</h3>
         <table>
           <thead><tr><th>Path</th><th>Views</th><th>Users</th></tr></thead>
           <tbody>

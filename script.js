@@ -21079,11 +21079,53 @@ document.addEventListener('DOMContentLoaded', () => {
     return { positions, contentWidth, contentHeight, orphanBandY, nodeW, nodeH };
   }
 
+  _sceneSiteMapEdgePath(fromPos, toPos, index, total) {
+    const x1 = fromPos.x + fromPos.w / 2;
+    const y1 = fromPos.y + fromPos.h;
+    const x2 = toPos.x + toPos.w / 2;
+    const y2 = toPos.y;
+    const spread = 30;
+    const offset = total <= 1 ? 0 : (index - (total - 1) / 2) * spread;
+    const midY = (y1 + y2) / 2;
+    // Fan parallel portals sideways so stacked arrows are readable.
+    return `M ${x1} ${y1} C ${x1 + offset} ${midY}, ${x2 + offset} ${midY}, ${x2} ${y2}`;
+  }
+
   showSceneSiteMap() {
     removeEditorOverlayDialogs();
     const graph = this.buildSceneSiteMap();
     const layout = this._layoutSceneSiteMap(graph);
     const esc = (s) => this._escapeHTML(s);
+    const positions = layout.positions;
+    const nodeW = layout.nodeW;
+    const nodeH = layout.nodeH;
+
+    // Pair counts for fanning multi-edges between the same scenes.
+    const pairTotals = {};
+    const pairCounters = {};
+    graph.edges.forEach((e) => {
+      const key = `${e.from}=>${e.to}`;
+      pairTotals[key] = (pairTotals[key] || 0) + 1;
+    });
+    graph.edges.forEach((e) => {
+      const key = `${e.from}=>${e.to}`;
+      const idx = pairCounters[key] || 0;
+      pairCounters[key] = idx + 1;
+      e._fanIndex = idx;
+      e._fanTotal = pairTotals[key];
+    });
+
+    const brokenByFrom = {};
+    graph.broken.forEach((e) => {
+      if (!brokenByFrom[e.from]) brokenByFrom[e.from] = [];
+      brokenByFrom[e.from].push(e);
+    });
+    Object.keys(brokenByFrom).forEach((fromId) => {
+      brokenByFrom[fromId].forEach((e, i) => {
+        e._stubIndex = i;
+        e._stubTotal = brokenByFrom[fromId].length;
+      });
+    });
 
     const dialog = document.createElement('div');
     dialog.className = 'editor-overlay-dialog';
@@ -21114,7 +21156,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let nodeSvg = '';
     graph.nodes.forEach((node) => {
-      const pos = layout.positions[node.id];
+      const pos = positions[node.id];
       if (!pos) return;
       const label = this._sceneSiteMapCountLabel(node.counts);
       const rawName = String(node.name || node.id);
@@ -21125,69 +21167,48 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (node.flags.noInbound) badges.push('NO IN');
       const badgeText = badges.length ? badges.join(' · ') : node.type === 'video' ? 'video' : 'image';
       nodeSvg += `
-        <g class="ssm-node" data-scene-id="${esc(node.id)}" style="cursor:pointer">
-          <title>${esc(rawName)} — click to open</title>
-          <rect x="${pos.x}" y="${pos.y}" width="${pos.w}" height="${pos.h}" rx="10" ry="10"
+        <g class="ssm-node" data-scene-id="${esc(node.id)}" style="cursor:grab">
+          <title>${esc(rawName)} — drag to rearrange · double-click to open</title>
+          <rect class="ssm-node-rect" x="${pos.x}" y="${pos.y}" width="${pos.w}" height="${pos.h}" rx="10" ry="10"
             fill="${nodeFill(node)}" stroke="${nodeStroke(node)}" stroke-width="2" />
-          <text x="${pos.x + pos.w / 2}" y="${pos.y + 22}" text-anchor="middle"
+          <text class="ssm-node-t1" x="${pos.x + pos.w / 2}" y="${pos.y + 22}" text-anchor="middle"
             fill="#fff" font-size="13" font-weight="bold">${esc(shortName)}</text>
-          <text x="${pos.x + pos.w / 2}" y="${pos.y + 40}" text-anchor="middle"
+          <text class="ssm-node-t2" x="${pos.x + pos.w / 2}" y="${pos.y + 40}" text-anchor="middle"
             fill="#b0bec5" font-size="11">${esc(label)}</text>
-          <text x="${pos.x + pos.w / 2}" y="${pos.y + 54}" text-anchor="middle"
+          <text class="ssm-node-t3" x="${pos.x + pos.w / 2}" y="${pos.y + 54}" text-anchor="middle"
             fill="${nodeStroke(node)}" font-size="10">${esc(badgeText)}</text>
         </g>`;
     });
 
-    const edgePath = (fromPos, toPos, broken) => {
-      const x1 = fromPos.x + fromPos.w / 2;
-      const y1 = fromPos.y + fromPos.h;
-      const x2 = toPos.x + toPos.w / 2;
-      const y2 = toPos.y;
-      const midY = (y1 + y2) / 2;
-      const color = broken ? '#ef5350' : '#81d4fa';
-      const dash = broken ? ' stroke-dasharray="6 4"' : '';
-      return `<path d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}"
-        fill="none" stroke="${color}" stroke-width="2.5"${dash}
-        marker-end="url(#${broken ? 'ssm-arrow-broken' : 'ssm-arrow'})" />`;
-    };
-
     let edgeSvg = '';
     graph.edges.forEach((e) => {
-      const fromPos = layout.positions[e.from];
-      const toPos = layout.positions[e.to];
+      const fromPos = positions[e.from];
+      const toPos = positions[e.to];
       if (!fromPos || !toPos) return;
-      edgeSvg += `<g class="ssm-edge" data-from="${esc(e.from)}" data-hotspot-id="${esc(
-        String(e.hotspotId)
-      )}" style="cursor:pointer">${edgePath(fromPos, toPos, false)}
+      const d = this._sceneSiteMapEdgePath(fromPos, toPos, e._fanIndex || 0, e._fanTotal || 1);
+      edgeSvg += `<g class="ssm-edge" data-edge-id="${esc(e.id)}" data-from="${esc(
+        e.from
+      )}" data-to="${esc(e.to)}" data-hotspot-id="${esc(String(e.hotspotId))}" style="cursor:pointer">
+        <path class="ssm-edge-path" d="${d}" fill="none" stroke="#81d4fa" stroke-width="2.5"
+          marker-end="url(#ssm-arrow)" />
         <title>Portal from ${esc(graph.nodesById[e.from]?.name || e.from)} → ${esc(
         graph.nodesById[e.to]?.name || e.to
-      )}</title></g>`;
+      )} · click to edit</title>
+      </g>`;
     });
 
-    // Broken edges: draw to a phantom stub to the right of the source node
     graph.broken.forEach((e) => {
-      const fromPos = layout.positions[e.from];
-      if (!fromPos) return;
-      const stub = {
-        x: fromPos.x + fromPos.w + 12,
-        y: fromPos.y + fromPos.h / 2 - 10,
-        w: 48,
-        h: 20,
-      };
-      const x1 = fromPos.x + fromPos.w;
-      const y1 = fromPos.y + fromPos.h / 2;
-      const x2 = stub.x;
-      const y2 = stub.y + stub.h / 2;
       edgeSvg += `
-        <g class="ssm-edge ssm-edge-broken" data-from="${esc(e.from)}" data-hotspot-id="${esc(
-        String(e.hotspotId)
-      )}" style="cursor:pointer">
+        <g class="ssm-edge ssm-edge-broken" data-edge-id="${esc(e.id)}" data-from="${esc(
+        e.from
+      )}" data-hotspot-id="${esc(String(e.hotspotId))}" data-stub-index="${e._stubIndex || 0}"
+          style="cursor:pointer">
           <title>Broken portal (missing target: ${esc(e.to || '(empty)')}) — click to edit</title>
-          <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ef5350" stroke-width="2.5"
+          <line class="ssm-broken-line" x1="0" y1="0" x2="0" y2="0" stroke="#ef5350" stroke-width="2.5"
             stroke-dasharray="6 4" marker-end="url(#ssm-arrow-broken)" />
-          <rect x="${stub.x}" y="${stub.y}" width="${stub.w}" height="${stub.h}" rx="4"
+          <rect class="ssm-broken-rect" x="0" y="0" width="48" height="20" rx="4"
             fill="#b71c1c" stroke="#ef5350" />
-          <text x="${stub.x + stub.w / 2}" y="${stub.y + 14}" text-anchor="middle"
+          <text class="ssm-broken-text" x="0" y="0" text-anchor="middle"
             fill="#fff" font-size="10">broken</text>
         </g>`;
     });
@@ -21195,7 +21216,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let orphanBand = '';
     if (graph.unreachable.length) {
       orphanBand = `
-        <text x="${layout.contentWidth / 2}" y="${layout.orphanBandY + 8}" text-anchor="middle"
+        <text class="ssm-orphan-label" x="${layout.contentWidth / 2}" y="${
+        layout.orphanBandY + 8
+      }" text-anchor="middle"
           fill="#ffb74d" font-size="13" font-weight="bold">Orphaned / unreachable from start</text>`;
     }
 
@@ -21216,7 +21239,8 @@ document.addEventListener('DOMContentLoaded', () => {
               ${chip('Broken', graph.summary.brokenCount, '#c62828')}
             </div>
           </div>
-          <div style="display:flex;gap:8px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" id="ssm-reset-layout" style="background:#455a64;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;">Reset layout</button>
             <button type="button" id="ssm-refresh" style="background:#546e7a;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;">Refresh</button>
             <button type="button" id="ssm-close" style="background:#666;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;">Close</button>
           </div>
@@ -21227,14 +21251,14 @@ document.addEventListener('DOMContentLoaded', () => {
           <span style="margin-left:10px;color:#90a4ae;">■</span> No inbound portals
           <span style="margin-left:10px;color:#ffb74d;">■</span> Unreachable / orphaned
           <span style="margin-left:10px;color:#ef5350;">— —</span> Broken portal
-          <span style="margin-left:12px;color:#b0bec5;">Click a scene to open it. Click a broken portal to edit it.</span>
+          <span style="margin-left:12px;color:#b0bec5;">Drag cards to untangle · double-click a scene to open · click a portal to edit it.</span>
         </div>
-        <div style="flex:1;min-height:0;background:#121212;border:1px solid #333;border-radius:8px;overflow:auto;">
+        <div id="ssm-canvas-wrap" style="flex:1;min-height:0;background:#121212;border:1px solid #333;border-radius:8px;overflow:auto;">
           ${
             emptyHint ||
-            `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.contentWidth}" height="${
+            `<svg id="ssm-svg" xmlns="http://www.w3.org/2000/svg" width="${layout.contentWidth}" height="${
               layout.contentHeight
-            }" style="display:block;min-width:100%;">
+            }" style="display:block;min-width:100%;touch-action:none;">
             <defs>
               <marker id="ssm-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
                 <path d="M0,0 L8,3 L0,6 Z" fill="#81d4fa" />
@@ -21243,9 +21267,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <path d="M0,0 L8,3 L0,6 Z" fill="#ef5350" />
               </marker>
             </defs>
+            <g id="ssm-edges">${edgeSvg}</g>
+            <g id="ssm-nodes">${nodeSvg}</g>
             ${orphanBand}
-            ${edgeSvg}
-            ${nodeSvg}
           </svg>`
           }
         </div>
@@ -21254,19 +21278,182 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.body.appendChild(dialog);
 
+    const svg = dialog.querySelector('#ssm-svg');
     const close = () => {
       if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
     };
-    dialog.querySelector('#ssm-close')?.addEventListener('click', close);
-    dialog.querySelector('#ssm-refresh')?.addEventListener('click', () => {
-      this.showSceneSiteMap();
-    });
-    dialog.addEventListener('click', (evt) => {
-      if (evt.target === dialog) close();
-    });
+
+    const applyNodePosition = (sceneId) => {
+      const pos = positions[sceneId];
+      const g = dialog.querySelector(`.ssm-node[data-scene-id="${CSS.escape(sceneId)}"]`);
+      if (!pos || !g) return;
+      const rect = g.querySelector('.ssm-node-rect');
+      const t1 = g.querySelector('.ssm-node-t1');
+      const t2 = g.querySelector('.ssm-node-t2');
+      const t3 = g.querySelector('.ssm-node-t3');
+      if (rect) {
+        rect.setAttribute('x', String(pos.x));
+        rect.setAttribute('y', String(pos.y));
+      }
+      const cx = pos.x + pos.w / 2;
+      if (t1) {
+        t1.setAttribute('x', String(cx));
+        t1.setAttribute('y', String(pos.y + 22));
+      }
+      if (t2) {
+        t2.setAttribute('x', String(cx));
+        t2.setAttribute('y', String(pos.y + 40));
+      }
+      if (t3) {
+        t3.setAttribute('x', String(cx));
+        t3.setAttribute('y', String(pos.y + 54));
+      }
+    };
+
+    const expandCanvas = () => {
+      if (!svg) return;
+      let maxX = layout.contentWidth;
+      let maxY = layout.contentHeight;
+      Object.values(positions).forEach((p) => {
+        maxX = Math.max(maxX, p.x + p.w + 80);
+        maxY = Math.max(maxY, p.y + p.h + 80);
+      });
+      svg.setAttribute('width', String(Math.ceil(maxX)));
+      svg.setAttribute('height', String(Math.ceil(maxY)));
+    };
+
+    const redrawEdges = () => {
+      graph.edges.forEach((e) => {
+        const g = dialog.querySelector(`.ssm-edge[data-edge-id="${CSS.escape(e.id)}"]`);
+        const path = g && g.querySelector('.ssm-edge-path');
+        const fromPos = positions[e.from];
+        const toPos = positions[e.to];
+        if (!path || !fromPos || !toPos) return;
+        path.setAttribute(
+          'd',
+          this._sceneSiteMapEdgePath(fromPos, toPos, e._fanIndex || 0, e._fanTotal || 1)
+        );
+      });
+      graph.broken.forEach((e) => {
+        const g = dialog.querySelector(`.ssm-edge-broken[data-edge-id="${CSS.escape(e.id)}"]`);
+        if (!g) return;
+        const fromPos = positions[e.from];
+        if (!fromPos) return;
+        const stubIndex = e._stubIndex || 0;
+        const stub = {
+          x: fromPos.x + fromPos.w + 12,
+          y: fromPos.y + fromPos.h / 2 - 10 + stubIndex * 26,
+          w: 48,
+          h: 20,
+        };
+        const line = g.querySelector('.ssm-broken-line');
+        const rect = g.querySelector('.ssm-broken-rect');
+        const text = g.querySelector('.ssm-broken-text');
+        const x1 = fromPos.x + fromPos.w;
+        const y1 = fromPos.y + fromPos.h / 2 + stubIndex * 26;
+        if (line) {
+          line.setAttribute('x1', String(x1));
+          line.setAttribute('y1', String(y1));
+          line.setAttribute('x2', String(stub.x));
+          line.setAttribute('y2', String(stub.y + stub.h / 2));
+        }
+        if (rect) {
+          rect.setAttribute('x', String(stub.x));
+          rect.setAttribute('y', String(stub.y));
+        }
+        if (text) {
+          text.setAttribute('x', String(stub.x + stub.w / 2));
+          text.setAttribute('y', String(stub.y + 14));
+        }
+      });
+    };
+
+    redrawEdges();
+
+    const clientToSvg = (clientX, clientY) => {
+      if (!svg) return { x: 0, y: 0 };
+      const pt = svg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const ctm = svg.getScreenCTM();
+      if (!ctm) return { x: clientX, y: clientY };
+      const local = pt.matrixTransform(ctm.inverse());
+      return { x: local.x, y: local.y };
+    };
+
+    let drag = null;
+    const DRAG_THRESHOLD = 5;
 
     dialog.querySelectorAll('.ssm-node').forEach((el) => {
-      el.addEventListener('click', (evt) => {
+      el.addEventListener('pointerdown', (evt) => {
+        if (evt.button != null && evt.button !== 0) return;
+        const sceneId = el.getAttribute('data-scene-id');
+        const pos = positions[sceneId];
+        if (!sceneId || !pos) return;
+        evt.preventDefault();
+        evt.stopPropagation();
+        const pt = clientToSvg(evt.clientX, evt.clientY);
+        drag = {
+          sceneId,
+          el,
+          startX: pt.x,
+          startY: pt.y,
+          origX: pos.x,
+          origY: pos.y,
+          moved: false,
+          pointerId: evt.pointerId,
+        };
+        try {
+          el.setPointerCapture(evt.pointerId);
+        } catch (_) {
+          /* ignore */
+        }
+        el.style.cursor = 'grabbing';
+      });
+
+      el.addEventListener('pointermove', (evt) => {
+        if (!drag || drag.el !== el) return;
+        const pt = clientToSvg(evt.clientX, evt.clientY);
+        const dx = pt.x - drag.startX;
+        const dy = pt.y - drag.startY;
+        if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        drag.moved = true;
+        const pos = positions[drag.sceneId];
+        pos.x = Math.max(8, drag.origX + dx);
+        pos.y = Math.max(8, drag.origY + dy);
+        applyNodePosition(drag.sceneId);
+        expandCanvas();
+        redrawEdges();
+      });
+
+      const endDrag = (evt) => {
+        if (!drag || drag.el !== el) return;
+        const wasDrag = drag.moved;
+        const sceneId = drag.sceneId;
+        el.style.cursor = 'grab';
+        try {
+          el.releasePointerCapture(drag.pointerId);
+        } catch (_) {
+          /* ignore */
+        }
+        drag = null;
+        if (wasDrag) {
+          evt.preventDefault();
+          evt.stopPropagation();
+        }
+        return { wasDrag, sceneId };
+      };
+
+      el.addEventListener('pointerup', (evt) => {
+        endDrag(evt);
+      });
+      el.addEventListener('pointercancel', (evt) => {
+        endDrag(evt);
+      });
+
+      // Open scene on double-click so single-click/drag can rearrange freely.
+      el.addEventListener('dblclick', (evt) => {
+        evt.preventDefault();
         evt.stopPropagation();
         const sceneId = el.getAttribute('data-scene-id');
         if (!sceneId || !this.scenes[sceneId]) return;
@@ -21296,10 +21483,36 @@ document.addEventListener('DOMContentLoaded', () => {
             );
             if (hs) this.showEditHotspotDialog(hs.id);
           };
-          // Hotspots are adopted synchronously in switchToScene; defer one frame for UI settle.
           setTimeout(openEdit, 120);
         }
       });
+    });
+
+    dialog.querySelector('#ssm-close')?.addEventListener('click', close);
+    dialog.querySelector('#ssm-refresh')?.addEventListener('click', () => {
+      this.showSceneSiteMap();
+    });
+    dialog.querySelector('#ssm-reset-layout')?.addEventListener('click', () => {
+      const fresh = this._layoutSceneSiteMap(graph);
+      Object.keys(fresh.positions).forEach((id) => {
+        if (!positions[id]) return;
+        positions[id].x = fresh.positions[id].x;
+        positions[id].y = fresh.positions[id].y;
+        applyNodePosition(id);
+      });
+      if (svg) {
+        svg.setAttribute('width', String(fresh.contentWidth));
+        svg.setAttribute('height', String(fresh.contentHeight));
+      }
+      const orphanLabel = dialog.querySelector('.ssm-orphan-label');
+      if (orphanLabel) {
+        orphanLabel.setAttribute('x', String(fresh.contentWidth / 2));
+        orphanLabel.setAttribute('y', String(fresh.orphanBandY + 8));
+      }
+      redrawEdges();
+    });
+    dialog.addEventListener('click', (evt) => {
+      if (evt.target === dialog) close();
     });
   }
 

@@ -1,4 +1,8 @@
+const ALL_PAGE_LIMIT = 5000;
+
 let cachedLogs = [];
+let logPage = 0;
+let lastLogTotal = 0;
 
 async function readAdminJson(res, fallbackLabel) {
   const text = await res.text();
@@ -44,6 +48,23 @@ function stampForFilename() {
   }
 }
 
+function pageSizeValue() {
+  const raw = document.getElementById('page-size')?.value || '50';
+  if (raw === 'all') return 'all';
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 50;
+}
+
+function effectiveLimit() {
+  return pageSizeValue() === 'all' ? ALL_PAGE_LIMIT : pageSizeValue();
+}
+
+function pageCount(total, limit) {
+  if (!total) return 1;
+  if (pageSizeValue() === 'all') return 1;
+  return Math.max(1, Math.ceil(total / limit));
+}
+
 function downloadLogsBundle(logs, label) {
   const rows = Array.isArray(logs) ? logs : [];
   if (!rows.length) {
@@ -71,16 +92,79 @@ async function downloadSingleLog(id) {
   downloadJsonFile(`error-${id.slice(0, 8)}-${stampForFilename()}.json`, data.log || data);
 }
 
-async function loadErrorLogs() {
+function renderPager({ total, page, limit }) {
+  const nodes = ['log-pager', 'log-pager-bottom']
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  if (!nodes.length) return;
+
+  const size = pageSizeValue();
+  if (!total || size === 'all' || total <= limit) {
+    const label =
+      total > 0 ? (size === 'all' ? `Showing all ${total}` : `Showing ${total}`) : '';
+    nodes.forEach((el) => {
+      if (!label) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        return;
+      }
+      el.style.display = 'flex';
+      el.innerHTML = `<span class="pager-range">${escapeHtml(label)}</span>`;
+    });
+    return;
+  }
+
+  const pages = pageCount(total, limit);
+  const safePage = Math.min(Math.max(0, page), pages - 1);
+  const start = safePage * limit + 1;
+  const end = Math.min(total, (safePage + 1) * limit);
+  const html = `
+    <button type="button" class="pager-prev" ${safePage <= 0 ? 'disabled' : ''}>Previous</button>
+    <span class="pager-range">Showing ${start}–${end} of ${total} · Page ${
+      safePage + 1
+    } of ${pages}</span>
+    <button type="button" class="pager-next" ${
+      safePage >= pages - 1 ? 'disabled' : ''
+    }>Next</button>
+  `;
+  nodes.forEach((el) => {
+    el.style.display = 'flex';
+    el.innerHTML = html;
+    el.querySelectorAll('.pager-prev').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        logPage = Math.max(0, logPage - 1);
+        loadErrorLogs({ preservePage: true });
+      });
+    });
+    el.querySelectorAll('.pager-next').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        logPage += 1;
+        loadErrorLogs({ preservePage: true });
+      });
+    });
+  });
+}
+
+async function loadErrorLogs(options = {}) {
   const status = document.getElementById('status');
   const root = document.getElementById('log-root');
   const meta = document.getElementById('list-meta');
   status.textContent = 'Loading…';
   status.className = 'status';
 
+  if (!options.preservePage) logPage = 0;
+
   const level = document.getElementById('filter-level').value;
   const code = document.getElementById('filter-code').value;
-  const params = new URLSearchParams({ limit: '200' });
+  const limit = effectiveLimit();
+  const pages = pageCount(lastLogTotal, limit);
+  if (logPage >= pages) logPage = Math.max(0, pages - 1);
+  const offset = pageSizeValue() === 'all' ? 0 : logPage * limit;
+
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
   if (level) params.set('level', level);
   if (code) params.set('code', code);
 
@@ -89,7 +173,13 @@ async function loadErrorLogs() {
     const data = await readAdminJson(res, 'Error log');
     const logs = data.logs || [];
     cachedLogs = logs;
-    meta.textContent = `${logs.length} shown${data.total != null ? ` of ${data.total}` : ''} · times in Eastern Time`;
+    lastLogTotal = data.total || 0;
+    const sizeLabel = pageSizeValue() === 'all' ? 'all rows' : `${limit} per page`;
+    meta.textContent = `${logs.length} shown${
+      data.total != null ? ` of ${data.total}` : ''
+    } · ${sizeLabel} · times in Eastern Time`;
+
+    renderPager({ total: lastLogTotal, page: logPage, limit });
 
     if (!logs.length) {
       root.innerHTML = '<div class="empty">No error reports yet.</div>';
@@ -162,7 +252,7 @@ async function loadErrorLogs() {
             method: 'DELETE',
           });
           await readAdminJson(delRes, 'Delete');
-          await loadErrorLogs();
+          await loadErrorLogs({ preservePage: true });
         } catch (err) {
           status.textContent = err.message || 'Delete failed';
           status.className = 'status err';
@@ -173,6 +263,7 @@ async function loadErrorLogs() {
   } catch (err) {
     cachedLogs = [];
     root.innerHTML = '';
+    renderPager({ total: 0, page: 0, limit: effectiveLimit() });
     status.textContent = err.message || 'Failed to load error log';
     status.className = 'status err';
   }
@@ -183,9 +274,10 @@ async function initMainApp() {
   document.getElementById('main-content').style.display = 'block';
   renderAdminNav('errors');
 
-  document.getElementById('refresh-btn').addEventListener('click', loadErrorLogs);
-  document.getElementById('filter-level').addEventListener('change', loadErrorLogs);
-  document.getElementById('filter-code').addEventListener('change', loadErrorLogs);
+  document.getElementById('refresh-btn').addEventListener('click', () => loadErrorLogs());
+  document.getElementById('filter-level').addEventListener('change', () => loadErrorLogs());
+  document.getElementById('filter-code').addEventListener('change', () => loadErrorLogs());
+  document.getElementById('page-size').addEventListener('change', () => loadErrorLogs());
   document.getElementById('download-json-btn').addEventListener('click', async () => {
     const status = document.getElementById('status');
     try {
@@ -193,7 +285,8 @@ async function initMainApp() {
       status.className = 'status';
       const level = document.getElementById('filter-level').value;
       const code = document.getElementById('filter-code').value;
-      const params = new URLSearchParams({ limit: '1000' });
+      // Download respects current filters; pull up to the "all" cap.
+      const params = new URLSearchParams({ limit: String(ALL_PAGE_LIMIT), offset: '0' });
       if (level) params.set('level', level);
       if (code) params.set('code', code);
       const res = await adminFetch(`/admin/error-logs?${params.toString()}`);

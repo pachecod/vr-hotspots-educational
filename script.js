@@ -4759,6 +4759,13 @@ class HotspotEditor {
       this.showSceneManager();
     });
 
+    const siteMapBtn = document.getElementById('scene-site-map');
+    if (siteMapBtn) {
+      siteMapBtn.addEventListener('click', () => {
+        this.showSceneSiteMap();
+      });
+    }
+
     document.getElementById('current-scene').addEventListener('change', (e) => {
       this.switchToScene(e.target.value);
     });
@@ -20853,6 +20860,449 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 100);
   }
 
+  buildSceneSiteMap() {
+    // Keep current-scene hotspots in sync so the map reflects unsaved in-memory edits.
+    if (this.currentScene && this.scenes?.[this.currentScene]) {
+      this.scenes[this.currentScene].hotspots = [...(this.hotspots || [])];
+    }
+
+    const sceneIds = Object.keys(this.scenes || {});
+    const startId = this.getFirstSceneId();
+    const nodesById = {};
+    const edges = [];
+    const broken = [];
+
+    sceneIds.forEach((id) => {
+      const scene = this.scenes[id] || {};
+      const counts = {
+        text: 0,
+        audio: 0,
+        textAudio: 0,
+        image: 0,
+        video: 0,
+        model: 0,
+        weblink: 0,
+        navigation: 0,
+      };
+      (scene.hotspots || []).forEach((h) => {
+        if (!h) return;
+        if (h.type === 'text') counts.text += 1;
+        else if (h.type === 'audio') counts.audio += 1;
+        else if (h.type === 'text-audio') counts.textAudio += 1;
+        else if (h.type === 'navigation') counts.navigation += 1;
+        else if (h.type === 'weblink') counts.weblink += 1;
+        else if (h.type === 'model') counts.model += 1;
+        else if (h.type === 'image') {
+          if (h.mediaKind === 'video' || h.video) counts.video += 1;
+          else counts.image += 1;
+        }
+      });
+      nodesById[id] = {
+        id,
+        name: scene.name || id,
+        type: scene.type === 'video' ? 'video' : 'image',
+        hotspotCount: (scene.hotspots || []).length,
+        counts,
+        inbound: 0,
+        outbound: 0,
+        flags: {
+          isStart: id === startId,
+          noInbound: false,
+          unreachable: false,
+        },
+      };
+    });
+
+    sceneIds.forEach((fromId) => {
+      const scene = this.scenes[fromId] || {};
+      (scene.hotspots || []).forEach((h) => {
+        if (!h || h.type !== 'navigation') return;
+        const to = h.navigationTarget;
+        const edge = {
+          id: `${fromId}:${h.id}`,
+          from: fromId,
+          to: to || '',
+          hotspotId: h.id,
+          broken: !to || !nodesById[to],
+        };
+        if (edge.broken) {
+          broken.push(edge);
+        } else {
+          edges.push(edge);
+          nodesById[fromId].outbound += 1;
+          nodesById[to].inbound += 1;
+        }
+      });
+    });
+
+    // BFS reachability from tour start
+    const reachable = new Set();
+    if (startId && nodesById[startId]) {
+      const queue = [startId];
+      reachable.add(startId);
+      while (queue.length) {
+        const cur = queue.shift();
+        edges.forEach((e) => {
+          if (e.from === cur && !reachable.has(e.to)) {
+            reachable.add(e.to);
+            queue.push(e.to);
+          }
+        });
+      }
+    }
+
+    const layers = [];
+    const layerOf = {};
+    if (startId && nodesById[startId]) {
+      layerOf[startId] = 0;
+      const q = [startId];
+      while (q.length) {
+        const cur = q.shift();
+        const depth = layerOf[cur];
+        edges.forEach((e) => {
+          if (e.from !== cur) return;
+          if (layerOf[e.to] == null) {
+            layerOf[e.to] = depth + 1;
+            q.push(e.to);
+          }
+        });
+      }
+    }
+
+    sceneIds.forEach((id) => {
+      const node = nodesById[id];
+      node.flags.unreachable = !reachable.has(id);
+      node.flags.noInbound = !node.flags.isStart && node.inbound === 0;
+      if (node.flags.unreachable) return;
+      const depth = layerOf[id] != null ? layerOf[id] : 0;
+      if (!layers[depth]) layers[depth] = [];
+      layers[depth].push(id);
+    });
+
+    const unreachable = sceneIds.filter((id) => !reachable.has(id));
+    const noInbound = sceneIds.filter(
+      (id) => nodesById[id] && nodesById[id].flags.noInbound && !nodesById[id].flags.unreachable
+    );
+
+    return {
+      startId,
+      nodes: sceneIds.map((id) => nodesById[id]),
+      nodesById,
+      edges,
+      broken,
+      layers,
+      unreachable,
+      noInbound,
+      summary: {
+        sceneCount: sceneIds.length,
+        portalCount: edges.length + broken.length,
+        unreachableCount: unreachable.length,
+        brokenCount: broken.length,
+      },
+    };
+  }
+
+  _sceneSiteMapCountLabel(counts) {
+    const parts = [];
+    if (counts.text) parts.push(`T${counts.text}`);
+    if (counts.textAudio) parts.push(`TA${counts.textAudio}`);
+    if (counts.audio) parts.push(`A${counts.audio}`);
+    if (counts.image) parts.push(`I${counts.image}`);
+    if (counts.video) parts.push(`V${counts.video}`);
+    if (counts.model) parts.push(`M${counts.model}`);
+    if (counts.weblink) parts.push(`W${counts.weblink}`);
+    if (counts.navigation) parts.push(`Nav${counts.navigation}`);
+    return parts.length ? parts.join(' · ') : 'empty';
+  }
+
+  _layoutSceneSiteMap(graph) {
+    const nodeW = 160;
+    const nodeH = 64;
+    const gapX = 36;
+    const gapY = 90;
+    const padX = 40;
+    const padY = 36;
+    const positions = {};
+    let maxRowWidth = 0;
+
+    (graph.layers || []).forEach((ids, row) => {
+      const rowWidth = ids.length * nodeW + Math.max(0, ids.length - 1) * gapX;
+      maxRowWidth = Math.max(maxRowWidth, rowWidth);
+      ids.forEach((id, col) => {
+        positions[id] = {
+          x: padX + col * (nodeW + gapX),
+          y: padY + row * (nodeH + gapY),
+          w: nodeW,
+          h: nodeH,
+        };
+      });
+    });
+
+    const orphanIds = graph.unreachable || [];
+    const reachableRows = (graph.layers || []).length;
+    const orphanBandY = padY + reachableRows * (nodeH + gapY) + (reachableRows ? 28 : 0);
+    if (orphanIds.length) {
+      const rowWidth = orphanIds.length * nodeW + Math.max(0, orphanIds.length - 1) * gapX;
+      maxRowWidth = Math.max(maxRowWidth, rowWidth);
+      orphanIds.forEach((id, col) => {
+        positions[id] = {
+          x: padX + col * (nodeW + gapX),
+          y: orphanBandY + 28,
+          w: nodeW,
+          h: nodeH,
+          orphan: true,
+        };
+      });
+    }
+
+    // Center each row under the widest row
+    const contentWidth = Math.max(maxRowWidth, nodeW) + padX * 2;
+    (graph.layers || []).forEach((ids) => {
+      const rowWidth = ids.length * nodeW + Math.max(0, ids.length - 1) * gapX;
+      const offset = (contentWidth - rowWidth) / 2 - padX;
+      ids.forEach((id) => {
+        if (positions[id]) positions[id].x += Math.max(0, offset);
+      });
+    });
+    if (orphanIds.length) {
+      const rowWidth = orphanIds.length * nodeW + Math.max(0, orphanIds.length - 1) * gapX;
+      const offset = (contentWidth - rowWidth) / 2 - padX;
+      orphanIds.forEach((id) => {
+        if (positions[id]) positions[id].x += Math.max(0, offset);
+      });
+    }
+
+    const contentHeight =
+      (orphanIds.length ? orphanBandY + 28 + nodeH : padY + Math.max(reachableRows, 1) * (nodeH + gapY)) +
+      padY;
+
+    return { positions, contentWidth, contentHeight, orphanBandY, nodeW, nodeH };
+  }
+
+  showSceneSiteMap() {
+    removeEditorOverlayDialogs();
+    const graph = this.buildSceneSiteMap();
+    const layout = this._layoutSceneSiteMap(graph);
+    const esc = (s) => this._escapeHTML(s);
+
+    const dialog = document.createElement('div');
+    dialog.className = 'editor-overlay-dialog';
+    dialog.id = 'scene-site-map-dialog';
+    dialog.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8); z-index: ${EDITOR_LAYER.dialog}; display: flex;
+      align-items: center; justify-content: center; font-family: Arial;
+    `;
+
+    const chip = (label, value, color) =>
+      `<span style="display:inline-block;padding:4px 10px;border-radius:999px;background:${color};color:#fff;font-size:12px;font-weight:bold;margin-right:6px;margin-bottom:4px;">${esc(
+        label
+      )}: ${value}</span>`;
+
+    const nodeFill = (node) => {
+      if (node.flags.isStart) return '#1b5e20';
+      if (node.flags.unreachable) return '#5d4037';
+      if (node.flags.noInbound) return '#37474f';
+      return '#263238';
+    };
+    const nodeStroke = (node) => {
+      if (node.flags.isStart) return '#66bb6a';
+      if (node.flags.unreachable) return '#ffb74d';
+      if (node.flags.noInbound) return '#90a4ae';
+      return '#4fc3f7';
+    };
+
+    let nodeSvg = '';
+    graph.nodes.forEach((node) => {
+      const pos = layout.positions[node.id];
+      if (!pos) return;
+      const label = this._sceneSiteMapCountLabel(node.counts);
+      const rawName = String(node.name || node.id);
+      const shortName = rawName.length > 18 ? `${rawName.slice(0, 17)}…` : rawName;
+      const badges = [];
+      if (node.flags.isStart) badges.push('START');
+      if (node.flags.unreachable) badges.push('ORPHAN');
+      else if (node.flags.noInbound) badges.push('NO IN');
+      const badgeText = badges.length ? badges.join(' · ') : node.type === 'video' ? 'video' : 'image';
+      nodeSvg += `
+        <g class="ssm-node" data-scene-id="${esc(node.id)}" style="cursor:pointer">
+          <title>${esc(rawName)} — click to open</title>
+          <rect x="${pos.x}" y="${pos.y}" width="${pos.w}" height="${pos.h}" rx="10" ry="10"
+            fill="${nodeFill(node)}" stroke="${nodeStroke(node)}" stroke-width="2" />
+          <text x="${pos.x + pos.w / 2}" y="${pos.y + 22}" text-anchor="middle"
+            fill="#fff" font-size="13" font-weight="bold">${esc(shortName)}</text>
+          <text x="${pos.x + pos.w / 2}" y="${pos.y + 40}" text-anchor="middle"
+            fill="#b0bec5" font-size="11">${esc(label)}</text>
+          <text x="${pos.x + pos.w / 2}" y="${pos.y + 54}" text-anchor="middle"
+            fill="${nodeStroke(node)}" font-size="10">${esc(badgeText)}</text>
+        </g>`;
+    });
+
+    const edgePath = (fromPos, toPos, broken) => {
+      const x1 = fromPos.x + fromPos.w / 2;
+      const y1 = fromPos.y + fromPos.h;
+      const x2 = toPos.x + toPos.w / 2;
+      const y2 = toPos.y;
+      const midY = (y1 + y2) / 2;
+      const color = broken ? '#ef5350' : '#81d4fa';
+      const dash = broken ? ' stroke-dasharray="6 4"' : '';
+      return `<path d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}"
+        fill="none" stroke="${color}" stroke-width="2.5"${dash}
+        marker-end="url(#${broken ? 'ssm-arrow-broken' : 'ssm-arrow'})" />`;
+    };
+
+    let edgeSvg = '';
+    graph.edges.forEach((e) => {
+      const fromPos = layout.positions[e.from];
+      const toPos = layout.positions[e.to];
+      if (!fromPos || !toPos) return;
+      edgeSvg += `<g class="ssm-edge" data-from="${esc(e.from)}" data-hotspot-id="${esc(
+        String(e.hotspotId)
+      )}" style="cursor:pointer">${edgePath(fromPos, toPos, false)}
+        <title>Portal from ${esc(graph.nodesById[e.from]?.name || e.from)} → ${esc(
+        graph.nodesById[e.to]?.name || e.to
+      )}</title></g>`;
+    });
+
+    // Broken edges: draw to a phantom stub to the right of the source node
+    graph.broken.forEach((e) => {
+      const fromPos = layout.positions[e.from];
+      if (!fromPos) return;
+      const stub = {
+        x: fromPos.x + fromPos.w + 12,
+        y: fromPos.y + fromPos.h / 2 - 10,
+        w: 48,
+        h: 20,
+      };
+      const x1 = fromPos.x + fromPos.w;
+      const y1 = fromPos.y + fromPos.h / 2;
+      const x2 = stub.x;
+      const y2 = stub.y + stub.h / 2;
+      edgeSvg += `
+        <g class="ssm-edge ssm-edge-broken" data-from="${esc(e.from)}" data-hotspot-id="${esc(
+        String(e.hotspotId)
+      )}" style="cursor:pointer">
+          <title>Broken portal (missing target: ${esc(e.to || '(empty)')}) — click to edit</title>
+          <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ef5350" stroke-width="2.5"
+            stroke-dasharray="6 4" marker-end="url(#ssm-arrow-broken)" />
+          <rect x="${stub.x}" y="${stub.y}" width="${stub.w}" height="${stub.h}" rx="4"
+            fill="#b71c1c" stroke="#ef5350" />
+          <text x="${stub.x + stub.w / 2}" y="${stub.y + 14}" text-anchor="middle"
+            fill="#fff" font-size="10">broken</text>
+        </g>`;
+    });
+
+    let orphanBand = '';
+    if (graph.unreachable.length) {
+      orphanBand = `
+        <text x="${layout.contentWidth / 2}" y="${layout.orphanBandY + 8}" text-anchor="middle"
+          fill="#ffb74d" font-size="13" font-weight="bold">Orphaned / unreachable from start</text>`;
+    }
+
+    const emptyHint =
+      graph.summary.sceneCount === 0
+        ? `<p style="color:#ccc;text-align:center;padding:40px;">No scenes yet. Add a scene first.</p>`
+        : '';
+
+    dialog.innerHTML = `
+      <div style="background:#1e1e1e;padding:20px 22px;border-radius:12px;color:#fff;width:min(1100px,94vw);height:min(80vh,820px);display:flex;flex-direction:column;box-shadow:0 16px 60px rgba(0,0,0,0.55);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+          <div>
+            <h3 style="margin:0 0 8px;color:#4CAF50;">Scene Site Map</h3>
+            <div>
+              ${chip('Scenes', graph.summary.sceneCount, '#455a64')}
+              ${chip('Portals', graph.summary.portalCount, '#0277bd')}
+              ${chip('Unreachable', graph.summary.unreachableCount, '#ef6c00')}
+              ${chip('Broken', graph.summary.brokenCount, '#c62828')}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button type="button" id="ssm-refresh" style="background:#546e7a;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;">Refresh</button>
+            <button type="button" id="ssm-close" style="background:#666;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;">Close</button>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#90a4ae;margin-bottom:10px;line-height:1.45;">
+          <span style="color:#66bb6a;">■</span> Start
+          <span style="margin-left:10px;color:#4fc3f7;">■</span> Reachable
+          <span style="margin-left:10px;color:#90a4ae;">■</span> No inbound portals
+          <span style="margin-left:10px;color:#ffb74d;">■</span> Unreachable / orphaned
+          <span style="margin-left:10px;color:#ef5350;">— —</span> Broken portal
+          <span style="margin-left:12px;color:#b0bec5;">Click a scene to open it. Click a broken portal to edit it.</span>
+        </div>
+        <div style="flex:1;min-height:0;background:#121212;border:1px solid #333;border-radius:8px;overflow:auto;">
+          ${
+            emptyHint ||
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.contentWidth}" height="${
+              layout.contentHeight
+            }" style="display:block;min-width:100%;">
+            <defs>
+              <marker id="ssm-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#81d4fa" />
+              </marker>
+              <marker id="ssm-arrow-broken" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#ef5350" />
+              </marker>
+            </defs>
+            ${orphanBand}
+            ${edgeSvg}
+            ${nodeSvg}
+          </svg>`
+          }
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    const close = () => {
+      if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
+    };
+    dialog.querySelector('#ssm-close')?.addEventListener('click', close);
+    dialog.querySelector('#ssm-refresh')?.addEventListener('click', () => {
+      this.showSceneSiteMap();
+    });
+    dialog.addEventListener('click', (evt) => {
+      if (evt.target === dialog) close();
+    });
+
+    dialog.querySelectorAll('.ssm-node').forEach((el) => {
+      el.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        const sceneId = el.getAttribute('data-scene-id');
+        if (!sceneId || !this.scenes[sceneId]) return;
+        close();
+        const dropdown = document.getElementById('current-scene');
+        if (dropdown) dropdown.value = sceneId;
+        this.switchToScene(sceneId);
+      });
+    });
+
+    dialog.querySelectorAll('.ssm-edge').forEach((el) => {
+      el.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        const fromId = el.getAttribute('data-from');
+        const hotspotIdRaw = el.getAttribute('data-hotspot-id');
+        const hotspotId = Number(hotspotIdRaw);
+        const isBroken = el.classList.contains('ssm-edge-broken');
+        if (!fromId || !this.scenes[fromId]) return;
+        close();
+        const dropdown = document.getElementById('current-scene');
+        if (dropdown) dropdown.value = fromId;
+        this.switchToScene(fromId);
+        if (isBroken || Number.isFinite(hotspotId)) {
+          const openEdit = () => {
+            const hs = (this.hotspots || []).find(
+              (h) => h && (h.id === hotspotId || String(h.id) === String(hotspotIdRaw))
+            );
+            if (hs) this.showEditHotspotDialog(hs.id);
+          };
+          // Hotspots are adopted synchronously in switchToScene; defer one frame for UI settle.
+          setTimeout(openEdit, 120);
+        }
+      });
+    });
+  }
+
   showSceneManager() {
     removeEditorOverlayDialogs();
 
@@ -20931,8 +21381,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     dialog.innerHTML = `
       <div style="background: #2a2a2a; padding: 30px; border-radius: 10px; color: white; max-width: 600px; max-height: 80vh; overflow-y: auto;">
-        <h3 style="margin-top: 0; color: #4CAF50;">🎬 Scene Manager</h3>
-        <p style="margin: 0 0 20px; color: #ccc; font-size: 14px;">Manage your 360° scenes (images and videos)</p>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
+          <div>
+            <h3 style="margin-top: 0; color: #4CAF50;">🎬 Scene Manager</h3>
+            <p style="margin: 0 0 20px; color: #ccc; font-size: 14px;">Manage your 360° scenes (images and videos)</p>
+          </div>
+          <button type="button" id="ssm-from-manager" style="
+            background: #0277bd; color: white; border: none; padding: 8px 12px;
+            border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; white-space:nowrap;">
+            Scene Site Map
+          </button>
+        </div>
         <div style="margin: 20px 0;">
           ${sceneListHTML}
         </div>
@@ -20944,6 +21403,9 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     document.body.appendChild(dialog);
+    dialog.querySelector('#ssm-from-manager')?.addEventListener('click', () => {
+      this.showSceneSiteMap();
+    });
   }
 
   applySceneImageFromUrl(sceneId, urlOrAsset, { onDone } = {}) {

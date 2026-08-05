@@ -1537,9 +1537,17 @@
             <option value="scene1">Scene 1</option>
           </select>
         </div>
-        <div style="display: flex; gap: 5px">
-          <button class="btn btn-secondary" id="add-scene" style="flex: 1">Add Scene</button>
-          <button class="btn btn-secondary" id="manage-scenes" style="flex: 1">Manage</button>
+        <div style="display: flex; gap: 5px; flex-wrap: wrap">
+          <button class="btn btn-secondary" id="add-scene" style="flex: 1; min-width: 90px">Add Scene</button>
+          <button class="btn btn-secondary" id="manage-scenes" style="flex: 1; min-width: 90px">Manage</button>
+          <button
+            class="btn btn-secondary"
+            id="scene-site-map"
+            style="flex: 1; min-width: 100%"
+            title="Visual map of scenes, portals, and orphaned scenes"
+          >
+            Scene Site Map
+          </button>
         </div>
       </div>
 

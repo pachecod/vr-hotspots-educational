@@ -53,6 +53,33 @@
       .stat .label { font-size: 12px; color: #666; margin-bottom: 4px; }
       .stat .value { font-size: 1.35em; font-weight: bold; }
       .stat .sub { font-size: 11px; color: #888; margin-top: 4px; }
+      .stat .cap {
+        margin-top: 10px;
+      }
+      .stat .cap-track {
+        height: 8px;
+        border-radius: 999px;
+        background: #e9ecef;
+        overflow: hidden;
+      }
+      .stat .cap-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: #198754;
+        width: 0;
+        min-width: 0;
+        transition: width 0.25s ease;
+      }
+      .stat .cap-fill.warn { background: #e0a800; }
+      .stat .cap-fill.crit { background: #dc3545; }
+      .stat .cap-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 4px;
+        font-size: 10px;
+        color: #888;
+      }
       .panel {
         background: #fff;
         border: 1px solid #dee2e6;
@@ -70,8 +97,8 @@
         margin-bottom: 14px;
       }
       .charts {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        display: flex;
+        flex-direction: column;
         gap: 14px;
       }
       .chart-box {
@@ -79,6 +106,8 @@
         border-radius: 6px;
         padding: 10px;
         background: #fafafa;
+        width: 100%;
+        box-sizing: border-box;
       }
       .chart-box h3 {
         margin: 0 0 6px;
@@ -181,6 +210,36 @@
       @media (max-width: 800px) {
         .two-col { grid-template-columns: 1fr; }
       }
+      /* Charts-only: graphs + window controls, no tiles/tables/chatter */
+      #usage-app.charts-only .page-intro,
+      #usage-app.charts-only #config-warn,
+      #usage-app.charts-only #stat-grid,
+      #usage-app.charts-only #analytics-meta,
+      #usage-app.charts-only #analytics-pages,
+      #usage-app.charts-only #render-meta,
+      #usage-app.charts-only #render-legend,
+      #usage-app.charts-only #error-markers-hint,
+      #usage-app.charts-only #error-detail,
+      #usage-app.charts-only #window-meta,
+      #usage-app.charts-only .detail-panels,
+      #usage-app.charts-only #btn-scan {
+        display: none !important;
+      }
+      #usage-app.charts-only .panel {
+        padding: 10px 12px;
+        margin-bottom: 12px;
+      }
+      #usage-app.charts-only .panel h2 {
+        font-size: 14px;
+        margin: 0 0 8px;
+      }
+      #usage-app.charts-only .charts { gap: 10px; }
+      #usage-app.charts-only .chart-box { padding: 8px; }
+      button.view-toggle.active {
+        background: #0d6efd;
+        border-color: #0d6efd;
+        color: #fff;
+      }
     </style>
     <script src="admin-auth-ui.js"></script>
     <script src="admin-nav.js"></script>
@@ -190,33 +249,29 @@
     <div id="usage-app" style="display: none">
       <nav id="admin-nav" data-active="usage"></nav>
       <h1>Usage &amp; Infrastructure</h1>
-      <p class="hint">
-        Render traffic/CPU/memory (last N hours), Google Analytics users/page views, B2 storage growth,
-        hosted disk on this instance, and recent cloud uploads. GA4 reporting can lag by several hours.
+      <p class="hint page-intro">
+        All charts share one time window (X-axis aligned). Y-axes stay in each metric’s units.
+        GA is daily; Render is high-resolution; B2 depends on snapshot frequency. GA4 can lag by several hours.
       </p>
 
       <div class="toolbar">
         <label>
-          Render window
-          <select id="hours">
-            <option value="6">6 hours</option>
-            <option value="24" selected>24 hours</option>
-            <option value="72">3 days</option>
-            <option value="168">7 days</option>
-          </select>
-        </label>
-        <label>
-          Storage history
-          <select id="days">
-            <option value="7">7 days</option>
-            <option value="30" selected>30 days</option>
-            <option value="90">90 days</option>
+          Time window
+          <select id="window">
+            <option value="24">Last 24 hours</option>
+            <option value="72">Last 3 days</option>
+            <option value="168" selected>Last 7 days</option>
+            <option value="720">Last 30 days</option>
           </select>
         </label>
         <button type="button" id="btn-refresh">Refresh</button>
         <button type="button" id="btn-scan" class="secondary">Scan storage now</button>
+        <button type="button" id="btn-charts-only" class="secondary view-toggle" aria-pressed="false">
+          Charts only
+        </button>
         <span id="status" class="status"></span>
       </div>
+      <p id="window-meta" class="hint" style="margin: -8px 0 14px"></p>
 
       <div id="config-warn" class="warn" style="display: none"></div>
       <div id="stat-grid" class="grid"></div>
@@ -244,32 +299,36 @@
         <div id="error-detail" class="error-detail" aria-live="polite"></div>
       </div>
 
-      <div class="two-col">
-        <div class="panel">
-          <h2>B2 &amp; hosted storage (latest snapshot)</h2>
-          <div id="storage-latest"></div>
-        </div>
-        <div class="panel">
-          <h2>B2 total growth</h2>
+      <div class="panel">
+        <h2>B2 storage &amp; uploads</h2>
+        <div id="storage-charts" class="charts">
           <div class="chart-box">
-            <h3>student-projects + hosted + other (B2 total)</h3>
-            <canvas id="chart-b2-growth" width="560" height="120"></canvas>
+            <h3>B2 total (student-projects + hosted + other)</h3>
+            <canvas id="chart-b2-growth" width="900" height="120"></canvas>
           </div>
-          <div class="chart-box" style="margin-top: 10px">
+          <div class="chart-box">
             <h3>Upload bytes by day (tracked saves)</h3>
-            <canvas id="chart-uploads" width="560" height="120"></canvas>
+            <canvas id="chart-uploads" width="900" height="120"></canvas>
           </div>
         </div>
       </div>
 
-      <div class="panel">
-        <h2>This instance (live)</h2>
-        <div id="memory-panel"></div>
-      </div>
+      <div class="detail-panels">
+        <div class="two-col">
+          <div class="panel">
+            <h2>B2 &amp; hosted storage (latest snapshot)</h2>
+            <div id="storage-latest"></div>
+          </div>
+          <div class="panel">
+            <h2>This instance (live)</h2>
+            <div id="memory-panel"></div>
+          </div>
+        </div>
 
-      <div class="panel">
-        <h2>Recent cloud uploads</h2>
-        <div id="recent-uploads"></div>
+        <div class="panel">
+          <h2>Recent cloud uploads</h2>
+          <div id="recent-uploads"></div>
+        </div>
       </div>
     </div>
     <script src="admin-usage.js"></script>

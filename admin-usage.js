@@ -447,6 +447,54 @@ function seriesFromHistory(rows, pick) {
   }));
 }
 
+/** Shared X-axis window for every Usage chart (prefer server `window`, else Render). */
+function getSharedChartRange(data) {
+  const w = data?.window || {};
+  let start = parseTimestampMs(w.startTime);
+  let end = parseTimestampMs(w.endTime);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    start = parseTimestampMs(data?.render?.range?.startTime);
+    end = parseTimestampMs(data?.render?.range?.endTime);
+  }
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    const hours = Number(document.getElementById('window')?.value) || 168;
+    end = Date.now();
+    start = end - hours * 3600 * 1000;
+  }
+  return {
+    rangeStart: new Date(start).toISOString(),
+    rangeEnd: new Date(end).toISOString(),
+    hours: w.hours || data?.render?.range?.hours || null,
+    days: w.days || data?.analytics?.range?.days || null,
+  };
+}
+
+function formatWindowLabel(hours, days) {
+  const h = Number(hours);
+  if (Number.isFinite(h) && h < 48) return `last ${h} hours`;
+  const d = Number(days) || (Number.isFinite(h) ? Math.ceil(h / 24) : null);
+  if (d === 1) return 'last 24 hours';
+  if (d) return `last ${d} days`;
+  return 'selected window';
+}
+
+function capacityBarHtml(cap) {
+  if (!cap || !(cap.max > 0) || !Number.isFinite(cap.used)) return '';
+  const pct = Math.max(0, Math.min(100, (Number(cap.used) / Number(cap.max)) * 100));
+  const tone = pct >= 90 ? 'crit' : pct >= 75 ? 'warn' : '';
+  const usedLabel = cap.format ? cap.format(cap.used) : formatNum(cap.used);
+  const maxLabel = cap.format ? cap.format(cap.max) : formatNum(cap.max);
+  return `<div class="cap" title="${escapeHtml(usedLabel)} of ${escapeHtml(maxLabel)}">
+      <div class="cap-track">
+        <div class="cap-fill ${tone}" style="width:${pct.toFixed(2)}%"></div>
+      </div>
+      <div class="cap-meta">
+        <span>${escapeHtml(pct.toFixed(1))}% used</span>
+        <span>${escapeHtml(maxLabel)} cap</span>
+      </div>
+    </div>`;
+}
+
 function renderStats(data) {
   const grid = document.getElementById('stat-grid');
   const latest = data.storage?.latest || [];
@@ -458,21 +506,19 @@ function renderStats(data) {
   const memSeries = data.render?.metrics?.memory?.series || [];
   const lastCpu = cpuSeries.length ? cpuSeries[cpuSeries.length - 1].value : null;
   const lastMem = memSeries.length ? memSeries[memSeries.length - 1].value : null;
+  const cpuLimit = latestSeriesValue(data.render?.metrics?.cpuLimit?.series);
+  const memoryLimit = latestSeriesValue(data.render?.metrics?.memoryLimit?.series);
+  const maxB2 = data.storage?.limits?.b2MaxBytes || null;
 
   const cards = [
     {
       label: 'B2 total',
       value: b2Total ? formatBytes(b2Total.byteSize) : '—',
-      sub: (() => {
-        if (!b2Total) return 'Run a scan';
-        const maxB2 = data.storage?.limits?.b2MaxBytes;
-        const files = `${formatNum(b2Total.fileCount)} files`;
-        if (maxB2) {
-          const pct = Math.min(999, (Number(b2Total.byteSize) / maxB2) * 100);
-          return `${files} · ${pct.toFixed(1)}% of ${formatBytes(maxB2)}`;
-        }
-        return files;
-      })(),
+      sub: b2Total ? `${formatNum(b2Total.fileCount)} files` : 'Run a scan',
+      capacity:
+        b2Total && maxB2
+          ? { used: Number(b2Total.byteSize) || 0, max: maxB2, format: formatBytes }
+          : null,
     },
     {
       label: 'B2 student projects',
@@ -518,11 +564,23 @@ function renderStats(data) {
       label: 'CPU (latest)',
       value: lastCpu == null ? '—' : `${(Number(lastCpu) * 100).toFixed(1)}%`,
       sub: data.render?.configured ? 'Render metric' : 'Render not configured',
+      capacity:
+        lastCpu != null && cpuLimit != null && cpuLimit > 0
+          ? {
+              used: Number(lastCpu),
+              max: Number(cpuLimit),
+              format: (v) => `${(Number(v) * 100).toFixed(1)}%`,
+            }
+          : null,
     },
     {
       label: 'Memory (latest)',
       value: lastMem == null ? '—' : formatBytes(lastMem),
       sub: data.render?.configured ? 'Render metric' : 'Render not configured',
+      capacity:
+        lastMem != null && memoryLimit != null && memoryLimit > 0
+          ? { used: Number(lastMem), max: Number(memoryLimit), format: formatBytes }
+          : null,
     },
     {
       label: 'Heap (this process)',
@@ -537,6 +595,7 @@ function renderStats(data) {
         <div class="label">${escapeHtml(c.label)}</div>
         <div class="value">${escapeHtml(c.value)}</div>
         <div class="sub">${escapeHtml(c.sub || '')}</div>
+        ${capacityBarHtml(c.capacity)}
       </div>`
     )
     .join('');
@@ -582,7 +641,7 @@ function renderConfigWarn(data) {
   el.innerHTML = bits.map((b) => escapeHtml(b)).join('<br>');
 }
 
-function renderAnalyticsCharts(data) {
+function renderAnalyticsCharts(data, sharedRange) {
   const meta = document.getElementById('analytics-meta');
   const root = document.getElementById('analytics-charts');
   const pagesEl = document.getElementById('analytics-pages');
@@ -606,7 +665,7 @@ function renderAnalyticsCharts(data) {
   const range = data.analytics.range || {};
   meta.textContent = `Property ${data.analytics.config?.propertyId || ''}${
     data.analytics.config?.measurementId ? ` · ${data.analytics.config.measurementId}` : ''
-  } · last ${range.days || '?'} days${
+  } · ${formatWindowLabel(sharedRange.hours, range.days || sharedRange.days)} · daily buckets${
     data.analytics.realtimeActiveUsers != null
       ? ` · ${formatNum(data.analytics.realtimeActiveUsers)} active now`
       : ''
@@ -637,7 +696,7 @@ function renderAnalyticsCharts(data) {
     .map(
       (c) => `<div class="chart-box">
         <h3>${escapeHtml(c.title)}</h3>
-        <canvas id="chart-ga-${c.key}" width="560" height="120"></canvas>
+        <canvas id="chart-ga-${c.key}" width="900" height="120"></canvas>
       </div>`
     )
     .join('');
@@ -650,6 +709,8 @@ function renderAnalyticsCharts(data) {
         color: c.color,
         formatValue: c.formatValue,
         emptyLabel: 'No GA4 data in this window',
+        rangeStart: sharedRange.rangeStart,
+        rangeEnd: sharedRange.rangeEnd,
       }
     );
   }
@@ -682,7 +743,7 @@ function renderAnalyticsCharts(data) {
   }
 }
 
-function renderRenderCharts(data) {
+function renderRenderCharts(data, sharedRange) {
   const meta = document.getElementById('render-meta');
   const root = document.getElementById('render-charts');
   const hint = document.getElementById('error-markers-hint');
@@ -702,9 +763,10 @@ function renderRenderCharts(data) {
   if (legend) legend.style.display = 'flex';
   const range = data.render.range || {};
   const errorInfo = data.errors || { logs: [], total: 0 };
-  meta.textContent = `Service ${data.render.config?.serviceId || ''} · last ${range.hours || '?'}h · resolution ${
-    range.resolutionSeconds || '?'
-  }s${
+  meta.textContent = `Service ${data.render.config?.serviceId || ''} · ${formatWindowLabel(
+    range.hours || sharedRange.hours,
+    sharedRange.days
+  )} · resolution ${range.resolutionSeconds || '?'}s${
     errorInfo.total
       ? ` · ${errorInfo.total} error${errorInfo.total === 1 ? '' : 's'} in window${
           errorInfo.truncated ? ' (showing first 200)' : ''
@@ -718,8 +780,8 @@ function renderRenderCharts(data) {
   const metrics = data.render.metrics || {};
   const cpuLimit = latestSeriesValue(metrics.cpuLimit?.series);
   const memoryLimit = latestSeriesValue(metrics.memoryLimit?.series);
-  const rangeStart = range.startTime;
-  const rangeEnd = range.endTime;
+  const rangeStart = sharedRange.rangeStart;
+  const rangeEnd = sharedRange.rangeEnd;
   const errorMarkers = clusterErrorMarkers(
     errorInfo.logs || [],
     parseTimestampMs(rangeStart),
@@ -774,7 +836,7 @@ function renderRenderCharts(data) {
             ? ` <span style="color:#dc3545">(${escapeHtml(metrics[c.key].error)})</span>`
             : ''
         }</h3>
-        <canvas id="chart-${c.key}" width="560" height="120"></canvas>
+        <canvas id="chart-${c.key}" width="900" height="120"></canvas>
       </div>`
     )
     .join('');
@@ -904,16 +966,27 @@ async function loadUsage() {
   const status = document.getElementById('status');
   status.textContent = 'Loading…';
   status.className = 'status';
-  const hours = document.getElementById('hours').value;
-  const days = document.getElementById('days').value;
+  const hours = Number(document.getElementById('window').value) || 168;
+  const days = Math.max(1, Math.ceil(hours / 24));
   try {
     const res = await adminFetch(`/admin/usage/overview?hours=${hours}&days=${days}`);
     const data = await readJsonResponse(res, 'Usage overview');
+    const sharedRange = getSharedChartRange(data);
+
+    const windowMeta = document.getElementById('window-meta');
+    if (windowMeta) {
+      const startLabel = formatChartTime(parseTimestampMs(sharedRange.rangeStart));
+      const endLabel = formatChartTime(parseTimestampMs(sharedRange.rangeEnd));
+      windowMeta.textContent = `Aligned window: ${formatWindowLabel(
+        sharedRange.hours || hours,
+        sharedRange.days || days
+      )} (${startLabel} → ${endLabel})`;
+    }
 
     renderConfigWarn(data);
     renderStats(data);
-    renderAnalyticsCharts(data);
-    renderRenderCharts(data);
+    renderAnalyticsCharts(data, sharedRange);
+    renderRenderCharts(data, sharedRange);
     renderStorageLatest(data);
     renderMemory(data);
     renderRecent(data);
@@ -926,12 +999,20 @@ async function loadUsage() {
         formatValue: formatBytes,
         emptyLabel: 'No B2 snapshots yet',
         maxValue: data.storage?.limits?.b2MaxBytes || null,
+        rangeStart: sharedRange.rangeStart,
+        rangeEnd: sharedRange.rangeEnd,
       }
     );
     drawSeries(
       document.getElementById('chart-uploads'),
       seriesFromHistory(data.uploads?.byDay || [], (r) => Number(r.byteSize) || 0),
-      { color: '#198754', formatValue: formatBytes, emptyLabel: 'No upload events yet' }
+      {
+        color: '#198754',
+        formatValue: formatBytes,
+        emptyLabel: 'No upload events yet',
+        rangeStart: sharedRange.rangeStart,
+        rangeEnd: sharedRange.rangeEnd,
+      }
     );
 
     status.textContent = 'Updated';
@@ -964,12 +1045,39 @@ async function scanNow() {
   }
 }
 
+function isChartsOnlyView() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('view') === 'charts';
+}
+
+function setChartsOnlyView(on) {
+  const app = document.getElementById('usage-app');
+  const btn = document.getElementById('btn-charts-only');
+  if (!app) return;
+  app.classList.toggle('charts-only', Boolean(on));
+  if (btn) {
+    btn.classList.toggle('active', Boolean(on));
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.textContent = on ? 'Full view' : 'Charts only';
+  }
+  const url = new URL(window.location.href);
+  if (on) url.searchParams.set('view', 'charts');
+  else url.searchParams.delete('view');
+  window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+}
+
 function initMainApp() {
   document.getElementById('usage-app').style.display = 'block';
   document.getElementById('btn-refresh').addEventListener('click', loadUsage);
   document.getElementById('btn-scan').addEventListener('click', scanNow);
-  document.getElementById('hours').addEventListener('change', loadUsage);
-  document.getElementById('days').addEventListener('change', loadUsage);
+  document.getElementById('window').addEventListener('change', loadUsage);
+  const chartsBtn = document.getElementById('btn-charts-only');
+  if (chartsBtn) {
+    chartsBtn.addEventListener('click', () => {
+      setChartsOnlyView(!document.getElementById('usage-app').classList.contains('charts-only'));
+    });
+  }
+  setChartsOnlyView(isChartsOnlyView());
   loadUsage();
 }
 

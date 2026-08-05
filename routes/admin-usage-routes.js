@@ -34,8 +34,20 @@ function memorySnapshot() {
 function registerAdminUsageRoutes(app) {
   app.get('/admin/usage/overview', requireAdmin, async (req, res) => {
     try {
-      const hours = Math.max(1, Math.min(24 * 30, Number(req.query.hours) || 24));
-      const days = Math.max(1, Math.min(90, Number(req.query.days) || 30));
+      // One shared window: hours drives Render; days (ceil) drives GA/B2/uploads.
+      const hours = Math.max(1, Math.min(24 * 30, Number(req.query.hours) || 168));
+      const days = Math.max(
+        1,
+        Math.min(90, Number(req.query.days) || Math.ceil(hours / 24))
+      );
+      const endMs = Date.now();
+      const startMs = endMs - hours * 3600 * 1000;
+      const sharedWindow = {
+        hours,
+        days,
+        startTime: new Date(startMs).toISOString(),
+        endTime: new Date(endMs).toISOString(),
+      };
 
       const [render, latest, history, uploads, recent, hostedLive, errors, analytics] =
         await Promise.all([
@@ -68,6 +80,7 @@ function registerAdminUsageRoutes(app) {
       res.json({
         success: true,
         dbEnabled: isDbEnabled(),
+        window: sharedWindow,
         renderConfig: renderMetrics.getConfig(),
         analyticsConfig: ga4Metrics.getConfig(),
         job: getSnapshotJobStatus(),

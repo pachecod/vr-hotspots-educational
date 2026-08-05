@@ -54,7 +54,96 @@ function latestSeriesValue(series) {
   return Number.isFinite(v) ? v : null;
 }
 
-function paintChart(canvas, hoverIndex = -1) {
+function parseTimestampMs(value) {
+  if (value == null) return NaN;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1e12 ? value : value * 1000;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+/** Cluster errors that fall within ~2% of the chart window (min 10 minutes). */
+function clusterErrorMarkers(logs, rangeStartMs, rangeEndMs) {
+  const start = Number(rangeStartMs);
+  const end = Number(rangeEndMs);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+  const span = end - start;
+  const clusterMs = Math.max(10 * 60 * 1000, span * 0.02);
+
+  const sorted = (logs || [])
+    .map((log) => ({ ...log, t: parseTimestampMs(log.createdAt) }))
+    .filter((log) => Number.isFinite(log.t) && log.t >= start && log.t <= end)
+    .sort((a, b) => a.t - b.t);
+
+  const clusters = [];
+  for (const log of sorted) {
+    const last = clusters[clusters.length - 1];
+    if (last && log.t - last.t <= clusterMs) {
+      last.logs.push(log);
+      last.t = Math.round(
+        last.logs.reduce((sum, item) => sum + item.t, 0) / last.logs.length
+      );
+    } else {
+      clusters.push({ t: log.t, logs: [log] });
+    }
+  }
+  return clusters;
+}
+
+function showErrorClusterDetail(cluster) {
+  const el = document.getElementById('error-detail');
+  if (!el || !cluster) return;
+  const logs = cluster.logs || [];
+  const when = formatChartTime(cluster.t);
+  el.className = 'error-detail open';
+  el.innerHTML = `
+    <button type="button" class="close-err" aria-label="Close">&times;</button>
+    <h3>${logs.length} reported error${logs.length === 1 ? '' : 's'} near ${escapeHtml(when)}</h3>
+    <ul>
+      ${logs
+        .slice(0, 12)
+        .map((log) => {
+          const time = log.timestampEdt || formatChartTime(log.t || log.createdAt);
+          return `<li>
+            <div><span class="code">${escapeHtml(log.code || 'unknown')}</span>
+              · ${escapeHtml(time)}
+              · ${escapeHtml(log.userName || 'unknown')}</div>
+            <div>${escapeHtml(log.message || '')}</div>
+          </li>`;
+        })
+        .join('')}
+    </ul>
+    ${
+      logs.length > 12
+        ? `<p class="hint">Showing 12 of ${logs.length}. See <a href="/admin-error-log.html">Error Log</a> for the full list.</p>`
+        : `<p class="hint"><a href="/admin-error-log.html">Open Error Log</a></p>`
+    }
+  `;
+  const closeBtn = el.querySelector('.close-err');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      el.className = 'error-detail';
+      el.innerHTML = '';
+    });
+  }
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function markerLayout(state, w, h) {
+  const pad = state.pad;
+  const t0 = state.t0;
+  const span = state.span;
+  return (state.errorMarkers || [])
+    .map((cluster, index) => {
+      const x = pad + ((cluster.t - t0) / span) * (w - pad * 2);
+      const y = pad + 10;
+      return { index, cluster, x, y, hitR: 10 };
+    })
+    .filter((m) => Number.isFinite(m.x));
+}
+
+function paintChart(canvas, hoverIndex = -1, activeMarkerIndex = -1) {
   const state = canvas._chartState;
   if (!state) return;
   const { points, min, max, pad, t0, span, color, formatValue, emptyLabel, maxValue } = state;
@@ -62,6 +151,7 @@ function paintChart(canvas, hoverIndex = -1) {
   const w = canvas.width;
   const h = canvas.height;
   const range = Math.max(1e-9, max - min);
+  const hasSeries = points.length >= 2;
 
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#ffffff';
@@ -73,11 +163,10 @@ function paintChart(canvas, hoverIndex = -1) {
   ctx.lineTo(w, h - 0.5);
   ctx.stroke();
 
-  if (points.length < 2) {
+  if (!hasSeries) {
     ctx.fillStyle = '#999';
     ctx.font = '12px Arial';
     ctx.fillText(emptyLabel || 'No data in this window', 10, h / 2);
-    return;
   }
 
   const yForValue = (v) => h - pad - ((v - min) / range) * (h - pad * 2);
@@ -86,7 +175,7 @@ function paintChart(canvas, hoverIndex = -1) {
     y: yForValue(p.v),
   });
 
-  if (Number.isFinite(maxValue)) {
+  if (hasSeries && Number.isFinite(maxValue)) {
     const yMax = yForValue(maxValue);
     ctx.strokeStyle = 'rgba(220, 53, 69, 0.65)';
     ctx.lineWidth = 1.25;
@@ -104,23 +193,25 @@ function paintChart(canvas, hoverIndex = -1) {
     ctx.fillText(maxText, w - pad - tw, Math.max(pad + 10, yMax - 4));
   }
 
-  ctx.strokeStyle = color || '#0d6efd';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  points.forEach((p, i) => {
-    const { x, y } = xy(p);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
+  if (hasSeries) {
+    ctx.strokeStyle = color || '#0d6efd';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    points.forEach((p, i) => {
+      const { x, y } = xy(p);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
 
-  const last = points[points.length - 1];
-  ctx.fillStyle = '#333';
-  ctx.font = '11px Arial';
-  const label = formatValue ? formatValue(last.v) : String(Math.round(last.v * 100) / 100);
-  ctx.fillText(`latest ${label}`, 10, 14);
+    const last = points[points.length - 1];
+    ctx.fillStyle = '#333';
+    ctx.font = '11px Arial';
+    const label = formatValue ? formatValue(last.v) : String(Math.round(last.v * 100) / 100);
+    ctx.fillText(`latest ${label}`, 10, 14);
+  }
 
-  if (hoverIndex >= 0 && hoverIndex < points.length) {
+  if (hasSeries && hoverIndex >= 0 && hoverIndex < points.length) {
     const p = points[hoverIndex];
     const { x, y } = xy(p);
     ctx.strokeStyle = 'rgba(108,117,125,0.55)';
@@ -139,6 +230,44 @@ function paintChart(canvas, hoverIndex = -1) {
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
+
+  const markers = markerLayout(state, w, h);
+  state._markerLayout = markers;
+  for (const marker of markers) {
+    const active = marker.index === activeMarkerIndex;
+    const size = active ? 8 : 6;
+    ctx.beginPath();
+    ctx.moveTo(marker.x, marker.y - size);
+    ctx.lineTo(marker.x - size, marker.y + size);
+    ctx.lineTo(marker.x + size, marker.y + size);
+    ctx.closePath();
+    ctx.fillStyle = active ? '#b02a37' : '#dc3545';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    if (marker.cluster.logs.length > 1) {
+      ctx.fillStyle = '#842029';
+      ctx.font = '9px Arial';
+      ctx.fillText(String(marker.cluster.logs.length), marker.x + size + 1, marker.y + 3);
+    }
+  }
+}
+
+function findMarkerAt(state, canvasX, canvasY) {
+  const markers = state._markerLayout || [];
+  let best = null;
+  let bestDist = Infinity;
+  for (const marker of markers) {
+    const dx = canvasX - marker.x;
+    const dy = canvasY - marker.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist <= marker.hitR && dist < bestDist) {
+      best = marker;
+      bestDist = dist;
+    }
+  }
+  return best;
 }
 
 function bindChartHover(canvas) {
@@ -148,18 +277,58 @@ function bindChartHover(canvas) {
   const hideTip = () => {
     const tip = canvas._chartTip;
     if (tip) tip.style.display = 'none';
-    if (canvas._chartState) paintChart(canvas, -1);
+    if (canvas._chartState) paintChart(canvas, -1, -1);
+    canvas.style.cursor = 'crosshair';
   };
 
   canvas.addEventListener('mousemove', (ev) => {
     const state = canvas._chartState;
-    if (!state || state.points.length < 2) {
+    if (!state) {
       hideTip();
       return;
     }
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / Math.max(1, rect.width);
+    const scaleY = canvas.height / Math.max(1, rect.height);
     const x = (ev.clientX - rect.left) * scaleX;
+    const y = (ev.clientY - rect.top) * scaleY;
+    paintChart(canvas, -1, -1);
+
+    const marker = findMarkerAt(state, x, y);
+    const tip = ensureChartTip(canvas.parentElement);
+    canvas._chartTip = tip;
+
+    if (marker) {
+      canvas.style.cursor = 'pointer';
+      paintChart(canvas, -1, marker.index);
+      if (tip) {
+        const count = marker.cluster.logs.length;
+        const first = marker.cluster.logs[0];
+        tip.innerHTML = `<div class="tip-val">${count} error${count === 1 ? '' : 's'}</div>
+          <div class="tip-time">${escapeHtml(formatChartTime(marker.cluster.t))}</div>
+          <div class="tip-err">${escapeHtml(first.code || 'error')}: ${escapeHtml(
+            (first.message || '').slice(0, 80)
+          )}${count > 1 ? '…' : ''}</div>
+          <div class="tip-err">Click for details</div>`;
+        tip.style.display = 'block';
+        const tipW = tip.offsetWidth || 160;
+        const tipH = tip.offsetHeight || 48;
+        let left = ev.clientX - rect.left + 12;
+        let top = ev.clientY - rect.top - tipH - 8;
+        if (left + tipW > rect.width - 4) left = ev.clientX - rect.left - tipW - 12;
+        if (top < 4) top = ev.clientY - rect.top + 14;
+        tip.style.left = `${Math.max(4, left)}px`;
+        tip.style.top = `${Math.max(4, top)}px`;
+      }
+      return;
+    }
+
+    canvas.style.cursor = 'crosshair';
+    if (state.points.length < 2) {
+      if (tip) tip.style.display = 'none';
+      return;
+    }
+
     const { points, pad, t0, span } = state;
     const plotW = canvas.width - pad * 2;
     const ratio = Math.max(0, Math.min(1, (x - pad) / plotW));
@@ -175,9 +344,7 @@ function bindChartHover(canvas) {
       }
     }
 
-    paintChart(canvas, best);
-    const tip = ensureChartTip(canvas.parentElement);
-    canvas._chartTip = tip;
+    paintChart(canvas, best, -1);
     if (!tip) return;
     const p = points[best];
     const valueLabel = state.formatValue
@@ -198,6 +365,19 @@ function bindChartHover(canvas) {
     tip.style.top = `${Math.max(4, top)}px`;
   });
 
+  canvas.addEventListener('click', (ev) => {
+    const state = canvas._chartState;
+    if (!state) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / Math.max(1, rect.width);
+    const scaleY = canvas.height / Math.max(1, rect.height);
+    const x = (ev.clientX - rect.left) * scaleX;
+    const y = (ev.clientY - rect.top) * scaleY;
+    paintChart(canvas, -1, -1);
+    const marker = findMarkerAt(state, x, y);
+    if (marker) showErrorClusterDetail(marker.cluster);
+  });
+
   canvas.addEventListener('mouseleave', hideTip);
 }
 
@@ -206,7 +386,7 @@ function drawSeries(canvas, series, opts = {}) {
 
   const points = (series || [])
     .map((p) => ({
-      t: Date.parse(p.timestamp) || Number(p.timestamp) * (String(p.timestamp).length < 12 ? 1000 : 1),
+      t: parseTimestampMs(p.timestamp),
       v: Number(p.value),
     }))
     .filter((p) => Number.isFinite(p.t) && Number.isFinite(p.v));
@@ -225,9 +405,22 @@ function drawSeries(canvas, series, opts = {}) {
     max = max * 1.1 || 1;
   }
   const pad = 8;
-  const t0 = points.length ? points[0].t : 0;
-  const t1 = points.length ? points[points.length - 1].t : 1;
+  const rangeStart = parseTimestampMs(opts.rangeStart);
+  const rangeEnd = parseTimestampMs(opts.rangeEnd);
+  const t0 = Number.isFinite(rangeStart)
+    ? rangeStart
+    : points.length
+      ? points[0].t
+      : Date.now() - 24 * 3600 * 1000;
+  const t1 = Number.isFinite(rangeEnd)
+    ? rangeEnd
+    : points.length
+      ? points[points.length - 1].t
+      : Date.now();
   const span = Math.max(1, t1 - t0);
+  const errorMarkers = Array.isArray(opts.errorMarkers)
+    ? opts.errorMarkers
+    : clusterErrorMarkers(opts.errors || [], t0, t1);
 
   canvas._chartState = {
     points,
@@ -240,10 +433,11 @@ function drawSeries(canvas, series, opts = {}) {
     formatValue: opts.formatValue,
     emptyLabel: opts.emptyLabel,
     maxValue,
+    errorMarkers,
   };
 
   bindChartHover(canvas);
-  paintChart(canvas, -1);
+  paintChart(canvas, -1, -1);
 }
 
 function seriesFromHistory(rows, pick) {
@@ -355,19 +549,43 @@ function renderConfigWarn(data) {
 function renderRenderCharts(data) {
   const meta = document.getElementById('render-meta');
   const root = document.getElementById('render-charts');
+  const hint = document.getElementById('error-markers-hint');
+  const detail = document.getElementById('error-detail');
+  if (detail) {
+    detail.className = 'error-detail';
+    detail.innerHTML = '';
+  }
   if (!data.render?.configured) {
     meta.textContent = 'Render metrics unavailable until API key + service id are configured.';
     root.innerHTML = '';
+    if (hint) hint.style.display = 'none';
     return;
   }
   const range = data.render.range || {};
+  const errorInfo = data.errors || { logs: [], total: 0 };
   meta.textContent = `Service ${data.render.config?.serviceId || ''} · last ${range.hours || '?'}h · resolution ${
     range.resolutionSeconds || '?'
-  }s`;
+  }s${
+    errorInfo.total
+      ? ` · ${errorInfo.total} error${errorInfo.total === 1 ? '' : 's'} in window${
+          errorInfo.truncated ? ' (showing first 200)' : ''
+        }`
+      : ''
+  }`;
+  if (hint) {
+    hint.style.display = errorInfo.total ? 'block' : 'none';
+  }
 
   const metrics = data.render.metrics || {};
   const cpuLimit = latestSeriesValue(metrics.cpuLimit?.series);
   const memoryLimit = latestSeriesValue(metrics.memoryLimit?.series);
+  const rangeStart = range.startTime;
+  const rangeEnd = range.endTime;
+  const errorMarkers = clusterErrorMarkers(
+    errorInfo.logs || [],
+    parseTimestampMs(rangeStart),
+    parseTimestampMs(rangeEnd)
+  );
 
   const charts = [
     {
@@ -376,6 +594,7 @@ function renderRenderCharts(data) {
       formatValue: (v) => `${(Number(v) * 100).toFixed(1)}%`,
       color: '#0d6efd',
       maxValue: cpuLimit,
+      showErrors: true,
     },
     {
       key: 'memory',
@@ -383,25 +602,28 @@ function renderRenderCharts(data) {
       formatValue: (v) => formatBytes(v),
       color: '#6610f2',
       maxValue: memoryLimit,
+      showErrors: true,
     },
     {
       key: 'httpRequests',
       title: 'HTTP requests',
       formatValue: (v) => formatNum(v),
       color: '#198754',
-      // Render does not publish a request ceiling metric.
+      showErrors: true,
     },
     {
       key: 'httpLatency',
       title: 'HTTP latency p95',
       formatValue: (v) => `${Math.round(Number(v))} ms`,
       color: '#fd7e14',
+      showErrors: true,
     },
     {
       key: 'bandwidth',
       title: 'Bandwidth',
       formatValue: (v) => formatBytes(v),
       color: '#20c997',
+      showErrors: true,
     },
   ];
 
@@ -424,6 +646,9 @@ function renderRenderCharts(data) {
       formatValue: c.formatValue,
       emptyLabel: metrics[c.key]?.error || 'No data',
       maxValue: c.maxValue,
+      rangeStart,
+      rangeEnd,
+      errorMarkers: c.showErrors ? errorMarkers : [],
     });
   }
 }

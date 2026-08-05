@@ -6,6 +6,7 @@ const renderMetrics = require('../lib/usage/render-metrics');
 const { runStorageSnapshot, formatBytes, scanHostedDisk } = require('../lib/usage/storage-scan');
 const { runOnce, getSnapshotJobStatus } = require('../lib/usage/snapshot-job');
 const { getStorageLimits } = require('../lib/usage/storage-limits');
+const errorLog = require('../lib/error-log');
 
 function memorySnapshot() {
   const mu = process.memoryUsage();
@@ -35,7 +36,7 @@ function registerAdminUsageRoutes(app) {
       const hours = Math.max(1, Math.min(24 * 30, Number(req.query.hours) || 24));
       const days = Math.max(1, Math.min(90, Number(req.query.days) || 30));
 
-      const [render, latest, history, uploads, recent, hostedLive] = await Promise.all([
+      const [render, latest, history, uploads, recent, hostedLive, errors] = await Promise.all([
         renderMetrics.getDashboardMetrics({ hours, resolutionSeconds: hours > 72 ? 900 : 300 }),
         usageDb.getLatestSnapshots().catch(() => []),
         usageDb.getSnapshotHistory({ source: 'b2', scope: 'total', days }).catch(() => []),
@@ -48,6 +49,12 @@ function registerAdminUsageRoutes(app) {
         })),
         usageDb.getRecentUploads(20).catch(() => []),
         scanHostedDisk().catch(() => []),
+        errorLog.listErrorLogsForWindow({ hours, limit: 200 }).catch(() => ({
+          hours,
+          total: 0,
+          truncated: false,
+          logs: [],
+        })),
       ]);
 
       res.json({
@@ -66,6 +73,7 @@ function registerAdminUsageRoutes(app) {
         },
         uploads,
         recentUploads: recent,
+        errors,
       });
     } catch (err) {
       console.error('usage overview error:', err);

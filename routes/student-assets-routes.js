@@ -23,6 +23,7 @@ const {
   parseTagSortParam,
 } = require('../lib/asset-tags');
 const { prepareVideoForStorage, cleanupTempFiles } = require('../lib/video-pipeline');
+const { logAppError } = require('../lib/error-log');
 
 function buildStudentAssetPath(classSlug, studentId, category, filename) {
   return `student-assets/${classSlug}/${studentId}/${category}/${filename}`;
@@ -175,9 +176,27 @@ function registerStudentAssetRoutes(app, upload) {
         });
       } catch (err) {
         if (err.statusCode === 402) {
+          logAppError({
+            level: 'warning',
+            code: 'usage_quota_blocked',
+            message: (err.payload && err.payload.message) || 'Student asset upload blocked by quota',
+            userName: req.studentSession?.displayName || 'unknown',
+            studentId: req.studentSession?.studentId || null,
+            source: 'student-assets/upload',
+            details: { endpoint: '/api/student-assets/upload', payload: err.payload || null },
+          });
           return res.status(402).json({ success: false, ...err.payload });
         }
         console.error('Student asset upload error:', err);
+        logAppError({
+          level: 'error',
+          code: 'student_asset_upload_failed',
+          message: err.message || 'Student asset upload failed',
+          userName: req.studentSession?.displayName || 'unknown',
+          studentId: req.studentSession?.studentId || null,
+          source: 'student-assets/upload',
+          details: { stack: err.stack ? String(err.stack).slice(0, 2000) : null },
+        });
         res.status(500).json({ success: false, message: err.message || 'Upload failed' });
       } finally {
         cleanupTempFiles(cleanupPaths);

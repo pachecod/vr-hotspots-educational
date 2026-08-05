@@ -495,6 +495,26 @@ function renderStats(data) {
       sub: `${formatNum(data.uploads?.totalEvents)} tracked saves`,
     },
     {
+      label: 'GA users (last day)',
+      value:
+        data.analytics?.lastDayActiveUsers != null
+          ? formatNum(data.analytics.lastDayActiveUsers)
+          : '—',
+      sub:
+        data.analytics?.realtimeActiveUsers != null
+          ? `${formatNum(data.analytics.realtimeActiveUsers)} active now`
+          : data.analytics?.configured
+            ? 'GA4 daily active users'
+            : 'GA4 not configured',
+    },
+    {
+      label: 'GA page views (period)',
+      value: data.analytics?.totals?.pageViews != null ? formatNum(data.analytics.totals.pageViews) : '—',
+      sub: data.analytics?.configured
+        ? `${formatNum(data.analytics.totals?.sessions || 0)} sessions`
+        : 'GA4 not configured',
+    },
+    {
       label: 'CPU (latest)',
       value: lastCpu == null ? '—' : `${(Number(lastCpu) * 100).toFixed(1)}%`,
       sub: data.render?.configured ? 'Render metric' : 'Render not configured',
@@ -537,6 +557,22 @@ function renderConfigWarn(data) {
       `Render charts need ${missing.join(' and ')}. Create an API key in the Render dashboard and set it on the service. On Render, RENDER_SERVICE_ID is usually set automatically.`
     );
   }
+  const ga = data.analyticsConfig || {};
+  if (!ga.configured) {
+    const missing = [];
+    if (!ga.propertyIdConfigured) missing.push('GA4_PROPERTY_ID');
+    if (!ga.credentialsConfigured) missing.push('GA4_SERVICE_ACCOUNT_JSON');
+    if (!ga.libraryAvailable) missing.push('@google-analytics/data (npm install)');
+    if (ga.credentialsError) {
+      bits.push(`Google Analytics credentials error: ${ga.credentialsError}`);
+    } else {
+      bits.push(
+        `Google Analytics charts need ${missing.join(
+          ' and '
+        )}. Create a GCP service account, enable the Analytics Data API, and add the service account as a Viewer on your GA4 property.`
+      );
+    }
+  }
   if (!bits.length) {
     el.style.display = 'none';
     el.textContent = '';
@@ -544,6 +580,106 @@ function renderConfigWarn(data) {
   }
   el.style.display = 'block';
   el.innerHTML = bits.map((b) => escapeHtml(b)).join('<br>');
+}
+
+function renderAnalyticsCharts(data) {
+  const meta = document.getElementById('analytics-meta');
+  const root = document.getElementById('analytics-charts');
+  const pagesEl = document.getElementById('analytics-pages');
+  if (!meta || !root) return;
+
+  if (!data.analytics?.configured) {
+    meta.textContent =
+      'Google Analytics unavailable until GA4_PROPERTY_ID and GA4_SERVICE_ACCOUNT_JSON are configured.';
+    root.innerHTML = '';
+    if (pagesEl) pagesEl.innerHTML = '';
+    return;
+  }
+
+  if (data.analytics.error) {
+    meta.innerHTML = `<span style="color:#dc3545">${escapeHtml(data.analytics.error)}</span>`;
+    root.innerHTML = '';
+    if (pagesEl) pagesEl.innerHTML = '';
+    return;
+  }
+
+  const range = data.analytics.range || {};
+  meta.textContent = `Property ${data.analytics.config?.propertyId || ''}${
+    data.analytics.config?.measurementId ? ` · ${data.analytics.config.measurementId}` : ''
+  } · last ${range.days || '?'} days${
+    data.analytics.realtimeActiveUsers != null
+      ? ` · ${formatNum(data.analytics.realtimeActiveUsers)} active now`
+      : ''
+  }`;
+
+  const charts = [
+    {
+      key: 'activeUsers',
+      title: 'Active users (daily)',
+      formatValue: (v) => formatNum(v),
+      color: '#0d6efd',
+    },
+    {
+      key: 'sessions',
+      title: 'Sessions (daily)',
+      formatValue: (v) => formatNum(v),
+      color: '#198754',
+    },
+    {
+      key: 'pageViews',
+      title: 'Page views (daily)',
+      formatValue: (v) => formatNum(v),
+      color: '#fd7e14',
+    },
+  ];
+
+  root.innerHTML = charts
+    .map(
+      (c) => `<div class="chart-box">
+        <h3>${escapeHtml(c.title)}</h3>
+        <canvas id="chart-ga-${c.key}" width="560" height="120"></canvas>
+      </div>`
+    )
+    .join('');
+
+  for (const c of charts) {
+    drawSeries(
+      document.getElementById(`chart-ga-${c.key}`),
+      data.analytics.metrics?.[c.key]?.series || [],
+      {
+        color: c.color,
+        formatValue: c.formatValue,
+        emptyLabel: 'No GA4 data in this window',
+      }
+    );
+  }
+
+  if (pagesEl) {
+    const pages = data.analytics.topPages || [];
+    if (!pages.length) {
+      pagesEl.innerHTML = '<div class="empty">No top pages yet.</div>';
+    } else {
+      pagesEl.innerHTML = `
+        <h3 style="margin:0 0 8px;font-size:13px;color:#555;font-weight:normal;">Top pages</h3>
+        <table>
+          <thead><tr><th>Path</th><th>Views</th><th>Users</th></tr></thead>
+          <tbody>
+            ${pages
+              .map(
+                (p) => `<tr>
+                  <td class="code">${escapeHtml(p.path)}</td>
+                  <td>${escapeHtml(formatNum(p.pageViews))}</td>
+                  <td>${escapeHtml(formatNum(p.activeUsers))}</td>
+                </tr>`
+              )
+              .join('')}
+          </tbody>
+        </table>
+        <p class="hint" style="margin:8px 0 0">${escapeHtml(
+          data.analytics.note || ''
+        )}</p>`;
+    }
+  }
 }
 
 function renderRenderCharts(data) {
@@ -776,6 +912,7 @@ async function loadUsage() {
 
     renderConfigWarn(data);
     renderStats(data);
+    renderAnalyticsCharts(data);
     renderRenderCharts(data);
     renderStorageLatest(data);
     renderMemory(data);

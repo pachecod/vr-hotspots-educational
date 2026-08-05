@@ -36,6 +36,7 @@ const { registerErrorLogRoutes } = require('./routes/error-log-routes');
 const { registerAdminUsageRoutes } = require('./routes/admin-usage-routes');
 const { startUsageSnapshotJob } = require('./lib/usage/snapshot-job');
 const { recordProjectUploadBytes } = require('./lib/usage/record-upload');
+const { logAppError } = require('./lib/error-log');
 const { registerAdminStudentPeekRoutes } = require('./routes/admin-student-peek-routes');
 const { registerAdminContentRoutes } = require('./routes/admin-content-routes');
 const { registerFlatPageRoutes } = require('./routes/flat-page-routes');
@@ -1340,6 +1341,13 @@ app.get('/api/b2-upload-url', requireAuthForCloudWrites, async (req, res) => {
       classSlug: req.studentSession?.classSlug || null,
     });
   } catch (err) {
+    logAppError({
+      level: 'error',
+      code: 'b2_upload_url_failed',
+      message: err.message || 'Failed to get secure upload URL',
+      source: 'api/b2-upload-url',
+      details: { stack: err.stack ? String(err.stack).slice(0, 2000) : null },
+    });
     res.status(500).json({ success: false, message: 'Failed to get secure upload URL' });
   }
 });
@@ -1452,9 +1460,27 @@ app.post('/api/submit-project-meta', requireAuthForCloudWrites, express.json(), 
       });
     } catch (err) {
       if (err.statusCode === 402) {
+        logAppError({
+          level: 'warning',
+          code: 'usage_quota_blocked',
+          message: (err.payload && err.payload.message) || 'Usage limit reached',
+          source: 'submit-project-meta',
+          details: { endpoint: '/api/submit-project-meta', payload: err.payload || null },
+        });
         return res.status(402).json({ success: false, ...err.payload });
       }
       console.error('Submit-project meta error:', err);
+      logAppError({
+        level: 'error',
+        code: 'b2_upload_meta_orphan',
+        message: err.message || 'submit-project-meta failed after client upload',
+        source: 'submit-project-meta',
+        details: {
+          remotePath: (req.body && req.body.remotePath) || null,
+          projectName: (req.body && req.body.projectName) || null,
+          stack: err.stack ? String(err.stack).slice(0, 2000) : null,
+        },
+      });
       return res.status(500).json({ success: false, message: err.message || 'Server error' });
     }
   };

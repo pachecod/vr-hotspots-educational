@@ -27,6 +27,12 @@ const {
   getHostedProjectUpdatedAt,
 } = require('../lib/hosted-b2-storage');
 const { query } = require('../services/db-service');
+const { logAppError } = require('../lib/error-log');
+
+function sessDisplayName(req) {
+  const sess = getStudentSession(req);
+  return (sess && (sess.displayName || sess.username)) || 'unknown';
+}
 
 const STAGED_PROJECT_TTL_MS = 60 * 60 * 1000;
 
@@ -250,9 +256,27 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         });
       } catch (err) {
         if (err.statusCode === 402) {
+          logAppError({
+            level: 'warning',
+            code: 'usage_quota_blocked',
+            message: (err.payload && err.payload.message) || 'Usage limit reached',
+            userName: sessDisplayName(req),
+            studentId: getStudentSession(req)?.studentId || null,
+            source: 'prepare-upload',
+            details: { endpoint: '/api/student/projects/prepare-upload', payload: err.payload || null },
+          });
           return res.status(402).json({ success: false, ...err.payload });
         }
         console.error('prepare-upload error:', err);
+        logAppError({
+          level: 'error',
+          code: 'prepare_upload_failed',
+          message: err.message || 'prepare-upload failed',
+          userName: sessDisplayName(req),
+          studentId: getStudentSession(req)?.studentId || null,
+          source: 'prepare-upload',
+          details: { stack: err.stack ? String(err.stack).slice(0, 2000) : null },
+        });
         return res.status(500).json({ success: false, message: err.message || 'Server error' });
       }
     };
@@ -486,6 +510,19 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         });
       } catch (err) {
         console.error('save-draft error:', err);
+        logAppError({
+          level: 'error',
+          code: 'b2_upload_meta_orphan',
+          message: err.message || 'save-draft failed after client upload',
+          userName: sessDisplayName(req),
+          studentId: getStudentSession(req)?.studentId || null,
+          source: 'save-draft',
+          details: {
+            remotePath: (req.body && req.body.remotePath) || null,
+            projectName: (req.body && req.body.projectName) || null,
+            stack: err.stack ? String(err.stack).slice(0, 2000) : null,
+          },
+        });
         return res.status(500).json({ success: false, message: err.message });
       }
     };

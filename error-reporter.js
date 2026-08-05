@@ -8,6 +8,42 @@
   const recent = new Map();
   const DEDUP_MS = 5 * 60 * 1000;
 
+  const CODES = {
+    UNHANDLED_ERROR: 'unhandled_error',
+    UNHANDLED_REJECTION: 'unhandled_rejection',
+    CLIENT_ERROR: 'client_error',
+    DUPLICATE_HOTSPOT_LAYOUTS: 'duplicate_hotspot_layouts',
+    CLOUD_SUBMIT_FAILED: 'cloud_submit_failed',
+    B2_DIRECT_UPLOAD_FAILED: 'b2_direct_upload_failed',
+    B2_UPLOAD_META_ORPHAN: 'b2_upload_meta_orphan',
+    PREPARE_UPLOAD_FAILED: 'prepare_upload_failed',
+    LOCAL_PERSIST_QUOTA: 'local_persist_quota',
+    IDB_MEDIA_SAVE_FAILED: 'idb_media_save_failed',
+    SCENE_VIDEO_LOAD_FAILED: 'scene_video_load_failed',
+    SCENE_VIDEO_MISSING_SOURCE: 'scene_video_missing_source',
+    SCENE_PANORAMA_LOAD_FAILED: 'scene_panorama_load_failed',
+    VIDEO_TEXTURE_BIND_FAILED: 'video_texture_bind_failed',
+    HOTSPOT_MEDIA_LOAD_FAILED: 'hotspot_media_load_failed',
+    REHYDRATE_MEDIA_INCOMPLETE: 'rehydrate_media_incomplete',
+    SCENE_VIDEO_SERVER_UPLOAD_FALLBACK: 'scene_video_server_upload_fallback',
+    EDITOR_VIDEO_COMPRESS_FAILED: 'editor_video_compress_failed',
+    MOV_TRANSCODE_UNAVAILABLE: 'mov_transcode_unavailable',
+    VIDEO_TRANSCODE_STORE_ORIGINAL: 'video_transcode_store_original',
+    SESSION_REQUIRED_MID_FLOW: 'session_required_mid_flow',
+    CLOUD_WRITE_AUTH_DENIED: 'cloud_write_auth_denied',
+    B2_UPLOAD_URL_FAILED: 'b2_upload_url_failed',
+    EXPORT_ZIP_FAILED: 'export_zip_failed',
+    EXPORT_ASSET_MISSING: 'export_asset_missing',
+    VR_CLOUD_PUBLISH_FAILED: 'vr_cloud_publish_failed',
+    VR_CLOUD_PREVIEW_EXPIRED: 'vr_cloud_preview_expired',
+    FLAT_PAGE_PUBLISH_FAILED: 'flat_page_publish_failed',
+    FLAT_PAGE_B2_UPLOAD_FAILED: 'flat_page_b2_upload_failed',
+    STUDENT_ASSET_UPLOAD_FAILED: 'student_asset_upload_failed',
+    USAGE_QUOTA_BLOCKED: 'usage_quota_blocked',
+    LOCAL_PROJECT_SAVE_FAILED: 'local_project_save_failed',
+    ZIP_TEMPLATE_LOAD_FAILED: 'zip_template_load_failed',
+  };
+
   function appVersion() {
     try {
       if (typeof APP_VERSION !== 'undefined') return APP_VERSION;
@@ -74,6 +110,45 @@
     } catch (err) {
       console.warn('[error-reporter] failed to send', err);
       return { success: false };
+    }
+  }
+
+  /**
+   * Fire-and-forget helper for caught product failures.
+   * Normalizes HTTP 402 → usage_quota_blocked.
+   */
+  function reportCaught(code, message, details = {}, level = 'error') {
+    try {
+      let finalCode = code || CODES.CLIENT_ERROR;
+      let finalLevel = level || 'error';
+      const detailObj = details && typeof details === 'object' ? { ...details } : { value: details };
+      const status = Number(detailObj.httpStatus || detailObj.status);
+      if (status === 402 || finalCode === CODES.USAGE_QUOTA_BLOCKED) {
+        finalCode = CODES.USAGE_QUOTA_BLOCKED;
+        finalLevel = 'warning';
+      }
+      const msg =
+        message ||
+        (detailObj.error && detailObj.error.message) ||
+        (typeof detailObj.error === 'string' ? detailObj.error : null) ||
+        finalCode;
+      if (detailObj.error && detailObj.error.stack && !detailObj.stack) {
+        detailObj.stack = String(detailObj.error.stack).slice(0, 2000);
+      }
+      if (detailObj.error && typeof detailObj.error !== 'string') {
+        detailObj.errorName = detailObj.error.name || null;
+        detailObj.errorMessage = detailObj.error.message || String(detailObj.error);
+        delete detailObj.error;
+      }
+      return reportError({
+        code: finalCode,
+        message: String(msg).slice(0, 2000),
+        level: finalLevel,
+        source: detailObj.source || 'client',
+        details: detailObj,
+      });
+    } catch (_) {
+      return Promise.resolve({ success: false });
     }
   }
 
@@ -173,7 +248,7 @@
       try {
         const msg = event && event.message ? event.message : 'Unhandled error';
         reportError({
-          code: 'unhandled_error',
+          code: CODES.UNHANDLED_ERROR,
           message: msg,
           level: 'error',
           source: 'window.onerror',
@@ -197,7 +272,7 @@
               ? reason
               : 'Unhandled promise rejection';
         reportError({
-          code: 'unhandled_rejection',
+          code: CODES.UNHANDLED_REJECTION,
           message: String(message).slice(0, 2000),
           level: 'error',
           source: 'unhandledrejection',
@@ -218,7 +293,9 @@
   }
 
   global.ErrorReporter = {
+    CODES,
     reportError,
+    reportCaught,
     reportProjectIntegrity,
     checkEditorProjectIntegrity,
     detectDuplicateHotspotLayouts,

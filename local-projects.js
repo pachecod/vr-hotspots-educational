@@ -379,7 +379,21 @@
         media,
       };
       const ok = await idbPut(LOCAL_PROJECTS_STORE, record);
-      if (!ok) throw new Error('Browser storage is full or unavailable. Try removing media or projects.');
+      if (!ok) {
+        try {
+          if (global.ErrorReporter && typeof global.ErrorReporter.reportCaught === 'function') {
+            global.ErrorReporter.reportCaught(
+              global.ErrorReporter.CODES.LOCAL_PROJECT_SAVE_FAILED,
+              'Browser storage is full or unavailable for local project save',
+              { projectId: id, projectName: record.name },
+              'error'
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
+        throw new Error('Browser storage is full or unavailable. Try removing media or projects.');
+      }
       this.rememberOpenedId(id);
       try {
         const nameInput = document.getElementById('template-name');
@@ -449,6 +463,18 @@
           localStorage.removeItem(FLAT_KEY);
         }
       } catch (e) {
+        try {
+          if (global.ErrorReporter && typeof global.ErrorReporter.reportCaught === 'function') {
+            global.ErrorReporter.reportCaught(
+              global.ErrorReporter.CODES.LOCAL_PROJECT_SAVE_FAILED,
+              'Could not write opened local project into browser storage',
+              { error: e, projectId: id },
+              'error'
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
         throw new Error('Could not write project to browser storage.');
       }
 

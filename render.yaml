@@ -76,6 +76,11 @@ services:
         value: "true"
       - key: GOOGLE_ANALYTICS_MEASUREMENT_ID
         sync: false
+      # Admin → Usage: GA4 Data API (property id + service account JSON)
+      - key: GA4_PROPERTY_ID
+        sync: false
+      - key: GA4_SERVICE_ACCOUNT_JSON
+        sync: false
       # Admin → Usage & Infra: Render Metrics API (Account Settings → API Keys)
       - key: RENDER_API_KEY
         sync: false

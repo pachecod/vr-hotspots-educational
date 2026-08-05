@@ -842,6 +842,21 @@ function mountEditorFlatVideoBillboard(component, data, forceRemount) {
       assetEl.removeEventListener('canplay', onReady);
       assetEl.removeEventListener('error', onError);
       console.warn('[VideoHotspot] Asset failed to load:', assetEl.src || _src);
+      try {
+        if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+          window.ErrorReporter.reportCaught(
+            window.ErrorReporter.CODES.HOTSPOT_MEDIA_LOAD_FAILED,
+            'Video hotspot asset failed to load',
+            {
+              mediaKind: 'video',
+              src: String(assetEl.src || _src || '').slice(0, 300),
+            },
+            'warning'
+          );
+        }
+      } catch (_) {
+        /* ignore */
+      }
     };
     assetEl.addEventListener('loadeddata', onReady, { once: true });
     assetEl.addEventListener('canplay', onReady, { once: true });
@@ -1716,6 +1731,18 @@ class HotspotEditor {
   _assertMovConversionAvailable(file) {
     if (!this._isMovVideoFile(file)) return true;
     if (this._shouldUseEditorLocalVideoCompression(file)) return true;
+    try {
+      if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+        window.ErrorReporter.reportCaught(
+          window.ErrorReporter.CODES.MOV_TRANSCODE_UNAVAILABLE,
+          'QuickTime (.mov) conversion unavailable',
+          { fileName: file && file.name, byteSize: file && file.size },
+          'warning'
+        );
+      }
+    } catch (_) {
+      /* ignore */
+    }
     alert(
       'QuickTime (.mov) files must be converted to MP4 on the server.\n\n' +
         'Video conversion is not available right now. Export/convert the video to MP4 or WebM, then try again.'
@@ -1985,6 +2012,24 @@ class HotspotEditor {
           throw err;
         }
         console.warn('Editor video compression failed; storing original video', err);
+        try {
+          if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+            window.ErrorReporter.reportCaught(
+              window.ErrorReporter.CODES.EDITOR_VIDEO_COMPRESS_FAILED,
+              err.message || 'Editor video compression failed; storing original',
+              { error: err, fileName: file && file.name, byteSize: file && file.size },
+              'warning'
+            );
+            window.ErrorReporter.reportCaught(
+              window.ErrorReporter.CODES.VIDEO_TRANSCODE_STORE_ORIGINAL,
+              'Storing original video after compression failure',
+              { fileName: file && file.name, byteSize: file && file.size },
+              'warning'
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
       } finally {
         this._hideEditorVideoProcessingProgress();
       }
@@ -2045,6 +2090,23 @@ class HotspotEditor {
         }
       } catch (err) {
         console.warn('Server video upload/compression failed; using local storage', err);
+        try {
+          if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+            window.ErrorReporter.reportCaught(
+              window.ErrorReporter.CODES.SCENE_VIDEO_SERVER_UPLOAD_FALLBACK,
+              err.message || 'Server video upload/compression failed; using local storage',
+              {
+                error: err,
+                fileName: file && file.name,
+                byteSize: file && file.size,
+                storageKey: storageKeyFinal,
+              },
+              'warning'
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
       } finally {
         this.hideLoadingIndicator();
       }
@@ -3380,7 +3442,10 @@ class HotspotEditor {
   async saveVideoToIDB(key, file) {
     try {
       const db = await this.openVideoDB();
-      if (!db) return false;
+      if (!db) {
+        this._reportIdbMediaSaveFailed('video', key, file, 'db_unavailable');
+        return false;
+      }
       return await new Promise((resolve) => {
         const tx = db.transaction('videos', 'readwrite');
         const store = tx.objectStore('videos');
@@ -3394,10 +3459,35 @@ class HotspotEditor {
         };
         store.put(rec);
         tx.oncomplete = () => resolve(true);
-        tx.onerror = () => resolve(false);
+        tx.onerror = () => {
+          this._reportIdbMediaSaveFailed('video', key, file, 'tx_error');
+          resolve(false);
+        };
       });
-    } catch (_) {
+    } catch (err) {
+      this._reportIdbMediaSaveFailed('video', key, file, 'exception', err);
       return false;
+    }
+  }
+
+  _reportIdbMediaSaveFailed(mediaKind, key, file, reason, err) {
+    try {
+      if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+        window.ErrorReporter.reportCaught(
+          window.ErrorReporter.CODES.IDB_MEDIA_SAVE_FAILED,
+          `Failed to save ${mediaKind} to IndexedDB (${reason})`,
+          {
+            mediaKind,
+            storageKey: key || null,
+            fileName: file && file.name ? file.name : null,
+            byteSize: file && file.size != null ? file.size : null,
+            reason,
+            error: err || null,
+          }
+        );
+      }
+    } catch (_) {
+      /* ignore */
     }
   }
 
@@ -3453,7 +3543,10 @@ class HotspotEditor {
   async saveImageToIDB(key, fileOrBlob) {
     try {
       const db = await this.openVideoDB();
-      if (!db) return false;
+      if (!db) {
+        this._reportIdbMediaSaveFailed('image', key, fileOrBlob, 'db_unavailable');
+        return false;
+      }
       const name = fileOrBlob && fileOrBlob.name ? fileOrBlob.name : 'image.png';
       const type = fileOrBlob && fileOrBlob.type ? fileOrBlob.type : 'image/png';
       const size = fileOrBlob && fileOrBlob.size ? fileOrBlob.size : 0;
@@ -3464,9 +3557,13 @@ class HotspotEditor {
         const rec = { key, name, type, size, updated: Date.now(), blob };
         store.put(rec);
         tx.oncomplete = () => resolve(true);
-        tx.onerror = () => resolve(false);
+        tx.onerror = () => {
+          this._reportIdbMediaSaveFailed('image', key, fileOrBlob, 'tx_error');
+          resolve(false);
+        };
       });
-    } catch (_) {
+    } catch (err) {
+      this._reportIdbMediaSaveFailed('image', key, fileOrBlob, 'exception', err);
       return false;
     }
   }
@@ -3522,7 +3619,10 @@ class HotspotEditor {
   async saveModelToIDB(key, fileOrBlob) {
     try {
       const db = await this.openVideoDB();
-      if (!db) return false;
+      if (!db) {
+        this._reportIdbMediaSaveFailed('model', key, fileOrBlob, 'db_unavailable');
+        return false;
+      }
       const name = fileOrBlob && fileOrBlob.name ? fileOrBlob.name : 'model.glb';
       const type = fileOrBlob && fileOrBlob.type ? fileOrBlob.type : 'model/gltf-binary';
       const size = fileOrBlob && fileOrBlob.size ? fileOrBlob.size : 0;
@@ -3533,9 +3633,13 @@ class HotspotEditor {
         const rec = { key, name, type, size, updated: Date.now(), blob };
         store.put(rec);
         tx.oncomplete = () => resolve(true);
-        tx.onerror = () => resolve(false);
+        tx.onerror = () => {
+          this._reportIdbMediaSaveFailed('model', key, fileOrBlob, 'tx_error');
+          resolve(false);
+        };
       });
-    } catch (_) {
+    } catch (err) {
+      this._reportIdbMediaSaveFailed('model', key, fileOrBlob, 'exception', err);
       return false;
     }
   }
@@ -3608,7 +3712,10 @@ class HotspotEditor {
   async saveAudioToIDB(key, fileOrBlob) {
     try {
       const db = await this.openVideoDB();
-      if (!db) return false;
+      if (!db) {
+        this._reportIdbMediaSaveFailed('audio', key, fileOrBlob, 'db_unavailable');
+        return false;
+      }
       const name = fileOrBlob && fileOrBlob.name ? fileOrBlob.name : 'audio.mp3';
       const type = fileOrBlob && fileOrBlob.type ? fileOrBlob.type : 'audio/mpeg';
       const size = fileOrBlob && fileOrBlob.size ? fileOrBlob.size : 0;
@@ -3619,9 +3726,13 @@ class HotspotEditor {
         const rec = { key, name, type, size, updated: Date.now(), blob };
         store.put(rec);
         tx.oncomplete = () => resolve(true);
-        tx.onerror = () => resolve(false);
+        tx.onerror = () => {
+          this._reportIdbMediaSaveFailed('audio', key, fileOrBlob, 'tx_error');
+          resolve(false);
+        };
       });
-    } catch (_) {
+    } catch (err) {
+      this._reportIdbMediaSaveFailed('audio', key, fileOrBlob, 'exception', err);
       return false;
     }
   }
@@ -10097,6 +10208,17 @@ class HotspotEditor {
       this.hideProgress(progressDiv);
       alert(`Complete project "${templateName}.zip" created! Extract and open index.html to run.`);
     } catch (error) {
+      try {
+        if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+          window.ErrorReporter.reportCaught(
+            window.ErrorReporter.CODES.EXPORT_ZIP_FAILED,
+            error.message || 'Export ZIP failed',
+            { error, templateName, exportMode }
+          );
+        }
+      } catch (_) {
+        /* ignore */
+      }
       alert(`Error creating project: ${error.message}`);
     }
   }
@@ -10239,6 +10361,18 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
           }
         } catch (e) {
           console.warn(`Could not copy scene image: ${scene.image}`);
+          try {
+            if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+              window.ErrorReporter.reportCaught(
+                window.ErrorReporter.CODES.EXPORT_ASSET_MISSING,
+                'Could not copy scene image into export ZIP',
+                { sceneId, image: String(scene.image || '').slice(0, 300), error: e },
+                'warning'
+              );
+            }
+          } catch (_) {
+            /* ignore */
+          }
         }
       }
     }
@@ -11848,6 +11982,17 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
         window.hideProjectLoadingOverlay();
       }
       console.error('Error loading ZIP template:', error);
+      try {
+        if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+          window.ErrorReporter.reportCaught(
+            window.ErrorReporter.CODES.ZIP_TEMPLATE_LOAD_FAILED,
+            error.message || 'Failed to load ZIP template into editor',
+            { error }
+          );
+        }
+      } catch (_) {
+        /* ignore */
+      }
       alert('Error loading template: ' + error.message);
     }
   }
@@ -12342,7 +12487,24 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.success) {
-      throw new Error(data.message || `Tour generation failed (${res.status})`);
+      const msg = data.message || `Tour generation failed (${res.status})`;
+      try {
+        if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+          const expired =
+            res.status === 404 || /expired/i.test(String(data.message || ''));
+          window.ErrorReporter.reportCaught(
+            expired
+              ? window.ErrorReporter.CODES.VR_CLOUD_PREVIEW_EXPIRED
+              : window.ErrorReporter.CODES.VR_CLOUD_PUBLISH_FAILED,
+            msg,
+            { httpStatus: res.status, projectName, preview: true },
+            expired ? 'warning' : 'error'
+          );
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      throw new Error(msg);
     }
     const embedState = {
       hostedUrl: data.url || data.hostedUrl,
@@ -12408,6 +12570,17 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
       return true;
     } catch (err) {
       console.error('Flat mode VR tour generation failed:', err);
+      try {
+        if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+          window.ErrorReporter.reportCaught(
+            window.ErrorReporter.CODES.VR_CLOUD_PUBLISH_FAILED,
+            err.message || 'Flat mode VR tour generation failed',
+            { error: err, flow: 'flat_content_mode' }
+          );
+        }
+      } catch (_) {
+        /* ignore */
+      }
       alert(
         err.message ||
           'Could not generate a standalone 360° tour for the flat page. Check your connection and try again.'
@@ -13013,6 +13186,25 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
       ? 'Out of browser storage, so your last change was NOT saved. Export your project now, then remove unused scenes or images to free space.'
       : 'Your last change could NOT be saved in this browser.';
 
+    try {
+      if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+        window.ErrorReporter.reportCaught(
+          outOfSpace
+            ? window.ErrorReporter.CODES.LOCAL_PERSIST_QUOTA
+            : 'local_persist_failed',
+          message,
+          {
+            error: err,
+            outOfSpace,
+            sceneCount: this.scenes ? Object.keys(this.scenes).length : 0,
+          },
+          outOfSpace ? 'error' : 'warning'
+        );
+      }
+    } catch (_) {
+      /* ignore */
+    }
+
     // Silent data loss would be worse than the stuck dialog this replaced, so the first
     // failure interrupts. Deferring lets the dialog finish closing before it blocks, and
     // later failures only toast so autosave cannot trap the user in dialogs.
@@ -13040,6 +13232,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
       const entries = Object.entries(this.scenes || {});
       if (!entries.length) return;
       let changed = false;
+      const missing = [];
       for (const [sceneId, scene] of entries) {
         if (!scene || scene.type !== 'image') continue;
         // Only rehydrate if we have a storage key and not an explicit remote/data URL
@@ -13060,9 +13253,19 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
           } catch (_) {
             /* ignore */
           }
+        } else {
+          missing.push({ sceneId, mediaKind: 'image', storageKey: key });
         }
       }
       if (changed) this.saveScenesData();
+      if (missing.length && window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+        window.ErrorReporter.reportCaught(
+          window.ErrorReporter.CODES.REHYDRATE_MEDIA_INCOMPLETE,
+          `Missing ${missing.length} image scene blob(s) during IDB rehydrate`,
+          { missingCount: missing.length, missing: missing.slice(0, 20) },
+          'warning'
+        );
+      }
     } catch (_) {
       /* ignore */
     }
@@ -18765,6 +18968,22 @@ document.addEventListener('DOMContentLoaded', () => {
           await this.attachVideoTextureToSphere(videosphere, videoEl, loadToken);
         } catch (texErr) {
           console.warn('Video texture bind failed, continuing with placement surface:', texErr);
+          try {
+            if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+              window.ErrorReporter.reportCaught(
+                window.ErrorReporter.CODES.VIDEO_TEXTURE_BIND_FAILED,
+                texErr.message || 'Video texture bind failed',
+                {
+                  error: texErr,
+                  sceneId: this.currentScene,
+                  videoSrcKind: typeof resolvedVideoSrc === 'string' ? resolvedVideoSrc.slice(0, 80) : null,
+                },
+                'warning'
+              );
+            }
+          } catch (_) {
+            /* ignore */
+          }
         }
         if (loadToken !== this._sceneLoadToken) return;
 
@@ -18781,6 +19000,23 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         if (loadToken !== this._sceneLoadToken) return;
         console.warn('Video failed to load:', resolvedVideoSrc, err);
+        try {
+          if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+            window.ErrorReporter.reportCaught(
+              window.ErrorReporter.CODES.SCENE_VIDEO_LOAD_FAILED,
+              err.message || 'Failed to load scene video',
+              {
+                error: err,
+                sceneId: this.currentScene,
+                sceneName: scene && scene.name,
+                videoSrc: typeof resolvedVideoSrc === 'string' ? resolvedVideoSrc.slice(0, 200) : null,
+                videoStorageKey: scene && scene.videoStorageKey,
+              }
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
         alert(
           'Failed to load the video for this scene. If it was added from a local file, try re-selecting the file or ensure browser storage permissions allow keeping large files.'
         );
@@ -18791,6 +19027,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } else if (scene.type === 'video' && !resolvedVideoSrc) {
       // No valid src (likely after refresh without IDB record) – prompt user to reselect file
+      try {
+        if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+          window.ErrorReporter.reportCaught(
+            window.ErrorReporter.CODES.SCENE_VIDEO_MISSING_SOURCE,
+            'Video scene missing resolvable source',
+            {
+              sceneId: this.currentScene,
+              sceneName: scene && scene.name,
+              videoStorageKey: scene && scene.videoStorageKey,
+              hostedVideoUrl: scene && scene.hostedVideoUrl,
+            },
+            'warning'
+          );
+        }
+      } catch (_) {
+        /* ignore */
+      }
       const choose = confirm(
         'This video scene needs the original file again. Do you want to select the video file now?'
       );
@@ -18917,6 +19170,22 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         newPanorama.onerror = () => {
           console.error('Failed to load panorama:', chosenSrc);
+          try {
+            if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+              window.ErrorReporter.reportCaught(
+                window.ErrorReporter.CODES.SCENE_PANORAMA_LOAD_FAILED,
+                'Failed to load scene panorama image',
+                {
+                  sceneId: this.currentScene,
+                  sceneName: scene && scene.name,
+                  imageSrc: typeof chosenSrc === 'string' ? chosenSrc.slice(0, 300) : null,
+                  imageStorageKey: scene && scene.imageStorageKey,
+                }
+              );
+            }
+          } catch (_) {
+            /* ignore */
+          }
           alert(
             `Failed to load scene image: ${chosenSrc}\nPlease check if the URL is accessible and is a valid image.`
           );
@@ -22625,6 +22894,18 @@ class StudentSubmission {
       const sessRes = await fetch('/api/student/session', { credentials: 'include' });
       const sess = await sessRes.json();
       if (sess.authRequired && !sess.authenticated) {
+        try {
+          if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+            window.ErrorReporter.reportCaught(
+              window.ErrorReporter.CODES.SESSION_REQUIRED_MID_FLOW,
+              'Sign-in required before cloud save/submit',
+              { kind: options.kind || 'submitted', flow: 'submitProject' },
+              'warning'
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
         alert('Please sign in before submitting your project.');
         return false;
       }
@@ -22663,6 +22944,7 @@ class StudentSubmission {
     if (statusDiv) statusDiv.innerHTML = '<p style="color: #4CAF50;">📦 Generating project...</p>';
 
     let submissionSucceeded = false;
+    let content = null;
 
     try {
       // Generate the complete project using existing export functionality
@@ -22696,7 +22978,7 @@ class StudentSubmission {
       }
 
       // Generate blob
-      const content = await zip.generateAsync({ type: 'blob' });
+      content = await zip.generateAsync({ type: 'blob' });
 
       const studentNote = options.studentNote || '';
 
@@ -22709,11 +22991,20 @@ class StudentSubmission {
       });
       if (prepRes.status === 402) {
         const quota = await prepRes.json();
-        throw new Error(quota.message || 'Usage limit reached.');
+        const qErr = new Error(quota.message || 'Usage limit reached.');
+        qErr.httpStatus = 402;
+        qErr.errorCode = 'usage_quota_blocked';
+        qErr.endpoint = '/api/student/projects/prepare-upload';
+        throw qErr;
       }
       if (!prepRes.ok) {
         const errBody = await prepRes.json().catch(() => ({}));
-        throw new Error(errBody.message || 'Could not prepare cloud save.');
+        const pErr = new Error(errBody.message || 'Could not prepare cloud save.');
+        pErr.httpStatus = prepRes.status;
+        pErr.errorCode =
+          prepRes.status === 401 ? 'session_required_mid_flow' : 'prepare_upload_failed';
+        pErr.endpoint = '/api/student/projects/prepare-upload';
+        throw pErr;
       }
       prepareData = await prepRes.json();
 
@@ -22754,9 +23045,19 @@ class StudentSubmission {
             let authData;
             try {
               const authRes = await fetch('/api/b2-upload-url', { credentials: 'include' });
-              if (!authRes.ok) throw new Error('Could not get upload credentials');
+              if (!authRes.ok) {
+                const uErr = new Error('Could not get upload credentials');
+                uErr.httpStatus = authRes.status;
+                uErr.errorCode =
+                  authRes.status === 401 ? 'session_required_mid_flow' : 'b2_upload_url_failed';
+                throw uErr;
+              }
               authData = await authRes.json();
-              if (!authData.success) throw new Error(authData.message || 'B2 Auth failed');
+              if (!authData.success) {
+                const uErr = new Error(authData.message || 'B2 Auth failed');
+                uErr.errorCode = 'b2_upload_url_failed';
+                throw uErr;
+              }
             } catch (err) {
               return handleRetry(err);
             }
@@ -22809,7 +23110,10 @@ class StudentSubmission {
                 if (uploadLabel) uploadLabel.textContent = `Retrying upload... (${attempts}/${maxAttempts})`;
                 setTimeout(attemptUpload, 2000);
               } else {
-                reject(err || new Error('Upload failed after maximum retries'));
+                const fail = err || new Error('Upload failed after maximum retries');
+                if (!fail.errorCode) fail.errorCode = 'b2_direct_upload_failed';
+                fail.attempts = attempts;
+                reject(fail);
               }
             };
 
@@ -22851,10 +23155,27 @@ class StudentSubmission {
                 
                 if (metaRes.status === 402) {
                   const quota = await metaRes.json();
-                  throw new Error(quota.message || 'Usage limit reached. Ask your team leader or teacher about upgrading.');
+                  const qErr = new Error(
+                    quota.message ||
+                      'Usage limit reached. Ask your team leader or teacher about upgrading.'
+                  );
+                  qErr.httpStatus = 402;
+                  qErr.errorCode = 'usage_quota_blocked';
+                  qErr.b2UploadSucceeded = true;
+                  qErr.remotePath = remotePath;
+                  throw qErr;
                 }
-                
-                if (!metaRes.ok) throw new Error('Failed to log submission');
+
+                if (!metaRes.ok) {
+                  const mErr = new Error('Failed to log submission');
+                  mErr.httpStatus = metaRes.status;
+                  mErr.errorCode = 'b2_upload_meta_orphan';
+                  mErr.b2UploadSucceeded = true;
+                  mErr.remotePath = remotePath;
+                  mErr.fileName = fileName;
+                  mErr.kind = kind;
+                  throw mErr;
+                }
                 const metaData = await metaRes.json();
                 resolve(metaData);
               } catch (e) {
@@ -22927,6 +23248,34 @@ class StudentSubmission {
       }
     } catch (error) {
       console.error('Submission error:', error);
+      try {
+        if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+          const code =
+            error && error.errorCode
+              ? error.errorCode
+              : window.ErrorReporter.CODES.CLOUD_SUBMIT_FAILED;
+          window.ErrorReporter.reportCaught(
+            code,
+            error.message || 'Cloud save/submit failed',
+            {
+              error,
+              kind,
+              projectName,
+              httpStatus: error && error.httpStatus,
+              attempts: error && error.attempts,
+              endpoint: error && error.endpoint,
+              remotePath: error && error.remotePath,
+              b2UploadSucceeded: Boolean(error && error.b2UploadSucceeded),
+              byteSize: content && content.size != null ? content.size : null,
+            },
+            code === 'usage_quota_blocked' || code === 'session_required_mid_flow'
+              ? 'warning'
+              : 'error'
+          );
+        }
+      } catch (_) {
+        /* ignore */
+      }
       if (statusDiv) {
       statusDiv.innerHTML = `
         <p style="color: #f44336;">❌ Submission failed</p>
@@ -23268,6 +23617,22 @@ const CommonAssetsPicker = {
       });
       const data = await res.json();
       if (res.status === 402) {
+        try {
+          if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+            window.ErrorReporter.reportCaught(
+              window.ErrorReporter.CODES.USAGE_QUOTA_BLOCKED,
+              'Student asset upload blocked by storage limit',
+              {
+                httpStatus: 402,
+                endpoint: '/api/student-assets/upload',
+                category: this.activeCategory,
+              },
+              'warning'
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
         alert('Storage limit reached. Ask your team leader or teacher about upgrading.');
         return;
       }
@@ -23276,6 +23641,17 @@ const CommonAssetsPicker = {
       if (tagsInput) tagsInput.value = '';
       await this.load();
     } catch (err) {
+      try {
+        if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+          window.ErrorReporter.reportCaught(
+            window.ErrorReporter.CODES.STUDENT_ASSET_UPLOAD_FAILED,
+            err.message || 'Student asset upload failed',
+            { error: err, category: this.activeCategory }
+          );
+        }
+      } catch (_) {
+        /* ignore */
+      }
       alert(err.message || 'Upload failed');
     }
   },

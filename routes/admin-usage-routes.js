@@ -7,6 +7,7 @@ const { runStorageSnapshot, formatBytes, scanHostedDisk } = require('../lib/usag
 const { runOnce, getSnapshotJobStatus } = require('../lib/usage/snapshot-job');
 const { getStorageLimits } = require('../lib/usage/storage-limits');
 const errorLog = require('../lib/error-log');
+const ga4Metrics = require('../lib/usage/ga4-metrics');
 
 function memorySnapshot() {
   const mu = process.memoryUsage();
@@ -36,34 +37,43 @@ function registerAdminUsageRoutes(app) {
       const hours = Math.max(1, Math.min(24 * 30, Number(req.query.hours) || 24));
       const days = Math.max(1, Math.min(90, Number(req.query.days) || 30));
 
-      const [render, latest, history, uploads, recent, hostedLive, errors] = await Promise.all([
-        renderMetrics.getDashboardMetrics({ hours, resolutionSeconds: hours > 72 ? 900 : 300 }),
-        usageDb.getLatestSnapshots().catch(() => []),
-        usageDb.getSnapshotHistory({ source: 'b2', scope: 'total', days }).catch(() => []),
-        usageDb.getUploadTotals({ days }).catch(() => ({
-          days,
-          totalBytes: 0,
-          totalEvents: 0,
-          byKind: [],
-          byDay: [],
-        })),
-        usageDb.getRecentUploads(20).catch(() => []),
-        scanHostedDisk().catch(() => []),
-        errorLog.listErrorLogsForWindow({ hours, limit: 200 }).catch(() => ({
-          hours,
-          total: 0,
-          truncated: false,
-          logs: [],
-        })),
-      ]);
+      const [render, latest, history, uploads, recent, hostedLive, errors, analytics] =
+        await Promise.all([
+          renderMetrics.getDashboardMetrics({ hours, resolutionSeconds: hours > 72 ? 900 : 300 }),
+          usageDb.getLatestSnapshots().catch(() => []),
+          usageDb.getSnapshotHistory({ source: 'b2', scope: 'total', days }).catch(() => []),
+          usageDb.getUploadTotals({ days }).catch(() => ({
+            days,
+            totalBytes: 0,
+            totalEvents: 0,
+            byKind: [],
+            byDay: [],
+          })),
+          usageDb.getRecentUploads(20).catch(() => []),
+          scanHostedDisk().catch(() => []),
+          errorLog.listErrorLogsForWindow({ hours, limit: 200 }).catch(() => ({
+            hours,
+            total: 0,
+            truncated: false,
+            logs: [],
+          })),
+          ga4Metrics.getDashboardMetrics({ days }).catch((err) => ({
+            configured: false,
+            config: ga4Metrics.getConfig(),
+            metrics: null,
+            error: err.message || 'GA4 request failed',
+          })),
+        ]);
 
       res.json({
         success: true,
         dbEnabled: isDbEnabled(),
         renderConfig: renderMetrics.getConfig(),
+        analyticsConfig: ga4Metrics.getConfig(),
         job: getSnapshotJobStatus(),
         memory: memorySnapshot(),
         render,
+        analytics,
         storage: {
           latest,
           historyB2Total: history,
@@ -91,6 +101,17 @@ function registerAdminUsageRoutes(app) {
       res.json({ success: true, ...data });
     } catch (err) {
       console.error('usage render error:', err);
+      res.status(500).json({ success: false, message: err.message || 'Server error' });
+    }
+  });
+
+  app.get('/admin/usage/analytics', requireAdmin, async (req, res) => {
+    try {
+      const days = Math.max(1, Math.min(90, Number(req.query.days) || 30));
+      const data = await ga4Metrics.getDashboardMetrics({ days });
+      res.json({ success: true, ...data });
+    } catch (err) {
+      console.error('usage analytics error:', err);
       res.status(500).json({ success: false, message: err.message || 'Server error' });
     }
   });

@@ -884,6 +884,17 @@ button:hover { background: #1d4ed8; }`;
         }
       } catch (err) {
         console.warn('[FlatPage] publish failed', err);
+        try {
+          if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+            window.ErrorReporter.reportCaught(
+              window.ErrorReporter.CODES.FLAT_PAGE_PUBLISH_FAILED,
+              err.message || 'Flat page publish failed',
+              { error: err }
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
         this._setCloudStatus(err.message || 'Publish failed', true);
         alert('Could not publish flat page: ' + (err.message || 'unknown error'));
       }

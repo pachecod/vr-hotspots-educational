@@ -191,8 +191,8 @@
       <nav id="admin-nav" data-active="usage"></nav>
       <h1>Usage &amp; Infrastructure</h1>
       <p class="hint">
-        Render traffic/CPU/memory (last N hours), B2 file storage totals and growth, hosted disk on this instance,
-        and recent cloud uploads. Times for upload history use Eastern Time where noted.
+        Render traffic/CPU/memory (last N hours), Google Analytics users/page views, B2 storage growth,
+        hosted disk on this instance, and recent cloud uploads. GA4 reporting can lag by several hours.
       </p>
 
       <div class="toolbar">
@@ -220,6 +220,13 @@
 
       <div id="config-warn" class="warn" style="display: none"></div>
       <div id="stat-grid" class="grid"></div>
+
+      <div class="panel">
+        <h2>Google Analytics</h2>
+        <div id="analytics-meta" class="hint" style="margin-bottom: 10px"></div>
+        <div id="analytics-charts" class="charts"></div>
+        <div id="analytics-pages" style="margin-top: 12px"></div>
+      </div>
 
       <div class="panel">
         <h2>Render — CPU, memory, traffic</h2>

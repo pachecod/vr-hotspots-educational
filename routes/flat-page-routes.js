@@ -16,6 +16,7 @@ const {
   removeHostedFlatPageDir,
 } = require('../lib/student-content/flat-page-purge');
 const { uploadHostedUtf8, getHostedDir } = require('../lib/hosted-b2-storage');
+const { logAppError } = require('../lib/error-log');
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
@@ -55,6 +56,13 @@ async function uploadFlatPageFilesToB2(prefix, files) {
       );
     } catch (err) {
       console.warn('Flat page B2 upload failed:', err.message);
+      logAppError({
+        level: 'error',
+        code: 'flat_page_b2_upload_failed',
+        message: err.message || 'Flat page B2 upload failed',
+        source: 'flat-page-b2',
+        details: { prefix, fileName: file && file.name },
+      });
     }
   }
 }
@@ -402,6 +410,15 @@ function registerFlatPageRoutes(app) {
       await handlePublish(req, res);
     } catch (err) {
       console.error('Publish flat page error:', err);
+      logAppError({
+        level: 'error',
+        code: 'flat_page_publish_failed',
+        message: err.message || 'Flat page publish failed',
+        userName: req.studentSession?.displayName || 'unknown',
+        studentId: req.studentSession?.studentId || null,
+        source: 'flat-pages/publish',
+        details: { stack: err.stack ? String(err.stack).slice(0, 2000) : null },
+      });
       res.status(500).json({ success: false, message: err.message });
     }
   });
@@ -411,6 +428,15 @@ function registerFlatPageRoutes(app) {
       await handlePublish(req, res, slugify(req.params.slug));
     } catch (err) {
       console.error('Publish flat page error:', err);
+      logAppError({
+        level: 'error',
+        code: 'flat_page_publish_failed',
+        message: err.message || 'Flat page publish failed',
+        userName: req.studentSession?.displayName || 'unknown',
+        studentId: req.studentSession?.studentId || null,
+        source: 'flat-pages/publish',
+        details: { slug: req.params.slug, stack: err.stack ? String(err.stack).slice(0, 2000) : null },
+      });
       res.status(500).json({ success: false, message: err.message });
     }
   });

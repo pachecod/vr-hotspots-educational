@@ -1622,18 +1622,170 @@ class HotspotEditor {
   }
 
   // ===== IndexedDB asset storage helpers (videos + images) =====
+  parseCommonAssetRefFromUrl(url) {
+    if (!url || typeof url !== 'string') return null;
+    const match = url.match(/common-assets\/([^/]+)\/([^/?#]+)/);
+    if (!match) return null;
+    try {
+      const category = decodeURIComponent(match[1]);
+      const name = decodeURIComponent(match[2]);
+      if (!category || !name) return null;
+      return { category, name };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  toDurableCommonAssetProxyPath(category, name) {
+    if (!category || !name) return '';
+    return `/common-assets/${encodeURIComponent(category)}/${encodeURIComponent(name)}`;
+  }
+
+  /**
+   * Rewrite short-lived Backblaze signed URLs (…?Authorization=…) to same-origin
+   * /common-assets/… proxies that the server re-authorizes on each request.
+   */
+  toDurableCommonAssetUrl(url) {
+    if (typeof url !== 'string' || !url) return null;
+    const trimmed = url.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('/common-assets/')) {
+      return trimmed.split(/[?#]/)[0];
+    }
+    const parsed = this.parseCommonAssetRefFromUrl(trimmed);
+    if (!parsed) return null;
+    return this.toDurableCommonAssetProxyPath(parsed.category, parsed.name);
+  }
+
+  rewriteDurableCommonAssetUrlField(obj, field) {
+    if (!obj || typeof obj[field] !== 'string') return false;
+    const durable = this.toDurableCommonAssetUrl(obj[field]);
+    if (!durable || durable === obj[field]) return false;
+    obj[field] = durable;
+    return true;
+  }
+
+  ensureCommonAssetProvenanceFromUrls(obj, urlFields = []) {
+    if (!obj) return false;
+    let changed = false;
+    const candidates = [];
+    if (typeof obj.commonAssetUrl === 'string') candidates.push(obj.commonAssetUrl);
+    for (const field of urlFields) {
+      if (typeof obj[field] === 'string') candidates.push(obj[field]);
+    }
+    let parsed = null;
+    for (const candidate of candidates) {
+      parsed = this.parseCommonAssetRefFromUrl(candidate);
+      if (parsed) break;
+    }
+    if (!parsed && obj.commonAssetCategory && obj.commonAssetName) {
+      parsed = { category: obj.commonAssetCategory, name: obj.commonAssetName };
+    }
+    if (!parsed) return false;
+
+    const durable = this.toDurableCommonAssetProxyPath(parsed.category, parsed.name);
+    if (obj.commonAssetCategory !== parsed.category) {
+      obj.commonAssetCategory = parsed.category;
+      changed = true;
+    }
+    if (obj.commonAssetName !== parsed.name) {
+      obj.commonAssetName = parsed.name;
+      changed = true;
+    }
+    if (obj.commonAssetUrl !== durable) {
+      obj.commonAssetUrl = durable;
+      changed = true;
+    }
+    for (const field of urlFields) {
+      if (typeof obj[field] === 'string' && this.parseCommonAssetRefFromUrl(obj[field])) {
+        if (obj[field] !== durable) {
+          obj[field] = durable;
+          changed = true;
+        }
+      }
+    }
+    return changed;
+  }
+
+  rewriteDurableCommonAssetUrlsInObject(obj, urlFields = []) {
+    if (!obj || typeof obj !== 'object') return false;
+    let changed = this.ensureCommonAssetProvenanceFromUrls(obj, urlFields);
+    for (const field of urlFields) {
+      if (this.rewriteDurableCommonAssetUrlField(obj, field)) changed = true;
+    }
+    if (this.rewriteDurableCommonAssetUrlField(obj, 'commonAssetUrl')) changed = true;
+    return changed;
+  }
+
+  rewriteDurableCommonAssetUrlsInHotspot(hotspot) {
+    return this.rewriteDurableCommonAssetUrlsInObject(hotspot, [
+      'image',
+      'video',
+      'audio',
+      'model',
+      'src',
+      'url',
+    ]);
+  }
+
+  rewriteDurableCommonAssetUrlsInScene(scene) {
+    if (!scene || typeof scene !== 'object') return false;
+    let changed = this.rewriteDurableCommonAssetUrlsInObject(scene, ['image', 'videoSrc']);
+    if (scene.globalSound && typeof scene.globalSound === 'object') {
+      if (this.rewriteDurableCommonAssetUrlsInObject(scene.globalSound, ['audio', 'url'])) {
+        changed = true;
+      }
+    }
+    if (scene.ground && typeof scene.ground === 'object') {
+      const groundFields = [
+        'diffuseMap',
+        'normalMap',
+        'roughnessMap',
+        'aoMap',
+        'displacementMap',
+      ];
+      for (const field of groundFields) {
+        if (this.rewriteDurableCommonAssetUrlField(scene.ground, field)) changed = true;
+      }
+    }
+    if (Array.isArray(scene.hotspots)) {
+      scene.hotspots.forEach((h) => {
+        if (this.rewriteDurableCommonAssetUrlsInHotspot(h)) changed = true;
+      });
+    }
+    return changed;
+  }
+
+  /** Migrate persisted project data away from expired B2 download tokens. */
+  rewriteDurableCommonAssetUrlsInProject() {
+    let changed = false;
+    Object.values(this.scenes || {}).forEach((scene) => {
+      if (this.rewriteDurableCommonAssetUrlsInScene(scene)) changed = true;
+    });
+    if (Array.isArray(this.hotspots)) {
+      this.hotspots.forEach((h) => {
+        if (this.rewriteDurableCommonAssetUrlsInHotspot(h)) changed = true;
+      });
+    }
+    return changed;
+  }
+
   isCommonAssetObject(obj) {
-    return !!(obj && typeof obj.commonAssetUrl === 'string' && /^https?:\/\//i.test(obj.commonAssetUrl));
+    if (!obj) return false;
+    if (obj.commonAssetCategory && obj.commonAssetName) return true;
+    if (typeof obj.commonAssetUrl !== 'string' || !obj.commonAssetUrl) return false;
+    if (obj.commonAssetUrl.startsWith('/common-assets/')) return true;
+    return (
+      /^https?:\/\//i.test(obj.commonAssetUrl) && /common-assets\//i.test(obj.commonAssetUrl)
+    );
   }
 
   getCommonAssetProvenance(asset) {
     if (!asset || !asset.category || !asset.name) return null;
-    const commonAssetUrl = asset.url;
-    if (!commonAssetUrl || typeof commonAssetUrl !== 'string' || !/^https?:\/\//i.test(commonAssetUrl)) {
-      return null;
-    }
+    const durable = this.toDurableCommonAssetProxyPath(asset.category, asset.name);
+    if (!durable) return null;
     return {
-      commonAssetUrl,
+      commonAssetUrl: durable,
       commonAssetCategory: asset.category,
       commonAssetName: asset.name,
     };
@@ -2179,25 +2331,41 @@ class HotspotEditor {
   }
 
   getRuntimeCommonAssetUrl(asset) {
-    return (asset && (asset.proxyUrl || asset.url)) || '';
+    if (!asset) return '';
+    if (asset.category && asset.name) {
+      return this.toDurableCommonAssetProxyPath(asset.category, asset.name);
+    }
+    return (
+      this.toDurableCommonAssetUrl(asset.proxyUrl) ||
+      this.toDurableCommonAssetUrl(asset.url) ||
+      asset.proxyUrl ||
+      asset.url ||
+      ''
+    );
   }
 
   buildCommonAssetProxyPath(obj) {
     const category = obj?.commonAssetCategory || obj?.category;
     const name = obj?.commonAssetName || obj?.name;
-    if (!category || !name) return '';
-    return `/common-assets/${category}/${encodeURIComponent(name)}`;
+    if (category && name) {
+      return this.toDurableCommonAssetProxyPath(category, name);
+    }
+    return (
+      this.toDurableCommonAssetUrl(obj?.commonAssetUrl) ||
+      this.toDurableCommonAssetUrl(obj?.image) ||
+      this.toDurableCommonAssetUrl(obj?.videoSrc) ||
+      ''
+    );
   }
 
   resolveSceneVideoSrc(scene) {
     if (!scene || scene.type !== 'video') return '';
+    this.rewriteDurableCommonAssetUrlsInScene(scene);
     let src = '';
     if (typeof scene.hostedVideoProxyUrl === 'string' && scene.hostedVideoProxyUrl.trim()) {
       src = scene.hostedVideoProxyUrl.trim();
     } else if (typeof scene.hostedVideoUrl === 'string' && scene.hostedVideoUrl.trim()) {
       src = scene.hostedVideoUrl.trim();
-    } else if (typeof scene.videoSrc === 'string' && scene.videoSrc.trim()) {
-      src = scene.videoSrc.trim();
     } else if (this.isCommonAssetObject(scene)) {
       const proxy = this.buildCommonAssetProxyPath(scene);
       if (proxy) {
@@ -2206,7 +2374,11 @@ class HotspotEditor {
       } else {
         src = scene.commonAssetUrl || '';
       }
+    } else if (typeof scene.videoSrc === 'string' && scene.videoSrc.trim()) {
+      src = scene.videoSrc.trim();
     }
+    const durable = this.toDurableCommonAssetUrl(src);
+    if (durable) src = durable;
     return src ? this.toAbsoluteMediaUrl(src) : '';
   }
 
@@ -6596,9 +6768,14 @@ class HotspotEditor {
       let videoSrc = '';
       _videoLoadKey =
         data.videoStorageKey || (typeof data.id === 'number' ? `video_hotspot_${data.id}` : null);
+      this.rewriteDurableCommonAssetUrlsInHotspot(data);
       if (data.commonAssetUrl) {
-        videoSrc = data.commonAssetUrl;
-        if (!data.video) data.video = data.commonAssetUrl;
+        const durable =
+          this.buildCommonAssetProxyPath(data) ||
+          this.toDurableCommonAssetUrl(data.commonAssetUrl) ||
+          data.commonAssetUrl;
+        videoSrc = durable;
+        data.video = durable;
       } else if (data.video instanceof File) {
         try {
           videoSrc = URL.createObjectURL(data.video);
@@ -6655,10 +6832,12 @@ class HotspotEditor {
       // Prefer explicit key, but fall back to legacy pattern image_hotspot_<id>
       _imageLoadKey =
         data.imageStorageKey || (typeof data.id === 'number' ? `image_hotspot_${data.id}` : null);
-      if (data.commonAssetUrl) {
-        const proxy = this.buildCommonAssetProxyPath(data);
-        imgSrc = proxy ? this.toAbsoluteMediaUrl(proxy) : data.commonAssetUrl;
-        if (!data.image) data.image = imgSrc;
+      this.rewriteDurableCommonAssetUrlsInHotspot(data);
+      if (data.commonAssetUrl || this.parseCommonAssetRefFromUrl(data.image)) {
+        const proxy =
+          this.buildCommonAssetProxyPath(data) || this.toDurableCommonAssetUrl(data.image);
+        imgSrc = proxy ? this.toAbsoluteMediaUrl(proxy) : data.commonAssetUrl || data.image;
+        if (proxy) data.image = proxy;
       } else if (data.image instanceof File) {
         try {
           imgSrc = URL.createObjectURL(data.image);
@@ -10196,12 +10375,18 @@ class HotspotEditor {
   }
 
   _isRemoteMediaUrl(url) {
-    return typeof url === 'string' && /^https?:\/\//i.test(url);
+    if (typeof url !== 'string' || !url) return false;
+    if (/^https?:\/\//i.test(url)) return true;
+    return url.startsWith('/common-assets/') || url.startsWith('/student-assets/');
   }
 
   _baseNameFromRemoteUrl(url, fallback = 'file.bin') {
-    if (!this._isRemoteMediaUrl(url)) return fallback;
+    if (typeof url !== 'string' || !url) return fallback;
     try {
+      if (url.startsWith('/')) {
+        const segment = url.split(/[?#]/)[0].split('/').pop();
+        return segment ? decodeURIComponent(segment) : fallback;
+      }
       const segment = new URL(url).pathname.split('/').pop();
       return segment ? decodeURIComponent(segment) : fallback;
     } catch (_) {
@@ -11346,6 +11531,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
         // Handle new format with scenes
         if (template.scenes) {
           this.scenes = template.scenes;
+          this.rewriteDurableCommonAssetUrlsInProject();
           this.currentScene = template.currentScene || 'scene1';
           this.updateSceneDropdown();
           this.loadCurrentScene();
@@ -11424,6 +11610,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
 
       // Load scenes and custom styles
       this.scenes = config.scenes || {};
+      this.rewriteDurableCommonAssetUrlsInProject();
       this.currentScene = config.currentScene || Object.keys(this.scenes)[0] || 'scene1';
 
       // Try to load customStyles from config (new format)
@@ -12928,6 +13115,12 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
       console.warn('[Persist] Hotspot sync failed; saving last known state', err);
     }
 
+    try {
+      this.rewriteDurableCommonAssetUrlsInProject();
+    } catch (_) {
+      /* ignore */
+    }
+
     // --- Auto-clean invalid image hotspots (missing image reference) ---
     try {
       let removedCount = 0;
@@ -13727,6 +13920,16 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
             scene.videoSrc = this.buildCommonAssetProxyPath(scene);
           }
         });
+
+        // Replace expired Backblaze Authorization= URLs with durable /common-assets proxies.
+        const rewrittenCommonAssets = this.rewriteDurableCommonAssetUrlsInProject();
+        if (rewrittenCommonAssets) {
+          try {
+            this.saveScenesData();
+          } catch (_) {
+            /* ignore */
+          }
+        }
 
         // Seed any missing imageAspectRatio from legacy _aspectRatio to maintain continuity
         try {
@@ -19209,9 +19412,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      if (this.isCommonAssetObject(scene) && scene.type === 'image') {
+      if (scene.type === 'image') {
+        this.rewriteDurableCommonAssetUrlsInScene(scene);
         const proxy = this.buildCommonAssetProxyPath(scene);
-        if (proxy) chosenSrc = proxy;
+        if (proxy) {
+          chosenSrc = proxy;
+          if (typeof scene.image === 'string' && this.parseCommonAssetRefFromUrl(scene.image)) {
+            scene.image = proxy;
+          }
+        } else if (typeof chosenSrc === 'string') {
+          const durable = this.toDurableCommonAssetUrl(chosenSrc);
+          if (durable) chosenSrc = durable;
+        }
       }
 
       if (chosenSrc.startsWith && chosenSrc.startsWith('#')) {
@@ -24363,7 +24575,11 @@ const CommonAssetsPicker = {
     if (!el) return false;
 
     const editor = window.hotspotEditor;
-    el.value = asset.proxyUrl || asset.url;
+    const durableUrl =
+      editor && typeof editor.getRuntimeCommonAssetUrl === 'function'
+        ? editor.getRuntimeCommonAssetUrl(asset)
+        : asset.proxyUrl || asset.url;
+    el.value = durableUrl;
     if (editor) {
       editor._skipClearCommonAssetDataset = true;
       editor.setCommonAssetDataset(el, asset);

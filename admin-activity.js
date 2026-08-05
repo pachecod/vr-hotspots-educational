@@ -109,16 +109,27 @@ function renderAuthTable(events) {
   </table>`;
 }
 
-function fileCell(u) {
-  const name = u.fileName || '';
-  if (!u.id || !u.b2Path || !name) {
-    return `<span class="code">${escapeHtml(name || '—')}</span>`;
+function canDownloadUpload(u) {
+  return !!(u && u.id && u.b2Path && u.fileName);
+}
+
+function downloadLabel(u) {
+  const name = String(u.fileName || '');
+  if (/\.zip$/i.test(name) || u.kind === 'draft' || u.kind === 'submitted') {
+    return 'Download ZIP';
   }
-  return `<button type="button" class="linkish code dl-upload" data-id="${escapeHtml(
+  return 'Download';
+}
+
+function downloadCell(u) {
+  if (!canDownloadUpload(u)) {
+    return `<span title="No cloud path stored for this event">—</span>`;
+  }
+  return `<button type="button" class="dl-btn dl-upload" data-id="${escapeHtml(
     u.id
-  )}" data-name="${escapeHtml(name)}" title="Download from cloud storage">${escapeHtml(
-    name
-  )}</button>`;
+  )}" data-name="${escapeHtml(u.fileName)}" title="Download ${escapeHtml(
+    u.fileName
+  )} from cloud storage">${escapeHtml(downloadLabel(u))}</button>`;
 }
 
 async function downloadUploadEvent(id, fileName) {
@@ -133,7 +144,9 @@ async function downloadUploadEvent(id, fileName) {
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName || 'download.bin';
+    document.body.appendChild(link);
     link.click();
+    link.remove();
     URL.revokeObjectURL(url);
   } catch (err) {
     alert('Download failed: ' + (err.message || 'unknown error'));
@@ -155,7 +168,11 @@ function renderUploadsTable(events) {
     el.innerHTML = '<div class="empty">No upload events in this window.</div>';
     return;
   }
-  el.innerHTML = `<table>
+  const downloadable = events.filter(canDownloadUpload).length;
+  el.innerHTML = `<p class="meta" style="margin:0 0 8px">${downloadable} of ${
+    events.length
+  } shown can be downloaded from cloud storage.</p>
+  <table>
     <thead>
       <tr>
         <th>When</th>
@@ -165,6 +182,7 @@ function renderUploadsTable(events) {
         <th>Project / package</th>
         <th>File</th>
         <th>Size</th>
+        <th>Download</th>
       </tr>
     </thead>
     <tbody>
@@ -182,8 +200,9 @@ function renderUploadsTable(events) {
             <td>${escapeHtml(studentLabel(u))}</td>
             <td class="code">${escapeHtml(u.classSlug || '')}</td>
             <td>${escapeHtml(u.projectName || '')}</td>
-            <td>${fileCell(u)}</td>
+            <td class="code">${escapeHtml(u.fileName || '—')}</td>
             <td>${escapeHtml(formatBytes(u.byteSize))}</td>
+            <td>${downloadCell(u)}</td>
           </tr>`;
         })
         .join('')}
@@ -237,6 +256,12 @@ function initMainApp() {
       loadActivity();
     });
   });
+  // Default to Uploads so ZIP downloads are front and center for classroom ops.
+  const uploadsTab = document.querySelector('.toolbar button.tab[data-tab="uploads"]');
+  if (uploadsTab) {
+    document.querySelectorAll('.toolbar button.tab').forEach((b) => b.classList.remove('active'));
+    uploadsTab.classList.add('active');
+  }
   loadActivity();
 }
 

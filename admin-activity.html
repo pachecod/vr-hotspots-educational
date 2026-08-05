@@ -86,6 +86,26 @@
         text-align: left;
       }
       button.linkish:hover { color: #0a58ca; }
+      button.dl-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+        background: #0d6efd;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      button.dl-btn:hover { background: #0a58ca; }
+      button.dl-btn:disabled {
+        background: #adb5bd;
+        cursor: not-allowed;
+      }
+      #activity-sections {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
       .warn {
         background: #fff3cd;
         border: 1px solid #ffecb5;
@@ -107,8 +127,10 @@
       <nav id="admin-nav" data-active="activity"></nav>
       <h1>Activity</h1>
       <p class="hint">
-        Login/logout timestamps and cloud upload events (package or asset file totals).
-        Logout is recorded only on explicit logout — closing a tab or cookie expiry is not logged.
+        Login/logout timestamps and cloud upload events. Use the <strong>Uploads</strong> tab
+        (or the Uploads table below) and click <strong>Download</strong> to fetch a draft/submit ZIP
+        or asset from cloud storage. Logout is recorded only on explicit logout — closing a tab or
+        cookie expiry is not logged.
       </p>
 
       <div class="toolbar">
@@ -142,16 +164,21 @@
       </div>
       <div id="meta" class="meta"></div>
 
-      <div id="section-auth" class="section visible">
-        <h2>Logins &amp; logouts</h2>
-        <div id="auth-table"></div>
-      </div>
+      <div id="activity-sections">
+        <div id="section-uploads" class="section visible">
+          <h2>Uploads</h2>
+          <p class="hint" style="margin-top:0">
+            Draft and submitted packages are ZIP files. Download pulls the file from B2 for that event.
+          </p>
+          <div id="uploads-table"></div>
+        </div>
 
-      <div id="section-uploads" class="section visible">
-        <h2>Uploads</h2>
-        <div id="uploads-table"></div>
+        <div id="section-auth" class="section visible">
+          <h2>Logins &amp; logouts</h2>
+          <div id="auth-table"></div>
+        </div>
       </div>
     </div>
-    <script src="admin-activity.js"></script>
+    <script src="admin-activity.js?v=2"></script>
   </body>
 </html>

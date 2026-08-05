@@ -110,6 +110,26 @@
       .chart-tip .tip-time { opacity: 0.9; white-space: nowrap; }
       .chart-tip .tip-err { color: #ffc9ce; margin-top: 2px; }
       .error-markers-hint { font-size: 12px; color: #666; margin: 0 0 8px; }
+      .render-legend {
+        font-size: 12px;
+        color: #666;
+        margin: 0 0 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        align-items: center;
+      }
+      .render-legend .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .render-legend .legend-dots {
+        display: inline-block;
+        width: 28px;
+        border-top: 2px dashed #dc3545;
+        transform: translateY(1px);
+      }
       .error-detail {
         display: none;
         margin-top: 12px;
@@ -204,6 +224,12 @@
       <div class="panel">
         <h2>Render — CPU, memory, traffic</h2>
         <div id="render-meta" class="hint" style="margin-bottom: 10px"></div>
+        <div id="render-legend" class="render-legend" style="display: none">
+          <span class="legend-item">
+            <span class="legend-dots" aria-hidden="true"></span>
+            <span>Dotted line = absolute limit for this server (CPU / memory plan ceiling).</span>
+          </span>
+        </div>
         <p id="error-markers-hint" class="error-markers-hint" style="display: none">
           Red triangles mark reported errors in this window — click one to inspect (rough time correlation only).
         </p>

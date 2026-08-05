@@ -550,6 +550,7 @@ function renderRenderCharts(data) {
   const meta = document.getElementById('render-meta');
   const root = document.getElementById('render-charts');
   const hint = document.getElementById('error-markers-hint');
+  const legend = document.getElementById('render-legend');
   const detail = document.getElementById('error-detail');
   if (detail) {
     detail.className = 'error-detail';
@@ -559,8 +560,10 @@ function renderRenderCharts(data) {
     meta.textContent = 'Render metrics unavailable until API key + service id are configured.';
     root.innerHTML = '';
     if (hint) hint.style.display = 'none';
+    if (legend) legend.style.display = 'none';
     return;
   }
+  if (legend) legend.style.display = 'flex';
   const range = data.render.range || {};
   const errorInfo = data.errors || { logs: [], total: 0 };
   meta.textContent = `Service ${data.render.config?.serviceId || ''} · last ${range.hours || '?'}h · resolution ${

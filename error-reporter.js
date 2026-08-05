@@ -41,7 +41,23 @@
     STUDENT_ASSET_UPLOAD_FAILED: 'student_asset_upload_failed',
     USAGE_QUOTA_BLOCKED: 'usage_quota_blocked',
     LOCAL_PROJECT_SAVE_FAILED: 'local_project_save_failed',
+    LOCAL_PROJECT_OPEN_FAILED: 'local_project_open_failed',
+    LOCAL_PROJECT_RENAME_FAILED: 'local_project_rename_failed',
+    LOCAL_PROJECT_DELETE_FAILED: 'local_project_delete_failed',
     ZIP_TEMPLATE_LOAD_FAILED: 'zip_template_load_failed',
+    SCENE_ADD_IMAGE_FAILED: 'scene_add_image_failed',
+    SCENE_ADD_IMAGE_URL_FAILED: 'scene_add_image_url_failed',
+    SCENE_ADD_VIDEO_FAILED: 'scene_add_video_failed',
+    SCENE_REPLACE_VIDEO_FAILED: 'scene_replace_video_failed',
+    HOTSPOT_VIDEO_PROCESS_FAILED: 'hotspot_video_process_failed',
+    HOTSPOT_VIDEO_EDIT_FAILED: 'hotspot_video_edit_failed',
+    SCENES_DATA_LOAD_FAILED: 'scenes_data_load_failed',
+    FLAT_PAGE_LOAD_FAILED: 'flat_page_load_failed',
+    FLAT_PAGE_PERSIST_FAILED: 'flat_page_persist_failed',
+    FLAT_PAGE_ZIP_READ_FAILED: 'flat_page_zip_read_failed',
+    FLAT_PAGES_FROM_TEMPLATE_FAILED: 'flat_pages_from_template_failed',
+    EXPORT_FLAT_PAGES_FAILED: 'export_flat_pages_failed',
+    EXPORT_PREPARE_FAILED: 'export_prepare_failed',
   };
 
   function appVersion() {

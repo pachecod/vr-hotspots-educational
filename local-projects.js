@@ -36,6 +36,32 @@
     );
   }
 
+  function reportLocalCaught(code, message, details, level) {
+    try {
+      if (global.ErrorReporter && typeof global.ErrorReporter.reportCaught === 'function') {
+        global.ErrorReporter.reportCaught(
+          code,
+          message,
+          details || {},
+          level || 'error'
+        );
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function localCode(name) {
+    return (
+      (global.ErrorReporter &&
+        global.ErrorReporter.CODES &&
+        global.ErrorReporter.CODES[name]) ||
+      String(name || '')
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+        .toLowerCase()
+    );
+  }
+
   function storageStoreForKey(key) {
     const k = String(key || '');
     if (k.startsWith('video_')) return 'videos';
@@ -380,18 +406,11 @@
       };
       const ok = await idbPut(LOCAL_PROJECTS_STORE, record);
       if (!ok) {
-        try {
-          if (global.ErrorReporter && typeof global.ErrorReporter.reportCaught === 'function') {
-            global.ErrorReporter.reportCaught(
-              global.ErrorReporter.CODES.LOCAL_PROJECT_SAVE_FAILED,
-              'Browser storage is full or unavailable for local project save',
-              { projectId: id, projectName: record.name },
-              'error'
-            );
-          }
-        } catch (_) {
-          /* ignore */
-        }
+        reportLocalCaught(
+          localCode('LOCAL_PROJECT_SAVE_FAILED'),
+          'Browser storage is full or unavailable for local project save',
+          { projectId: id, projectName: record.name }
+        );
         throw new Error('Browser storage is full or unavailable. Try removing media or projects.');
       }
       this.rememberOpenedId(id);
@@ -408,12 +427,28 @@
       if (!rec) throw new Error('Project not found.');
       rec.name = String(name || '').trim() || rec.name;
       rec.updatedAt = Date.now();
-      await idbPut(LOCAL_PROJECTS_STORE, rec);
+      const ok = await idbPut(LOCAL_PROJECTS_STORE, rec);
+      if (!ok) {
+        reportLocalCaught(
+          localCode('LOCAL_PROJECT_RENAME_FAILED'),
+          'Could not rename local project in browser storage',
+          { projectId: id, projectName: rec.name }
+        );
+        throw new Error('Could not rename project in browser storage.');
+      }
       await this.refreshButtonVisibility();
     },
 
     async remove(id) {
-      await idbDelete(LOCAL_PROJECTS_STORE, id);
+      const ok = await idbDelete(LOCAL_PROJECTS_STORE, id);
+      if (!ok) {
+        reportLocalCaught(
+          localCode('LOCAL_PROJECT_DELETE_FAILED'),
+          'Could not delete local project from browser storage',
+          { projectId: id }
+        );
+        throw new Error('Could not delete project from browser storage.');
+      }
       await this.refreshButtonVisibility();
     },
 
@@ -463,18 +498,11 @@
           localStorage.removeItem(FLAT_KEY);
         }
       } catch (e) {
-        try {
-          if (global.ErrorReporter && typeof global.ErrorReporter.reportCaught === 'function') {
-            global.ErrorReporter.reportCaught(
-              global.ErrorReporter.CODES.LOCAL_PROJECT_SAVE_FAILED,
-              'Could not write opened local project into browser storage',
-              { error: e, projectId: id },
-              'error'
-            );
-          }
-        } catch (_) {
-          /* ignore */
-        }
+        reportLocalCaught(
+          localCode('LOCAL_PROJECT_OPEN_FAILED'),
+          'Could not write opened local project into browser storage',
+          { error: e && e.message, projectId: id }
+        );
         throw new Error('Could not write project to browser storage.');
       }
 
@@ -527,7 +555,16 @@
         alert(`Saved locally as "${trimmed}". Open My Local Projects anytime to switch.`);
         await this.refreshButtonVisibility();
       } catch (e) {
-        alert(e.message || 'Could not save locally.');
+        const msg = e && e.message ? String(e.message) : 'Could not save locally.';
+        const isValidation =
+          /guest mode|Nothing to save|enter a name|up to \d+ local/i.test(msg) ||
+          /Sign in uses cloud save/i.test(msg);
+        if (!isValidation) {
+          reportLocalCaught(localCode('LOCAL_PROJECT_SAVE_FAILED'), msg, {
+            projectName: trimmed,
+          });
+        }
+        alert(msg);
       }
     },
 
@@ -660,7 +697,12 @@
             dialog.remove();
             await this.open(id);
           } catch (e) {
-            alert(e.message || 'Could not open local project.');
+            const msg = e && e.message ? String(e.message) : 'Could not open local project.';
+            reportLocalCaught(localCode('LOCAL_PROJECT_OPEN_FAILED'), msg, {
+              projectId: id,
+              reason: /Project not found/i.test(msg) ? 'not_found' : 'open_failed',
+            });
+            alert(msg);
           }
         });
       });
@@ -678,7 +720,12 @@
             dialog.remove();
             await this.show();
           } catch (e) {
-            alert(e.message || 'Could not rename.');
+            const msg = e && e.message ? String(e.message) : 'Could not rename.';
+            reportLocalCaught(localCode('LOCAL_PROJECT_RENAME_FAILED'), msg, {
+              projectId: id,
+              projectName: trimmed,
+            });
+            alert(msg);
           }
         });
       });
@@ -695,7 +742,9 @@
             dialog.remove();
             await this.show();
           } catch (e) {
-            alert(e.message || 'Could not delete.');
+            const msg = e && e.message ? String(e.message) : 'Could not delete.';
+            reportLocalCaught(localCode('LOCAL_PROJECT_DELETE_FAILED'), msg, { projectId: id });
+            alert(msg);
           }
         });
       });

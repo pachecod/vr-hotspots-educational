@@ -243,6 +243,18 @@ button:hover { background: #1d4ed8; }`;
         if (normalized) this.project = normalized;
       } catch (err) {
         console.warn('[FlatPage] Failed to load saved flat pages:', err);
+        try {
+          if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+            window.ErrorReporter.reportCaught(
+              window.ErrorReporter.CODES.FLAT_PAGE_LOAD_FAILED,
+              err.message || 'Failed to load saved flat pages',
+              { error: err && err.message },
+              'warning'
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
       }
     }
 
@@ -251,6 +263,18 @@ button:hover { background: #1d4ed8; }`;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.project));
       } catch (err) {
         console.warn('[FlatPage] Failed to persist flat pages:', err);
+        try {
+          if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+            window.ErrorReporter.reportCaught(
+              window.ErrorReporter.CODES.FLAT_PAGE_PERSIST_FAILED,
+              err.message || 'Failed to persist flat pages',
+              { error: err && err.message },
+              'error'
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
       }
     }
 
@@ -761,6 +785,18 @@ button:hover { background: #1d4ed8; }`;
         return { version: PROJECT_VERSION, activePageId, pages };
       } catch (err) {
         console.warn('[FlatPage] Failed to read flat pages from ZIP:', err);
+        try {
+          if (window.ErrorReporter && typeof window.ErrorReporter.reportCaught === 'function') {
+            window.ErrorReporter.reportCaught(
+              window.ErrorReporter.CODES.FLAT_PAGE_ZIP_READ_FAILED,
+              err.message || 'Failed to read flat pages from ZIP',
+              { error: err && err.message },
+              'warning'
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
         return null;
       }
     }

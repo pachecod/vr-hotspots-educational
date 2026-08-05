@@ -1,3 +1,21 @@
+async function readAdminJson(res, fallbackLabel) {
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch (_) {
+    throw new Error(
+      res.ok
+        ? `${fallbackLabel}: invalid JSON from server`
+        : `${fallbackLabel} failed (${res.status})`
+    );
+  }
+  if (!res.ok || !data || data.success === false) {
+    throw new Error((data && data.message) || `${fallbackLabel} failed (${res.status})`);
+  }
+  return data;
+}
+
 async function loadErrorLogs() {
   const status = document.getElementById('status');
   const root = document.getElementById('log-root');
@@ -12,7 +30,8 @@ async function loadErrorLogs() {
   if (code) params.set('code', code);
 
   try {
-    const data = await adminFetch(`/admin/error-logs?${params.toString()}`);
+    const res = await adminFetch(`/admin/error-logs?${params.toString()}`);
+    const data = await readAdminJson(res, 'Error log');
     const logs = data.logs || [];
     meta.textContent = `${logs.length} shown${data.total != null ? ` of ${data.total}` : ''} · times in Eastern Time`;
 
@@ -67,7 +86,10 @@ async function loadErrorLogs() {
       btn.addEventListener('click', async () => {
         if (!confirm('Delete this log entry?')) return;
         try {
-          await adminFetch(`/admin/error-logs/${btn.dataset.del}`, { method: 'DELETE' });
+          const delRes = await adminFetch(`/admin/error-logs/${btn.dataset.del}`, {
+            method: 'DELETE',
+          });
+          await readAdminJson(delRes, 'Delete');
           await loadErrorLogs();
         } catch (err) {
           status.textContent = err.message || 'Delete failed';
@@ -103,11 +125,12 @@ async function initMainApp() {
   document.getElementById('clear-old-btn').addEventListener('click', async () => {
     if (!confirm('Delete error logs older than 30 days?')) return;
     try {
-      await adminFetch('/admin/error-logs/clear', {
+      const res = await adminFetch('/admin/error-logs/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ olderThanDays: 30 }),
       });
+      await readAdminJson(res, 'Clear');
       await loadErrorLogs();
     } catch (err) {
       document.getElementById('status').textContent = err.message || 'Clear failed';
@@ -118,11 +141,12 @@ async function initMainApp() {
   document.getElementById('clear-all-btn').addEventListener('click', async () => {
     if (!confirm('Delete ALL error logs? This cannot be undone.')) return;
     try {
-      await adminFetch('/admin/error-logs/clear', {
+      const res = await adminFetch('/admin/error-logs/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
+      await readAdminJson(res, 'Clear');
       await loadErrorLogs();
     } catch (err) {
       document.getElementById('status').textContent = err.message || 'Clear failed';

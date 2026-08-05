@@ -276,6 +276,30 @@ async function applyIncrementalMigrations(pool) {
           ADD COLUMN IF NOT EXISTS byte_size BIGINT;
       `,
     },
+    {
+      name: 'auth_activity_v1',
+      sql: `
+        CREATE TABLE IF NOT EXISTS auth_events (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          event TEXT NOT NULL,
+          role TEXT NOT NULL,
+          student_id UUID,
+          username TEXT,
+          display_name TEXT,
+          class_id UUID,
+          class_slug TEXT,
+          ip TEXT,
+          user_agent TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_auth_events_created
+          ON auth_events (created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_auth_events_role_created
+          ON auth_events (role, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_auth_events_event_created
+          ON auth_events (event, created_at DESC);
+      `,
+    },
   ];
 
   for (const migration of migrations) {

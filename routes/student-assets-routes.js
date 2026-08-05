@@ -153,6 +153,21 @@ function registerStudentAssetRoutes(app, upload) {
           [studentId, category, storedFilename, b2Path, prepared.size]
         );
 
+        try {
+          const usageDb = require('../lib/usage/usage-db');
+          await usageDb.recordUploadEvent({
+            kind: 'asset',
+            byteSize: prepared.size,
+            b2Path,
+            classSlug: ctx.class_slug || null,
+            studentId,
+            projectName: category || null,
+            fileName: storedFilename,
+          });
+        } catch (usageErr) {
+          console.warn('usage asset upload event failed:', usageErr.message);
+        }
+
         const tags = parseTagsFromBody(req.body);
         let savedTags = [];
         if (tags.length && isDbEnabled()) {

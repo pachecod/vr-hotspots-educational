@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { SESSION_BOOT_ID } = require('./lib/session-boot-id');
 const { endLocalTestUser } = require('./lib/local-test-user');
+const { recordAuthEvent } = require('./lib/usage/auth-events');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_SESSION_SECRET =
@@ -109,7 +110,7 @@ function requireAdmin(req, res, next) {
   return next();
 }
 
-function handleAdminLogin(req, res) {
+async function handleAdminLogin(req, res) {
   const password = req.body && req.body.password;
   if (!password || password !== ADMIN_PASSWORD) {
     return res.status(401).json({ success: false, message: 'Invalid admin password' });
@@ -118,10 +119,15 @@ function handleAdminLogin(req, res) {
   endLocalTestUser(res);
   const token = createAdminSessionToken();
   setSessionCookie(res, token);
+  await recordAuthEvent({ event: 'login', role: 'admin', req });
   return res.json({ success: true });
 }
 
-function handleAdminLogout(req, res) {
+async function handleAdminLogout(req, res) {
+  const session = getAdminSession(req);
+  if (session) {
+    await recordAuthEvent({ event: 'logout', role: 'admin', req });
+  }
   clearSessionCookie(res);
   endLocalTestUser(res);
   return res.json({ success: true });

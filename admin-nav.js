@@ -14,6 +14,7 @@ function renderAdminNav(activeTab) {
     { id: 'users', label: 'Users and Classes', href: '/admin-users.html' },
     { id: 'billing', label: 'Billing & Limits', href: '/admin-billing.html' },
     { id: 'usage', label: 'Usage', href: '/admin-usage.html' },
+    { id: 'activity', label: 'Activity', href: '/admin-activity.html' },
     { id: 'errors', label: 'Error Log', href: '/admin-error-log.html' },
   ];
 

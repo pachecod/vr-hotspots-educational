@@ -227,6 +227,17 @@
       tr:nth-child(even) { background: #fafafa; }
       .code { font-family: monospace; font-size: 12px; }
       .empty { color: #666; padding: 12px; background: #f8f9fa; border-radius: 6px; }
+      button.linkish {
+        background: none;
+        border: none;
+        padding: 0;
+        color: #0d6efd;
+        cursor: pointer;
+        text-decoration: underline;
+        font: inherit;
+        text-align: left;
+      }
+      button.linkish:hover { color: #0a58ca; }
       .two-col {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -374,7 +385,7 @@
         </div>
 
         <div class="panel">
-          <h2>Recent cloud uploads</h2>
+          <h2>Recent cloud uploads <a href="/admin-activity.html" style="font-size:12px;font-weight:normal;margin-left:8px">See full Activity</a></h2>
           <div id="recent-uploads"></div>
         </div>
       </div>

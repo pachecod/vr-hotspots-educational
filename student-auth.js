@@ -8,6 +8,7 @@ const {
   getLocalTestSession,
   endLocalTestUser,
 } = require('./lib/local-test-user');
+const { recordAuthEvent } = require('./lib/usage/auth-events');
 
 const STUDENT_AUTH_REQUIRED = process.env.STUDENT_AUTH_REQUIRED === 'true';
 const STUDENT_SESSION_SECRET =
@@ -103,6 +104,16 @@ async function handleStudentLogin(req, res) {
     });
     endLocalTestUser(res);
     session.setCookie(res, token);
+    await recordAuthEvent({
+      event: 'login',
+      role: 'student',
+      studentId: student.id,
+      username: student.username,
+      displayName: student.display_name,
+      classId: student.class_id,
+      classSlug: student.class_slug,
+      req,
+    });
     return res.json({
       success: true,
       student: {
@@ -119,7 +130,20 @@ async function handleStudentLogin(req, res) {
   }
 }
 
-function handleStudentLogout(req, res) {
+async function handleStudentLogout(req, res) {
+  const sess = getStudentSession(req);
+  if (sess && sess.studentId) {
+    await recordAuthEvent({
+      event: 'logout',
+      role: 'student',
+      studentId: sess.studentId,
+      username: sess.username || null,
+      displayName: sess.displayName || null,
+      classId: sess.classId || null,
+      classSlug: sess.classSlug || null,
+      req,
+    });
+  }
   session.clearCookie(res);
   endLocalTestUser(res);
   return res.json({ success: true });

@@ -912,32 +912,69 @@ function renderMemory(data) {
     </div>`;
 }
 
+async function downloadUploadEvent(id, fileName) {
+  try {
+    const response = await adminFetch(`/admin/activity/uploads/${encodeURIComponent(id)}/download`);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Download failed');
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName || 'download.bin';
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Download failed: ' + (err.message || 'unknown error'));
+  }
+}
+
 function renderRecent(data) {
   const el = document.getElementById('recent-uploads');
   const rows = data.recentUploads || [];
   if (!rows.length) {
     el.innerHTML =
-      '<div class="empty">No tracked uploads yet. New draft/submit cloud saves will appear here with byte sizes.</div>';
+      '<div class="empty">No tracked uploads yet. New draft/submit cloud saves and asset uploads will appear here with byte sizes. <a href="/admin-activity.html">Open Activity</a></div>';
     return;
   }
   el.innerHTML = `<table>
-    <thead><tr><th>When</th><th>Kind</th><th>Size</th><th>Class</th><th>Project</th><th>File</th></tr></thead>
+    <thead><tr><th>When</th><th>Kind</th><th>Student</th><th>Size</th><th>Class</th><th>Project</th><th>File</th></tr></thead>
     <tbody>
       ${rows
         .map((r) => {
           const when = r.createdAt ? new Date(r.createdAt).toLocaleString() : '';
+          const student =
+            r.studentDisplayName ||
+            r.studentUsername ||
+            (r.studentId ? String(r.studentId).slice(0, 8) : '');
+          const fileHtml =
+            r.id && r.b2Path && r.fileName
+              ? `<button type="button" class="linkish code dl-upload" data-id="${escapeHtml(
+                  r.id
+                )}" data-name="${escapeHtml(r.fileName)}" title="Download from cloud storage">${escapeHtml(
+                  r.fileName
+                )}</button>`
+              : `<span class="code">${escapeHtml(r.fileName || '')}</span>`;
           return `<tr>
             <td>${escapeHtml(when)}</td>
             <td>${escapeHtml(r.kind)}</td>
+            <td>${escapeHtml(student || '—')}</td>
             <td>${escapeHtml(formatBytes(r.byteSize))}</td>
             <td class="code">${escapeHtml(r.classSlug || '')}</td>
             <td>${escapeHtml(r.projectName || '')}</td>
-            <td class="code">${escapeHtml(r.fileName || '')}</td>
+            <td>${fileHtml}</td>
           </tr>`;
         })
         .join('')}
     </tbody>
   </table>`;
+  el.querySelectorAll('button.dl-upload').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      downloadUploadEvent(btn.getAttribute('data-id'), btn.getAttribute('data-name'));
+    });
+  });
 }
 
 async function readJsonResponse(res, fallbackLabel) {

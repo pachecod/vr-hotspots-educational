@@ -153,12 +153,11 @@ function kindBadge(kind) {
     submitted: 'Submitted',
     admin_return: 'Teacher feedback',
     admin_assigned: 'Assigned project',
+    admin_repair: 'Repaired copy',
     draft: 'Draft',
   };
   const cls =
-    kind === 'admin_return'
-      ? 'badge-return'
-      : kind === 'admin_assigned'
+    kind === 'admin_return' || kind === 'admin_assigned' || kind === 'admin_repair'
       ? 'badge-return'
       : kind === 'draft'
       ? 'badge-draft'
@@ -264,6 +263,11 @@ async function loadInbox() {
             <div class="actions">
               <button class="btn-download" onclick="downloadVersion('${versionId}', '${escapeHtml(sub.fileName)}')">📥 Download</button>
               ${
+                legacy
+                  ? ''
+                  : `<button class="btn-repair" onclick="repairMediaVersion('${versionId}', '${escapeHtml(sub.projectName || 'project')}')">🔧 Repair media</button>`
+              }
+              ${
                 hosted
                   ? `<button class="btn-unhost" onclick="unhostVersion('${versionId}', '${escapeHtml(sub.fileName)}', '${escapeHtml(sub.projectName || 'project')}')">🚫 Unhost</button>`
                   : `<button class="btn-host" onclick="hostVersion('${versionId}', '${escapeHtml(sub.projectName || 'project')}')">🌐 Host</button>`
@@ -313,6 +317,93 @@ async function downloadVersion(versionId, fileName) {
     URL.revokeObjectURL(url);
   } catch (err) {
     alert('Download failed: ' + err.message);
+  }
+}
+
+function formatRenameList(renames) {
+  if (!Array.isArray(renames) || !renames.length) return '';
+  return renames
+    .map((r) => {
+      const from = String(r.from || '').split('/').pop();
+      const to = String(r.to || '').split('/').pop();
+      return `• ${from} → ${to}`;
+    })
+    .join('\n');
+}
+
+async function repairMediaVersion(versionId, projectName) {
+  if (isLegacyVersion(versionId)) {
+    alert('Media repair is not available for legacy B2-only submissions.');
+    return;
+  }
+  const confirmed = confirm(
+    `Scan "${projectName || 'this project'}" for image/video files missing extensions and save a repaired copy?\n\nThe original submission is not changed. The copy stays hidden from the student until you send it.`
+  );
+  if (!confirmed) return;
+
+  try {
+    const response = await adminFetch(`/admin/versions/${versionId}/repair-media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.success === false) {
+      throw new Error(result.message || 'Repair failed');
+    }
+
+    if (!result.repaired) {
+      alert(result.message || 'No extensionless media found to rename.');
+      return;
+    }
+
+    const renameBlock = formatRenameList(result.renames);
+    const choice = prompt(
+      `${result.message || 'Repaired copy saved.'}\n\nRenamed:\n${renameBlock}\n\nNext step — type one of:\n  host   = host the repaired copy for testing\n  send   = send repaired copy to the student\n  download = download the repaired ZIP\n  (leave blank to do nothing)`,
+      'host'
+    );
+    const action = String(choice || '')
+      .trim()
+      .toLowerCase();
+    const repairedId = result.versionId;
+    const repairedName = result.fileName || 'repaired.zip';
+
+    if (action === 'host') {
+      await hostVersion(repairedId, `${projectName || 'project'}_repaired`);
+    } else if (action === 'send') {
+      await sendRepairedVersion(repairedId);
+    } else if (action === 'download') {
+      await downloadVersion(repairedId, repairedName);
+    }
+
+    // Refresh history panel if open for this card's thread
+    await loadInbox();
+  } catch (err) {
+    alert('Repair failed: ' + err.message);
+  }
+}
+
+async function sendRepairedVersion(versionId) {
+  if (!versionId) return;
+  const note = prompt(
+    'Note for the student (optional):',
+    'Media filenames repaired so pictures display correctly. Please open this version and confirm your image hotspots look right.'
+  );
+  if (note === null) return; // cancelled
+  try {
+    const response = await adminFetch(`/admin/versions/${versionId}/send-repair`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminNote: note }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Send failed');
+    }
+    alert(result.message || `Sent as v${result.versionNumber}. Student will see new feedback.`);
+    await loadInbox();
+  } catch (err) {
+    alert('Send failed: ' + err.message);
   }
 }
 
@@ -467,10 +558,19 @@ async function toggleHistory(threadId, btn) {
           v.studentNote || v.adminNote
             ? `<br><em>${escapeHtml(v.studentNote || v.adminNote)}</em>`
             : '';
+        const projectLabel = escapeHtml(v.projectName || 'project');
+        const repairActions =
+          v.kind === 'admin_repair'
+            ? `<button onclick="hostVersion('${v.id}', '${projectLabel}_repaired')" style="margin-left:6px;font-size:11px;">Host</button>` +
+              `<button onclick="sendRepairedVersion('${v.id}')" style="margin-left:6px;font-size:11px;">Send to student</button>`
+            : v.kind === 'submitted' || v.kind === 'admin_return' || v.kind === 'admin_assigned'
+            ? `<button onclick="repairMediaVersion('${v.id}', '${projectLabel}')" style="margin-left:6px;font-size:11px;">Repair media</button>`
+            : '';
         return `<div class="version-row">
           ${kindBadge(v.kind)} v${v.versionNumber} — ${v.submittedAt || v.createdAt ? new Date(v.submittedAt || v.createdAt).toLocaleString() : ''}
           ${note}
           <button onclick="downloadVersion('${v.id}', '${escapeHtml(v.fileName)}')" style="margin-left:8px;font-size:11px;">Download</button>
+          ${repairActions}
         </div>`;
       })
       .join('');

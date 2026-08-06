@@ -18,6 +18,14 @@ When new Error Log / Activity exports arrive, add a dated entry with:
 
 ## Entries
 
+### 2026-08-06 — Admin “Repair media” for extensionless submitted ZIPs
+
+**Feature:** Admin Submissions → **Repair media** on a version.  
+Server downloads the ZIP, sniffs magic bytes for extensionless `images/` / `videos/` files, renames (e.g. UUID → `.jpg`), rewrites `config.json`, and saves a new **`admin_repair`** copy on B2 (original untouched; hidden from students). Then admin can **Host** that copy to test, and **Send to student** (`admin_return`) when ready.
+
+**APIs:** `POST /admin/versions/:id/repair-media`, `POST /admin/versions/:id/send-repair`  
+**Preventative:** client export already forces extensions (commit on `3.6`). Repair is for already-submitted broken ZIPs.
+
 ### 2026-08-06 ~12:25 PM EDT — student10 black image hotspot (extensionless export)
 
 **Source:** Classroom photo (iPad vs laptop) + `exports/0806/v009_1786032732576.zip` / Desktop unzip  

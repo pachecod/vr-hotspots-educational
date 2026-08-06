@@ -241,6 +241,7 @@ async function listStudentProjects(studentId) {
      INNER JOIN LATERAL (
        SELECT * FROM project_versions pv
        WHERE pv.thread_id = pt.id
+         AND pv.kind <> 'admin_repair'
        ORDER BY pv.version_number DESC
        LIMIT 1
      ) lv ON TRUE
@@ -278,6 +279,8 @@ async function listThreadVersions(threadId, { studentId } = {}) {
   if (studentId) {
     params.push(studentId);
     sql += ` AND pt.student_id = $${params.length}`;
+    // Admin repair copies are for teacher testing only until sent as admin_return.
+    sql += ` AND pv.kind <> 'admin_repair'`;
   }
   sql += ` ORDER BY pv.version_number DESC`;
   const { rows } = await query(sql, params);

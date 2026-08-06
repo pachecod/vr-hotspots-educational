@@ -28,6 +28,7 @@ const {
 } = require('../lib/hosted-b2-storage');
 const { query } = require('../services/db-service');
 const { logAppError } = require('../lib/error-log');
+const { repairMediaExtensionsInZip } = require('../lib/repair-media-extensions');
 
 function sessDisplayName(req) {
   const sess = getStudentSession(req);
@@ -686,6 +687,180 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
     } catch (err) {
       console.error('admin return error:', err);
       return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  /**
+   * Auto-rename extensionless images/videos in a submitted ZIP and save a new
+   * admin_repair copy (hidden from students). Original ZIP is never overwritten.
+   */
+  app.post('/admin/versions/:versionId/repair-media', async (req, res) => {
+    let tempPath = null;
+    let repairedPath = null;
+    try {
+      if (!isDbEnabled()) {
+        return res.status(503).json({ success: false, message: 'Database required for media repair' });
+      }
+      const parentVersion = await projectVersionsDb.getVersionById(req.params.versionId);
+      if (!parentVersion) {
+        return res.status(404).json({ success: false, message: 'Version not found' });
+      }
+
+      tempPath = path.join(
+        'temp-uploads',
+        `repair_in_${Date.now()}_${parentVersion.fileName || 'project.zip'}`
+      );
+      repairedPath = path.join(
+        'temp-uploads',
+        `repair_out_${Date.now()}_${parentVersion.fileName || 'project.zip'}`
+      );
+      await b2Service.downloadFile(parentVersion.b2Path, tempPath);
+      assertValidZipFile(tempPath);
+
+      const summary = repairMediaExtensionsInZip(tempPath, repairedPath);
+      if (!summary.repaired) {
+        return res.json({
+          success: true,
+          repaired: false,
+          message: 'No extensionless media found to rename.',
+          renames: [],
+          skipped: summary.skipped || [],
+          configUpdated: false,
+          parentVersionId: parentVersion.id,
+        });
+      }
+
+      const classSlug = parentVersion.classSlug || 'default';
+      const reserved = await projectVersionsDb.reserveVersionPath({
+        studentId: parentVersion.studentId,
+        classSlug,
+        projectName: parentVersion.projectName,
+        threadId: parentVersion.threadId,
+      });
+
+      await b2Service.uploadFile(repairedPath, reserved.b2Path);
+
+      const renameNote = summary.renamed
+        .slice(0, 8)
+        .map((r) => `${path.posix.basename(r.from)} → ${path.posix.basename(r.to)}`)
+        .join('; ');
+      const adminNote = projectVersionsDb.trimNote(
+        `Media filenames repaired (${summary.renamed.length} file${
+          summary.renamed.length === 1 ? '' : 's'
+        }): ${renameNote}${summary.renamed.length > 8 ? '…' : ''}`
+      );
+
+      const result = await projectVersionsDb.createVersion({
+        studentId: parentVersion.studentId,
+        projectName: parentVersion.projectName,
+        fileName: reserved.fileName,
+        b2Path: reserved.b2Path,
+        kind: 'admin_repair',
+        createdBy: 'admin',
+        adminNote,
+        parentVersionId: parentVersion.id,
+        threadId: parentVersion.threadId,
+        versionNumber: reserved.versionNumber,
+      });
+
+      return res.json({
+        success: true,
+        repaired: true,
+        message: `Repaired ${summary.renamed.length} media file(s). Copy saved as v${result.versionNumber} (not visible to student until sent).`,
+        versionId: result.version.id,
+        versionNumber: result.versionNumber,
+        fileName: reserved.fileName,
+        renames: summary.renamed,
+        skipped: summary.skipped || [],
+        configUpdated: !!summary.configUpdated,
+        parentVersionId: parentVersion.id,
+        downloadUrl: `/admin/versions/${result.version.id}/download`,
+      });
+    } catch (err) {
+      console.error('admin repair-media error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    } finally {
+      for (const p of [tempPath, repairedPath]) {
+        if (!p) continue;
+        try {
+          if (fs.existsSync(p)) fs.unlinkSync(p);
+        } catch (_) {}
+      }
+    }
+  });
+
+  /**
+   * Promote an admin_repair copy to admin_return so the student can open it.
+   */
+  app.post('/admin/versions/:versionId/send-repair', async (req, res) => {
+    let tempPath = null;
+    try {
+      if (!isDbEnabled()) {
+        return res.status(503).json({ success: false, message: 'Database required' });
+      }
+      const repairVersion = await projectVersionsDb.getVersionById(req.params.versionId);
+      if (!repairVersion) {
+        return res.status(404).json({ success: false, message: 'Version not found' });
+      }
+      if (repairVersion.kind !== 'admin_repair') {
+        return res.status(400).json({
+          success: false,
+          message: 'Only admin_repair versions can be sent with this action',
+        });
+      }
+
+      const defaultNote =
+        'Media filenames repaired so pictures display correctly. Please open this version and confirm your image hotspots look right.';
+      const adminNote = projectVersionsDb.trimNote(
+        req.body?.adminNote || req.body?.admin_note || defaultNote
+      );
+      const classSlug = repairVersion.classSlug || 'default';
+
+      tempPath = path.join(
+        'temp-uploads',
+        `send_repair_${Date.now()}_${repairVersion.fileName || 'project.zip'}`
+      );
+      await b2Service.downloadFile(repairVersion.b2Path, tempPath);
+      assertValidZipFile(tempPath);
+
+      const reserved = await projectVersionsDb.reserveVersionPath({
+        studentId: repairVersion.studentId,
+        classSlug,
+        projectName: repairVersion.projectName,
+        threadId: repairVersion.threadId,
+      });
+
+      await b2Service.uploadFile(tempPath, reserved.b2Path);
+
+      const result = await projectVersionsDb.createVersion({
+        studentId: repairVersion.studentId,
+        projectName: repairVersion.projectName,
+        fileName: reserved.fileName,
+        b2Path: reserved.b2Path,
+        kind: 'admin_return',
+        createdBy: 'admin',
+        adminNote,
+        parentVersionId: repairVersion.id,
+        threadId: repairVersion.threadId,
+        versionNumber: reserved.versionNumber,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Repaired copy sent to student',
+        versionId: result.version.id,
+        versionNumber: result.versionNumber,
+        repairVersionId: repairVersion.id,
+      });
+    } catch (err) {
+      console.error('admin send-repair error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    } finally {
+      if (tempPath) {
+        try {
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch (_) {}
+      }
     }
   });
 

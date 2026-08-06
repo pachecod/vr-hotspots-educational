@@ -36,6 +36,8 @@ const StudentPeek = {
       submitted: ['Submitted', 'version-badge-submitted'],
       draft: ['Draft', 'version-badge-draft'],
       admin_return: ['Teacher feedback', 'version-badge-return'],
+      admin_assigned: ['Assigned project', 'version-badge-return'],
+      admin_repair: ['Repaired copy', 'version-badge-return'],
     };
     const [text, cls] = labels[kind] || [kind, 'version-badge-draft'];
     return `<span class="version-badge ${cls}">${text}</span>`;

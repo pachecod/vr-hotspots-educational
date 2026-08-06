@@ -300,6 +300,25 @@ async function applyIncrementalMigrations(pool) {
           ON auth_events (event, created_at DESC);
       `,
     },
+    {
+      name: 'usage_download_daily_v1',
+      sql: `
+        CREATE TABLE IF NOT EXISTS usage_download_daily (
+          day_gmt DATE PRIMARY KEY,
+          byte_size BIGINT NOT NULL DEFAULT 0,
+          event_count INT NOT NULL DEFAULT 0,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `,
+    },
+    {
+      name: 'project_versions_admin_repair_v1',
+      sql: `
+        ALTER TABLE project_versions DROP CONSTRAINT IF EXISTS project_versions_kind_check;
+        ALTER TABLE project_versions ADD CONSTRAINT project_versions_kind_check
+          CHECK (kind IN ('draft', 'submitted', 'admin_return', 'admin_assigned', 'admin_repair'));
+      `,
+    },
   ];
 
   for (const migration of migrations) {

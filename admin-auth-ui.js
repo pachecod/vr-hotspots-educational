@@ -179,7 +179,7 @@ async function requireAdminSession(containerId, onAuthenticated) {
   const authed = await checkAdminSession();
   if (authed) {
     setAdminAuthenticated(true);
-    onAuthenticated();
+    await Promise.resolve(onAuthenticated());
     return;
   }
   renderAdminLoginGate(containerId, onAuthenticated);

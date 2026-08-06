@@ -246,8 +246,10 @@ async function loadHostedAssignableProjects() {
       const opt = document.createElement('option');
       opt.value = project.hostedPath;
       const owner = project.studentName ? ` — ${project.studentName}` : '';
-      opt.textContent = `${project.title}${owner} (${project.sourceLabel || project.source})`;
+      const pathBit = project.hostedPath ? ` [${project.hostedPath}]` : '';
+      opt.textContent = `${project.title}${owner}${pathBit} (${project.sourceLabel || project.source})`;
       opt.dataset.title = project.title;
+      opt.dataset.hostedPath = project.hostedPath || '';
       select.appendChild(opt);
     });
   } catch (err) {
@@ -355,17 +357,56 @@ async function sendFromAssignPage() {
   }
 }
 
-async function applyAssignQueryPrefill() {
+function readAssignPrefill() {
   const params = new URLSearchParams(window.location.search);
-  if (![...params.keys()].length) return;
+  let stored = null;
+  try {
+    const raw = sessionStorage.getItem('webxrideAssignPrefill');
+    if (raw) stored = JSON.parse(raw);
+  } catch (_) {
+    stored = null;
+  }
 
-  const source = params.get('source');
-  const hostedPathRaw = params.get('hostedPath') || params.get('hosted') || '';
-  const hostedPath = normalizeHostedPathParam(hostedPathRaw);
-  const projectName = params.get('projectName') || '';
-  const classId = params.get('classId') || '';
-  const studentId = params.get('studentId') || '';
-  const adminNote = params.get('adminNote') || '';
+  const hostedFromQuery = normalizeHostedPathParam(
+    params.get('hostedPath') || params.get('hosted') || ''
+  );
+  const hostedFromStore = normalizeHostedPathParam(stored?.hostedPath || '');
+
+  // Prefer query string; fall back to sessionStorage (survives odd redirects / lost params).
+  const hostedPath = hostedFromQuery || hostedFromStore;
+  const source = params.get('source') || stored?.source || (hostedPath ? 'hosted' : '');
+  const projectName = params.get('projectName') || stored?.projectName || '';
+  const classId = params.get('classId') || stored?.classId || '';
+  const studentId = params.get('studentId') || stored?.studentId || '';
+  const studentName = params.get('studentName') || stored?.studentName || '';
+  const adminNote = params.get('adminNote') || stored?.adminNote || '';
+  const repairVersionId = params.get('repairVersionId') || stored?.repairVersionId || '';
+
+  return {
+    source,
+    hostedPath,
+    projectName,
+    classId,
+    studentId,
+    studentName,
+    adminNote,
+    repairVersionId,
+    hadPrefill: !!(hostedPath || studentId || projectName || params.get('prefill')),
+  };
+}
+
+async function applyAssignQueryPrefill() {
+  const prefill = readAssignPrefill();
+  if (!prefill.hadPrefill) return;
+
+  const {
+    source,
+    hostedPath,
+    projectName,
+    classId,
+    studentId,
+    adminNote,
+  } = prefill;
 
   if (projectName) {
     const nameInput = document.getElementById('assign-project-name');
@@ -381,9 +422,10 @@ async function applyAssignQueryPrefill() {
     setAssignSource('hosted');
   }
   if (hostedPath) {
-    hostedSelected = selectHostedProjectPath(hostedPath, {
-      title: projectName || hostedPath,
-    });
+    const repairTitle = projectName
+      ? `${projectName} · repaired (${hostedPath})`
+      : `Repaired (${hostedPath})`;
+    hostedSelected = selectHostedProjectPath(hostedPath, { title: repairTitle });
     const nameInput = document.getElementById('assign-project-name');
     if (nameInput && !nameInput.value.trim()) {
       nameInput.value = projectName || hostedPath;
@@ -407,22 +449,25 @@ async function applyAssignQueryPrefill() {
     if (studentSel) studentSel.value = studentId;
   }
 
-  // Re-assert hosted selection after student loads (in case anything reset the select)
+  // Re-assert hosted selection after async student load
   if (hostedPath) {
-    hostedSelected = selectHostedProjectPath(hostedPath, {
-      title: projectName || hostedPath,
-    });
+    const repairTitle = projectName
+      ? `${projectName} · repaired (${hostedPath})`
+      : `Repaired (${hostedPath})`;
+    hostedSelected = selectHostedProjectPath(hostedPath, { title: repairTitle });
   }
 
+  try {
+    sessionStorage.removeItem('webxrideAssignPrefill');
+  } catch (_) {}
+
   updateAssignButtons();
-  if (hostedPath || studentId) {
-    setAssignStatus(
-      hostedSelected
-        ? `Prefilled repaired project “${hostedPath}”. Preview or send when ready.`
-        : `Opened assign form, but could not select hosted path “${hostedPath || '(missing)'}”. Pick it from the list.`,
-      hostedSelected ? 'info' : 'error'
-    );
-  }
+  setAssignStatus(
+    hostedSelected
+      ? `Prefilled repaired project “${hostedPath}”. Preview or send when ready.`
+      : `Assign form opened, but hosted path “${hostedPath || '(missing)'}” was not selected. Choose it from the hosted list (look for “repaired” or [${hostedPath}]).`,
+    hostedSelected ? 'info' : 'error'
+  );
 }
 
 async function initAssignPage() {
@@ -446,12 +491,12 @@ async function initAssignPage() {
 
   document.getElementById('assign-hosted-select')?.addEventListener('change', (e) => {
     selectedHostedPath = e.target.value || null;
-    // Keep source on hosted when user picks from the list
     if (selectedHostedPath && assignSource !== 'hosted') {
+      const keep = selectedHostedPath;
       setAssignSource('hosted');
-      // setAssignSource clears select when switching to zip only; switching to hosted is fine
       const select = document.getElementById('assign-hosted-select');
-      if (select && selectedHostedPath) select.value = selectedHostedPath;
+      if (select) select.value = keep;
+      selectedHostedPath = keep;
     }
     const selectedOption = e.target.selectedOptions?.[0];
     const title = selectedOption?.dataset?.title;
@@ -466,9 +511,22 @@ async function initAssignPage() {
   document.getElementById('assign-preview-btn')?.addEventListener('click', previewAssignedProject);
   document.getElementById('assign-send-btn')?.addEventListener('click', sendFromAssignPage);
 
-  await loadAssignClasses();
-  await loadHostedAssignableProjects();
-  await applyAssignQueryPrefill();
+  try {
+    await loadAssignClasses();
+  } catch (err) {
+    console.error('loadAssignClasses failed', err);
+  }
+  try {
+    await loadHostedAssignableProjects();
+  } catch (err) {
+    console.error('loadHostedAssignableProjects failed', err);
+  }
+  try {
+    await applyAssignQueryPrefill();
+  } catch (err) {
+    console.error('applyAssignQueryPrefill failed', err);
+    setAssignStatus('Prefill failed: ' + err.message, 'error');
+  }
 }
 
 requireAdminSession('login-root', initAssignPage);

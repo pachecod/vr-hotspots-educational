@@ -570,22 +570,37 @@ function openAssignFromRepair(
     );
     return;
   }
-  const qs = new URLSearchParams({
+  const adminNote =
+    'Media filenames repaired so pictures display correctly. Please open this version and confirm your image hotspots look right.';
+  const prefill = {
     source: 'hosted',
     hostedPath: path,
     projectName: projectName || 'project',
+    studentId: studentId || '',
+    classId: classId || '',
+    studentName: studentName || '',
+    repairVersionId: repairVersionId || '',
+    adminNote,
+  };
+  try {
+    sessionStorage.setItem('webxrideAssignPrefill', JSON.stringify(prefill));
+  } catch (err) {
+    console.warn('Could not stash assign prefill', err);
+  }
+  const qs = new URLSearchParams({
+    source: 'hosted',
+    hostedPath: path,
+    projectName: prefill.projectName,
+    prefill: '1',
   });
   if (studentId) qs.set('studentId', studentId);
   if (classId) qs.set('classId', classId);
   if (studentName) qs.set('studentName', studentName);
   if (repairVersionId) qs.set('repairVersionId', repairVersionId);
-  qs.set(
-    'adminNote',
-    'Media filenames repaired so pictures display correctly. Please open this version and confirm your image hotspots look right.'
-  );
+  qs.set('adminNote', adminNote);
   const url = `/admin-assign-project.html?${qs.toString()}`;
-  console.log('[Assign repair]', url);
-  window.location.assign(url);
+  console.log('[Assign repair]', url, prefill);
+  window.location.href = url;
 }
 
 async function repairMediaVersion(

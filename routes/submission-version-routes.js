@@ -88,8 +88,9 @@ async function listHostedAssignableProjects() {
   if (isDbEnabled()) {
     const { rows: submissionRows } = await query(
       `SELECT DISTINCT ON (pv.hosted_path)
-              pv.hosted_path, pv.hosted_url, pv.hosted_at,
-              pt.project_name, s.display_name AS student_name, c.name AS class_name
+              pv.hosted_path, pv.hosted_url, pv.hosted_at, pv.kind,
+              pt.project_name, s.display_name AS student_name, s.username AS student_username,
+              c.name AS class_name
        FROM project_versions pv
        JOIN project_threads pt ON pt.id = pv.thread_id
        JOIN students s ON s.id = pt.student_id
@@ -98,15 +99,22 @@ async function listHostedAssignableProjects() {
        ORDER BY pv.hosted_path, pv.version_number DESC`
     );
     for (const row of submissionRows) {
+      const isRepair = row.kind === 'admin_repair';
+      const who = row.student_username || row.student_name;
+      const pathLabel = row.hosted_path;
+      const title = isRepair
+        ? `${row.project_name} · repaired (${pathLabel})`
+        : row.project_name;
       addItem({
         hostedPath: row.hosted_path,
         tourUrl: row.hosted_url,
-        title: row.project_name,
-        source: 'submission',
-        sourceLabel: 'Hosted submission',
-        studentName: row.student_name,
+        title,
+        source: isRepair ? 'repair' : 'submission',
+        sourceLabel: isRepair ? 'Repaired copy' : 'Hosted submission',
+        studentName: who,
         className: row.class_name,
         updatedAt: row.hosted_at,
+        kind: row.kind,
       });
     }
 

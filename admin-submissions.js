@@ -446,6 +446,14 @@ function formatRenameList(renames) {
     .join('\n');
 }
 
+function resolveVersionHostedPath(v) {
+  if (!v) return '';
+  if (v.hostedPath) return String(v.hostedPath).trim();
+  const fromUrl = String(v.tourUrl || v.hostedUrl || '');
+  const m = fromUrl.match(/\/hosted\/([^/]+)/i);
+  return m ? m[1] : '';
+}
+
 function renderRepairRows(repairs, ctx) {
   if (!repairs.length) {
     return '<p class="repairs-empty">No repaired copies yet. Use <strong>Repair media</strong> on this submission first.</p>';
@@ -453,9 +461,9 @@ function renderRepairRows(repairs, ctx) {
   return repairs
     .map((v) => {
       const hostHint = suggestHostPath(ctx.projectName, ctx.studentName, { repaired: true });
-      const hostedName = v.hostedPath || '';
+      const hostedName = resolveVersionHostedPath(v);
       const note = v.adminNote ? `<div class="repair-note"><em>${escapeHtml(v.adminNote)}</em></div>` : '';
-      const links = formatHostedLinks(v);
+      const links = formatHostedLinks({ ...v, hostedPath: hostedName || v.hostedPath });
       return `<div class="repair-card" data-repair-id="${escapeHtml(v.id)}">
         <div class="repair-card-head">
           ${kindBadge('admin_repair')} <strong>v${v.versionNumber}</strong>
@@ -476,7 +484,7 @@ function renderRepairRows(repairs, ctx) {
           <button class="btn-download" type="button" data-action="repair-download" data-version-id="${escapeHtml(v.id)}" data-file-name="${escapeHtml(v.fileName || 'repaired.zip')}">Download</button>
           <button class="btn-host" type="button" data-action="repair-host" data-version-id="${escapeHtml(v.id)}" data-host-hint="${escapeHtml(hostHint)}" data-hosted-path="${escapeHtml(hostedName || hostHint)}">Host</button>
           <a class="btn btn-review" href="/index.html?adminReview=1&versionId=${encodeURIComponent(v.id)}">Review</a>
-          <button class="btn-assign-repair" type="button" data-action="repair-assign" data-hosted-path="${escapeHtml(v.hostedPath || '')}" data-repair-id="${escapeHtml(v.id)}">Assign / send to student</button>
+          <button class="btn-assign-repair" type="button" data-action="repair-assign" data-hosted-path="${escapeHtml(hostedName)}" data-repair-id="${escapeHtml(v.id)}">Assign / send to student</button>
         </div>
       </div>`;
     })
@@ -908,8 +916,8 @@ async function toggleHistory(threadId, btn) {
         const links = v.kind === 'admin_repair' ? formatHostedLinks(v) : '';
         const repairActions =
           v.kind === 'admin_repair'
-            ? `<button type="button" class="btn-host" data-action="repair-host" data-version-id="${escapeHtml(v.id)}" data-host-hint="${escapeHtml(repairHostHint)}" data-hosted-path="${escapeHtml(v.hostedPath || repairHostHint)}" style="margin-left:6px;font-size:11px;">Host</button>` +
-              `<button type="button" class="btn-assign-repair" data-action="repair-assign" data-hosted-path="${escapeHtml(v.hostedPath || '')}" data-repair-id="${escapeHtml(v.id)}" style="margin-left:6px;font-size:11px;">Assign / send</button>`
+            ? `<button type="button" class="btn-host" data-action="repair-host" data-version-id="${escapeHtml(v.id)}" data-host-hint="${escapeHtml(repairHostHint)}" data-hosted-path="${escapeHtml(resolveVersionHostedPath(v) || repairHostHint)}" style="margin-left:6px;font-size:11px;">Host</button>` +
+              `<button type="button" class="btn-assign-repair" data-action="repair-assign" data-hosted-path="${escapeHtml(resolveVersionHostedPath(v))}" data-repair-id="${escapeHtml(v.id)}" style="margin-left:6px;font-size:11px;">Assign / send</button>`
             : v.kind === 'submitted' || v.kind === 'admin_return' || v.kind === 'admin_assigned'
             ? `<button type="button" onclick="repairMediaVersion(${jsString(v.id)}, ${jsString(
                 projectLabel
@@ -917,9 +925,10 @@ async function toggleHistory(threadId, btn) {
                 studentId
               )}, ${jsString(classId)})" style="margin-left:6px;font-size:11px;">Repair media</button>`
             : '';
+        const histHosted = resolveVersionHostedPath(v);
         return `<div class="version-row" data-repair-id="${v.kind === 'admin_repair' ? escapeHtml(v.id) : ''}">
           ${kindBadge(v.kind)} v${v.versionNumber} — ${v.submittedAt || v.createdAt ? new Date(v.submittedAt || v.createdAt).toLocaleString() : ''}
-          ${v.kind === 'admin_repair' && v.hostedPath ? `<br><strong>Hosted as:</strong> <code>${escapeHtml(v.hostedPath)}</code>` : ''}
+          ${v.kind === 'admin_repair' && histHosted ? `<br><strong>Hosted as:</strong> <code>${escapeHtml(histHosted)}</code>` : ''}
           ${links}
           ${note}
           <button type="button" data-action="repair-download" data-version-id="${escapeHtml(v.id)}" data-file-name="${escapeHtml(v.fileName || '')}" style="margin-left:8px;font-size:11px;">Download</button>

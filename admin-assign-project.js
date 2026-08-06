@@ -100,6 +100,10 @@ function setAssignSource(source) {
   assignSource = source === 'hosted' ? 'hosted' : 'zip';
   document.getElementById('assign-source-zip')?.classList.toggle('active', assignSource === 'zip');
   document.getElementById('assign-source-hosted')?.classList.toggle('active', assignSource === 'hosted');
+  const zipRadio = document.querySelector('input[name="assign-source"][value="zip"]');
+  const hostedRadio = document.querySelector('input[name="assign-source"][value="hosted"]');
+  if (zipRadio) zipRadio.checked = assignSource === 'zip';
+  if (hostedRadio) hostedRadio.checked = assignSource === 'hosted';
   if (assignSource === 'zip') {
     selectedHostedPath = null;
     const hostedSelect = document.getElementById('assign-hosted-select');
@@ -111,6 +115,68 @@ function setAssignSource(source) {
     if (zipInput) zipInput.value = '';
   }
   updateAssignButtons();
+}
+
+/** Normalize /hosted/foo/index.html or foo → foo */
+function normalizeHostedPathParam(raw) {
+  let path = String(raw || '').trim();
+  try {
+    path = decodeURIComponent(path);
+  } catch (_) {
+    /* keep */
+  }
+  path = path.replace(/^https?:\/\/[^/]+/i, '');
+  const hostedMatch = path.match(/\/hosted\/([^/]+)/i);
+  if (hostedMatch) path = hostedMatch[1];
+  path = path.replace(/^\/+/, '').replace(/\/index\.html$/i, '').replace(/\/+$/, '');
+  return path;
+}
+
+function selectHostedProjectPath(hostedPath, { title } = {}) {
+  const path = normalizeHostedPathParam(hostedPath);
+  const select = document.getElementById('assign-hosted-select');
+  if (!path || !select) return false;
+
+  setAssignSource('hosted');
+
+  let matchValue = [...select.options].find((o) => o.value === path)?.value || '';
+  if (!matchValue) {
+    // Case-insensitive / suffix fallback
+    const lower = path.toLowerCase();
+    matchValue =
+      [...select.options].find((o) => o.value && o.value.toLowerCase() === lower)?.value || '';
+  }
+
+  if (!matchValue) {
+    const opt = document.createElement('option');
+    opt.value = path;
+    opt.textContent = `${title || path} (repaired / hosted)`;
+    opt.dataset.title = title || path;
+    // Put at top of list (after placeholder)
+    if (select.options.length > 1) {
+      select.add(opt, select.options[1]);
+    } else {
+      select.appendChild(opt);
+    }
+    if (!hostedProjects.some((p) => p.hostedPath === path)) {
+      hostedProjects.unshift({
+        hostedPath: path,
+        title: title || path,
+        source: 'repair',
+        sourceLabel: 'Repaired hosted copy',
+        tourUrl: `/hosted/${path}/index.html`,
+      });
+    }
+    matchValue = path;
+  }
+
+  select.value = matchValue;
+  selectedHostedPath = matchValue;
+  // Ensure UI reflects selection even if value was already set
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  updateHostedMeta();
+  updateAssignButtons();
+  return select.value === matchValue;
 }
 
 async function loadStudentsForClass(classId) {
@@ -294,7 +360,8 @@ async function applyAssignQueryPrefill() {
   if (![...params.keys()].length) return;
 
   const source = params.get('source');
-  const hostedPath = params.get('hostedPath') || '';
+  const hostedPathRaw = params.get('hostedPath') || params.get('hosted') || '';
+  const hostedPath = normalizeHostedPathParam(hostedPathRaw);
   const projectName = params.get('projectName') || '';
   const classId = params.get('classId') || '';
   const studentId = params.get('studentId') || '';
@@ -309,33 +376,17 @@ async function applyAssignQueryPrefill() {
     if (noteInput) noteInput.value = adminNote;
   }
 
+  let hostedSelected = false;
   if (source === 'hosted' || hostedPath) {
     setAssignSource('hosted');
-    const hostedRadio = document.querySelector('input[name="assign-source"][value="hosted"]');
-    if (hostedRadio) hostedRadio.checked = true;
   }
-
   if (hostedPath) {
-    const select = document.getElementById('assign-hosted-select');
-    if (select) {
-      const match = [...select.options].some((o) => o.value === hostedPath);
-      if (!match) {
-        const opt = document.createElement('option');
-        opt.value = hostedPath;
-        opt.textContent = `${hostedPath} (repaired / hosted)`;
-        opt.dataset.title = projectName || hostedPath;
-        select.appendChild(opt);
-        hostedProjects.push({
-          hostedPath,
-          title: projectName || hostedPath,
-          source: 'repair',
-          sourceLabel: 'Repaired hosted copy',
-          tourUrl: `/hosted/${hostedPath}/index.html`,
-        });
-      }
-      select.value = hostedPath;
-      selectedHostedPath = hostedPath;
-      updateHostedMeta();
+    hostedSelected = selectHostedProjectPath(hostedPath, {
+      title: projectName || hostedPath,
+    });
+    const nameInput = document.getElementById('assign-project-name');
+    if (nameInput && !nameInput.value.trim()) {
+      nameInput.value = projectName || hostedPath;
     }
   }
 
@@ -356,11 +407,20 @@ async function applyAssignQueryPrefill() {
     if (studentSel) studentSel.value = studentId;
   }
 
+  // Re-assert hosted selection after student loads (in case anything reset the select)
+  if (hostedPath) {
+    hostedSelected = selectHostedProjectPath(hostedPath, {
+      title: projectName || hostedPath,
+    });
+  }
+
   updateAssignButtons();
   if (hostedPath || studentId) {
     setAssignStatus(
-      'Prefilled from repaired submission. Preview or send when ready.',
-      'info'
+      hostedSelected
+        ? `Prefilled repaired project “${hostedPath}”. Preview or send when ready.`
+        : `Opened assign form, but could not select hosted path “${hostedPath || '(missing)'}”. Pick it from the list.`,
+      hostedSelected ? 'info' : 'error'
     );
   }
 }
@@ -386,6 +446,13 @@ async function initAssignPage() {
 
   document.getElementById('assign-hosted-select')?.addEventListener('change', (e) => {
     selectedHostedPath = e.target.value || null;
+    // Keep source on hosted when user picks from the list
+    if (selectedHostedPath && assignSource !== 'hosted') {
+      setAssignSource('hosted');
+      // setAssignSource clears select when switching to zip only; switching to hosted is fine
+      const select = document.getElementById('assign-hosted-select');
+      if (select && selectedHostedPath) select.value = selectedHostedPath;
+    }
     const selectedOption = e.target.selectedOptions?.[0];
     const title = selectedOption?.dataset?.title;
     const nameInput = document.getElementById('assign-project-name');

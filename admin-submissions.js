@@ -281,17 +281,13 @@ async function loadInbox() {
           : `<button class="btn-history" onclick="toggleHistory('${threadId}', this)">📜 Version history</button>`;
         const repairsBtn = legacy
           ? ''
-          : `<button class="btn-repairs" type="button" onclick="toggleRepairs(${jsString(threadId)}, this, ${jsString(
-              sub.projectName || 'project'
-            )}, ${jsString(studentLabel)}, ${jsString(sub.studentId || '')}, ${jsString(
-              sub.classId || ''
-            )}, ${jsString(versionId)})">🧩 Repaired versions</button>`;
+          : `<button class="btn-repairs" type="button" data-action="toggle-repairs">Repaired versions</button>`;
         const reviewLink = legacy
           ? ''
           : `<a class="btn btn-review" href="/index.html?adminReview=1&versionId=${versionId}">✏️ Review in Editor</a>`;
 
         return `
-          <div class="submission-card" data-version-id="${versionId}" data-thread-id="${threadId}" data-project-name="${escapeHtml(sub.projectName || '')}" data-student-name="${escapeHtml(studentLabel)}" data-student-id="${escapeHtml(sub.studentId || '')}" data-class-id="${escapeHtml(sub.classId || '')}">
+          <div class="submission-card" data-version-id="${escapeHtml(versionId)}" data-thread-id="${escapeHtml(threadId)}" data-project-name="${escapeHtml(sub.projectName || '')}" data-student-name="${escapeHtml(studentLabel)}" data-student-id="${escapeHtml(sub.studentId || '')}" data-class-id="${escapeHtml(sub.classId || '')}">
             <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}${featured ? ' <span class="badge badge-featured">Featured</span>' : ''}${legacy ? ' <span class="badge badge-draft">B2 only</span>' : ''}</h3>
             <p class="submitted-by">Submitted by: <strong>${escapeHtml(studentLabel)}</strong>${sub.className ? ` <span class="submitted-by-class">(${escapeHtml(sub.className)})</span>` : ''}</p>
             <div class="meta">
@@ -325,11 +321,12 @@ async function loadInbox() {
               ${historyBtn}
               <button class="btn-delete" onclick="deleteVersion('${versionId}')">🗑️ Delete</button>
             </div>
-            <div class="version-history" id="history-${threadId}"></div>
-            <div class="version-history repairs-panel" id="repairs-${threadId}"></div>
+            <div class="version-history" id="history-${escapeHtml(threadId)}"></div>
+            <div class="version-history repairs-panel" data-repairs-panel></div>
           </div>`;
       })
       .join('');
+    bindInboxCardActions(container);
   } catch (error) {
     if (error.code === 'AUTH_REQUIRED') {
       const main = document.getElementById('main-content');
@@ -339,6 +336,33 @@ async function loadInbox() {
     }
     container.innerHTML = '<p style="color:#dc3545;">Error loading inbox.</p>';
   }
+}
+
+function bindInboxCardActions(container) {
+  if (!container || container.dataset.repairsBound === '1') return;
+  container.dataset.repairsBound = '1';
+  container.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action="toggle-repairs"]');
+    if (!btn || !container.contains(btn)) return;
+    e.preventDefault();
+    const card = btn.closest('.submission-card');
+    if (!card) return;
+    const threadId = card.getAttribute('data-thread-id') || '';
+    try {
+      await toggleRepairs(
+        threadId,
+        btn,
+        card.getAttribute('data-project-name') || 'project',
+        card.getAttribute('data-student-name') || '',
+        card.getAttribute('data-student-id') || '',
+        card.getAttribute('data-class-id') || '',
+        card.getAttribute('data-version-id') || ''
+      );
+    } catch (err) {
+      console.error('toggleRepairs failed', err);
+      alert('Could not open repaired versions: ' + (err.message || err));
+    }
+  });
 }
 
 async function downloadVersion(versionId, fileName) {
@@ -438,8 +462,15 @@ async function toggleRepairs(
   parentVersionId,
   options = {}
 ) {
-  const panel = document.getElementById('repairs-' + threadId);
-  if (!panel) return;
+  const card =
+    (btn && btn.closest && btn.closest('.submission-card')) ||
+    document.querySelector(`.submission-card[data-thread-id="${CSS.escape(threadId)}"]`);
+  const panel = card?.querySelector('[data-repairs-panel]');
+  if (!panel) {
+    console.warn('Repairs panel not found for thread', threadId);
+    alert('Could not find the repaired-versions panel for this submission.');
+    return;
+  }
   const forceOpen = !!options.forceOpen;
   if (panel.classList.contains('open') && !forceOpen) {
     panel.classList.remove('open');
@@ -450,8 +481,8 @@ async function toggleRepairs(
   panel.classList.add('open');
   if (btn) btn.classList.add('active');
   try {
+    if (!threadId) throw new Error('Missing thread id');
     const repairs = await fetchThreadRepairs(threadId);
-    const card = document.querySelector(`.submission-card[data-thread-id="${threadId}"]`);
     const parentVersionNumber =
       card?.querySelector('.meta')?.textContent?.match(/Version:\s*#?(\d+)/)?.[1] || '';
     panel.innerHTML =
@@ -469,10 +500,11 @@ async function toggleRepairs(
       });
     if (btn) {
       btn.textContent = repairs.length
-        ? `🧩 Repaired versions (${repairs.length})`
-        : '🧩 Repaired versions';
+        ? `Repaired versions (${repairs.length})`
+        : 'Repaired versions';
     }
   } catch (err) {
+    console.error(err);
     panel.innerHTML = `<p style="color:#dc3545;">Could not load repairs: ${escapeHtml(err.message)}</p>`;
   }
 }
@@ -569,29 +601,40 @@ async function repairMediaVersion(
     } else if (action === 'download') {
       await downloadVersion(repairedId, repairedName);
       await loadInbox();
-      if (tid) {
-        const btn = document.querySelector(
-          `.submission-card[data-thread-id="${tid}"] .btn-repairs`
-        );
-        await toggleRepairs(tid, btn, projectName, studentName, studentId, classId, versionId, {
-          forceOpen: true,
-        });
-      }
+      await openRepairsPanelForThread(tid, projectName, studentName, studentId, classId, versionId);
     } else if (action === 'open' || action === null) {
       // "Show repaired versions" or dismiss → open the panel
       await loadInbox();
-      if (tid) {
-        const btn = document.querySelector(
-          `.submission-card[data-thread-id="${tid}"] .btn-repairs`
-        );
-        await toggleRepairs(tid, btn, projectName, studentName, studentId, classId, versionId, {
-          forceOpen: true,
-        });
-      }
+      await openRepairsPanelForThread(tid, projectName, studentName, studentId, classId, versionId);
     }
   } catch (err) {
     alert('Repair failed: ' + err.message);
   }
+}
+
+async function openRepairsPanelForThread(
+  threadId,
+  projectName,
+  studentName,
+  studentId,
+  classId,
+  parentVersionId
+) {
+  if (!threadId) return;
+  const card = document.querySelector(
+    `.submission-card[data-thread-id="${CSS.escape(threadId)}"]`
+  );
+  const btn = card?.querySelector('[data-action="toggle-repairs"]');
+  await toggleRepairs(
+    threadId,
+    btn,
+    projectName,
+    studentName,
+    studentId,
+    classId,
+    parentVersionId,
+    { forceOpen: true }
+  );
 }
 
 /** Button dialog after a successful repair (replaces typing host/open into prompt). */
@@ -680,21 +723,14 @@ async function hostVersion(versionId, projectName, options = {}) {
       showHostSuccess(result);
       const tid = options.threadId;
       await loadInbox();
-      if (tid) {
-        const btn = document.querySelector(
-          `.submission-card[data-thread-id="${tid}"] .btn-repairs`
-        );
-        await toggleRepairs(
-          tid,
-          btn,
-          options.projectName || projectName,
-          options.studentName || '',
-          options.studentId || '',
-          options.classId || '',
-          options.parentVersionId || '',
-          { forceOpen: true }
-        );
-      }
+      await openRepairsPanelForThread(
+        tid,
+        options.projectName || projectName,
+        options.studentName || '',
+        options.studentId || '',
+        options.classId || '',
+        options.parentVersionId || ''
+      );
     } else {
       stopHostProgress();
       alert(result.message || result.error || 'Hosting failed');

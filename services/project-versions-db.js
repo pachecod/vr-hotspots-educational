@@ -371,6 +371,21 @@ async function listRawVersionsForThread(threadId) {
   return rows;
 }
 
+/** All version storage keys (any kind) — used so repair/return ZIPs are not shown as B2 orphans. */
+async function listAllVersionStorageKeys() {
+  if (!isDbEnabled()) return new Set();
+  const { rows } = await query(`SELECT b2_path, file_name FROM project_versions`);
+  const keys = new Set();
+  for (const row of rows) {
+    if (row.b2_path) {
+      keys.add(String(row.b2_path).replace(/^student-projects\//, ''));
+      keys.add(String(row.b2_path));
+    }
+    if (row.file_name) keys.add(String(row.file_name));
+  }
+  return keys;
+}
+
 async function getUnreadFeedbackCount(studentId) {
   const { rows } = await query(
     `SELECT COUNT(*)::int AS count FROM project_versions pv
@@ -500,6 +515,7 @@ module.exports = {
   deleteVersion,
   deleteThread,
   listRawVersionsForThread,
+  listAllVersionStorageKeys,
   getUnreadFeedbackCount,
   listUnreadFeedback,
   importLegacySubmissions,

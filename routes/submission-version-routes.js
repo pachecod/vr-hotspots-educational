@@ -559,11 +559,14 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       });
 
       // Include B2 uploads that never received a DB row (e.g. local dev without DATABASE_URL).
+      // Pass all version storage keys so admin_repair / admin_return ZIPs are not listed as orphans.
       if (!classId && !studentId) {
+        const extraKnownKeys = await projectVersionsDb.listAllVersionStorageKeys();
         inbox = await mergeB2OrphansIntoInbox(inbox, b2Service, {
           filter: filterVal,
           hostedFilter: hostedFilterVal,
           featuredFilter: featuredFilterVal,
+          extraKnownKeys,
         });
       }
 

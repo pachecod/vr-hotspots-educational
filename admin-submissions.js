@@ -342,25 +342,73 @@ function bindInboxCardActions(container) {
   if (!container || container.dataset.repairsBound === '1') return;
   container.dataset.repairsBound = '1';
   container.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-action="toggle-repairs"]');
+    const btn = e.target.closest('[data-action]');
     if (!btn || !container.contains(btn)) return;
-    e.preventDefault();
+    const action = btn.getAttribute('data-action');
+    if (!action) return;
+
     const card = btn.closest('.submission-card');
-    if (!card) return;
-    const threadId = card.getAttribute('data-thread-id') || '';
+    const repairCard = btn.closest('.repair-card');
+
     try {
-      await toggleRepairs(
-        threadId,
-        btn,
-        card.getAttribute('data-project-name') || 'project',
-        card.getAttribute('data-student-name') || '',
-        card.getAttribute('data-student-id') || '',
-        card.getAttribute('data-class-id') || '',
-        card.getAttribute('data-version-id') || ''
-      );
+      if (action === 'toggle-repairs') {
+        e.preventDefault();
+        if (!card) return;
+        await toggleRepairs(
+          card.getAttribute('data-thread-id') || '',
+          btn,
+          card.getAttribute('data-project-name') || 'project',
+          card.getAttribute('data-student-name') || '',
+          card.getAttribute('data-student-id') || '',
+          card.getAttribute('data-class-id') || '',
+          card.getAttribute('data-version-id') || ''
+        );
+        return;
+      }
+
+      if (action === 'repair-download') {
+        e.preventDefault();
+        await downloadVersion(
+          btn.getAttribute('data-version-id') || '',
+          btn.getAttribute('data-file-name') || 'repaired.zip'
+        );
+        return;
+      }
+
+      if (action === 'repair-host') {
+        e.preventDefault();
+        if (!card) return;
+        const hostHint = btn.getAttribute('data-host-hint') || 'project_repaired';
+        const hostedPath = btn.getAttribute('data-hosted-path') || hostHint;
+        await hostVersion(btn.getAttribute('data-version-id') || '', hostHint, {
+          suggestedPath: hostedPath,
+          repaired: true,
+          threadId: card.getAttribute('data-thread-id') || '',
+          projectName: card.getAttribute('data-project-name') || 'project',
+          studentName: card.getAttribute('data-student-name') || '',
+          studentId: card.getAttribute('data-student-id') || '',
+          classId: card.getAttribute('data-class-id') || '',
+          parentVersionId: card.getAttribute('data-version-id') || '',
+        });
+        return;
+      }
+
+      if (action === 'repair-assign') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!card) return;
+        openAssignFromRepair(
+          btn.getAttribute('data-hosted-path') || '',
+          card.getAttribute('data-student-id') || '',
+          card.getAttribute('data-class-id') || '',
+          card.getAttribute('data-project-name') || 'project',
+          card.getAttribute('data-student-name') || '',
+          btn.getAttribute('data-repair-id') || (repairCard && repairCard.getAttribute('data-repair-id')) || ''
+        );
+      }
     } catch (err) {
-      console.error('toggleRepairs failed', err);
-      alert('Could not open repaired versions: ' + (err.message || err));
+      console.error('Inbox action failed', action, err);
+      alert('Action failed: ' + (err.message || err));
     }
   });
 }
@@ -425,20 +473,10 @@ function renderRepairRows(repairs, ctx) {
         </div>
         ${note}
         <div class="actions repair-actions">
-          <button class="btn-download" type="button" onclick="downloadVersion(${jsString(v.id)}, ${jsString(v.fileName || 'repaired.zip')})">Download</button>
-          <button class="btn-host" type="button" onclick="hostVersion(${jsString(v.id)}, ${jsString(hostHint)}, { suggestedPath: ${jsString(
-            hostedName || hostHint
-          )}, repaired: true, threadId: ${jsString(ctx.threadId)}, projectName: ${jsString(
-            ctx.projectName
-          )}, studentName: ${jsString(ctx.studentName)}, studentId: ${jsString(
-            ctx.studentId
-          )}, classId: ${jsString(ctx.classId)}, parentVersionId: ${jsString(ctx.parentVersionId)} })">Host</button>
+          <button class="btn-download" type="button" data-action="repair-download" data-version-id="${escapeHtml(v.id)}" data-file-name="${escapeHtml(v.fileName || 'repaired.zip')}">Download</button>
+          <button class="btn-host" type="button" data-action="repair-host" data-version-id="${escapeHtml(v.id)}" data-host-hint="${escapeHtml(hostHint)}" data-hosted-path="${escapeHtml(hostedName || hostHint)}">Host</button>
           <a class="btn btn-review" href="/index.html?adminReview=1&versionId=${encodeURIComponent(v.id)}">Review</a>
-          <button class="btn-assign-repair" type="button" onclick="openAssignFromRepair(${jsString(
-            v.hostedPath || ''
-          )}, ${jsString(ctx.studentId)}, ${jsString(ctx.classId)}, ${jsString(
-            ctx.projectName
-          )}, ${jsString(ctx.studentName)}, ${jsString(v.id)})">Assign / send to student</button>
+          <button class="btn-assign-repair" type="button" data-action="repair-assign" data-hosted-path="${escapeHtml(v.hostedPath || '')}" data-repair-id="${escapeHtml(v.id)}">Assign / send to student</button>
         </div>
       </div>`;
     })
@@ -517,7 +555,8 @@ function openAssignFromRepair(
   studentName,
   repairVersionId
 ) {
-  if (!hostedPath) {
+  const path = String(hostedPath || '').trim();
+  if (!path) {
     alert(
       'Host the repaired copy first, then use Assign / send to student. That opens Assign Project with the hosted repair preselected.'
     );
@@ -525,7 +564,7 @@ function openAssignFromRepair(
   }
   const qs = new URLSearchParams({
     source: 'hosted',
-    hostedPath,
+    hostedPath: path,
     projectName: projectName || 'project',
   });
   if (studentId) qs.set('studentId', studentId);
@@ -536,7 +575,9 @@ function openAssignFromRepair(
     'adminNote',
     'Media filenames repaired so pictures display correctly. Please open this version and confirm your image hotspots look right.'
   );
-  window.location.href = `/admin-assign-project.html?${qs.toString()}`;
+  const url = `/admin-assign-project.html?${qs.toString()}`;
+  console.log('[Assign repair]', url);
+  window.location.assign(url);
 }
 
 async function repairMediaVersion(
@@ -867,22 +908,8 @@ async function toggleHistory(threadId, btn) {
         const links = v.kind === 'admin_repair' ? formatHostedLinks(v) : '';
         const repairActions =
           v.kind === 'admin_repair'
-            ? `<button type="button" onclick="hostVersion(${jsString(v.id)}, ${jsString(
-                repairHostHint
-              )}, { suggestedPath: ${jsString(v.hostedPath || repairHostHint)}, repaired: true, threadId: ${jsString(
-                threadId
-              )}, projectName: ${jsString(projectLabel)}, studentName: ${jsString(
-                studentLabel
-              )}, studentId: ${jsString(studentId)}, classId: ${jsString(
-                classId
-              )}, parentVersionId: ${jsString(parentId)} })" style="margin-left:6px;font-size:11px;">Host</button>` +
-              `<button type="button" onclick="openAssignFromRepair(${jsString(
-                v.hostedPath || ''
-              )}, ${jsString(studentId)}, ${jsString(classId)}, ${jsString(
-                projectLabel
-              )}, ${jsString(studentLabel)}, ${jsString(
-                v.id
-              )})" style="margin-left:6px;font-size:11px;">Assign / send</button>`
+            ? `<button type="button" class="btn-host" data-action="repair-host" data-version-id="${escapeHtml(v.id)}" data-host-hint="${escapeHtml(repairHostHint)}" data-hosted-path="${escapeHtml(v.hostedPath || repairHostHint)}" style="margin-left:6px;font-size:11px;">Host</button>` +
+              `<button type="button" class="btn-assign-repair" data-action="repair-assign" data-hosted-path="${escapeHtml(v.hostedPath || '')}" data-repair-id="${escapeHtml(v.id)}" style="margin-left:6px;font-size:11px;">Assign / send</button>`
             : v.kind === 'submitted' || v.kind === 'admin_return' || v.kind === 'admin_assigned'
             ? `<button type="button" onclick="repairMediaVersion(${jsString(v.id)}, ${jsString(
                 projectLabel
@@ -890,14 +917,12 @@ async function toggleHistory(threadId, btn) {
                 studentId
               )}, ${jsString(classId)})" style="margin-left:6px;font-size:11px;">Repair media</button>`
             : '';
-        return `<div class="version-row">
+        return `<div class="version-row" data-repair-id="${v.kind === 'admin_repair' ? escapeHtml(v.id) : ''}">
           ${kindBadge(v.kind)} v${v.versionNumber} — ${v.submittedAt || v.createdAt ? new Date(v.submittedAt || v.createdAt).toLocaleString() : ''}
           ${v.kind === 'admin_repair' && v.hostedPath ? `<br><strong>Hosted as:</strong> <code>${escapeHtml(v.hostedPath)}</code>` : ''}
           ${links}
           ${note}
-          <button type="button" onclick="downloadVersion(${jsString(v.id)}, ${jsString(
-            v.fileName || ''
-          )})" style="margin-left:8px;font-size:11px;">Download</button>
+          <button type="button" data-action="repair-download" data-version-id="${escapeHtml(v.id)}" data-file-name="${escapeHtml(v.fileName || '')}" style="margin-left:8px;font-size:11px;">Download</button>
           ${repairActions}
         </div>`;
       })
@@ -920,5 +945,11 @@ function initInbox() {
   loadClassesAndStudents();
   loadInbox();
 }
+
+window.openAssignFromRepair = openAssignFromRepair;
+window.toggleRepairs = toggleRepairs;
+window.hostVersion = hostVersion;
+window.downloadVersion = downloadVersion;
+window.repairMediaVersion = repairMediaVersion;
 
 requireAdminSession('login-root', initInbox);

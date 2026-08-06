@@ -202,9 +202,11 @@ async function loadErrorLogs(options = {}) {
         <tbody>
           ${logs
             .map((log) => {
-              const levelClass = `level level-${escapeHtml(log.level || 'error')}`;
+              const level = log.level || 'error';
+              const levelClass = `level level-${escapeHtml(level)}`;
+              const rowClass = `row-level-${escapeHtml(level)}`;
               const details = log.details ? JSON.stringify(log.details, null, 2) : '';
-              return `<tr>
+              return `<tr class="${rowClass}">
                 <td>${escapeHtml(log.timestampEdt || '')}<br><small style="color:#888">${escapeHtml(
                   log.appVersion ? `v${log.appVersion}` : ''
                 )}</small></td>

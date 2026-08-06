@@ -49,6 +49,13 @@
       }
       th { background: #f8f9fa; }
       tr:nth-child(even) { background: #fafafa; }
+      tr.row-level-error,
+      tr.row-level-error:nth-child(even) {
+        background: #fde8ea;
+      }
+      tr.row-level-error:hover {
+        background: #f8d7da;
+      }
       .level {
         display: inline-block;
         padding: 2px 8px;
@@ -201,6 +208,6 @@
         <div id="log-pager-bottom" class="pager" style="display:none"></div>
       </div>
     </div>
-    <script src="admin-error-log.js?v=5"></script>
+    <script src="admin-error-log.js?v=6"></script>
   </body>
 </html>

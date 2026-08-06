@@ -33,6 +33,26 @@ function formatSubmittedBy(sub) {
   return sub.studentUsername || sub.studentName || sub.studentDisplayName || 'Unknown';
 }
 
+/** Host URL slug: keep date slashes as dashes (8/6 → 8-6), not stripped to 86. */
+function suggestHostPath(projectName, studentName, { repaired = false } = {}) {
+  const slugPart = (value, { keepEmpty = false } = {}) => {
+    const s = String(value || '')
+      .trim()
+      .replace(/\//g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase();
+    return s || (keepEmpty ? '' : '');
+  };
+  const projectPart = slugPart(projectName) || 'project';
+  const studentPart = slugPart(studentName, { keepEmpty: true });
+  let path = studentPart ? `${projectPart}_${studentPart}` : projectPart;
+  if (repaired) path += '_repaired';
+  return path.replace(/_+/g, '_');
+}
+
 function isSubmissionHosted(sub) {
   return !!(sub.isHosted || sub.hostedUrl || sub.tourUrl || sub.hostedPath);
 }
@@ -265,7 +285,7 @@ async function loadInbox() {
               ${
                 legacy
                   ? ''
-                  : `<button class="btn-repair" onclick="repairMediaVersion('${versionId}', '${escapeHtml(sub.projectName || 'project')}')">🔧 Repair media</button>`
+                  : `<button class="btn-repair" onclick="repairMediaVersion('${versionId}', '${escapeHtml(sub.projectName || 'project')}', '${escapeHtml(formatSubmittedBy(sub))}')">🔧 Repair media</button>`
               }
               ${
                 hosted
@@ -331,7 +351,7 @@ function formatRenameList(renames) {
     .join('\n');
 }
 
-async function repairMediaVersion(versionId, projectName) {
+async function repairMediaVersion(versionId, projectName, studentName) {
   if (isLegacyVersion(versionId)) {
     alert('Media repair is not available for legacy B2-only submissions.');
     return;
@@ -367,9 +387,10 @@ async function repairMediaVersion(versionId, projectName) {
       .toLowerCase();
     const repairedId = result.versionId;
     const repairedName = result.fileName || 'repaired.zip';
+    const hostHint = suggestHostPath(projectName, studentName, { repaired: true });
 
     if (action === 'host') {
-      await hostVersion(repairedId, `${projectName || 'project'}_repaired`);
+      await hostVersion(repairedId, hostHint, { suggestedPath: hostHint });
     } else if (action === 'send') {
       await sendRepairedVersion(repairedId);
     } else if (action === 'download') {
@@ -407,13 +428,13 @@ async function sendRepairedVersion(versionId) {
   }
 }
 
-async function hostVersion(versionId, projectName) {
+async function hostVersion(versionId, projectName, options = {}) {
   const suggestedPath =
-    String(projectName || 'project')
-      .replace(/\s+/g, '')
-      .replace(/[^a-zA-Z0-9_-]/g, '')
-      .toLowerCase() || 'project';
-  const urlPath = prompt('URL path for hosting (e.g. john_doe):', suggestedPath);
+    options.suggestedPath ||
+    suggestHostPath(projectName, options.studentName || '', {
+      repaired: !!options.repaired,
+    });
+  const urlPath = prompt('URL path for hosting (e.g. 8-6_student10_repaired):', suggestedPath);
   if (!urlPath || !/^[a-zA-Z0-9_-]+$/.test(urlPath)) {
     if (urlPath) alert('Invalid URL path.');
     return;
@@ -559,12 +580,16 @@ async function toggleHistory(threadId, btn) {
             ? `<br><em>${escapeHtml(v.studentNote || v.adminNote)}</em>`
             : '';
         const projectLabel = escapeHtml(v.projectName || 'project');
+        const studentLabel = escapeHtml(
+          v.studentUsername || v.studentName || v.studentDisplayName || ''
+        );
+        const repairHostHint = suggestHostPath(v.projectName, studentLabel, { repaired: true });
         const repairActions =
           v.kind === 'admin_repair'
-            ? `<button onclick="hostVersion('${v.id}', '${projectLabel}_repaired')" style="margin-left:6px;font-size:11px;">Host</button>` +
+            ? `<button onclick="hostVersion('${v.id}', '${escapeHtml(repairHostHint)}', { suggestedPath: '${escapeHtml(repairHostHint)}' })" style="margin-left:6px;font-size:11px;">Host</button>` +
               `<button onclick="sendRepairedVersion('${v.id}')" style="margin-left:6px;font-size:11px;">Send to student</button>`
             : v.kind === 'submitted' || v.kind === 'admin_return' || v.kind === 'admin_assigned'
-            ? `<button onclick="repairMediaVersion('${v.id}', '${projectLabel}')" style="margin-left:6px;font-size:11px;">Repair media</button>`
+            ? `<button onclick="repairMediaVersion('${v.id}', '${projectLabel}', '${studentLabel}')" style="margin-left:6px;font-size:11px;">Repair media</button>`
             : '';
         return `<div class="version-row">
           ${kindBadge(v.kind)} v${v.versionNumber} — ${v.submittedAt || v.createdAt ? new Date(v.submittedAt || v.createdAt).toLocaleString() : ''}

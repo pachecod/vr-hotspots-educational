@@ -306,6 +306,68 @@
       .host-progress-overlay[hidden] {
         display: none !important;
       }
+      .repair-next-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10001;
+        padding: 16px;
+      }
+      .repair-next-card {
+        background: #fff;
+        border-radius: 10px;
+        max-width: 480px;
+        width: 100%;
+        padding: 22px 24px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+      }
+      .repair-next-card h2 {
+        margin: 0 0 10px;
+        font-size: 1.25rem;
+        color: #2c1a4a;
+      }
+      .repair-next-message {
+        margin: 0 0 12px;
+        color: #333;
+        line-height: 1.45;
+      }
+      .repair-next-renames {
+        background: #f8f5ff;
+        border: 1px solid #d4c4f0;
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        font-size: 13px;
+      }
+      .repair-next-renames ul {
+        margin: 6px 0 0;
+        padding-left: 1.2em;
+      }
+      .repair-next-hint {
+        margin: 0 0 12px;
+        font-weight: 600;
+        color: #444;
+      }
+      .repair-next-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .repair-next-actions button {
+        border: none;
+        border-radius: 4px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .btn-repair-dismiss {
+        background: #e9ecef;
+        color: #333;
+      }
       .host-progress-card {
         width: min(420px, 100%);
         background: #fff;

@@ -540,14 +540,6 @@ async function repairMediaVersion(
       return;
     }
 
-    const renameBlock = formatRenameList(result.renames);
-    const choice = prompt(
-      `${result.message || 'Repaired copy saved.'}\n\nRenamed:\n${renameBlock}\n\nNext step — type one of:\n  host   = host the repaired copy for testing\n  open   = show repaired versions under this submission\n  download = download the repaired ZIP\n  (leave blank to open repaired versions)`,
-      'host'
-    );
-    const action = String(choice || 'open')
-      .trim()
-      .toLowerCase();
     const repairedId = result.versionId;
     const repairedName = result.fileName || 'repaired.zip';
     const hostHint = suggestHostPath(projectName, studentName, { repaired: true });
@@ -557,6 +549,11 @@ async function repairMediaVersion(
         'data-thread-id'
       ) ||
       '';
+
+    const action = await showRepairNextStepDialog({
+      message: result.message || 'Repaired copy saved.',
+      renames: result.renames || [],
+    });
 
     if (action === 'host') {
       await hostVersion(repairedId, hostHint, {
@@ -580,7 +577,8 @@ async function repairMediaVersion(
           forceOpen: true,
         });
       }
-    } else {
+    } else if (action === 'open' || action === null) {
+      // "Show repaired versions" or dismiss → open the panel
       await loadInbox();
       if (tid) {
         const btn = document.querySelector(
@@ -594,6 +592,65 @@ async function repairMediaVersion(
   } catch (err) {
     alert('Repair failed: ' + err.message);
   }
+}
+
+/** Button dialog after a successful repair (replaces typing host/open into prompt). */
+function showRepairNextStepDialog({ message, renames }) {
+  return new Promise((resolve) => {
+    const existing = document.getElementById('repair-next-overlay');
+    if (existing) existing.remove();
+
+    const renameHtml = formatRenameList(renames)
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => `<li>${escapeHtml(line.replace(/^•\s*/, ''))}</li>`)
+      .join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'repair-next-overlay';
+    overlay.className = 'repair-next-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'repair-next-title');
+    overlay.innerHTML = `
+      <div class="repair-next-card">
+        <h2 id="repair-next-title">Repair complete</h2>
+        <p class="repair-next-message">${escapeHtml(message || '')}</p>
+        ${
+          renameHtml
+            ? `<div class="repair-next-renames"><strong>Renamed</strong><ul>${renameHtml}</ul></div>`
+            : ''
+        }
+        <p class="repair-next-hint">Choose what to do next:</p>
+        <div class="repair-next-actions">
+          <button type="button" class="btn-host" data-action="host">Host for testing</button>
+          <button type="button" class="btn-repairs" data-action="open">Show repaired versions</button>
+          <button type="button" class="btn-download" data-action="download">Download ZIP</button>
+          <button type="button" class="btn-repair-dismiss" data-action="open">Close</button>
+        </div>
+      </div>
+    `;
+
+    const finish = (action) => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+      resolve(action);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') finish('open');
+    };
+    document.addEventListener('keydown', onKey);
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) finish('open');
+    });
+    overlay.querySelectorAll('[data-action]').forEach((btn) => {
+      btn.addEventListener('click', () => finish(btn.getAttribute('data-action')));
+    });
+
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-action="host"]')?.focus();
+  });
 }
 
 async function hostVersion(versionId, projectName, options = {}) {

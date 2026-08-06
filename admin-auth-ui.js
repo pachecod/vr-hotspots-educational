@@ -162,7 +162,7 @@ function renderAdminLoginGate(containerId, onAuthenticated) {
     errorEl.style.display = 'none';
     try {
       await adminLogin(password);
-      onAuthenticated();
+      await Promise.resolve(onAuthenticated());
     } catch (err) {
       errorEl.textContent = err.message || 'Login failed';
       errorEl.style.display = 'block';

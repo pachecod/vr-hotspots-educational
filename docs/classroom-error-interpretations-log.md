@@ -18,6 +18,50 @@ When new Error Log / Activity exports arrive, add a dated entry with:
 
 ## Entries
 
+### 2026-08-06 ~12:25 PM EDT — student10 black image hotspot (extensionless export)
+
+**Source:** Classroom photo (iPad vs laptop) + `exports/0806/v009_1786032732576.zip` / Desktop unzip  
+**Student:** student10 · project `8/6` · version 9 · `versionId=03922370-23cc-41fa-ba15-3eac0209d21c`
+
+**Finding:** Picture hotspot on **Everything about Qabili polou** packaged as  
+`./images/b8db0a4d-69c1-47c3-80fa-4df35caddb9e` with **no extension**. Bytes are a valid JPEG (iPad Pro); renaming to `.jpg` shows the image locally. Hotspot export used the bare IDB/UUID name and did not append an extension (scene skies already did via `sanitizeExportFileName`).
+
+**Live editor also had** a separate Image hotspot on **Introducing** (`IMG_0123.jpeg`, pos `1.7 2.2 7.28`) showing black in the Edit dialog thumb — that one was **dropped on export** (missing media harden), so it is absent from v009.
+
+**Action:** Export fix — hotspot image/video packaging now forces an extension from MIME/type (`.jpg` / `.mp4` fallback). Student workaround until redeploy: replace image + re-upload, or rename file + update `config.json` in the ZIP.
+
+### 2026-08-06 ~12:01 PM EDT — Error Log export `error-log-048Z.json` (32 rows)
+
+**Source:** `/Users/danielpacheco/Downloads/error-log-048Z.json`  
+**Exported:** 2026-08-06T16:01:04.049Z
+
+**Full export counts:**
+
+| Code | Count | Notes |
+|---|---:|---|
+| `unhandled_rejection` `sceneEl.querySelectorAll` | 13 | Dominant; mostly iPad Chrome during scene load / gizmo hide |
+| `session_required_mid_flow` | 8 | Stale cookie / multi-tab cloud submit |
+| `scene_panorama_load_failed` | 4 | All from **Aug 5 morning** (expired B2) — none new today |
+| `hotspot_video_process_failed` (.mov) | 3 | student08 again today 10:34 (hs 141); prior student08/09 on Aug 5 |
+| `unhandled_error` | 2 | WebXR + `__gCrWeb` — ignore |
+| `scene_video_missing_source` | 1 | student19 Aug 5 8:08 PM — 360 video scene lacks playable source |
+| `video_transcode_store_original` | 1 | Aug 5 afternoon (already noted) |
+
+**Aug 6 morning only (11 rows — actionable):**
+
+| Time | Code | Student | Meaning |
+|---|---|---|---|
+| 11:57 | `session_required_mid_flow` | student07 | Submit with dead session → refresh + sign in |
+| 10:24 | `session_required_mid_flow` | student17 | Same |
+| 10:24–11:46 | A-Frame `querySelectorAll` | student05/09/10/12/13 (+ `8_4`) | Known race; noise unless stuck |
+| 10:34 | `.mov` → MP4 failed | student08 | Export as H.264 MP4 and re-add |
+
+**Also overnight (Aug 5 8:08 PM):** student19 `scene_video_missing_source` on a video scene (`videoStorageKey` present but not resolvable) — check that project’s Introduction/360 video media.
+
+**Good:** Still **no** new `scene_panorama_load_failed` after the B2 proxy fix.
+
+---
+
 ### 2026-08-05 ~3:30 PM EDT — Full Error Log export `…T19-30-34-506Z.json` (21 rows)
 
 **Source:** `/Users/danielpacheco/Downloads/error-log-all-shown-2026-08-05T19-30-34-506Z.json`

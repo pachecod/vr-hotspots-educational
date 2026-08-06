@@ -231,6 +231,11 @@ async function loadClassesAndStudents() {
   }
 }
 
+function revealDangerZone() {
+  const dangerZone = document.getElementById('danger-zone');
+  if (dangerZone) dangerZone.hidden = false;
+}
+
 async function loadInbox() {
   const container = document.getElementById('inbox-list');
   try {
@@ -260,6 +265,7 @@ async function loadInbox() {
       container.innerHTML = hasFilters
         ? '<p>No submissions match the current filters.</p>'
         : '<p>No submissions yet.</p>';
+      revealDangerZone();
       return;
     }
 
@@ -327,14 +333,18 @@ async function loadInbox() {
       })
       .join('');
     bindInboxCardActions(container);
+    revealDangerZone();
   } catch (error) {
     if (error.code === 'AUTH_REQUIRED') {
       const main = document.getElementById('main-content');
       if (main) main.style.display = 'none';
+      const dangerZone = document.getElementById('danger-zone');
+      if (dangerZone) dangerZone.hidden = true;
       requireAdminSession('login-root', initInbox);
       return;
     }
     container.innerHTML = '<p style="color:#dc3545;">Error loading inbox.</p>';
+    revealDangerZone();
   }
 }
 

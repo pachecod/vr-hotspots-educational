@@ -573,10 +573,19 @@ function registerCommonAssetRoutes(app, upload) {
 
       const remotePath = buildAdminRemotePath(category, filename);
       const contentType = getContentType(filename);
-      const { stream, statusCode } = await b2Service.downloadCommonAssetStream(remotePath);
+      const { stream, statusCode, headers } = await b2Service.downloadCommonAssetStream(remotePath);
       if (statusCode === 404) return res.status(404).send('Asset not found');
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'private, max-age=3600');
+      const bytes = Number(headers && headers['content-length']);
+      if (Number.isFinite(bytes) && bytes > 0) {
+        try {
+          const usageDb = require('../lib/usage/usage-db');
+          usageDb.recordDownloadBytes(bytes, { source: 'admin-common-assets' }).catch(() => {});
+        } catch (_) {
+          /* ignore */
+        }
+      }
       return stream.pipe(res);
     } catch (err) {
       console.error('Admin asset stream error:', err);
@@ -642,6 +651,16 @@ function registerCommonAssetRoutes(app, upload) {
       } else {
         res.status(200);
         if (contentLength) res.setHeader('Content-Length', contentLength);
+      }
+
+      const bytes = Number(contentLength);
+      if (Number.isFinite(bytes) && bytes > 0) {
+        try {
+          const usageDb = require('../lib/usage/usage-db');
+          usageDb.recordDownloadBytes(bytes, { source: 'common-assets' }).catch(() => {});
+        } catch (_) {
+          /* ignore metering failures */
+        }
       }
 
       stream.on('error', (err) => {

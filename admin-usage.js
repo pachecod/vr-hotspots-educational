@@ -509,6 +509,9 @@ function renderStats(data) {
   const cpuLimit = latestSeriesValue(data.render?.metrics?.cpuLimit?.series);
   const memoryLimit = latestSeriesValue(data.render?.metrics?.memoryLimit?.series);
   const maxB2 = data.storage?.limits?.b2MaxBytes || null;
+  const maxB2Download = data.storage?.limits?.b2DownloadMaxBytes || null;
+  const downloadsToday = data.storage?.downloadsToday || null;
+  const downloadUsed = Number(downloadsToday?.byteSize) || 0;
 
   const cards = [
     {
@@ -518,6 +521,17 @@ function renderStats(data) {
       capacity:
         b2Total && maxB2
           ? { used: Number(b2Total.byteSize) || 0, max: maxB2, format: formatBytes }
+          : null,
+    },
+    {
+      label: 'B2 downloads today',
+      value: downloadsToday ? formatBytes(downloadUsed) : '—',
+      sub: downloadsToday
+        ? `${formatNum(downloadsToday.eventCount || 0)} proxied · GMT ${downloadsToday.dayGmt || ''}`
+        : 'Proxied B2 traffic (GMT day)',
+      capacity:
+        maxB2Download
+          ? { used: downloadUsed, max: maxB2Download, format: formatBytes }
           : null,
     },
     {
@@ -1021,6 +1035,7 @@ async function loadUsage() {
 
     renderConfigWarn(data);
     renderStats(data);
+    fillB2CapInputs(data);
     renderAnalyticsCharts(data, sharedRange);
     renderRenderCharts(data, sharedRange);
     renderStorageLatest(data);
@@ -1056,6 +1071,68 @@ async function loadUsage() {
   } catch (err) {
     status.textContent = err.message || 'Error';
     status.className = 'status err';
+  }
+}
+
+function fillB2CapInputs(data) {
+  const limits = data.storage?.limits || {};
+  const storageEl = document.getElementById('cap-b2-storage-gb');
+  const downloadEl = document.getElementById('cap-b2-download-gb');
+  if (storageEl && document.activeElement !== storageEl) {
+    const gb =
+      limits.overrides?.b2MaxGb != null
+        ? limits.overrides.b2MaxGb
+        : limits.b2MaxGb != null
+          ? Math.round(Number(limits.b2MaxGb) * 1000) / 1000
+          : '';
+    storageEl.value = gb === '' || gb == null ? '' : String(gb);
+    storageEl.placeholder =
+      limits.b2MaxSource === 'env' ? `env: ${Math.round(Number(limits.b2MaxGb))}` : 'e.g. 50';
+  }
+  if (downloadEl && document.activeElement !== downloadEl) {
+    const gb =
+      limits.overrides?.b2DownloadMaxGb != null
+        ? limits.overrides.b2DownloadMaxGb
+        : limits.b2DownloadMaxGb != null
+          ? Math.round(Number(limits.b2DownloadMaxGb) * 1000) / 1000
+          : '';
+    downloadEl.value = gb === '' || gb == null ? '' : String(gb);
+    downloadEl.placeholder =
+      limits.b2DownloadMaxSource === 'env'
+        ? `env: ${Math.round(Number(limits.b2DownloadMaxGb))}`
+        : 'e.g. 200';
+  }
+}
+
+async function saveB2Caps() {
+  const status = document.getElementById('b2-caps-status');
+  const storageRaw = document.getElementById('cap-b2-storage-gb')?.value;
+  const downloadRaw = document.getElementById('cap-b2-download-gb')?.value;
+  const body = {
+    b2MaxGb: storageRaw === '' ? null : storageRaw,
+    b2DownloadMaxGb: downloadRaw === '' ? null : downloadRaw,
+  };
+  if (status) {
+    status.textContent = 'Saving…';
+    status.className = 'status';
+  }
+  try {
+    const res = await adminFetch('/admin/usage/limits', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    await readJsonResponse(res, 'Save B2 caps');
+    if (status) {
+      status.textContent = 'Saved';
+      status.className = 'status ok';
+    }
+    await loadUsage();
+  } catch (err) {
+    if (status) {
+      status.textContent = err.message || 'Save failed';
+      status.className = 'status err';
+    }
   }
 }
 
@@ -1107,6 +1184,7 @@ function initMainApp() {
   document.getElementById('btn-refresh').addEventListener('click', loadUsage);
   document.getElementById('btn-scan').addEventListener('click', scanNow);
   document.getElementById('window').addEventListener('change', loadUsage);
+  document.getElementById('btn-save-b2-caps')?.addEventListener('click', saveB2Caps);
   const chartsBtn = document.getElementById('btn-charts-only');
   if (chartsBtn) {
     chartsBtn.addEventListener('click', () => {

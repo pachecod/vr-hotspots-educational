@@ -267,7 +267,8 @@
       #usage-app.charts-only #error-detail,
       #usage-app.charts-only #window-meta,
       #usage-app.charts-only .detail-panels,
-      #usage-app.charts-only #btn-scan {
+      #usage-app.charts-only #btn-scan,
+      #usage-app.charts-only #b2-caps-panel {
         display: none !important;
       }
       #usage-app.charts-only .usage-layout {
@@ -353,6 +354,28 @@
 
           <div class="panel">
             <h2>B2 storage &amp; uploads</h2>
+            <div id="b2-caps-panel" class="hint" style="margin-bottom:12px;padding:12px;background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;">
+              <div style="font-weight:bold;color:#333;margin-bottom:8px;">B2 soft caps (Usage dashboard)</div>
+              <p style="margin:0 0 10px;font-size:12px;color:#666;line-height:1.4;">
+                Soft ceilings for this dashboard. Storage is measured by B2 file scan.
+                Download totals count <em>app-proxied</em> B2 traffic (GMT day, matching Backblaze reset).
+                Direct browser→B2 signed URL downloads are not included — check Backblaze Caps &amp; Alerts for full account bandwidth.
+              </p>
+              <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+                <label style="font-size:12px;color:#444;">
+                  Storage max (GB)
+                  <input id="cap-b2-storage-gb" type="number" min="0" step="1" placeholder="e.g. 50"
+                    style="display:block;margin-top:4px;padding:6px 8px;width:120px;border:1px solid #ccc;border-radius:4px;" />
+                </label>
+                <label style="font-size:12px;color:#444;">
+                  Daily download max (GB)
+                  <input id="cap-b2-download-gb" type="number" min="0" step="1" placeholder="e.g. 200"
+                    style="display:block;margin-top:4px;padding:6px 8px;width:140px;border:1px solid #ccc;border-radius:4px;" />
+                </label>
+                <button type="button" id="btn-save-b2-caps" class="secondary">Save caps</button>
+                <span id="b2-caps-status" class="status"></span>
+              </div>
+            </div>
             <div id="storage-charts" class="charts">
               <div class="chart-box">
                 <h3>B2 total (student-projects + hosted + other)</h3>

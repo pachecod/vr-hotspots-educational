@@ -18,6 +18,38 @@ When new Error Log / Activity exports arrive, add a dated entry with:
 
 ## Entries
 
+### 2026-08-06 ~2:42 PM EDT — Error Log export `error-log-all-latest.json` (38 rows)
+
+**Source:** `/Users/danielpacheco/Downloads/error-log-all-latest.json`  
+**Exported:** 2026-08-06T18:42:43.463Z
+
+**Full export counts:**
+
+| Code | Count | Notes |
+|---|---:|---|
+| `session_required_mid_flow` | 12 | Stale cookie / multi-tab cloud submit (6 today, 6 earlier) |
+| `unhandled_rejection` A-Frame `sceneEl.querySelectorAll` | 13 | Known race; noise unless stuck |
+| `scene_panorama_load_failed` | 5 | 4× Aug 5 B2 direct URLs + **1 new** student19 (see below) |
+| `hotspot_video_process_failed` (.mov) | 3 | student08/09 — export as H.264 MP4 |
+| `unhandled_error` | 2 | WebXR + `__gCrWeb` — ignore |
+| `unhandled_rejection` `ground-enabled-toggle` | 1 | **New** — student16 @ `/` |
+| `scene_video_missing_source` | 1 | student19 Aug 5 evening |
+| `video_transcode_store_original` | 1 | Aug 5 afternoon |
+
+**New / actionable since prior export (~12:01 PM):**
+
+| Time | Code | Student | Meaning |
+|---|---|---|---|
+| 2:21 PM | `ground-enabled-toggle` null | student16 | Editor init on path `/` — checkbox missing → crash in `bindEvents`. Hard refresh on `/index.html`, or we should null-guard the toggle. |
+| 2:03 PM | `scene_panorama_load_failed` | student19 | Scene **The start** — `imageSrc` is `./blob:https://…` (broken: `./` prefixed onto a blob URL). Sky won’t load until media is re-picked / project reloaded from IDB. |
+| 12:45–1:33 PM | `session_required_mid_flow` ×4 | student10, 14, 04, 06 | Submit with dead session → refresh + sign in, then submit again |
+
+**Class workaround:** Sessions → refresh + re-sign-in. student19 → re-add the 360 image on “The start” (or reopen a good cloud draft). student16 → open full editor URL and refresh. .mov students → use MP4.
+
+**Code follow-ups (not blocking class):** null-guard `ground-enabled-toggle` in `bindEvents`; stop prepending `./` to `blob:` / absolute URLs when building scene image paths.
+
+---
+
 ### 2026-08-06 — Admin “Repair media” for extensionless submitted ZIPs
 
 **Feature:** Admin Submissions → **Repair media** on a version.  

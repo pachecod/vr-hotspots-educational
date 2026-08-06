@@ -260,17 +260,37 @@
       }
       .danger-zone {
         margin-top: 40px;
-        padding: 20px;
+        padding: 16px 20px;
         border: 2px solid #f5c6cb;
         border-radius: 8px;
         background: #fff5f5;
       }
-      .danger-zone h2 {
-        margin: 0 0 8px;
-        color: #842029;
-        font-size: 1.1em;
+      .danger-zone[hidden] {
+        display: none !important;
       }
-      .danger-zone p {
+      .danger-zone > summary {
+        cursor: pointer;
+        color: #842029;
+        font-size: 1.05em;
+        font-weight: bold;
+        list-style: none;
+      }
+      .danger-zone > summary::-webkit-details-marker {
+        display: none;
+      }
+      .danger-zone > summary::before {
+        content: '▸ ';
+      }
+      .danger-zone[open] > summary::before {
+        content: '▾ ';
+      }
+      .danger-zone > summary:hover {
+        color: #58151c;
+      }
+      .danger-zone-body {
+        margin-top: 12px;
+      }
+      .danger-zone-body p {
         margin: 0 0 16px;
         color: #58151c;
         font-size: 14px;
@@ -465,16 +485,18 @@
 
     <div id="inbox-list">Loading submissions...</div>
 
-    <section class="danger-zone" aria-labelledby="danger-zone-heading">
-      <h2 id="danger-zone-heading">Danger zone</h2>
-      <p>
-        Remove every hosted public tour from the server. Submission ZIPs stay in the queue; you can
-        host them again later.
-      </p>
-      <button type="button" class="btn-unhost-all" id="unhost-all-btn" onclick="unhostEverything()">
-        Unhost Everything
-      </button>
-    </section>
+    <details class="danger-zone" id="danger-zone" hidden>
+      <summary id="danger-zone-heading">Danger zone</summary>
+      <div class="danger-zone-body">
+        <p>
+          Remove every hosted public tour from the server. Submission ZIPs stay in the queue; you can
+          host them again later.
+        </p>
+        <button type="button" class="btn-unhost-all" id="unhost-all-btn" onclick="unhostEverything()">
+          Unhost Everything
+        </button>
+      </div>
+    </details>
     </div>
 
     <script src="admin-submissions.js"></script>

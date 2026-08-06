@@ -5,7 +5,10 @@ const usageDb = require('../lib/usage/usage-db');
 const renderMetrics = require('../lib/usage/render-metrics');
 const { runStorageSnapshot, formatBytes, scanHostedDisk } = require('../lib/usage/storage-scan');
 const { runOnce, getSnapshotJobStatus } = require('../lib/usage/snapshot-job');
-const { getStorageLimits } = require('../lib/usage/storage-limits');
+const {
+  getStorageLimits,
+  saveStorageLimitOverrides,
+} = require('../lib/usage/storage-limits');
 const errorLog = require('../lib/error-log');
 const ga4Metrics = require('../lib/usage/ga4-metrics');
 
@@ -49,7 +52,7 @@ function registerAdminUsageRoutes(app) {
         endTime: new Date(endMs).toISOString(),
       };
 
-      const [render, latest, history, uploads, recent, hostedLive, errors, analytics] =
+      const [render, latest, history, uploads, recent, hostedLive, errors, analytics, limits, downloadsToday] =
         await Promise.all([
           renderMetrics.getDashboardMetrics({ hours, resolutionSeconds: hours > 72 ? 900 : 300 }),
           usageDb.getLatestSnapshots().catch(() => []),
@@ -75,6 +78,12 @@ function registerAdminUsageRoutes(app) {
             metrics: null,
             error: err.message || 'GA4 request failed',
           })),
+          getStorageLimits().catch(() => ({})),
+          usageDb.getDownloadTotalsToday().catch(() => ({
+            dayGmt: new Date().toISOString().slice(0, 10),
+            byteSize: 0,
+            eventCount: 0,
+          })),
         ]);
 
       res.json({
@@ -92,7 +101,8 @@ function registerAdminUsageRoutes(app) {
           historyB2Total: history,
           hostedLive: hostedLive[0] || null,
           formatHint: 'bytes',
-          limits: getStorageLimits(),
+          limits,
+          downloadsToday,
         },
         uploads,
         recentUploads: recent,
@@ -180,6 +190,33 @@ function registerAdminUsageRoutes(app) {
 
   app.get('/admin/usage/memory', requireAdmin, (req, res) => {
     res.json(memorySnapshot());
+  });
+
+  app.get('/admin/usage/limits', requireAdmin, async (_req, res) => {
+    try {
+      const limits = await getStorageLimits();
+      res.json({ success: true, limits });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message || 'Server error' });
+    }
+  });
+
+  app.put('/admin/usage/limits', requireAdmin, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const limits = await saveStorageLimitOverrides({
+        b2MaxGb: Object.prototype.hasOwnProperty.call(body, 'b2MaxGb')
+          ? body.b2MaxGb
+          : undefined,
+        b2DownloadMaxGb: Object.prototype.hasOwnProperty.call(body, 'b2DownloadMaxGb')
+          ? body.b2DownloadMaxGb
+          : undefined,
+      });
+      res.json({ success: true, limits });
+    } catch (err) {
+      const status = err.statusCode || 500;
+      res.status(status).json({ success: false, message: err.message || 'Server error' });
+    }
   });
 }
 

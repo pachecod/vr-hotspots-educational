@@ -54,6 +54,14 @@ function registerAdminActivityRoutes(app) {
       if (!fs.existsSync('temp-uploads')) fs.mkdirSync('temp-uploads', { recursive: true });
 
       await b2Service.downloadFile(remotePath, tempPath);
+      try {
+        const st = fs.statSync(tempPath);
+        if (st && st.size > 0) {
+          usageDb.recordDownloadBytes(st.size, { source: 'activity-download' }).catch(() => {});
+        }
+      } catch (_) {
+        /* ignore metering */
+      }
       res.setHeader('Content-Disposition', `attachment; filename="${safeName.replace(/"/g, '')}"`);
       res.setHeader('Content-Type', contentTypeForName(safeName));
       res.download(tempPath, safeName, () => {

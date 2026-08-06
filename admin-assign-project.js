@@ -113,6 +113,23 @@ function setAssignSource(source) {
   updateAssignButtons();
 }
 
+async function loadStudentsForClass(classId) {
+  const studentSel = document.getElementById('assign-student');
+  if (!studentSel) return [];
+  studentSel.innerHTML = '<option value="">Select a team member or student…</option>';
+  studentSel.disabled = !classId;
+  if (!classId) return [];
+  const sRes = await adminFetch(`/admin/students?classId=${encodeURIComponent(classId)}`);
+  const students = await sRes.json();
+  students.forEach((s) => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.displayName || s.display_name;
+    studentSel.appendChild(opt);
+  });
+  return students;
+}
+
 async function loadAssignClasses() {
   const classSel = document.getElementById('assign-class');
   const studentSel = document.getElementById('assign-student');
@@ -132,22 +149,13 @@ async function loadAssignClasses() {
   }
 
   classSel.addEventListener('change', async () => {
-    studentSel.innerHTML = '<option value="">Select a team member or student…</option>';
-    studentSel.disabled = !classSel.value;
     updateAssignButtons();
-    if (!classSel.value) return;
     try {
-      const sRes = await adminFetch(`/admin/students?classId=${encodeURIComponent(classSel.value)}`);
-      const students = await sRes.json();
-      students.forEach((s) => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = s.displayName || s.display_name;
-        studentSel.appendChild(opt);
-      });
+      await loadStudentsForClass(classSel.value);
     } catch (err) {
       setAssignStatus('Could not load students: ' + err.message, 'error');
     }
+    updateAssignButtons();
   });
 
   studentSel.addEventListener('change', updateAssignButtons);
@@ -281,7 +289,83 @@ async function sendFromAssignPage() {
   }
 }
 
-function initAssignPage() {
+async function applyAssignQueryPrefill() {
+  const params = new URLSearchParams(window.location.search);
+  if (![...params.keys()].length) return;
+
+  const source = params.get('source');
+  const hostedPath = params.get('hostedPath') || '';
+  const projectName = params.get('projectName') || '';
+  const classId = params.get('classId') || '';
+  const studentId = params.get('studentId') || '';
+  const adminNote = params.get('adminNote') || '';
+
+  if (projectName) {
+    const nameInput = document.getElementById('assign-project-name');
+    if (nameInput) nameInput.value = projectName;
+  }
+  if (adminNote) {
+    const noteInput = document.getElementById('assign-admin-note');
+    if (noteInput) noteInput.value = adminNote;
+  }
+
+  if (source === 'hosted' || hostedPath) {
+    setAssignSource('hosted');
+    const hostedRadio = document.querySelector('input[name="assign-source"][value="hosted"]');
+    if (hostedRadio) hostedRadio.checked = true;
+  }
+
+  if (hostedPath) {
+    const select = document.getElementById('assign-hosted-select');
+    if (select) {
+      const match = [...select.options].some((o) => o.value === hostedPath);
+      if (!match) {
+        const opt = document.createElement('option');
+        opt.value = hostedPath;
+        opt.textContent = `${hostedPath} (repaired / hosted)`;
+        opt.dataset.title = projectName || hostedPath;
+        select.appendChild(opt);
+        hostedProjects.push({
+          hostedPath,
+          title: projectName || hostedPath,
+          source: 'repair',
+          sourceLabel: 'Repaired hosted copy',
+          tourUrl: `/hosted/${hostedPath}/index.html`,
+        });
+      }
+      select.value = hostedPath;
+      selectedHostedPath = hostedPath;
+      updateHostedMeta();
+    }
+  }
+
+  if (classId) {
+    const classSel = document.getElementById('assign-class');
+    if (classSel) {
+      classSel.value = classId;
+      try {
+        await loadStudentsForClass(classId);
+      } catch (err) {
+        setAssignStatus('Could not load students for prefill: ' + err.message, 'error');
+      }
+    }
+  }
+
+  if (studentId) {
+    const studentSel = document.getElementById('assign-student');
+    if (studentSel) studentSel.value = studentId;
+  }
+
+  updateAssignButtons();
+  if (hostedPath || studentId) {
+    setAssignStatus(
+      'Prefilled from repaired submission. Preview or send when ready.',
+      'info'
+    );
+  }
+}
+
+async function initAssignPage() {
   const loginRoot = document.getElementById('login-root');
   const main = document.getElementById('main-content');
   if (loginRoot) loginRoot.innerHTML = '';
@@ -290,9 +374,6 @@ function initAssignPage() {
   if (typeof renderAdminNav === 'function') {
     renderAdminNav('assign');
   }
-
-  loadAssignClasses();
-  loadHostedAssignableProjects();
 
   document.querySelectorAll('input[name="assign-source"]').forEach((radio) => {
     radio.addEventListener('change', (e) => setAssignSource(e.target.value));
@@ -317,6 +398,10 @@ function initAssignPage() {
 
   document.getElementById('assign-preview-btn')?.addEventListener('click', previewAssignedProject);
   document.getElementById('assign-send-btn')?.addEventListener('click', sendFromAssignPage);
+
+  await loadAssignClasses();
+  await loadHostedAssignableProjects();
+  await applyAssignQueryPrefill();
 }
 
 requireAdminSession('login-root', initAssignPage);

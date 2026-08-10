@@ -54,6 +54,13 @@ services:
         sync: false
       - key: STUDENT_SESSION_SECRET
         sync: false
+      - key: STUDENT_PASSWORD_ENCRYPTION_SECRET
+        sync: false
+      # Optional: separate origin for /hosted/* (e.g. https://hosted.webxride.com)
+      - key: HOSTED_ORIGIN
+        sync: false
+      - key: SERVER_BASE_URL
+        sync: false
       - key: STRIPE_ENABLED
         value: "false"
       - key: STRIPE_SECRET_KEY
@@ -90,4 +97,4 @@ services:
       # Optional B2 daily download ceiling for Usage dashboard (GB, GMT day)
       - key: USAGE_B2_DOWNLOAD_MAX_GB
         sync: false
-# deploy-trigger: 2026-08-03T13:10Z branch 3.6 look-controls patch fix
+# deploy-trigger: 2026-08-06T20:45Z branch 3.8 security hardening

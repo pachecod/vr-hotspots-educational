@@ -17,14 +17,9 @@ const {
 } = require('../lib/student-content/flat-page-purge');
 const { uploadHostedUtf8, getHostedDir } = require('../lib/hosted-b2-storage');
 const { logAppError } = require('../lib/error-log');
+const { buildHostedUrl } = require('../lib/hosted-origin');
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
-
-function getServerBaseUrl(req) {
-  if (process.env.SERVER_BASE_URL) return process.env.SERVER_BASE_URL.replace(/\/$/, '');
-  const proto = req.headers['x-forwarded-proto'] ? String(req.headers['x-forwarded-proto']) : req.protocol;
-  return `${proto}://${req.get('host')}`;
-}
 
 async function getStudentContext(studentId) {
   const { rows } = await query(
@@ -120,7 +115,7 @@ function humanizeSlug(slug) {
 }
 
 /** Hosted flat pages on disk/B2 (covers publishes even when DB upsert lagged or failed). */
-function listHostedFlatPagesFromDisk(studentId, baseUrl) {
+function listHostedFlatPagesFromDisk(studentId, req) {
   const hostedDir = getHostedDir();
   if (!fs.existsSync(hostedDir)) return [];
   const dirPrefix = studentHostedPrefix(studentId);
@@ -139,7 +134,7 @@ function listHostedFlatPagesFromDisk(studentId, baseUrl) {
       slug,
       name: humanizeSlug(slug),
       files: [{ name: 'index.html' }],
-      hostedUrl: `${baseUrl}/hosted/${entry}/index.html`,
+      hostedUrl: buildHostedUrl(entry, 'index.html', req),
       isHosted: true,
       updatedAt,
       hostedPath: entry,
@@ -216,7 +211,6 @@ function registerFlatPageRoutes(app) {
   app.get('/api/student/flat-pages', requireStudentStrict, async (req, res) => {
     try {
       const studentId = req.studentSession.studentId;
-      const baseUrl = getServerBaseUrl(req);
       let dbPages = [];
       if (isDbEnabled()) {
         const { rows } = await query(
@@ -234,7 +228,7 @@ function registerFlatPageRoutes(app) {
           updatedAt: r.updated_at,
         }));
       }
-      const diskPages = listHostedFlatPagesFromDisk(studentId, baseUrl);
+      const diskPages = listHostedFlatPagesFromDisk(studentId, req);
       res.json({
         success: true,
         pages: mergeFlatPageLists(dbPages, diskPages),
@@ -373,7 +367,7 @@ function registerFlatPageRoutes(app) {
     const prefix = buildPrefix(classSlug, studentId, payload.slug);
     await uploadFlatPageFilesToB2(prefix, payload.files);
 
-    const url = `${getServerBaseUrl(req)}/hosted/${hostedPath}/index.html`;
+    const url = buildHostedUrl(hostedPath, 'index.html', req);
 
     let savedToLibrary = false;
     if (isDbEnabled()) {

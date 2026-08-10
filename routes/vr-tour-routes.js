@@ -19,15 +19,10 @@ const {
   hostedPathFromTourUrl,
 } = require('../lib/guest-preview-cleanup');
 const { uploadHostedDirectory } = require('../lib/hosted-b2-storage');
+const { getHostedOrigin, getAppOrigin, buildHostedUrl } = require('../lib/hosted-origin');
 
 const PREVIEW_COOKIE = 'vr_preview_sid';
 const PREVIEW_COOKIE_MAX_AGE_SEC = 7 * 24 * 60 * 60;
-
-function getServerBaseUrl(req) {
-  if (process.env.SERVER_BASE_URL) return process.env.SERVER_BASE_URL.replace(/\/$/, '');
-  const proto = req.headers['x-forwarded-proto'] ? String(req.headers['x-forwarded-proto']) : req.protocol;
-  return `${proto}://${req.get('host')}`;
-}
 
 function getOrSetPreviewSessionId(req, res) {
   const cookies = parseCookies(req);
@@ -58,7 +53,7 @@ async function publishZipToHostedDir({ zipPath, hostedPath, req, assertValidZipF
 
     await uploadHostedDirectory(tempDir, hostedPath);
 
-    const url = `${getServerBaseUrl(req)}/hosted/${hostedPath}/index.html`;
+    const url = buildHostedUrl(hostedPath, 'index.html', req);
     const qrUrl = tourUrlToQrUrl(url);
 
     return { url, hostedPath, hostedUrl: url, qrUrl };
@@ -73,8 +68,16 @@ function isAllowedTourQrUrl(url, req) {
   if (!url || !/^https?:\/\//i.test(url)) return false;
   try {
     const parsed = new URL(url);
-    const allowed = new URL(getServerBaseUrl(req));
-    return parsed.origin === allowed.origin && /\/hosted\/[^/]+\/index\.html$/i.test(parsed.pathname);
+    if (!/\/hosted\/[^/]+\/index\.html$/i.test(parsed.pathname)) return false;
+    const allowedOrigins = new Set();
+    try {
+      allowedOrigins.add(new URL(getHostedOrigin(req)).origin);
+    } catch (_) {}
+    try {
+      const app = getAppOrigin(req);
+      if (app) allowedOrigins.add(new URL(app).origin);
+    } catch (_) {}
+    return allowedOrigins.has(parsed.origin);
   } catch {
     return false;
   }

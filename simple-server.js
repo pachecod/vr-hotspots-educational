@@ -58,6 +58,7 @@ const {
   requireStudentStrict,
   isStudentAuthRequired,
   getStudentSession,
+  warnIfStudentAuthPermissive,
 } = require('./student-auth');
 const submissionsDb = require('./services/submissions-db');
 const projectVersionsDb = require('./services/project-versions-db');
@@ -76,6 +77,11 @@ const {
   createSitePasswordMiddleware,
   registerSitePasswordRoutes,
 } = require('./lib/security/site-password');
+const {
+  getHostedOrigin,
+  getAppOrigin,
+  createHostedOriginGuard,
+} = require('./lib/hosted-origin');
 const {
   createGitHubSession,
   getGitHubToken,
@@ -107,9 +113,18 @@ app.use((req, res, next) => {
   next();
 });
 app.use(csrfGuard);
+app.use(createHostedOriginGuard());
 
 registerSitePasswordRoutes(app);
 app.use(createSitePasswordMiddleware());
+
+app.get('/api/public-config', (req, res) => {
+  res.json({
+    success: true,
+    hostedOrigin: getHostedOrigin(req) || null,
+    appOrigin: getAppOrigin(req) || null,
+  });
+});
 
 registerStripeWebhook(app);
 
@@ -189,6 +204,9 @@ async function resolveSubmissionRemotePath(filename, versionId) {
   return `student-projects/${filename}`;
 }
 
+const ZIP_MAX_ENTRIES = 5000;
+const ZIP_MAX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024; // 500MB
+
 function assertValidZipFile(localPath) {
   const stat = fs.statSync(localPath);
   if (!stat.isFile() || stat.size < 22) {
@@ -204,7 +222,27 @@ function assertValidZipFile(localPath) {
   } finally {
     fs.closeSync(fd);
   }
+
+  // Pre-check entry count / declared uncompressed size (zip-bomb defense).
+  const AdmZip = require('adm-zip');
+  const zip = new AdmZip(localPath);
+  const entries = zip.getEntries();
+  if (entries.length > ZIP_MAX_ENTRIES) {
+    throw new Error(`ZIP has too many entries (max ${ZIP_MAX_ENTRIES})`);
+  }
+  let declaredUncompressed = 0;
+  for (const entry of entries) {
+    if (entry.isDirectory) continue;
+    declaredUncompressed += Number(entry.header?.size || 0);
+    if (declaredUncompressed > ZIP_MAX_UNCOMPRESSED_BYTES) {
+      throw new Error(
+        `ZIP uncompressed size exceeds limit (max ${ZIP_MAX_UNCOMPRESSED_BYTES / (1024 * 1024)}MB)`
+      );
+    }
+  }
 }
+
+const { assertStudentOwnedRemotePath } = require('./lib/security/student-remote-path');
 
 async function tryDeriveProjectMetaFromZip(zipPath) {
   return new Promise((resolve) => {
@@ -348,9 +386,7 @@ app.use(
   express.static(path.join(__dirname, 'starter-templates'), staticNoStaleOptions)
 );
 function getServerBaseUrlForHosted(req) {
-  if (process.env.SERVER_BASE_URL) return process.env.SERVER_BASE_URL.replace(/\/$/, '');
-  const proto = req.headers['x-forwarded-proto'] ? String(req.headers['x-forwarded-proto']) : req.protocol;
-  return `${proto}://${req.get('host')}`;
+  return getHostedOrigin(req) || getAppOrigin(req);
 }
 
 app.use(createGuestPreviewExpiryGuard());
@@ -593,6 +629,7 @@ async function extractZipToDirSafe(zipPath, destDir) {
   const { pipeline } = require('stream/promises');
   const destRoot = path.resolve(destDir);
   await fs.promises.mkdir(destRoot, { recursive: true });
+  assertValidZipFile(zipPath);
 
   return new Promise((resolve, reject) => {
     const input = fs.createReadStream(zipPath);
@@ -600,6 +637,8 @@ async function extractZipToDirSafe(zipPath, destDir) {
 
     let chain = Promise.resolve();
     let settled = false;
+    let entryCount = 0;
+    let uncompressedBytes = 0;
 
     const bail = (err) => {
       if (settled) return;
@@ -622,6 +661,12 @@ async function extractZipToDirSafe(zipPath, destDir) {
     parser.on('entry', (entry) => {
       chain = chain
         .then(async () => {
+          entryCount += 1;
+          if (entryCount > ZIP_MAX_ENTRIES) {
+            entry.autodrain();
+            throw new Error(`ZIP has too many entries (max ${ZIP_MAX_ENTRIES})`);
+          }
+
           const safeRel = sanitizeZipEntryPath((entry.path || '').toString());
           if (!safeRel) {
             entry.autodrain();
@@ -641,7 +686,24 @@ async function extractZipToDirSafe(zipPath, destDir) {
           }
 
           await fs.promises.mkdir(path.dirname(outPath), { recursive: true });
-          await pipeline(entry, fs.createWriteStream(outPath));
+          let written = 0;
+          const limiter = new (require('stream').Transform)({
+            transform(chunk, _enc, cb) {
+              written += chunk.length;
+              uncompressedBytes += chunk.length;
+              if (uncompressedBytes > ZIP_MAX_UNCOMPRESSED_BYTES) {
+                cb(
+                  new Error(
+                    `ZIP uncompressed size exceeds limit (max ${ZIP_MAX_UNCOMPRESSED_BYTES / (1024 * 1024)}MB)`
+                  )
+                );
+                return;
+              }
+              cb(null, chunk);
+            },
+          });
+          await pipeline(entry, limiter, fs.createWriteStream(outPath));
+          void written;
         })
         .catch((e) => bail(e));
     });
@@ -1391,13 +1453,27 @@ app.post('/api/submit-project-meta', requireAuthForCloudWrites, express.json(), 
       } = req.body || {};
       const safeProject = projectName || 'VR_Project';
 
+      let safeRemotePath = remotePath;
+      if (studentId && remotePath) {
+        try {
+          safeRemotePath = assertStudentOwnedRemotePath(remotePath, { classSlug, studentId });
+        } catch (pathErr) {
+          return res.status(pathErr.statusCode || 400).json({
+            success: false,
+            message: pathErr.message || 'Invalid remotePath',
+          });
+        }
+      } else if (studentId && !remotePath) {
+        return res.status(400).json({ success: false, message: 'remotePath is required' });
+      }
+
       let versionResult = null;
       if (isDbEnabled() && studentId && kind !== 'legacy') {
         versionResult = await projectVersionsDb.createVersion({
           studentId,
           projectName: safeProject,
           fileName,
-          b2Path: remotePath,
+          b2Path: safeRemotePath,
           kind: kind === 'draft' ? 'draft' : 'submitted',
           createdBy: 'student',
           studentNote,
@@ -1409,7 +1485,7 @@ app.post('/api/submit-project-meta', requireAuthForCloudWrites, express.json(), 
           studentName,
           projectName: safeProject,
           fileName,
-          remotePath,
+          remotePath: safeRemotePath,
         });
       } else if (isDbEnabled()) {
         await submissionsDb.createSubmission({
@@ -1417,14 +1493,14 @@ app.post('/api/submit-project-meta', requireAuthForCloudWrites, express.json(), 
           studentName,
           projectName: safeProject,
           fileName,
-          remotePath,
+          remotePath: safeRemotePath,
         });
       }
 
       await recordProjectUploadBytes({
         kind: kind === 'draft' ? 'draft' : 'submitted',
         byteSize: byteSize != null ? byteSize : contentLength,
-        remotePath,
+        remotePath: safeRemotePath,
         fileName,
         projectName: safeProject,
         studentId,
@@ -1436,7 +1512,7 @@ app.post('/api/submit-project-meta', requireAuthForCloudWrites, express.json(), 
         studentName,
         projectName: safeProject,
         fileName,
-        remotePath,
+        remotePath: safeRemotePath,
         submittedAt: new Date().toISOString(),
       };
 
@@ -1445,7 +1521,7 @@ app.post('/api/submit-project-meta', requireAuthForCloudWrites, express.json(), 
         studentName,
         projectName: safeProject,
         fileName,
-        remotePath,
+        remotePath: safeRemotePath,
         submittedAt: submission.submittedAt,
       });
       writeSubmissionsLog(logs);
@@ -1501,9 +1577,9 @@ function requireAuthForVideoFetch(req, res, next) {
 app.post('/fetch-video', requireAuthForVideoFetch, express.json(), async (req, res) => {
   const { url } = req.body;
 
-  let safeUrl;
+  let pinned;
   try {
-    safeUrl = await assertSafeOutboundUrl(url);
+    pinned = await assertSafeOutboundUrl(url);
   } catch (err) {
     return res.status(400).json({
       success: false,
@@ -1511,18 +1587,28 @@ app.post('/fetch-video', requireAuthForVideoFetch, express.json(), async (req, r
     });
   }
 
-  const targetUrl = safeUrl.toString();
-  console.log(`📹 Fetching video from: ${targetUrl}`);
+  const targetUrl = pinned.url.toString();
+  console.log(`📹 Fetching video from: ${targetUrl} (pinned ${pinned.address})`);
 
   const { getUploadLimits } = require('./lib/upload-limits');
   const uploadLimits = await getUploadLimits();
   const MAX_BYTES = uploadLimits.fetchVideo;
   const MAX_MB = uploadLimits.fetchVideoMb;
 
-  const protocol = safeUrl.protocol === 'https:' ? https : require('http');
+  const protocol = pinned.url.protocol === 'https:' ? https : require('http');
   let bytesReceived = 0;
 
-  const request = protocol.get(targetUrl, { timeout: 60000 }, (videoRes) => {
+  const request = protocol.get(
+    targetUrl,
+    {
+      timeout: 60000,
+      headers: { Host: pinned.hostname },
+      servername: pinned.hostname,
+      lookup(hostname, options, callback) {
+        callback(null, pinned.address, pinned.family);
+      },
+    },
+    (videoRes) => {
     if (videoRes.statusCode >= 300 && videoRes.statusCode < 400 && videoRes.headers.location) {
       videoRes.resume();
       return res.status(400).json({
@@ -1581,7 +1667,8 @@ app.post('/fetch-video', requireAuthForVideoFetch, express.json(), async (req, r
         });
       }
     });
-  });
+  }
+  );
 
   request.on('error', (err) => {
     console.error('Video fetch error:', err);
@@ -2317,6 +2404,7 @@ async function startServer() {
     console.log(`🌐 Also accessible at https://192.168.1.80:${PORT}`);
     console.log(`👨‍💼 Admin overview: https://localhost:${PORT}/admin`);
     console.log(`👨‍💼 Admin submissions: https://localhost:${PORT}/admin-submissions.html`);
+    warnIfStudentAuthPermissive();
   });
   server.timeout = 0; // Disable idle timeout 
   server.requestTimeout = 0; // Disable 5-minute request timeout (for huge uploads/downloads)
@@ -2328,6 +2416,7 @@ async function startServer() {
     console.log(`👨‍🏫 Admin overview: http://localhost:${PORT}/admin`);
     console.log(`👨‍🏫 Admin submissions: http://localhost:${PORT}/admin-submissions.html`);
     console.log('ℹ️  Running in HTTP mode (no SSL certificates found)');
+    warnIfStudentAuthPermissive();
   });
   server.timeout = 0; 
   server.requestTimeout = 0; 

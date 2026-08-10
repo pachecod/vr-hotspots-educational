@@ -4,7 +4,8 @@ function escapeHtml(text) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function isLegacyVersion(versionId) {
@@ -284,16 +285,16 @@ async function loadInbox() {
         const studentLabel = formatSubmittedBy(sub);
         const historyBtn = legacy
           ? ''
-          : `<button class="btn-history" onclick="toggleHistory('${threadId}', this)">📜 Version history</button>`;
+          : `<button class="btn-history" type="button" data-action="toggle-history">📜 Version history</button>`;
         const repairsBtn = legacy
           ? ''
           : `<button class="btn-repairs" type="button" data-action="toggle-repairs">Repaired versions</button>`;
         const reviewLink = legacy
           ? ''
-          : `<a class="btn btn-review" href="/index.html?adminReview=1&versionId=${versionId}">✏️ Review in Editor</a>`;
+          : `<a class="btn btn-review" href="/index.html?adminReview=1&versionId=${encodeURIComponent(versionId)}">✏️ Review in Editor</a>`;
 
         return `
-          <div class="submission-card" data-version-id="${escapeHtml(versionId)}" data-thread-id="${escapeHtml(threadId)}" data-project-name="${escapeHtml(sub.projectName || '')}" data-student-name="${escapeHtml(studentLabel)}" data-student-id="${escapeHtml(sub.studentId || '')}" data-class-id="${escapeHtml(sub.classId || '')}">
+          <div class="submission-card" data-version-id="${escapeHtml(versionId)}" data-thread-id="${escapeHtml(threadId)}" data-project-name="${escapeHtml(sub.projectName || '')}" data-student-name="${escapeHtml(studentLabel)}" data-student-id="${escapeHtml(sub.studentId || '')}" data-class-id="${escapeHtml(sub.classId || '')}" data-file-name="${escapeHtml(sub.fileName || '')}">
             <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}${featured ? ' <span class="badge badge-featured">Featured</span>' : ''}${legacy ? ' <span class="badge badge-draft">B2 only</span>' : ''}</h3>
             <p class="submitted-by">Submitted by: <strong>${escapeHtml(studentLabel)}</strong>${sub.className ? ` <span class="submitted-by-class">(${escapeHtml(sub.className)})</span>` : ''}</p>
             <div class="meta">
@@ -304,28 +305,28 @@ async function loadInbox() {
             </div>
             ${noteBlock}
             <div class="actions">
-              <button class="btn-download" onclick="downloadVersion('${versionId}', '${escapeHtml(sub.fileName)}')">📥 Download</button>
+              <button class="btn-download" type="button" data-action="download">📥 Download</button>
               ${
                 legacy
                   ? ''
-                  : `<button class="btn-repair" onclick="repairMediaVersion('${versionId}', '${escapeHtml(sub.projectName || 'project')}', '${escapeHtml(studentLabel)}', '${escapeHtml(threadId)}', '${escapeHtml(sub.studentId || '')}', '${escapeHtml(sub.classId || '')}')">🔧 Repair media</button>`
+                  : `<button class="btn-repair" type="button" data-action="repair-media">🔧 Repair media</button>`
               }
               ${repairsBtn}
               ${
                 hosted
-                  ? `<button class="btn-unhost" onclick="unhostVersion('${versionId}', '${escapeHtml(sub.fileName)}', '${escapeHtml(sub.projectName || 'project')}')">🚫 Unhost</button>`
-                  : `<button class="btn-host" onclick="hostVersion('${versionId}', '${escapeHtml(sub.projectName || 'project')}')">🌐 Host</button>`
+                  ? `<button class="btn-unhost" type="button" data-action="unhost">🚫 Unhost</button>`
+                  : `<button class="btn-host" type="button" data-action="host">🌐 Host</button>`
               }
               ${
                 hosted
                   ? featured
-                    ? `<button class="btn-unfeature" onclick="setHostedGalleryFeature('${versionId}', '${escapeHtml(sub.fileName)}', false)">Remove from Hosted List</button>`
-                    : `<button class="btn-feature" onclick="setHostedGalleryFeature('${versionId}', '${escapeHtml(sub.fileName)}', true)">Feature on Hosted List</button>`
+                    ? `<button class="btn-unfeature" type="button" data-action="unfeature">Remove from Hosted List</button>`
+                    : `<button class="btn-feature" type="button" data-action="feature">Feature on Hosted List</button>`
                   : ''
               }
               ${reviewLink}
               ${historyBtn}
-              <button class="btn-delete" onclick="deleteVersion('${versionId}')">🗑️ Delete</button>
+              <button class="btn-delete" type="button" data-action="delete">🗑️ Delete</button>
             </div>
             <div class="version-history" id="history-${escapeHtml(threadId)}"></div>
             <div class="version-history repairs-panel" data-repairs-panel></div>
@@ -373,6 +374,76 @@ function bindInboxCardActions(container) {
           card.getAttribute('data-class-id') || '',
           card.getAttribute('data-version-id') || ''
         );
+        return;
+      }
+
+      if (action === 'toggle-history') {
+        e.preventDefault();
+        if (!card) return;
+        await toggleHistory(card.getAttribute('data-thread-id') || '', btn);
+        return;
+      }
+
+      if (action === 'download') {
+        e.preventDefault();
+        if (!card) return;
+        await downloadVersion(
+          card.getAttribute('data-version-id') || '',
+          card.getAttribute('data-file-name') || 'project.zip'
+        );
+        return;
+      }
+
+      if (action === 'repair-media') {
+        e.preventDefault();
+        if (!card) return;
+        await repairMediaVersion(
+          card.getAttribute('data-version-id') || '',
+          card.getAttribute('data-project-name') || 'project',
+          card.getAttribute('data-student-name') || '',
+          card.getAttribute('data-thread-id') || '',
+          card.getAttribute('data-student-id') || '',
+          card.getAttribute('data-class-id') || ''
+        );
+        return;
+      }
+
+      if (action === 'host') {
+        e.preventDefault();
+        if (!card) return;
+        await hostVersion(
+          card.getAttribute('data-version-id') || '',
+          card.getAttribute('data-project-name') || 'project'
+        );
+        return;
+      }
+
+      if (action === 'unhost') {
+        e.preventDefault();
+        if (!card) return;
+        await unhostVersion(
+          card.getAttribute('data-version-id') || '',
+          card.getAttribute('data-file-name') || '',
+          card.getAttribute('data-project-name') || 'project'
+        );
+        return;
+      }
+
+      if (action === 'feature' || action === 'unfeature') {
+        e.preventDefault();
+        if (!card) return;
+        await setHostedGalleryFeature(
+          card.getAttribute('data-version-id') || '',
+          card.getAttribute('data-file-name') || '',
+          action === 'feature'
+        );
+        return;
+      }
+
+      if (action === 'delete') {
+        e.preventDefault();
+        if (!card) return;
+        await deleteVersion(card.getAttribute('data-version-id') || '');
         return;
       }
 

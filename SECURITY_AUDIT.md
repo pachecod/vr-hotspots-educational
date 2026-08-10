@@ -2,68 +2,65 @@
 
 This document tracks the security audit and remediation work for the VR Hotspots Educational app (Express + PostgreSQL + Backblaze B2).
 
-## Version 2.8 branch (security hardening)
+## Version 3.8 (security hardening)
 
-**Branch:** `2.8` (local only — do not push until explicitly approved)
+**Branch:** `3.8` (from `3.6`)
 
-**Purpose:** Apply P0/P1/P2 fixes from the audit before wider release.
+**Purpose:** Close critical/high gaps found after 2.8/3.6 — preview sandbox escape, same-origin `/hosted` isolation, reversible password keying, DNS-rebinding on `/fetch-video`, admin attribute XSS — and document what is actually shipped.
+
+**Deploy target for first validation:** `webxride.com` + `hosted.webxride.com`. Do **not** migrate `seedsofstory.webxride.com` until content is recovered. Guest/playground stays enabled on public webxride.
+
+See [docs/v3.8/README.md](docs/v3.8/README.md) for the deploy checklist.
 
 ### How to test locally
 
 ```bash
 cd create_hotspot_template-master
-git checkout 2.8
+git checkout 3.8
 npm install
-npm run test:security          # regression tests for redirect/SSRF/auth flags
-npm run build:flat-editor      # required after Preview.jsx sandbox change
-npm start                      # or npm run dev
+npm run test:security
+npm run build:flat-editor   # required after Preview.jsx sandbox change
+npm start
 ```
 
-Open http://localhost:3000 and verify:
-
-1. Student login still works; unauthenticated `/api/b2-upload-url` returns 401 when `DATABASE_URL` or B2 is configured
-2. Admin login rate-limits after 5 failed attempts per minute
-3. Flat page preview still renders (sandbox no longer has `allow-same-origin`)
-4. Remote video fetch via `/fetch-video` requires student session when DB/B2/production is active
-5. GitHub OAuth `returnTo=https://evil.com` redirects to `/` only
-
-### Production deploy checklist (before pushing 2.8)
-
-Set these env vars on Render (see `render.yaml`):
-
-- `NODE_ENV=production`
-- `ADMIN_PASSWORD` — strong, not `admin123`
-- `ADMIN_SESSION_SECRET` — random 32+ bytes
-- `STUDENT_SESSION_SECRET` — random 32+ bytes
-- `STUDENT_AUTH_REQUIRED=true`
-- `DATABASE_URL`, B2 credentials
-
-Server **exits on startup** in production if weak/default secrets are detected.
-
-### Changes in 2.8
+### Changes in 3.8
 
 | Area | Fix |
 |------|-----|
-| Auth | `requireAuthForCloudWrites` on `/submit-project`, `/api/b2-upload-url`, `/api/submit-project-meta` |
-| Secrets | Production startup validation (`lib/security/production-secrets.js`) |
-| SSRF | DNS-resolved IP blocklist on `/fetch-video`; no redirects; stream size cap |
-| XSS | Flat preview iframe drops `allow-same-origin`; escaped error `innerHTML` in editor/admin |
-| GitHub OAuth | Per-browser session cookie; `returnTo` allowlist |
-| Compression | Student auth + job ownership when DB enabled |
-| Ridey | Strict student auth when DB or `STUDENT_AUTH_REQUIRED` |
-| Admin | Login rate limiting (5/min) |
-| Headers | `helmet` (CSP disabled globally; basic CSP on `/hosted/*`) |
-| CSRF | Origin/Referer/`X-Requested-With` guard on mutating requests (strict in production) |
-| ZIP | `assertValidZipFile` on legacy `/submit-project` |
-| Tests | `npm run test:security` |
-| Deploy | Sessions invalidate on server restart (boot ID in cookies) |
+| XSS / sandbox | Flat preview + Ridey preview iframes drop `allow-same-origin` (source + committed bundle) |
+| Hosted isolation | Optional `HOSTED_ORIGIN` subdomain; host routing serves only `/hosted/*` on that host |
+| Passwords | Production requires dedicated `STUDENT_PASSWORD_ENCRYPTION_SECRET` (fail closed) |
+| SSRF | `/fetch-video` connects to DNS-pinned IP (Host/SNI keep original hostname) |
+| Admin XSS | Submissions UI escapes `'` / avoids unsafe single-quoted `onclick` interpolation |
+| Screenshots | Puppeteer request interception blocks private/metadata URLs; no `--disable-web-security` |
+| Ridey | Strict student auth whenever AI analysis can spend |
+| Tests | Extended `npm run test:security` |
 
-### Known remaining risks (post-2.8)
+### Remaining risks (accepted / follow-up)
 
-- Published student pages at `/hosted/*` intentionally run arbitrary JS (educational feature)
-- Weblink hotspots can load arbitrary external URLs in VR tours
+- Guest / local-test mode remains enabled on public webxride by product choice
+- Classroom installs without `HOSTED_ORIGIN` still serve `/hosted/*` on the app origin (document residual risk)
+- CSRF guard still accepts `X-Requested-With: XMLHttpRequest` (mitigated when hosted is on a separate origin)
 - Postgres TLS uses `rejectUnauthorized: false` for managed DB compatibility
-- Full CSRF double-submit tokens not yet implemented (partial mitigation via Origin check)
+- Zip-bomb size/ratio caps, CI security workflow, and further modularization of `simple-server.js` are not in 3.8
+- `seedsofstory.webxride.com` is intentionally not on 3.8 yet
+
+---
+
+## Version 2.8 branch (historical)
+
+**Branch:** `2.8`
+
+Earlier hardening: cloud-write auth, production secret checks for admin/session secrets, hostname/IP blocklist for `/fetch-video` (without DNS pin), helmet + hosted CSP, CSRF Origin guard, ZIP validation, admin login rate limit.
+
+**Correction:** 2.8 documentation claimed the flat preview iframe dropped `allow-same-origin`. That change was **not** present in shipped 2.8/3.6 source or `flat-editor.bundle.js`. It is fixed in **3.8**.
+
+### Known remaining risks after 2.8 (superseded by 3.8 where noted)
+
+- Published student pages at `/hosted/*` ran on the app origin — addressed in 3.8 via `HOSTED_ORIGIN`
+- Preview sandbox escape — addressed in 3.8
+- Password encryption fell back through session secrets — addressed in 3.8
+- `/fetch-video` DNS rebinding TOCTOU — addressed in 3.8
 
 ---
 
@@ -71,19 +68,13 @@ Server **exits on startup** in production if weak/default secrets are detected.
 
 The main application lives in this folder. It is a full-stack Node.js app: [`simple-server.js`](simple-server.js), PostgreSQL ([`services/db-service.js`](services/db-service.js)), Backblaze B2, Stripe, OpenAI (Ridey).
 
-**SQL injection:** Low risk — all queries use parameterized `$1`, `$2` placeholders via `db-service.query()`.
+**SQL injection:** Low risk — queries use parameterized `$1`, `$2` placeholders via `db-service.query()`. A few fixed enums are interpolated into `ORDER BY` (not user-controlled); prefer keep those enums closed.
 
-**Higher-risk areas (addressed in 2.8 where noted):** optional auth on writes, SSRF proxy, student HTML execution, default secrets, missing CSP/CSRF/helmet.
+**Students intentionally write HTML/CSS/JS** that runs on publish. Mitigation is **isolation** (separate subdomain when `HOSTED_ORIGIN` is set, teacher review), not sanitization of all student code.
 
 ---
 
 ## Phase 1 — Inventory and automated baseline
-
-### Endpoint auth matrix
-
-Build by grepping `app.(get|post|put|delete|use)` in `simple-server.js` and `routes/*`. Distinguish `requireStudent` (skips when auth off) vs `requireStudentStrict` (always required).
-
-### Automated scans
 
 ```bash
 npm audit
@@ -94,84 +85,14 @@ rg "query\(\`[^\`]*\$\{" --glob '*.js'   # SQL anti-pattern
 
 ---
 
-## Phase 2 — Category audit checklists
+## Phase 2–4 — Ongoing
 
-### SQL injection (OWASP A03)
+Use the checklists and dynamic tests from earlier audit work; re-run against staging with `HOSTED_ORIGIN` set before calling a classroom install “isolated.”
 
-- Enforce parameterized queries only
-- No user input in dynamic column/table names
-
-### Authentication (OWASP A01, A07)
-
-- No default passwords in production (enforced in 2.8)
-- All B2/DB writes require student session (2.8)
-- Admin login rate limited (2.8)
-
-### SSRF (OWASP A10)
-
-- `/fetch-video`: auth + DNS IP validation (2.8)
-- Block metadata IPs, private ranges, redirects
-
-### XSS (OWASP A03)
-
-- Escape dynamic `innerHTML` (partial 2.8)
-- Preview iframe isolation (2.8)
-- `/hosted/*` remains user-controlled JS by design
-
-### CSRF (OWASP A01)
-
-- Origin/Referer guard (2.8)
-- Consider double-submit tokens in a future release
-
-### File uploads (OWASP A04, A08)
-
-- ZIP path traversal blocked in `extractZipToDirSafe`
-- `assertValidZipFile` on all upload paths (2.8 for legacy submit)
-
----
-
-## Phase 3 — Dynamic testing
-
-Run against staging with production-like env:
-
-1. Unauthenticated B2 upload → 401
-2. SSRF to `169.254.169.254` → blocked
-3. GitHub `returnTo` open redirect → blocked
-4. Admin brute force → rate limited
-5. Cross-student asset access → 403
-
----
-
-## Phase 4 — Remediation priority
-
-### P0 — Done in 2.8
-
-- Auth-gate cloud writes
-- Production secret validation
-- SSRF hardening on `/fetch-video`
-- Preview sandbox isolation
-
-### P1 — Done in 2.8
-
-- GitHub per-session tokens + safe redirect
-- Compression job auth
-- Admin rate limit
-- Key innerHTML escapes
-
-### P2 — Partial in 2.8
-
-- helmet + hosted CSP
-- CSRF Origin guard
-- ZIP validation on legacy submit
-
-### P3 — Ongoing
+### Follow-ups (not 3.8)
 
 - Security tests in CI
-- npm audit on PRs
-- Document student-authored JS threat model for teachers
-
----
-
-## Architectural note
-
-Students intentionally write HTML/CSS/JS that runs on publish. Mitigation is **isolation** (separate subdomain, teacher review), not sanitization of all student code.
+- Zip entry-count / compression-ratio caps
+- Full CSRF double-submit tokens
+- Point GitHub default branch at the actively deployed line
+- Migrate seedsofstory (and other classroom subdomains) to `hosted.<install>.webxride.com` after content recovery

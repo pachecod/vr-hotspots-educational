@@ -1,28 +1,17 @@
 const rateLimit = require('express-rate-limit');
-const {
-  requireStudent,
-  requireStudentStrict,
-  isStudentAuthRequired,
-} = require('../student-auth');
+const { requireStudentStrict } = require('../student-auth');
 const { getAdminSession } = require('../admin-auth');
-const { isDbEnabled } = require('../services/db-service');
 const { getRideyEnabled, getRideyVersion } = require('../lib/app-settings');
 const { analyzeCodeWithAI } = require('../services/ridey-service');
 
-function requireRideyStudent(req, res, next) {
-  if (isDbEnabled() || isStudentAuthRequired()) {
-    return requireStudentStrict(req, res, next);
-  }
-  return requireStudent(req, res, next);
-}
-
+/** Ridey can spend OpenAI credits — always require a real student or admin session. */
 function requireRideyUser(req, res, next) {
   const adminSession = getAdminSession(req);
   if (adminSession) {
     req.adminSession = adminSession;
     return next();
   }
-  return requireRideyStudent(req, res, next);
+  return requireStudentStrict(req, res, next);
 }
 
 const rideyRateLimiter = rateLimit({

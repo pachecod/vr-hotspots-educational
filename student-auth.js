@@ -11,6 +11,7 @@ const {
 const { recordAuthEvent } = require('./lib/usage/auth-events');
 
 const STUDENT_AUTH_REQUIRED = process.env.STUDENT_AUTH_REQUIRED === 'true';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const STUDENT_SESSION_SECRET =
   process.env.STUDENT_SESSION_SECRET ||
   crypto.createHash('sha256').update(process.env.ADMIN_PASSWORD || 'admin123-student').digest('hex');
@@ -43,8 +44,28 @@ function getStudentSession(req) {
   return session.getSessionFromRequest(req, parseCookies);
 }
 
+/** True when soft requireStudent may skip auth (never in production). */
+function isStudentAuthPermissive() {
+  return !IS_PRODUCTION && !isStudentAuthRequired();
+}
+
+function warnIfStudentAuthPermissive() {
+  if (isStudentAuthPermissive()) {
+    console.warn(
+      '⚠️  requireStudent is running in PERMISSIVE mode (no auth). ' +
+        'Set STUDENT_AUTH_REQUIRED=true or NODE_ENV=production to enforce login.'
+    );
+  }
+}
+
+/**
+ * Soft auth: skips checks only in non-production when STUDENT_AUTH_REQUIRED is off.
+ * In production, always requires a student session (same as requireStudentStrict).
+ * Prefer requireStudentStrict for any route that can spend money or touch student data.
+ * @deprecated Use requireStudentStrict for new routes (Ridey and cloud writes already do).
+ */
 function requireStudent(req, res, next) {
-  if (!isStudentAuthRequired()) {
+  if (isStudentAuthPermissive()) {
     req.studentSession = null;
     return next();
   }
@@ -227,6 +248,8 @@ module.exports = {
   COOKIE_NAME,
   loginRateLimiter,
   isStudentAuthRequired,
+  isStudentAuthPermissive,
+  warnIfStudentAuthPermissive,
   getStudentSession,
   requireStudent,
   requireStudentStrict,

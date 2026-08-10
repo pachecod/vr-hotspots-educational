@@ -360,26 +360,65 @@ function testPasswordEncryptionSecretRequired() {
   console.log('✓ password encryption secret required in production');
 }
 
-function testPreviewSandboxAdminReviewIsolation() {
+function testPreviewSandboxAdminElevatedIsolation() {
   // Ridey / AI preview must never combine allow-scripts + allow-same-origin.
   const ridey = fs.readFileSync(path.join(__dirname, '..', 'flat-editor', 'AIAssistant.jsx'), 'utf8');
   assert.ok(!/sandbox="[^"]*allow-same-origin/.test(ridey), 'AIAssistant still has allow-same-origin');
 
-  // Live editor preview: allow-same-origin for nested VR embeds, but adminReview must omit it.
+  const helper = fs.readFileSync(
+    path.join(__dirname, '..', 'flat-editor', 'previewSandbox.js'),
+    'utf8'
+  );
+  const classic = fs.readFileSync(path.join(__dirname, '..', 'preview-sandbox.js'), 'utf8');
+  for (const [label, src] of [
+    ['flat-editor/previewSandbox.js', helper],
+    ['preview-sandbox.js', classic],
+  ]) {
+    assert.ok(/adminReview/.test(src), `${label} must check adminReview`);
+    assert.ok(/adminTemplate/.test(src), `${label} must check adminTemplate`);
+    assert.ok(/adminAssign/.test(src), `${label} must check adminAssign`);
+    assert.ok(
+      /allow-scripts allow-modals allow-popups allow-forms/.test(src),
+      `${label} must define restricted sandbox`
+    );
+    assert.ok(
+      /allow-scripts allow-same-origin allow-modals allow-popups allow-forms/.test(src),
+      `${label} must keep same-origin for non-admin editing`
+    );
+  }
+
+  // Both editor paths must call the shared helper — not re-inline query-param logic.
   const preview = fs.readFileSync(path.join(__dirname, '..', 'flat-editor', 'Preview.jsx'), 'utf8');
-  assert.ok(/adminReview/.test(preview), 'Preview.jsx must special-case adminReview sandbox');
   assert.ok(
-    /allow-scripts allow-modals allow-popups allow-forms/.test(preview),
-    'Preview.jsx must have restricted sandbox string for adminReview'
+    /from ['"]\.\/previewSandbox\.js['"]/.test(preview),
+    'Preview.jsx must import shared previewSandbox helper'
   );
   assert.ok(
-    /allow-scripts allow-same-origin allow-modals allow-popups allow-forms/.test(preview),
-    'Preview.jsx must restore allow-same-origin for normal editing (VR embed)'
+    /getPreviewSandboxAttribute\s*\(/.test(preview),
+    'Preview.jsx must call getPreviewSandboxAttribute'
+  );
+  assert.ok(
+    !/params\.get\(['"]adminReview['"]\)/.test(preview),
+    'Preview.jsx must not re-inline adminReview sandbox logic'
   );
 
   const legacy = fs.readFileSync(path.join(__dirname, '..', 'flat-page-editor.js'), 'utf8');
-  assert.ok(/adminReview/.test(legacy), 'flat-page-editor.js must special-case adminReview sandbox');
-  console.log('✓ preview sandbox: adminReview isolated; editor keeps same-origin for VR embeds');
+  assert.ok(
+    /getPreviewSandboxAttribute\s*\(/.test(legacy),
+    'flat-page-editor.js must call getPreviewSandboxAttribute'
+  );
+  assert.ok(
+    !/params\.get\(['"]adminReview['"]\)/.test(legacy),
+    'flat-page-editor.js must not re-inline adminReview sandbox logic'
+  );
+
+  const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.ok(
+    /preview-sandbox\.js/.test(indexHtml),
+    'index.html must load preview-sandbox.js for the legacy editor path'
+  );
+
+  console.log('✓ preview sandbox: shared helper covers adminReview/Template/Assign in both editors');
 }
 
 function testStudentRemotePathOwnership() {
@@ -470,6 +509,19 @@ function testCreateVersionOwnsRemotePath() {
     /SESSION_COOKIE_NAMES[\s\S]*app\.use\('\/hosted'/.test(server),
     'hosted static path must strip session cookies'
   );
+  const stripBlock = server.match(
+    /SESSION_COOKIE_NAMES\s*=\s*new Set\(\[([\s\S]*?)\]\)/
+  );
+  assert.ok(stripBlock, 'SESSION_COOKIE_NAMES set must exist');
+  const stripList = stripBlock[1];
+  assert.ok(
+    /class_roster_session/.test(stripList) && /site_access/.test(stripList),
+    'hosted cookie strip must use real class_roster_session and site_access names'
+  );
+  assert.ok(
+    !/\broster_gate\b/.test(stripList) && !/\bsite_password\b/.test(stripList),
+    'hosted cookie strip must not use incorrect roster_gate/site_password names'
+  );
   console.log('✓ createVersion ownership + save-draft + hosted cookie strip');
 }
 
@@ -493,7 +545,7 @@ async function main() {
   await testSsrfPinnedResolve();
   testHostedOriginHelper();
   testPasswordEncryptionSecretRequired();
-  testPreviewSandboxAdminReviewIsolation();
+  testPreviewSandboxAdminElevatedIsolation();
   testStudentRemotePathOwnership();
   testRequireStudentProductionStrict();
   testZipBombCapsPresent();

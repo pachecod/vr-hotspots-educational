@@ -41,10 +41,6 @@ function formatHostedLinks(sub) {
   return html;
 }
 
-function jsString(value) {
-  return JSON.stringify(String(value || ''));
-}
-
 function formatSubmittedBy(sub) {
   return sub.studentUsername || sub.studentName || sub.studentDisplayName || 'Unknown';
 }
@@ -396,17 +392,26 @@ function bindInboxCardActions(container) {
         return;
       }
 
-      if (action === 'repair-media') {
+      if (action === 'repair-media' || action === 'repair-media-version') {
         e.preventDefault();
-        if (!card) return;
-        await repairMediaVersion(
-          card.getAttribute('data-version-id') || '',
-          card.getAttribute('data-project-name') || 'project',
-          card.getAttribute('data-student-name') || '',
-          card.getAttribute('data-thread-id') || '',
-          card.getAttribute('data-student-id') || '',
-          card.getAttribute('data-class-id') || ''
-        );
+        const versionId =
+          btn.getAttribute('data-version-id') || (card && card.getAttribute('data-version-id')) || '';
+        const projectName =
+          btn.getAttribute('data-project-name') ||
+          (card && card.getAttribute('data-project-name')) ||
+          'project';
+        const studentName =
+          btn.getAttribute('data-student-name') ||
+          (card && card.getAttribute('data-student-name')) ||
+          '';
+        const threadId =
+          btn.getAttribute('data-thread-id') || (card && card.getAttribute('data-thread-id')) || '';
+        const studentId =
+          btn.getAttribute('data-student-id') || (card && card.getAttribute('data-student-id')) || '';
+        const classId =
+          btn.getAttribute('data-class-id') || (card && card.getAttribute('data-class-id')) || '';
+        if (!versionId && !card) return;
+        await repairMediaVersion(versionId, projectName, studentName, threadId, studentId, classId);
         return;
       }
 
@@ -1017,11 +1022,13 @@ async function toggleHistory(threadId, btn) {
             ? `<button type="button" class="btn-host" data-action="repair-host" data-version-id="${escapeHtml(v.id)}" data-host-hint="${escapeHtml(repairHostHint)}" data-hosted-path="${escapeHtml(resolveVersionHostedPath(v) || repairHostHint)}" style="margin-left:6px;font-size:11px;">Host</button>` +
               `<button type="button" class="btn-assign-repair" data-action="repair-assign" data-hosted-path="${escapeHtml(resolveVersionHostedPath(v))}" data-repair-id="${escapeHtml(v.id)}" style="margin-left:6px;font-size:11px;">Assign / send</button>`
             : v.kind === 'submitted' || v.kind === 'admin_return' || v.kind === 'admin_assigned'
-            ? `<button type="button" onclick="repairMediaVersion(${jsString(v.id)}, ${jsString(
-                projectLabel
-              )}, ${jsString(studentLabel)}, ${jsString(threadId)}, ${jsString(
+            ? `<button type="button" data-action="repair-media-version" data-version-id="${escapeHtml(
+                v.id
+              )}" data-project-name="${escapeHtml(projectLabel)}" data-student-name="${escapeHtml(
+                studentLabel
+              )}" data-thread-id="${escapeHtml(threadId)}" data-student-id="${escapeHtml(
                 studentId
-              )}, ${jsString(classId)})" style="margin-left:6px;font-size:11px;">Repair media</button>`
+              )}" data-class-id="${escapeHtml(classId)}" style="margin-left:6px;font-size:11px;">Repair media</button>`
             : '';
         const histHosted = resolveVersionHostedPath(v);
         return `<div class="version-row" data-repair-id="${v.kind === 'admin_repair' ? escapeHtml(v.id) : ''}">

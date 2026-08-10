@@ -12,6 +12,8 @@
     <script src="asset-preview-modal.js"></script>
     <script src="asset-tags-ui.js"></script>
     <script src="public-config.js"></script>
+    <script src="escape-html.js"></script>
+    <script src="preview-sandbox.js"></script>
     <script src="editor-capabilities.js"></script>
     <script src="local-projects.js"></script>
     <script src="template-gallery-ui.js"></script>
@@ -34,6 +36,7 @@
           document.head.appendChild(link);
           s.src = '/flat-editor.bundle.js';
           s.onerror = function () {
+            // preview-sandbox.js is already in <head>; legacy editor requires it.
             var legacy = document.createElement('script');
             legacy.src = '/flat-page-editor.js';
             document.head.appendChild(legacy);

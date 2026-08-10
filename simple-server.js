@@ -1321,9 +1321,9 @@ const SESSION_COOKIE_NAMES = new Set([
   'admin_session',
   'student_session',
   'local_test_session',
-  'roster_gate',
+  'class_roster_session',
   'github_oauth_session',
-  'site_password',
+  'site_access',
 ]);
 app.use('/hosted', (req, _res, next) => {
   const raw = req.headers.cookie;

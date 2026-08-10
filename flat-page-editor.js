@@ -616,14 +616,13 @@ button:hover { background: #1d4ed8; }`;
 
       const iframe = document.createElement('iframe');
       iframe.id = 'flat-editor-preview';
-      // Nested VR embeds need allow-same-origin; omit it only for adminReview.
-      let previewSandbox = 'allow-scripts allow-same-origin allow-modals allow-popups allow-forms';
-      try {
-        if (new URLSearchParams(window.location.search).get('adminReview') === '1') {
-          previewSandbox = 'allow-scripts allow-modals allow-popups allow-forms';
-        }
-      } catch (_) {}
-      iframe.setAttribute('sandbox', previewSandbox);
+      // Shared helper (preview-sandbox.js / flat-editor/previewSandbox.js) — same policy as Preview.jsx.
+      if (typeof window.getPreviewSandboxAttribute !== 'function') {
+        throw new Error(
+          'preview-sandbox.js must load before flat-page-editor.js (shared sandbox helper missing)'
+        );
+      }
+      iframe.setAttribute('sandbox', window.getPreviewSandboxAttribute());
       iframe.style.cssText = 'flex:1;width:100%;border:none;background:#fff;';
       this._els.preview = iframe;
 

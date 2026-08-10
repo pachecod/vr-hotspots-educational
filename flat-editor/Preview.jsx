@@ -1,23 +1,6 @@
 import React, { useMemo, useRef, useImperativeHandle, forwardRef } from 'react';
 import { buildPreviewDocument } from './buildPreview.js';
-
-/**
- * Nested VR-tour iframes inherit this sandbox. Without allow-same-origin they cannot
- * use IndexedDB/localStorage on the app origin, so the embedded 360 breaks.
- * Keep allow-same-origin for normal editing; drop it when an admin reviews a
- * student submission (?adminReview=1) so draft JS cannot touch the admin session.
- */
-function previewSandboxAttribute() {
-  try {
-    if (
-      typeof window !== 'undefined' &&
-      new URLSearchParams(window.location.search).get('adminReview') === '1'
-    ) {
-      return 'allow-scripts allow-modals allow-popups allow-forms';
-    }
-  } catch (_) {}
-  return 'allow-scripts allow-same-origin allow-modals allow-popups allow-forms';
-}
+import { getPreviewSandboxAttribute } from './previewSandbox.js';
 
 const Preview = forwardRef(function Preview({ page, refreshKey }, ref) {
   const iframeRef = useRef(null);
@@ -26,7 +9,8 @@ const Preview = forwardRef(function Preview({ page, refreshKey }, ref) {
     typeof window !== 'undefined' && window.location?.origin
       ? `${window.location.origin}/flat-pages/${pageId}/`
       : undefined;
-  const sandbox = useMemo(() => previewSandboxAttribute(), []);
+  // Shared helper also used by flat-page-editor.js — do not re-inline query-param checks here.
+  const sandbox = useMemo(() => getPreviewSandboxAttribute(), []);
 
   const srcdoc = useMemo(
     () => buildPreviewDocument(page, { baseHref }),

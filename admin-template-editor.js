@@ -212,7 +212,8 @@ async function saveTemplate() {
 function initMainApp() {
   document.getElementById('login-root').innerHTML = '';
   const main = document.getElementById('main-content');
-  main.style.display = 'flex';
+  main.style.display = '';
+  main.classList.add('is-ready');
   renderAdminNav('templates');
 
   if (window.AdminFlatEditingTools) {

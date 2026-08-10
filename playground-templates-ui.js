@@ -282,10 +282,21 @@ async function promptGuestAgreementIfNeeded(options = {}) {
 
 async function ensureGuestSessionForPlayground() {
   if (window.editorAccessMode === 'local_test' || window.editorAccessMode === 'student') return;
-  const res = await fetch('/api/local/test-user/start', { method: 'POST', credentials: 'include' });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
-    throw new Error(data.message || 'Could not start guest mode');
+  // JSON body ensures Safari sends an Origin header (needed if CSRF is re-enabled for this path).
+  const res = await fetch('/api/local/test-user/start', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: '{}',
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (_) {
+    data = null;
+  }
+  if (!res.ok || !data || !data.success) {
+    throw new Error((data && data.message) || 'Could not start guest mode');
   }
   window.editorAccessMode = 'local_test';
   window.currentStudent = null;
@@ -374,8 +385,8 @@ async function runPendingPlaygroundLoad() {
     if (typeof window.hideProjectLoadingOverlay === 'function') window.hideProjectLoadingOverlay();
     if (typeof window.hideSceneLoadingOverlay === 'function') window.hideSceneLoadingOverlay();
 
-    // Let the editor paint, then show terms on top (deep links and welcome-sample opens).
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // Prefer a timer over rAF — Safari can delay rAF while overlays settle.
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
     if (!agreed) {
@@ -389,6 +400,7 @@ async function runPendingPlaygroundLoad() {
     } catch (_) {}
   } finally {
     window.__playgroundTemplateLoading = false;
+    if (typeof window.hideProjectLoadingOverlay === 'function') window.hideProjectLoadingOverlay();
   }
 }
 

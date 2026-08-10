@@ -25520,6 +25520,13 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch((err) => {
         if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') return;
         console.error('Playground deep link failed:', err);
+        if (typeof hideProjectLoadingOverlay === 'function') {
+          hideProjectLoadingOverlay();
+        }
+        // Avoid renderEntryGate re-entering the same failing deep-link path.
+        window.__pendingPlaygroundSlug = null;
+        window.__playgroundDeepLink = false;
+        alert(err.message || 'Could not open sample project');
         if (typeof requireStudentSession === 'function') {
           requireStudentSession('student-login-gate', (student) => {
             window.currentStudent = student;
@@ -25528,8 +25535,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             startEditor();
           });
-        } else {
-          alert(err.message || 'Could not open sample project');
         }
       });
     return;

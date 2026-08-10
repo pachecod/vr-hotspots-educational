@@ -41,9 +41,12 @@ async function studentLogout() {
 }
 
 async function startLocalTestUser() {
+  // Include a JSON body so Safari sends Origin (bodyless POSTs can fail CSRF elsewhere).
   const res = await fetch('/api/local/test-user/start', {
     method: 'POST',
     credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: '{}',
   });
   const data = await res.json();
   if (!res.ok || !data.success) {
@@ -53,7 +56,12 @@ async function startLocalTestUser() {
 }
 
 async function endLocalTestUser() {
-  await fetch('/api/local/test-user/end', { method: 'POST', credentials: 'include' });
+  await fetch('/api/local/test-user/end', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: '{}',
+  });
 }
 
 function setEntryGateActive(active) {
@@ -533,6 +541,9 @@ function renderEntryGate(containerId, onAuthenticated) {
     if (gate) gate.innerHTML = '';
     window.openPlaygroundTemplate(slug, { containerId, onAuthenticated }).catch((err) => {
       if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') return;
+      hideProjectLoadingOverlay();
+      window.__pendingPlaygroundSlug = null;
+      window.__playgroundDeepLink = false;
       alert(err.message || 'Could not open sample project');
       renderIntegratedAuthStep(containerId, onAuthenticated, { showGuest: true });
     });

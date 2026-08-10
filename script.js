@@ -892,22 +892,35 @@ function imageHotspotTextureReady(aImgEl) {
   }
 }
 
+/** True only for cross-origin http(s) URLs. blob:/data:/same-origin must not use CORS anonymous (Safari hangs). */
+function mediaUrlNeedsAnonymousCors(url) {
+  if (window.CommonAssetsPreview && typeof window.CommonAssetsPreview.needsAnonymousCors === 'function') {
+    return window.CommonAssetsPreview.needsAnonymousCors(url);
+  }
+  if (!url || typeof url !== 'string') return false;
+  if (
+    url.startsWith('data:') ||
+    url.startsWith('blob:') ||
+    url.startsWith('/') ||
+    url.startsWith('./') ||
+    url.startsWith('#')
+  ) {
+    return false;
+  }
+  try {
+    return new URL(url, window.location.href).origin !== window.location.origin;
+  } catch (_) {
+    return false;
+  }
+}
+
 function applyImageHotspotCrossOrigin(aImgEl, src) {
   if (!aImgEl || !src || typeof src !== 'string') return;
-  if (src.startsWith('data:')) {
+  if (!mediaUrlNeedsAnonymousCors(src)) {
     aImgEl.removeAttribute('crossorigin');
     return;
   }
-  try {
-    const resolved = new URL(src, window.location.href);
-    if (resolved.origin === window.location.origin) {
-      aImgEl.removeAttribute('crossorigin');
-    } else {
-      aImgEl.setAttribute('crossorigin', 'anonymous');
-    }
-  } catch (_) {
-    aImgEl.removeAttribute('crossorigin');
-  }
+  aImgEl.setAttribute('crossorigin', 'anonymous');
 }
 
 /** Gaze-to-enlarge image/video hotspots: navigation / exported viewer only, never edit mode. */
@@ -2537,7 +2550,17 @@ class HotspotEditor {
 
   configureSceneVideoCrossOrigin(videoEl) {
     if (!videoEl) return;
-    // Required for WebGL video textures — without this, audio plays but the sphere stays black
+    const src = videoEl.currentSrc || videoEl.src || videoEl.getAttribute('src') || '';
+    // Cross-origin http(s) needs anonymous for WebGL; blob:/data:/same-origin must not (Safari hang).
+    if (!mediaUrlNeedsAnonymousCors(src)) {
+      videoEl.removeAttribute('crossorigin');
+      try {
+        videoEl.crossOrigin = null;
+      } catch (_) {
+        /* ignore */
+      }
+      return;
+    }
     videoEl.crossOrigin = 'anonymous';
     videoEl.setAttribute('crossorigin', 'anonymous');
   }
@@ -3643,30 +3666,43 @@ class HotspotEditor {
 
   openVideoDB() {
     if (this._videoDBPromise) return this._videoDBPromise;
-    this._videoDBPromise = new Promise((resolve, reject) => {
+    this._videoDBPromise = new Promise((resolve) => {
       if (!('indexedDB' in window)) return resolve(null);
       // v5: localProjects store for guest Save Locally library (media still in videos/images/audio/models)
-      const req = indexedDB.open('vr-hotspots', 5);
-      req.onupgradeneeded = (e) => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains('videos')) {
-          db.createObjectStore('videos', { keyPath: 'key' });
-        }
-        if (!db.objectStoreNames.contains('images')) {
-          db.createObjectStore('images', { keyPath: 'key' });
-        }
-        if (!db.objectStoreNames.contains('audio')) {
-          db.createObjectStore('audio', { keyPath: 'key' });
-        }
-        if (!db.objectStoreNames.contains('models')) {
-          db.createObjectStore('models', { keyPath: 'key' });
-        }
-        if (!db.objectStoreNames.contains('localProjects')) {
-          db.createObjectStore('localProjects', { keyPath: 'key' });
-        }
+      let settled = false;
+      const finish = (db) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(db);
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
+      const timer = setTimeout(() => finish(null), 5000);
+      try {
+        const req = indexedDB.open('vr-hotspots', 5);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('videos')) {
+            db.createObjectStore('videos', { keyPath: 'key' });
+          }
+          if (!db.objectStoreNames.contains('images')) {
+            db.createObjectStore('images', { keyPath: 'key' });
+          }
+          if (!db.objectStoreNames.contains('audio')) {
+            db.createObjectStore('audio', { keyPath: 'key' });
+          }
+          if (!db.objectStoreNames.contains('models')) {
+            db.createObjectStore('models', { keyPath: 'key' });
+          }
+          if (!db.objectStoreNames.contains('localProjects')) {
+            db.createObjectStore('localProjects', { keyPath: 'key' });
+          }
+        };
+        req.onsuccess = () => finish(req.result);
+        req.onerror = () => finish(null);
+        req.onblocked = () => finish(null);
+      } catch (_) {
+        finish(null);
+      }
     });
     return this._videoDBPromise;
   }
@@ -10523,13 +10559,36 @@ class HotspotEditor {
   }
 
   async loadJSZip() {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-      script.onload = () => resolve(window.JSZip);
-      script.onerror = () => reject(new Error('Failed to load JSZip'));
-      document.head.appendChild(script);
-    });
+    if (window.JSZip) return window.JSZip;
+    const sources = ['/vendor/jszip.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'];
+    let lastError = null;
+    for (const src of sources) {
+      try {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          const timer = setTimeout(() => {
+            script.onload = null;
+            script.onerror = null;
+            reject(new Error(`Timed out loading JSZip from ${src}`));
+          }, 8000);
+          script.onload = () => {
+            clearTimeout(timer);
+            if (window.JSZip) resolve(window.JSZip);
+            else reject(new Error('JSZip loaded without global'));
+          };
+          script.onerror = () => {
+            clearTimeout(timer);
+            reject(new Error(`Failed to load JSZip from ${src}`));
+          };
+          document.head.appendChild(script);
+        });
+        return window.JSZip;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError || new Error('Failed to load JSZip');
   }
 
   async addFilesToZip(zip, templateName, skyboxSrc, exportMode = 'bundle') {
@@ -19482,15 +19541,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const newPanorama = document.createElement('img');
       newPanorama.id = uniqueId;
       newPanorama.alt = '';
-      const isSameOriginImage =
-        typeof scene.image === 'string' &&
-        (scene.image.startsWith('/') ||
-          scene.image.startsWith('./') ||
-          scene.image.startsWith(window.location.origin));
-      if (!isSameOriginImage) {
-        newPanorama.crossOrigin = 'anonymous';
-      }
-
       let chosenSrc = null;
       try {
         if (
@@ -19540,6 +19590,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
+      if (mediaUrlNeedsAnonymousCors(chosenSrc)) {
+        newPanorama.crossOrigin = 'anonymous';
+      } else {
+        newPanorama.removeAttribute('crossorigin');
+      }
+
       if (chosenSrc.startsWith && chosenSrc.startsWith('#')) {
         newPanorama.src = document.querySelector(chosenSrc)?.src || '';
       } else {
@@ -19554,12 +19610,24 @@ document.addEventListener('DOMContentLoaded', () => {
       assets.appendChild(newPanorama);
 
       await new Promise((resolve) => {
-        const finish = () => {
-          if (loadToken !== this._sceneLoadToken) return;
-          skybox.setAttribute('src', `#${uniqueId}`);
-          skybox.setAttribute('visible', 'true');
+        let settled = false;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
           resolve();
         };
+        const finish = () => {
+          if (loadToken === this._sceneLoadToken) {
+            skybox.setAttribute('src', `#${uniqueId}`);
+            skybox.setAttribute('visible', 'true');
+          }
+          done();
+        };
+        const timeoutId = setTimeout(() => {
+          console.warn('Panorama load timed out:', chosenSrc);
+          finish();
+        }, 10000);
         newPanorama.onload = () => {
           console.log('New panorama loaded successfully:', chosenSrc);
           finish();
@@ -19587,9 +19655,9 @@ document.addEventListener('DOMContentLoaded', () => {
           );
           skybox.setAttribute('src', '#main-panorama');
           skybox.setAttribute('visible', 'true');
-          resolve();
+          done();
         };
-        if (newPanorama.complete) newPanorama.onload();
+        if (newPanorama.complete && newPanorama.naturalWidth > 0) finish();
       });
 
       if (loadToken !== this._sceneLoadToken) return;

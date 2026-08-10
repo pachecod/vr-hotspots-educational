@@ -4,13 +4,36 @@ function loadJSZip() {
   if (typeof window !== 'undefined' && window.JSZip) {
     return Promise.resolve(window.JSZip);
   }
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-    script.onload = () => resolve(window.JSZip);
-    script.onerror = () => reject(new Error('Failed to load JSZip'));
-    document.head.appendChild(script);
-  });
+  const sources = [
+    '/vendor/jszip.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+  ];
+  return (async () => {
+    let lastError = null;
+    for (const src of sources) {
+      try {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          const timer = setTimeout(() => reject(new Error(`Timed out loading JSZip from ${src}`)), 8000);
+          script.onload = () => {
+            clearTimeout(timer);
+            if (window.JSZip) resolve();
+            else reject(new Error('JSZip loaded without global'));
+          };
+          script.onerror = () => {
+            clearTimeout(timer);
+            reject(new Error(`Failed to load JSZip from ${src}`));
+          };
+          document.head.appendChild(script);
+        });
+        return window.JSZip;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError || new Error('Failed to load JSZip');
+  })();
 }
 
 export function slugifyStarterFolderName(name) {

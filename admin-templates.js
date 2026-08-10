@@ -33,6 +33,31 @@ function scopeLabel(scope) {
   return scope === 'combined' ? '360° + Web' : 'Flat page';
 }
 
+function guestDeepLinkUrl(slug) {
+  if (!slug) return '';
+  const origin = (typeof window !== 'undefined' && window.location && window.location.origin) || '';
+  return `${origin}/?playground=${encodeURIComponent(slug)}`;
+}
+
+function renderGuestDeepLink(t) {
+  const url = guestDeepLinkUrl(t.slug);
+  if (!url) return '';
+  const active = !!(t.is_playground && t.is_public);
+  const hint = active
+    ? 'Opens this template in guest mode.'
+    : 'Works after the template is public and marked Show on Welcome.';
+  return `
+    <div class="template-deeplink">
+      <div class="template-deeplink-label">Guest deep link</div>
+      <div class="template-deeplink-row">
+        <code class="template-deeplink-url" title="${escapeAttr(url)}">${escapeHtml(url)}</code>
+        <button type="button" class="btn btn-secondary btn-copy-deeplink" data-id="${t.id}" data-url="${escapeAttr(url)}">Copy</button>
+      </div>
+      <p class="template-deeplink-hint">${hint}</p>
+    </div>
+  `;
+}
+
 function renderOrderControls(t, index) {
   const isFirst = index === 0;
   const isLast = index === templates.length - 1;
@@ -67,6 +92,7 @@ function render() {
           ${t.bundle_b2_key ? '<span class="badge badge-bundle">Bundle uploaded</span>' : ''}
         </div>
         <div class="template-meta">${t.is_public ? 'Public' : 'Private'} · ${escapeHtml(t.slug)} · ${scopeLabel(t.scope)}</div>
+        ${renderGuestDeepLink(t)}
       </header>
       <div class="template-card-body">
         <section class="template-card-section">
@@ -252,6 +278,27 @@ templateListEl.addEventListener('click', async (e) => {
   if (orderBtn && orderBtn.dataset.id) {
     if (orderBtn.classList.contains('btn-order-up')) moveTemplate(orderBtn.dataset.id, 'up');
     if (orderBtn.classList.contains('btn-order-down')) moveTemplate(orderBtn.dataset.id, 'down');
+    return;
+  }
+
+  const copyBtn = e.target.closest('.btn-copy-deeplink');
+  if (copyBtn && copyBtn.dataset.url) {
+    const url = copyBtn.dataset.url;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        input.remove();
+      }
+      showToast('Deep link copied');
+    } catch (_) {
+      prompt('Copy this guest deep link:', url);
+    }
     return;
   }
 

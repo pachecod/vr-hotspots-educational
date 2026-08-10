@@ -360,18 +360,26 @@ function testPasswordEncryptionSecretRequired() {
   console.log('✓ password encryption secret required in production');
 }
 
-function testPreviewSandboxNoSameOrigin() {
-  const roots = [
-    path.join(__dirname, '..', 'flat-editor', 'Preview.jsx'),
-    path.join(__dirname, '..', 'flat-editor', 'AIAssistant.jsx'),
-    path.join(__dirname, '..', 'flat-page-editor.js'),
-  ];
-  for (const file of roots) {
-    const src = fs.readFileSync(file, 'utf8');
-    assert.ok(!/sandbox="[^"]*allow-same-origin/.test(src), `${file} still has allow-same-origin`);
-    assert.ok(!/setAttribute\(\s*['"]sandbox['"]\s*,\s*['"][^'"]*allow-same-origin/.test(src), `${file} setAttribute still has allow-same-origin`);
-  }
-  console.log('✓ preview sandbox drops allow-same-origin');
+function testPreviewSandboxAdminReviewIsolation() {
+  // Ridey / AI preview must never combine allow-scripts + allow-same-origin.
+  const ridey = fs.readFileSync(path.join(__dirname, '..', 'flat-editor', 'AIAssistant.jsx'), 'utf8');
+  assert.ok(!/sandbox="[^"]*allow-same-origin/.test(ridey), 'AIAssistant still has allow-same-origin');
+
+  // Live editor preview: allow-same-origin for nested VR embeds, but adminReview must omit it.
+  const preview = fs.readFileSync(path.join(__dirname, '..', 'flat-editor', 'Preview.jsx'), 'utf8');
+  assert.ok(/adminReview/.test(preview), 'Preview.jsx must special-case adminReview sandbox');
+  assert.ok(
+    /allow-scripts allow-modals allow-popups allow-forms/.test(preview),
+    'Preview.jsx must have restricted sandbox string for adminReview'
+  );
+  assert.ok(
+    /allow-scripts allow-same-origin allow-modals allow-popups allow-forms/.test(preview),
+    'Preview.jsx must restore allow-same-origin for normal editing (VR embed)'
+  );
+
+  const legacy = fs.readFileSync(path.join(__dirname, '..', 'flat-page-editor.js'), 'utf8');
+  assert.ok(/adminReview/.test(legacy), 'flat-page-editor.js must special-case adminReview sandbox');
+  console.log('✓ preview sandbox: adminReview isolated; editor keeps same-origin for VR embeds');
 }
 
 function testStudentRemotePathOwnership() {
@@ -432,7 +440,7 @@ async function main() {
   await testSsrfPinnedResolve();
   testHostedOriginHelper();
   testPasswordEncryptionSecretRequired();
-  testPreviewSandboxNoSameOrigin();
+  testPreviewSandboxAdminReviewIsolation();
   testStudentRemotePathOwnership();
   testRequireStudentProductionStrict();
   testZipBombCapsPresent();

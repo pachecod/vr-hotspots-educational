@@ -25455,6 +25455,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.__pendingPlaygroundSlug = playgroundSlug;
     window.__playgroundTemplateLoading = true;
     window.__playgroundGuestTemplate = true;
+    window.__playgroundDeepLink = true;
     window.__integratedWelcomePending = false;
     try {
       localStorage.setItem('vr-hotspot-welcome-seen', '1');
@@ -25462,7 +25463,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const startEditor = () => {
-    const delay = isPostAuthWelcomePending() ? 150 : 1000;
+    const delay =
+      window.__playgroundDeepLink || window.__pendingPlaygroundSlug || isPostAuthWelcomePending()
+        ? 150
+        : 1000;
     setTimeout(async () => {
       window.hotspotEditor = new HotspotEditor();
       showPostAuthWelcomeIfPending();
@@ -25489,6 +25493,47 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }, delay);
   };
+
+  // Direct template link: skip welcome screen; boot guest editor then load sample.
+  if (playgroundSlug && typeof window.openPlaygroundTemplate === 'function') {
+    if (typeof showProjectLoadingOverlay === 'function') {
+      showProjectLoadingOverlay('Loading Project.');
+    }
+    if (typeof setEntryGateActive === 'function') {
+      setEntryGateActive(false);
+    } else {
+      document.body.classList.remove('entry-gate-active');
+    }
+    const gate = document.getElementById('student-login-gate');
+    if (gate) gate.innerHTML = '';
+
+    window
+      .openPlaygroundTemplate(playgroundSlug, {
+        onAuthenticated: (student) => {
+          window.currentStudent = student;
+          if (typeof window.applyEditorCapabilities === 'function') {
+            window.applyEditorCapabilities();
+          }
+          startEditor();
+        },
+      })
+      .catch((err) => {
+        if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') return;
+        console.error('Playground deep link failed:', err);
+        if (typeof requireStudentSession === 'function') {
+          requireStudentSession('student-login-gate', (student) => {
+            window.currentStudent = student;
+            if (typeof window.applyEditorCapabilities === 'function') {
+              window.applyEditorCapabilities();
+            }
+            startEditor();
+          });
+        } else {
+          alert(err.message || 'Could not open sample project');
+        }
+      });
+    return;
+  }
 
   if (embedMode) {
     window.__vrTourEmbedMode = true;

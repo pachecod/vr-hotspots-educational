@@ -524,16 +524,21 @@ async function renderIntegratedAuthStep(containerId, onAuthenticated, options = 
 function renderEntryGate(containerId, onAuthenticated) {
   window.__welcomeOnAuthenticated = onAuthenticated;
   window.__integratedWelcomeContainerId = containerId;
-  renderIntegratedAuthStep(containerId, onAuthenticated, { showGuest: true });
   const slug = window.__pendingPlaygroundSlug;
+  // Deep link (?playground=slug): skip welcome chrome; open guest editor directly.
   if (slug && typeof window.openPlaygroundTemplate === 'function') {
-    setTimeout(() => {
-      window.openPlaygroundTemplate(slug, { containerId, onAuthenticated }).catch((err) => {
-        if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') return;
-        alert(err.message || 'Could not open sample project');
-      });
-    }, 0);
+    showProjectLoadingOverlay('Loading Project.');
+    setEntryGateActive(false);
+    const gate = document.getElementById(containerId);
+    if (gate) gate.innerHTML = '';
+    window.openPlaygroundTemplate(slug, { containerId, onAuthenticated }).catch((err) => {
+      if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') return;
+      alert(err.message || 'Could not open sample project');
+      renderIntegratedAuthStep(containerId, onAuthenticated, { showGuest: true });
+    });
+    return;
   }
+  renderIntegratedAuthStep(containerId, onAuthenticated, { showGuest: true });
 }
 
 async function returnToWelcomeScreen() {

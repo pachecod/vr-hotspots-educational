@@ -338,17 +338,6 @@ async function runPendingPlaygroundLoad() {
   window.__integratedWelcomePending = false;
 
   try {
-    const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
-    if (!agreed) {
-      window.__playgroundGuestTemplate = false;
-      const err = new Error('Guest agreement cancelled');
-      err.code = 'GUEST_AGREEMENT_CANCELLED';
-      throw err;
-    }
-    try {
-      localStorage.setItem('vr-hotspot-welcome-seen', '1');
-    } catch (_) {}
-
     const detailRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}`);
     const detail = await detailRes.json();
     if (!detailRes.ok || !detail.success) {
@@ -382,6 +371,22 @@ async function runPendingPlaygroundLoad() {
     }
 
     if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
+    if (typeof window.hideProjectLoadingOverlay === 'function') window.hideProjectLoadingOverlay();
+    if (typeof window.hideSceneLoadingOverlay === 'function') window.hideSceneLoadingOverlay();
+
+    // Let the editor paint, then show terms on top (deep links and welcome-sample opens).
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
+    if (!agreed) {
+      window.__playgroundGuestTemplate = false;
+      const err = new Error('Guest agreement cancelled');
+      err.code = 'GUEST_AGREEMENT_CANCELLED';
+      throw err;
+    }
+    try {
+      localStorage.setItem('vr-hotspot-welcome-seen', '1');
+    } catch (_) {}
   } finally {
     window.__playgroundTemplateLoading = false;
   }

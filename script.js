@@ -737,6 +737,7 @@ function mountEditorFlatVideoBillboard(component, data, forceRemount) {
 
     let fusingTimer = null;
     let isExpanded = false;
+    rememberGazeBaseScale(vid, scl);
     const editorRef = window.hotspotEditor;
     const gazeDuration =
       editorRef &&
@@ -747,9 +748,10 @@ function mountEditorFlatVideoBillboard(component, data, forceRemount) {
         : 2000;
     vid.addEventListener('raycaster-intersected', (evt) => {
       const cursorEl = evt.detail.el;
-      if (cursorEl && cursorEl.id === 'gaze-cursor') {
+      if (cursorEl && cursorEl.id === 'gaze-cursor' && shouldAllowGazeMediaExpand()) {
         if (fusingTimer) clearTimeout(fusingTimer);
         fusingTimer = setTimeout(() => {
+          if (!shouldAllowGazeMediaExpand()) return;
           isExpanded = true;
           vid.setAttribute('scale', `${scl * 2} ${scl * 2} 1`);
         }, gazeDuration);
@@ -906,6 +908,32 @@ function applyImageHotspotCrossOrigin(aImgEl, src) {
   } catch (_) {
     aImgEl.removeAttribute('crossorigin');
   }
+}
+
+/** Gaze-to-enlarge image/video hotspots: navigation / exported viewer only, never edit mode. */
+function shouldAllowGazeMediaExpand() {
+  try {
+    const editor = window.hotspotEditor;
+    if (!editor) return true;
+    return !!editor.navigationMode;
+  } catch (_) {
+    return true;
+  }
+}
+
+function rememberGazeBaseScale(el, scl) {
+  if (!el) return;
+  el.dataset.gazeBaseScale = String(scl);
+}
+
+function collapseGazeExpandedHotspotMedia() {
+  document
+    .querySelectorAll('.static-image-hotspot[data-gaze-base-scale], .static-video-hotspot[data-gaze-base-scale]')
+    .forEach((el) => {
+      const scl = parseFloat(el.dataset.gazeBaseScale);
+      if (!Number.isFinite(scl) || scl <= 0) return;
+      el.setAttribute('scale', `${scl} ${scl} 1`);
+    });
 }
 
 function srcToImageHotspotDataUrl(src) {
@@ -2725,10 +2753,14 @@ class HotspotEditor {
       if (mouseCursor) mouseCursor.setAttribute('visible', 'false');
       return;
     }
-    // Desktop: gaze ring in Navigation Mode; mouse ray always on for pointer clicks.
-    // Edit Mode hides gaze only — dual raycasters in Edit Mode block hotspot edit clicks.
+    // Desktop: gaze ring + raycaster only in Navigation Mode. Edit Mode must fully
+    // disable gaze raycasting so looking at image hotspots does not enlarge them.
     const navMode = !!this.navigationMode;
-    if (gazeCursor) gazeCursor.setAttribute('visible', navMode ? 'true' : 'false');
+    if (gazeCursor) {
+      gazeCursor.setAttribute('visible', navMode ? 'true' : 'false');
+      gazeCursor.setAttribute('raycaster', 'enabled', navMode);
+      if (!navMode) collapseGazeExpandedHotspotMedia();
+    }
     if (mouseCursor) mouseCursor.setAttribute('visible', 'true');
     this.refreshSceneMediaRaycasters();
   }
@@ -15397,6 +15429,7 @@ AFRAME.registerComponent("hotspot", {
       vid.classList.add('static-video-hotspot');
       vid.classList.add('clickable');
       disableImageHotspotCulling(vid);
+      rememberGazeBaseScale(vid, scl);
       var assetIdForVid = _vsrc.startsWith('#') ? _vsrc.slice(1) : '';
       if (assetIdForVid) {
         vid.dataset.videoAssetId = assetIdForVid;
@@ -15407,9 +15440,10 @@ AFRAME.registerComponent("hotspot", {
       const gazeDuration = (CUSTOM_STYLES.gaze && CUSTOM_STYLES.gaze.duration) ? Math.round(CUSTOM_STYLES.gaze.duration * 1000) : 2000;
       vid.addEventListener('raycaster-intersected', (evt) => {
         const cursorEl = evt.detail.el;
-        if (cursorEl && cursorEl.id === 'gaze-cursor') {
+        if (cursorEl && cursorEl.id === 'gaze-cursor' && shouldAllowGazeMediaExpand()) {
           if (fusingTimer) clearTimeout(fusingTimer);
           fusingTimer = setTimeout(() => {
+            if (!shouldAllowGazeMediaExpand()) return;
             isExpanded = true;
             vid.setAttribute('scale', (scl * 2) + ' ' + (scl * 2) + ' 1');
           }, gazeDuration);
@@ -15478,18 +15512,18 @@ AFRAME.registerComponent("hotspot", {
   if (knownAR !== 1) img.dataset.aspectRatio = String(knownAR);
       img.classList.add('static-image-hotspot');
       img.classList.add('clickable');
+      rememberGazeBaseScale(img, scl);
       
-      // Expand image after gaze completes - only for VR gaze-cursor
+      // Expand image after gaze completes — navigation / viewer only (not edit mode)
       let fusingTimer = null;
       let isExpanded = false;
       const gazeDuration = (CUSTOM_STYLES.gaze && CUSTOM_STYLES.gaze.duration) ? Math.round(CUSTOM_STYLES.gaze.duration * 1000) : 2000;
       img.addEventListener('raycaster-intersected', (evt) => {
         const cursorEl = evt.detail.el;
-        if (cursorEl && cursorEl.id === 'gaze-cursor') {
-          console.log('Gaze-cursor entered image');
+        if (cursorEl && cursorEl.id === 'gaze-cursor' && shouldAllowGazeMediaExpand()) {
           if (fusingTimer) clearTimeout(fusingTimer);
           fusingTimer = setTimeout(() => {
-            console.log('Expanding image after gaze');
+            if (!shouldAllowGazeMediaExpand()) return;
             isExpanded = true;
             img.setAttribute('scale', (scl * 2) + ' ' + (scl * 2) + ' 1');
           }, gazeDuration);
@@ -15499,7 +15533,6 @@ AFRAME.registerComponent("hotspot", {
       img.addEventListener('raycaster-intersected-cleared', (evt) => {
         const cursorEl = evt.detail.el;
         if (cursorEl && cursorEl.id === 'gaze-cursor') {
-          console.log('Gaze-cursor left image, isExpanded:', isExpanded);
           if (fusingTimer) {
             clearTimeout(fusingTimer);
             fusingTimer = null;
@@ -22510,8 +22543,9 @@ AFRAME.registerComponent('editor-spot', {
       } catch (_) {}
       img.classList.add('static-image-hotspot');
       img.classList.add('clickable');
+      rememberGazeBaseScale(img, scl);
 
-      // Expand image after gaze completes - only for VR gaze-cursor
+      // Expand image after gaze completes — navigation / viewer only (not edit mode)
       let fusingTimer = null;
       let isExpanded = false;
       const editorRef = window.hotspotEditor;
@@ -22524,11 +22558,10 @@ AFRAME.registerComponent('editor-spot', {
           : 2000;
       img.addEventListener('raycaster-intersected', (evt) => {
         const cursorEl = evt.detail.el;
-        if (cursorEl && cursorEl.id === 'gaze-cursor') {
-          console.log('Gaze-cursor entered image');
+        if (cursorEl && cursorEl.id === 'gaze-cursor' && shouldAllowGazeMediaExpand()) {
           if (fusingTimer) clearTimeout(fusingTimer);
           fusingTimer = setTimeout(() => {
-            console.log('Expanding image after gaze');
+            if (!shouldAllowGazeMediaExpand()) return;
             isExpanded = true;
             img.setAttribute('scale', `${scl * 2} ${scl * 2} 1`);
           }, gazeDuration);
@@ -22538,7 +22571,6 @@ AFRAME.registerComponent('editor-spot', {
       img.addEventListener('raycaster-intersected-cleared', (evt) => {
         const cursorEl = evt.detail.el;
         if (cursorEl && cursorEl.id === 'gaze-cursor') {
-          console.log('Gaze-cursor left image, isExpanded:', isExpanded);
           if (fusingTimer) {
             clearTimeout(fusingTimer);
             fusingTimer = null;

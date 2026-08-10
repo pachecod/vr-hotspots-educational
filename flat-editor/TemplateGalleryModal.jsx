@@ -5,8 +5,10 @@ import {
   fetchAdminStarterTemplates,
   fetchAdminStarterTemplate,
 } from './templates-api.js';
+import useModalFocusTrap from './useModalFocusTrap.js';
 
 export default function TemplateGalleryModal({ open, onClose, onLoad, mode = 'student' }) {
+  const dialogRef = useModalFocusTrap(open, onClose);
   const isAdmin = mode === 'admin';
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -67,10 +69,16 @@ export default function TemplateGalleryModal({ open, onClose, onLoad, mode = 'st
 
   return (
     <div className="flat-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="flat-modal flat-modal-wide">
+      <div
+        ref={dialogRef}
+        className="flat-modal flat-modal-wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="flat-templates-title"
+      >
         <div className="flat-modal-header">
-          <h2>{title}</h2>
-          <button type="button" className="flat-modal-close" onClick={onClose}>
+          <h2 id="flat-templates-title">{title}</h2>
+          <button type="button" className="flat-modal-close" onClick={onClose} aria-label="Close">
             ×
           </button>
         </div>

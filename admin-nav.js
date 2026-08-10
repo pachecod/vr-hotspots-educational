@@ -1,3 +1,22 @@
+function ensureAdminLandmarks() {
+  const content = document.getElementById('admin-content');
+  if (content && !document.getElementById('admin-main')) {
+    const main = document.createElement('main');
+    main.id = 'admin-main';
+    content.parentNode.insertBefore(main, content);
+    main.appendChild(content);
+  }
+
+  if (!document.getElementById('admin-skip-link')) {
+    const skip = document.createElement('a');
+    skip.id = 'admin-skip-link';
+    skip.className = 'admin-skip-link';
+    skip.href = '#admin-main';
+    skip.textContent = 'Skip to main content';
+    document.body.insertBefore(skip, document.body.firstChild);
+  }
+}
+
 function renderAdminNav(activeTab) {
   const nav = document.getElementById('admin-nav');
   if (!nav) return;
@@ -19,11 +38,14 @@ function renderAdminNav(activeTab) {
   ];
 
   nav.className = 'admin-nav';
+  nav.setAttribute('aria-label', 'Admin');
   nav.innerHTML =
     tabs
       .map(
         (t) =>
-          `<a href="${t.href}"${t.id === activeTab ? ' class="active"' : ''}>${t.label}</a>`
+          `<a href="${t.href}"${
+            t.id === activeTab ? ' class="active" aria-current="page"' : ''
+          }>${t.label}</a>`
       )
       .join('') +
     '<button type="button" id="admin-nav-logout" class="admin-nav-logout">Logout</button>';
@@ -41,6 +63,7 @@ function renderAdminNav(activeTab) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  ensureAdminLandmarks();
   const nav = document.getElementById('admin-nav');
   if (nav && nav.dataset.active) {
     renderAdminNav(nav.dataset.active);
@@ -48,3 +71,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.renderAdminNav = renderAdminNav;
+window.ensureAdminLandmarks = ensureAdminLandmarks;

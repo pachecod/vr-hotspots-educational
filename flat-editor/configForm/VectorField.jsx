@@ -18,9 +18,11 @@ export default function VectorField({ id, label, value, components = 3, field, h
   };
 
   return (
-    <div className="cfg-form-group cfg-vector-group">
-      <span className="cfg-vector-label">{label}</span>
-      <div className={`cfg-vector-row cfg-vector-row-${components}`}>
+    <div className="cfg-form-group cfg-vector-group" role="group" aria-label={label}>
+      <span className="cfg-vector-label" id={`${id}-label`}>
+        {label}
+      </span>
+      <div className={`cfg-vector-row cfg-vector-row-${components}`} aria-labelledby={`${id}-label`}>
         {axes.map((axis, index) => (
           <NumberStepper
             key={axis}

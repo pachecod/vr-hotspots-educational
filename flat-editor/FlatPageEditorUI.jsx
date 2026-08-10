@@ -176,13 +176,17 @@ export default function FlatPageEditorUI({ bridge }) {
           {state.adminTemplateMode ? 'Admin Template Editor' : 'Flat Web Page'}
         </span>
         {!state.adminTemplateMode && (
-          <input
-            type="text"
-            className="flat-page-name"
-            value={page.name}
-            placeholder="Page name"
-            onChange={(e) => bridge.setPageName(e.target.value)}
-          />
+          <label className="flat-page-name-label">
+            <span className="sr-only">Page name</span>
+            <input
+              type="text"
+              className="flat-page-name"
+              value={page.name}
+              placeholder="Page name"
+              aria-label="Page name"
+              onChange={(e) => bridge.setPageName(e.target.value)}
+            />
+          </label>
         )}
         {!state.adminTemplateMode && state.showCloudActions && (
           <div className="flat-cloud-actions">
@@ -223,10 +227,11 @@ export default function FlatPageEditorUI({ bridge }) {
             <span>{activeFileId}</span>
             <div className="flat-pane-tools">
               {isConfigTab && (
-                <div className="flat-config-mode-toggle">
+                <div className="flat-config-mode-toggle" role="group" aria-label="Config editor mode">
                   <button
                     type="button"
                     className={`flat-config-mode-btn${configMode === 'visual' ? ' active' : ''}`}
+                    aria-pressed={configMode === 'visual'}
                     onClick={() => setConfigEditorMode('visual')}
                   >
                     Visual
@@ -234,6 +239,7 @@ export default function FlatPageEditorUI({ bridge }) {
                   <button
                     type="button"
                     className={`flat-config-mode-btn${configMode === 'code' ? ' active' : ''}`}
+                    aria-pressed={configMode === 'code'}
                     onClick={() => setConfigEditorMode('code')}
                   >
                     Code
@@ -301,10 +307,11 @@ export default function FlatPageEditorUI({ bridge }) {
         <div className="flat-preview-pane">
           <div className="flat-pane-bar">
             <span>Live Preview</span>
-            <div className="flat-split-btns">
+            <div className="flat-split-btns" role="group" aria-label="Editor preview split">
               <button
                 type="button"
                 className={`flat-tool-btn${splitPreset === 'editor' ? ' active' : ''}`}
+                aria-pressed={splitPreset === 'editor'}
                 onClick={() => changeSplit('editor')}
                 title="More editor"
               >
@@ -313,6 +320,7 @@ export default function FlatPageEditorUI({ bridge }) {
               <button
                 type="button"
                 className={`flat-tool-btn${splitPreset === 'balanced' ? ' active' : ''}`}
+                aria-pressed={splitPreset === 'balanced'}
                 onClick={() => changeSplit('balanced')}
                 title="Balanced"
               >
@@ -321,6 +329,7 @@ export default function FlatPageEditorUI({ bridge }) {
               <button
                 type="button"
                 className={`flat-tool-btn${splitPreset === 'preview' ? ' active' : ''}`}
+                aria-pressed={splitPreset === 'preview'}
                 onClick={() => changeSplit('preview')}
                 title="More preview"
               >

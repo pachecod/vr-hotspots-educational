@@ -61,6 +61,7 @@ function ConfigField({ field, fullPath, value, onChange }) {
             type="text"
             className="cfg-input"
             value={value ?? ''}
+            aria-label={`${field.label} hex color`}
             onChange={(e) => handleChange(e.target.value)}
           />
         </div>

@@ -1,3 +1,22 @@
+.admin-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10000;
+  padding: 10px 16px;
+  background: #0056b3;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 0 0 4px 0;
+  font-size: 14px;
+}
+
+.admin-skip-link:focus {
+  left: 0;
+  outline: 3px solid #ffbf47;
+  outline-offset: 2px;
+}
+
 .admin-nav {
   display: flex;
   gap: 10px;
@@ -17,10 +36,15 @@
   font-size: 14px;
 }
 
+.admin-nav a:focus-visible {
+  outline: 3px solid #0056b3;
+  outline-offset: 2px;
+}
+
 .admin-nav a.active {
-  background: #007bff;
+  background: #0056b3;
   color: #fff;
-  border-color: #007bff;
+  border-color: #0056b3;
 }
 
 .admin-nav-logout {

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
@@ -11,6 +11,7 @@
     <script src="common-assets-preview.js"></script>
     <script src="asset-preview-modal.js"></script>
     <script src="asset-tags-ui.js"></script>
+    <script src="public-config.js"></script>
     <script src="editor-capabilities.js"></script>
     <script src="local-projects.js"></script>
     <script src="template-gallery-ui.js"></script>
@@ -580,7 +581,7 @@
 
       .test-user-signin-btn {
         padding: 6px 12px;
-        background: #4caf50;
+        background: #2e7d32;
         color: #fff;
         border: none;
         border-radius: 4px;
@@ -671,7 +672,7 @@
       }
 
       .my-local-projects-btn {
-        background: #e65100;
+        background: #b23c00;
         color: #fff;
         border: none;
         padding: 6px 12px;
@@ -1267,6 +1268,13 @@
     </div>
 
     <style>
+
+      [role="switch"]:focus-visible,
+      #edit-mode-bar-toggle:focus-visible,
+      #hotspot-editor-toggle:focus-visible {
+        outline: 3px solid #ffbf47 !important;
+        outline-offset: 2px;
+      }
       @keyframes spin {
         0% {
           transform: rotate(0deg);
@@ -1284,7 +1292,7 @@
     </div>
 
     <!-- Edit Mode toggle (top-left) -->
-    <div id="edit-mode-bar" class="edit-mode-bar">
+    <nav id="edit-mode-bar" class="edit-mode-bar" aria-label="Edit mode">
       <button
         id="edit-mode-bar-toggle"
         type="button"
@@ -1340,7 +1348,7 @@
           <input type="checkbox" id="edit-mode-toggle" checked style="display: none" />
         </div>
       </div>
-    </div>
+    </nav>
 
     <!-- Editor Global Sound Control -->
     <div id="editor-sound-control" class="editor-sound-control">🎵 Scene Audio: ON</div>
@@ -1360,7 +1368,7 @@
     </div>
 
     <!-- Side Panel -->
-    <div id="hotspot-editor">
+    <aside id="hotspot-editor" aria-label="Editing tools">
       <button
         id="hotspot-editor-toggle"
         type="button"
@@ -2616,7 +2624,7 @@
       </div>
 
       </div>
-    </div>
+    </aside>
 
     <!-- Common Assets Modal -->
     <div id="common-assets-modal">
@@ -2627,7 +2635,7 @@
         </div>
         <div class="modal-body">
           <div id="asset-source-tabs" style="display:flex;gap:8px;margin-bottom:12px;">
-            <button type="button" class="ca-source-tab active" data-source="my" style="flex:1;padding:8px;background:#4caf50;color:#fff;border:none;border-radius:4px;cursor:pointer;">My Assets</button>
+            <button type="button" class="ca-source-tab active" data-source="my" style="flex:1;padding:8px;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;">My Assets</button>
             <button type="button" class="ca-source-tab" data-source="shared" style="flex:1;padding:8px;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer;">Shared Assets</button>
           </div>
           <p id="shared-assets-intro" style="display:none;margin:0 0 12px;color:#ccc;font-size:14px;">These are uploaded by your teacher(s). Switch to <strong>My Assets</strong> to upload files and add tags.</p>
@@ -2639,7 +2647,7 @@
             <label for="student-asset-tags" style="display:block;margin-bottom:4px;color:#aaa;font-size:12px;">Tags (comma-separated)</label>
             <input type="text" id="student-asset-tags" class="ca-search" placeholder="e.g. landscape, outdoor, scene1" style="margin-bottom:8px;" />
             <small style="display:block;margin:0 0 8px;color:#888;font-size:11px;">Add tags when uploading, or use <strong>Edit Tags</strong> on any file below.</small>
-            <button type="button" id="student-asset-upload-btn" style="padding:8px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;">Upload to My Assets</button>
+            <button type="button" id="student-asset-upload-btn" style="padding:8px 12px;background:#0B5FA5;color:#fff;border:none;border-radius:4px;cursor:pointer;">Upload to My Assets</button>
           </div>
           <div id="common-assets-tag-filter" class="asset-tag-filter-mount"></div>
           <div class="ca-tabs" id="common-assets-tabs">
@@ -2676,6 +2684,7 @@
       </div>
     </div>
 
+    <main id="main-content">
     <a-scene background="color: #ECECEC" id="main-scene">
       <!-- VR Controllers -->
       <a-entity
@@ -2689,14 +2698,14 @@
 
       <a-assets>
         <!-- Default panorama image -->
-        <img id="main-panorama" src="./images/scene1.jpg" />
+        <img id="main-panorama" src="./images/scene1.jpg" alt="Default 360 panorama" />
         <!-- Default audio file -->
         <audio id="default-audio" src="./audio/music.mp3"></audio>
         <!-- Close icon -->
-        <img id="close" src="./images/close.png" />
+        <img id="close" src="./images/close.png" alt="" />
         <!-- Audio controls -->
-        <img id="play" src="./images/play.png" />
-        <img id="pause" src="./images/pause.png" />
+        <img id="play" src="./images/play.png" alt="" />
+        <img id="pause" src="./images/pause.png" alt="" />
       </a-assets>
 
       <!-- Container for hotspots -->
@@ -2739,6 +2748,7 @@
         </a-entity>
       </a-entity>
     </a-scene>
+    </main>
 
     <!-- Toggle instructions drawer (inside Hotspot Editor) -->
     <script>

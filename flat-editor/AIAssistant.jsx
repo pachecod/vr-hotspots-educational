@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { analyzeWithRidey } from './ridey-api.js';
 import { buildPreviewDocument } from './buildPreview.js';
 import RideyIcon from './RideyIcon.jsx';
+import useModalFocusTrap from './useModalFocusTrap.js';
 
 const QUICK_PROMPTS_BASE = [
   { text: 'Find bugs', prompt: 'Review this code and identify bugs or errors. Provide fixes.' },
@@ -92,13 +93,7 @@ export default function AIAssistant({
   const [modifiedByFile, setModifiedByFile] = useState({});
   const [previewDiffFile, setPreviewDiffFile] = useState(fileName);
 
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape' && open) onClose();
-    };
-    if (open) document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  const dialogRef = useModalFocusTrap(open, onClose);
 
   useEffect(() => {
     if (open) setPreviewDiffFile(fileName);
@@ -158,7 +153,13 @@ export default function AIAssistant({
 
   return (
     <div className="flat-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="flat-modal flat-modal-ridey">
+      <div
+        ref={dialogRef}
+        className="flat-modal flat-modal-ridey"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="flat-ridey-title"
+      >
         <div className="flat-modal-header">
           <div className="flat-modal-header-ridey">
             <RideyIcon
@@ -168,7 +169,7 @@ export default function AIAssistant({
               size={40}
             />
             <div>
-              <h2>Ask Ridey{isRidey2 ? ' 2.0' : ''}</h2>
+              <h2 id="flat-ridey-title">Ask Ridey{isRidey2 ? ' 2.0' : ''}</h2>
               <span className="flat-muted">
                 {fileName || language}
                 {fileCount > 1 ? ` · ${fileCount} files` : ''}
@@ -176,7 +177,7 @@ export default function AIAssistant({
               </span>
             </div>
           </div>
-          <button type="button" className="flat-modal-close" onClick={onClose}>
+          <button type="button" className="flat-modal-close" onClick={onClose} aria-label="Close">
             ×
           </button>
         </div>
@@ -319,7 +320,12 @@ export default function AIAssistant({
             <div className="flat-modal flat-modal-ridey-preview">
               <div className="flat-modal-header">
                 <h2>Preview Changes</h2>
-                <button type="button" className="flat-modal-close" onClick={() => setPreviewMode(false)}>
+                <button
+                  type="button"
+                  className="flat-modal-close"
+                  onClick={() => setPreviewMode(false)}
+                  aria-label="Close preview"
+                >
                   ×
                 </button>
               </div>
@@ -348,7 +354,7 @@ export default function AIAssistant({
                 <iframe
                   title="Ridey preview"
                   className="flat-ridey-preview-frame"
-                  sandbox="allow-scripts allow-same-origin"
+                  sandbox="allow-scripts"
                   srcDoc={previewHtml}
                 />
               </div>

@@ -102,7 +102,9 @@ export default function NumberStepper({
   if (compact) {
     return (
       <div className="cfg-axis-cell">
-        <span className="cfg-axis-label">{label}</span>
+        <label className="cfg-axis-label" htmlFor={id}>
+          {label}
+        </label>
         {control}
       </div>
     );

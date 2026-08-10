@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { fetchSnippets } from './snippets-api.js';
+import useModalFocusTrap from './useModalFocusTrap.js';
 
 export default function SnippetsModal({ open, onClose, onInsert }) {
   const [snippets, setSnippets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const dialogRef = useModalFocusTrap(open, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -25,9 +27,15 @@ export default function SnippetsModal({ open, onClose, onInsert }) {
 
   return (
     <div className="flat-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="flat-modal flat-modal-wide">
+      <div
+        ref={dialogRef}
+        className="flat-modal flat-modal-wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="flat-snippets-title"
+      >
         <div className="flat-modal-header">
-          <h2>Code Snippets</h2>
+          <h2 id="flat-snippets-title">Code Snippets</h2>
           <button type="button" className="flat-modal-close" onClick={onClose} aria-label="Close">
             ×
           </button>

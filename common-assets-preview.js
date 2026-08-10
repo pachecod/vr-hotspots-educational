@@ -35,6 +35,25 @@ const CommonAssetsPreview = {
     return asset.proxyUrl || asset.url || '';
   },
 
+  /**
+   * crossorigin="anonymous" omits cookies. Only use it for true cross-origin media
+   * (e.g. B2 signed URLs). Same-origin /student-assets and /admin/admin-assets need cookies.
+   */
+  needsAnonymousCors(url) {
+    if (!url || typeof url !== 'string') return false;
+    if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/')) return false;
+    try {
+      if (typeof window === 'undefined' || !window.location) return true;
+      return new URL(url, window.location.href).origin !== window.location.origin;
+    } catch (_) {
+      return false;
+    }
+  },
+
+  corsAttr(url) {
+    return this.needsAnonymousCors(url) ? ' crossorigin="anonymous"' : '';
+  },
+
   get3dModelProxyUrl(asset) {
     const direct = this.getAssetMediaUrl(asset);
     if (direct) return direct;
@@ -82,22 +101,23 @@ const CommonAssetsPreview = {
 
     let inner = '';
 
+    const cors = this.corsAttr(url);
     if (category === 'images' || category === '360-images') {
-      inner = `<img class="${thumbClass}" src="${this.escapeAttr(url)}" alt="" loading="lazy" crossorigin="anonymous" />`;
+      inner = `<img class="${thumbClass}" src="${this.escapeAttr(url)}" alt="" loading="lazy"${cors} />`;
     } else if (category === '360-videos' || category === 'videos') {
       const label =
         category === '360-videos' && context === 'grid'
           ? '<span class="asset-thumb-label">360°</span>'
           : '';
       inner = `<div class="${thumbClass} ${thumbClass}-video">
-        <video muted playsinline preload="metadata" crossorigin="anonymous" src="${this.escapeAttr(url)}"></video>
+        <video muted playsinline preload="metadata"${cors} src="${this.escapeAttr(url)}"></video>
         ${label}
       </div>`;
     } else if (category === 'audio') {
       if (context === 'grid') {
         inner = `<div class="${thumbClass} ${thumbClass}-audio">
           <span class="asset-thumb-icon" aria-hidden="true">🔊</span>
-          <audio controls preload="metadata" crossorigin="anonymous" src="${this.escapeAttr(url)}"></audio>
+          <audio controls preload="metadata"${cors} src="${this.escapeAttr(url)}"></audio>
         </div>`;
       } else {
         inner = `<div class="${thumbClass} ${thumbClass}-audio">
@@ -134,22 +154,23 @@ const CommonAssetsPreview = {
     const url = this.getAssetMediaUrl(asset);
     const name = asset.name || '';
 
+    const cors = this.corsAttr(url);
     if (category === 'images' || category === '360-images') {
       return `<img class="preview-image" src="${this.escapeAttr(url)}" alt="${this.escapeAttr(
         name
-      )}" crossorigin="anonymous" />`;
+      )}"${cors} />`;
     }
 
     if (category === '360-videos' || category === 'videos') {
       return `<div class="preview-video">
-        <video controls autoplay muted playsinline preload="auto" crossorigin="anonymous" src="${this.escapeAttr(url)}"></video>
+        <video controls autoplay muted playsinline preload="auto"${cors} src="${this.escapeAttr(url)}"></video>
         <p class="preview-filename">${this.escapeAttr(name)}</p>
       </div>`;
     }
 
     if (category === 'audio') {
       return `<div class="preview-audio">
-        <audio controls autoplay preload="auto" crossorigin="anonymous" src="${this.escapeAttr(url)}"></audio>
+        <audio controls autoplay preload="auto"${cors} src="${this.escapeAttr(url)}"></audio>
         <p class="preview-filename">${this.escapeAttr(name)}</p>
       </div>`;
     }

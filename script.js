@@ -1642,6 +1642,23 @@ class HotspotEditor {
   }
 
   /**
+   * Student/admin private asset proxies require session cookies. Never rewrite these
+   * to /common-assets/… (shared B2) and never treat them as shared common-asset provenance.
+   */
+  isCredentialedAppAssetUrl(url) {
+    if (typeof url !== 'string' || !url) return false;
+    let path = url.trim();
+    if (!path) return false;
+    try {
+      if (/^https?:\/\//i.test(path)) path = new URL(path).pathname;
+    } catch (_) {
+      /* keep path */
+    }
+    path = path.split(/[?#]/)[0];
+    return path.startsWith('/student-assets/') || path.startsWith('/admin/admin-assets/');
+  }
+
+  /**
    * Rewrite short-lived Backblaze signed URLs (…?Authorization=…) to same-origin
    * /common-assets/… proxies that the server re-authorizes on each request.
    */
@@ -1649,6 +1666,9 @@ class HotspotEditor {
     if (typeof url !== 'string' || !url) return null;
     const trimmed = url.trim();
     if (!trimmed) return null;
+    if (this.isCredentialedAppAssetUrl(trimmed)) {
+      return trimmed.split(/[?#]/)[0];
+    }
     if (trimmed.startsWith('/common-assets/')) {
       return trimmed.split(/[?#]/)[0];
     }
@@ -1782,6 +1802,9 @@ class HotspotEditor {
 
   getCommonAssetProvenance(asset) {
     if (!asset || !asset.category || !asset.name) return null;
+    const raw = asset.proxyUrl || asset.url || '';
+    // My Assets / admin-only assets are not shared common-assets — keep their own URLs.
+    if (this.isCredentialedAppAssetUrl(raw)) return null;
     const durable = this.toDurableCommonAssetProxyPath(asset.category, asset.name);
     if (!durable) return null;
     return {
@@ -2332,6 +2355,11 @@ class HotspotEditor {
 
   getRuntimeCommonAssetUrl(asset) {
     if (!asset) return '';
+    const raw = asset.proxyUrl || asset.url || '';
+    // Preserve credentialed student/admin asset paths — do not map them onto /common-assets/.
+    if (this.isCredentialedAppAssetUrl(raw)) {
+      return raw.split(/[?#]/)[0];
+    }
     if (asset.category && asset.name) {
       return this.toDurableCommonAssetProxyPath(asset.category, asset.name);
     }

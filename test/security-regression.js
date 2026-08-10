@@ -305,6 +305,8 @@ function testHostedOriginHelper() {
     assert.strictEqual(isHostedOriginRequest(hostedReq), true);
     assert.strictEqual(isAllowedOnHostedOrigin({ path: '/admin' }), false);
     assert.strictEqual(isAllowedOnHostedOrigin({ path: '/hosted/x/index.html' }), true);
+    assert.strictEqual(isAllowedOnHostedOrigin({ path: '/' }), true);
+    assert.strictEqual(isAllowedOnHostedOrigin({ path: '/health' }), true);
   } finally {
     restoreEnv(prev);
   }

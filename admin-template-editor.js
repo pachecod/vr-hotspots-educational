@@ -215,6 +215,10 @@ function initMainApp() {
   main.style.display = '';
   main.classList.add('is-ready');
   renderAdminNav('templates');
+  // CodeMirror / preview measure while the shell was hidden; refresh after layout.
+  requestAnimationFrame(() => {
+    window.dispatchEvent(new Event('resize'));
+  });
 
   if (window.AdminFlatEditingTools) {
     AdminFlatEditingTools.init();

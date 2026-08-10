@@ -1,3 +1,13 @@
+var escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
+  ? window.escapeHtml
+  : function (str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
 const ALL_PAGE_LIMIT = 5000;
 
 let cachedLogs = [];
@@ -22,13 +32,6 @@ async function readAdminJson(res, fallbackLabel) {
   return data;
 }
 
-function escapeHtml(text) {
-  return String(text || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 function downloadJsonFile(filename, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });

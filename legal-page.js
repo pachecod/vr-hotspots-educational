@@ -1,4 +1,15 @@
 (function () {
+var escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
+  ? window.escapeHtml
+  : function (str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
+
   const config = window.__LEGAL_PAGE_CONFIG__ || {};
   const slug = config.slug || 'terms';
   const backHref = config.backHref || '/index.html';
@@ -10,13 +21,7 @@
 
   if (backLink) backLink.href = backHref;
 
-  function escapeHtml(value) {
-    return String(value || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  
 
   function formatDate(iso) {
     if (!iso) return '';

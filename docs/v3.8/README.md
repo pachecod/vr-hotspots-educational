@@ -22,7 +22,9 @@ Same Render web service, second hostname:
    - `SERVER_BASE_URL=https://webxride.com`
    - `HOSTED_ORIGIN=https://hosted.webxride.com`
 
-Path shape stays `/hosted/<project>/...` on the subdomain. When `HOSTED_ORIGIN` is unset (local / classroom installs without a split), hosted pages stay on the app origin.
+Path shape stays `/hosted/<project>/...` on the subdomain. When `HOSTED_ORIGIN` is unset (local / classroom installs without a split), hosted pages stay on the app origin; the app also strips session cookies on `/hosted/*` as defense-in-depth. Cookie `Path` stays `/` because admin/student HTML and APIs live at the site root (Path cannot exclude `/hosted` while still covering those pages).
+
+**Production (webxride):** `HOSTED_ORIGIN=https://hosted.webxride.com` **is configured** on the Render service, with DNS CNAME `hosted` → the same Render target. Session cookies set on `webxride.com` are not sent to `hosted.webxride.com`.
 
 ### URL backfill (webxride DB)
 
@@ -47,11 +49,11 @@ Production **requires** `STUDENT_PASSWORD_ENCRYPTION_SECRET` (dedicated secret; 
 
 ## Implementation status
 
-Code for 3.8 is on branch `3.8`. Deploy/validation on webxride.com (DNS for `hosted.webxride.com`, env vars, cutover) is an operator step — leave `seedsofstory.webxride.com` on its current deploy until content is recovered.
+Code for 3.8 is on branch `3.8`. **webxride.com production already has** `hosted.webxride.com` DNS + `HOSTED_ORIGIN` / `SERVER_BASE_URL` set. Leave `seedsofstory.webxride.com` on its current deploy until content is recovered.
 
 ## Smoke checklist (after webxride deploy)
 
-1. Flat-page live preview still renders; sandbox has **no** `allow-same-origin`.
+1. Flat-page live preview still renders; normal edit sandbox keeps `allow-same-origin` (needed for nested VR embeds); `?adminReview=1` drops it.
 2. Open a published tour on `https://hosted.webxride.com/hosted/...` while logged into admin on `webxride.com` — hosted page JS must not receive admin cookies / must not successfully mutate `/admin` APIs.
 3. `/fetch-video` still works for a public HTTPS video URL; private/metadata hosts still blocked.
 4. Guest playground / Continue as Guest still works on webxride.
@@ -62,11 +64,13 @@ Code for 3.8 is on branch `3.8`. Deploy/validation on webxride.com (DNS for `hos
 
 | Area | Fix |
 |------|-----|
-| XSS / sandbox | Preview iframes drop `allow-same-origin`; rebuild `flat-editor.bundle.js` |
-| Hosted isolation | `HOSTED_ORIGIN` + host-based routing; cookies stay host-only on app origin |
+| XSS / sandbox | Admin-review preview drops `allow-same-origin`; editor keeps it for VR embeds |
+| Hosted isolation | `HOSTED_ORIGIN` on webxride (`hosted.webxride.com`) + `/hosted` cookie strip |
+| CSRF | Origin/Referer only (no `X-Requested-With` bypass) |
+| Path ownership | `createVersion` / save-draft reject foreign student B2 paths |
 | Passwords | Mandatory `STUDENT_PASSWORD_ENCRYPTION_SECRET` in production |
 | SSRF | DNS-pinned IP for `/fetch-video` |
-| Admin XSS | Single-quote-safe escaping / data attributes in submissions UI |
+| Admin XSS | Shared `escapeHtml` + data-attribute actions (no fragile onclick IDs) |
 | Screenshots | Puppeteer blocks private/metadata fetches |
 | Ridey | Strict student auth when AI spend is possible |
 | Docs | This file + corrected `SECURITY_AUDIT.md` |

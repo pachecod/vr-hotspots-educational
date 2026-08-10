@@ -1,3 +1,13 @@
+var escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
+  ? window.escapeHtml
+  : function (str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
 /**
  * Guest "Save Locally" library — multi-project snapshots in IndexedDB.
  * Signed-in users may only list/open existing local leftovers (no Save Locally).
@@ -15,13 +25,7 @@
     return (global.EDITOR_LAYER && global.EDITOR_LAYER.dialog) || 10050;
   }
 
-  function escapeHtml(text) {
-    return String(text || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  
 
   function canSaveLocally() {
     return typeof global.getEditorCapabilities === 'function'
@@ -680,7 +684,7 @@
             <strong>${escapeHtml(p.name)}</strong>
             <span style="color:#888;font-size:12px;margin-left:6px;">${escapeHtml(when)}</span>
             <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
-              <button type="button" data-open="${escapeHtml(p.id)}" style="padding:6px 12px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Open</button>
+              <button type="button" data-open="${escapeHtml(p.id)}" style="padding:6px 12px;background:#2E7D32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Open</button>
               <button type="button" data-rename="${escapeHtml(p.id)}" style="padding:6px 12px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Rename</button>
               <button type="button" data-delete="${escapeHtml(p.id)}" style="padding:6px 12px;background:#c62828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Delete</button>
             </div>

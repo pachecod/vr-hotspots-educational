@@ -1,3 +1,13 @@
+var escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
+  ? window.escapeHtml
+  : function (str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
 async function checkStudentSession() {
   try {
     const res = await fetch('/api/student/session', { credentials: 'include' });
@@ -459,7 +469,7 @@ async function renderIntegratedAuthStep(containerId, onAuthenticated, options = 
         }
         <button type="button" id="entry-signin-btn" style="
           width: 100%; padding: 14px 24px;
-          background: #4CAF50; color: white; border: none; border-radius: 8px;
+          background: #2E7D32; color: white; border: none; border-radius: 8px;
           font-size: 16px; font-weight: bold; cursor: pointer;
           box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         ">Sign in to a team or class account</button>
@@ -630,8 +640,8 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
       <div id="student-login-shell" style="
         position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:100000;
         display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;">
-        <div style="background:#2a2a2a;color:#fff;border-radius:12px;padding:32px;max-width:420px;width:90%;border:2px solid #4caf50;">
-          <h2 style="margin:0 0 8px;color:#4caf50;">WebXRIDE Immersive Storytelling Tool</h2>
+        <div style="background:#2a2a2a;color:#fff;border-radius:12px;padding:32px;max-width:420px;width:90%;border:2px solid #2E7D32;">
+          <h2 style="margin:0 0 8px;color:#2E7D32;">WebXRIDE Immersive Storytelling Tool</h2>
           <p id="student-login-subtitle" style="color:#ccc;margin:0 0 20px;">Choose your team or class</p>
           <div id="student-login-step"></div>
           <div id="student-login-error" style="color:#f44336;margin-top:12px;display:none;"></div>
@@ -682,7 +692,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
     subtitleEl.textContent = `Step 1 of ${total} — Choose your team or class`;
     const backBtn =
       options.showBackToEntry && !useWelcomeShell
-        ? `<button type="button" id="student-back-entry" style="background:none;border:none;color:#4caf50;cursor:pointer;margin-bottom:12px;padding:0;">← Back</button>`
+        ? `<button type="button" id="student-back-entry" style="background:none;border:none;color:#2E7D32;cursor:pointer;margin-bottom:12px;padding:0;">← Back</button>`
         : '';
     if (!classes.length) {
       stepEl.innerHTML =
@@ -729,7 +739,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
       <input type="password" id="class-password-input" placeholder="Enter team or class password" autocomplete="current-password" style="
         width:100%;padding:10px;border:1px solid rgba(255,255,255,0.25);border-radius:4px;background:rgba(0,0,0,0.2);color:#fff;box-sizing:border-box;margin-bottom:12px;" />
       <button type="button" id="class-password-submit" style="
-        width:100%;padding:12px;background:#4CAF50;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;">Continue</button>
+        width:100%;padding:12px;background:#2E7D32;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;">Continue</button>
     `;
 
     const passwordInput = document.getElementById('class-password-input');
@@ -809,7 +819,7 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
       <input type="password" id="student-password-input" placeholder="Enter your password" autocomplete="current-password" style="
         width:100%;padding:10px;border:1px solid rgba(255,255,255,0.25);border-radius:4px;background:rgba(0,0,0,0.2);color:#fff;box-sizing:border-box;margin-bottom:12px;" />
       <button type="button" id="student-login-submit" style="
-        width:100%;padding:12px;background:#4CAF50;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;">Sign In</button>
+        width:100%;padding:12px;background:#2E7D32;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;">Sign In</button>
     `;
 
     const passwordInput = document.getElementById('student-password-input');
@@ -891,13 +901,6 @@ function renderStudentLoginGate(containerId, onAuthenticated, options = {}) {
     });
 }
 
-function escapeHtml(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 async function requireStudentSession(containerId, onAuthenticated) {
   window.__welcomeOnAuthenticated = onAuthenticated;

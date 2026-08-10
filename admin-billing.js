@@ -1,3 +1,13 @@
+var escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
+  ? window.escapeHtml
+  : function (str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
 let selectedClassId = null;
 let currentBilling = null;
 let currentUsage = null;
@@ -314,9 +324,6 @@ async function openPortal() {
   window.location.href = data.url;
 }
 
-function escapeHtml(str) {
-  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 window.upgradeClass = upgradeClass;
 window.openPortal = openPortal;

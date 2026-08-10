@@ -434,6 +434,59 @@ function testZipBombCapsPresent() {
   console.log('✓ zip-bomb caps present in extract path');
 }
 
+function testCsrfNoXhrBypass() {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'lib/security/csrf-guard.js'), 'utf8');
+  assert.ok(
+    !/requestedWith\s*===\s*['"]XMLHttpRequest['"]/.test(src),
+    'CSRF guard must not bypass on X-Requested-With: XMLHttpRequest'
+  );
+  assert.ok(/hostMatchesOrigin/.test(src) && /refererMatchesHost/.test(src));
+  console.log('✓ CSRF guard relies on Origin/Referer only');
+}
+
+function testCreateVersionOwnsRemotePath() {
+  const versions = fs.readFileSync(
+    path.join(__dirname, '..', 'services/project-versions-db.js'),
+    'utf8'
+  );
+  assert.ok(
+    /async function createVersion[\s\S]*assertStudentOwnedRemotePath/.test(versions),
+    'createVersion must call assertStudentOwnedRemotePath'
+  );
+  const routes = fs.readFileSync(
+    path.join(__dirname, '..', 'routes/submission-version-routes.js'),
+    'utf8'
+  );
+  assert.ok(
+    /\/api\/student\/projects\/save-draft[\s\S]{0,3500}?classSlug:\s*sess\.classSlug/.test(routes),
+    'save-draft must pass classSlug into createVersion'
+  );
+  assert.ok(
+    /err\.statusCode === 400/.test(routes),
+    'save-draft must map ownership errors to HTTP 400'
+  );
+  const server = fs.readFileSync(path.join(__dirname, '..', 'simple-server.js'), 'utf8');
+  assert.ok(
+    /SESSION_COOKIE_NAMES[\s\S]*app\.use\('\/hosted'/.test(server),
+    'hosted static path must strip session cookies'
+  );
+  console.log('✓ createVersion ownership + save-draft + hosted cookie strip');
+}
+
+function testEscapeHtmlSharedUtility() {
+  const shared = fs.readFileSync(path.join(__dirname, '..', 'lib/escape-html.js'), 'utf8');
+  assert.ok(/&#39;/.test(shared), 'shared escapeHtml must escape single quotes');
+  const browser = fs.readFileSync(path.join(__dirname, '..', 'escape-html.js'), 'utf8');
+  assert.ok(/&#39;/.test(browser));
+  const users = fs.readFileSync(path.join(__dirname, '..', 'admin-users.js'), 'utf8');
+  assert.ok(
+    !/onclick=["']deleteStudent\(/.test(users),
+    'admin-users must not use inline onclick with interpolated IDs'
+  );
+  assert.ok(/data-action=["']delete-student["']/.test(users));
+  console.log('✓ shared escapeHtml + admin-users data-* actions');
+}
+
 async function main() {
   testSafeRedirect();
   testSsrfBlocklist();
@@ -444,6 +497,9 @@ async function main() {
   testStudentRemotePathOwnership();
   testRequireStudentProductionStrict();
   testZipBombCapsPresent();
+  testCsrfNoXhrBypass();
+  testCreateVersionOwnsRemotePath();
+  testEscapeHtmlSharedUtility();
   testCloudWriteAuthFlag();
   testLocalTestUserModeAvailability();
   testCloudWriteAuthWithLocalTestCookie();

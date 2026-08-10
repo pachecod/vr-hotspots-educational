@@ -1,3 +1,13 @@
+var escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
+  ? window.escapeHtml
+  : function (str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
 async function fetchPlaygroundConfig() {
   const res = await fetch('/api/playground/config');
   if (!res.ok) return { enabled: false };
@@ -11,13 +21,6 @@ async function fetchPlaygroundTemplates() {
   return data;
 }
 
-function escapeHtml(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 function scopeBadgeLabel(scope) {
   return scope === 'combined' ? '360° + Web' : 'Flat page';

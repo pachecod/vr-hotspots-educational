@@ -1314,6 +1314,31 @@ app.post('/github/push-zip-upload', upload.single('project'), async (req, res) =
 });
 
 // Serve hosted student projects from B2 (public bucket) via app proxy
+// Defense-in-depth when HOSTED_ORIGIN is unset: drop session cookies on /hosted/*
+// so server-side handlers never see admin/student sessions for hosted content.
+// Real isolation still requires HOSTED_ORIGIN on a separate subdomain.
+const SESSION_COOKIE_NAMES = new Set([
+  'admin_session',
+  'student_session',
+  'local_test_session',
+  'roster_gate',
+  'github_oauth_session',
+  'site_password',
+]);
+app.use('/hosted', (req, _res, next) => {
+  const raw = req.headers.cookie;
+  if (!raw) return next();
+  const kept = raw
+    .split(';')
+    .map((p) => p.trim())
+    .filter((p) => {
+      const name = p.split('=')[0];
+      return name && !SESSION_COOKIE_NAMES.has(name);
+    });
+  if (kept.length) req.headers.cookie = kept.join('; ');
+  else delete req.headers.cookie;
+  return next();
+});
 app.use('/hosted', createHostedStaticHandler());
 
 // Collect student project submissions (auth required when DB/B2/production)

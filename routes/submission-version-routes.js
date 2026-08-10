@@ -493,6 +493,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
           studentNote,
           threadId: threadId || null,
           versionNumber: versionNumber || null,
+          classSlug: sess.classSlug || 'default',
         });
         try {
           const { recordProjectUploadBytes } = require('../lib/usage/record-upload');
@@ -518,6 +519,9 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
           dbEnabled: true,
         });
       } catch (err) {
+        if (err.statusCode === 400) {
+          return res.status(400).json({ success: false, message: err.message });
+        }
         console.error('save-draft error:', err);
         logAppError({
           level: 'error',

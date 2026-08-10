@@ -28,21 +28,27 @@ npm start
 | Area | Fix |
 |------|-----|
 | XSS / sandbox | Flat preview + Ridey preview iframes drop `allow-same-origin` (source + committed bundle) |
-| Hosted isolation | Optional `HOSTED_ORIGIN` subdomain; host routing serves only `/hosted/*` on that host |
+| Hosted isolation | `HOSTED_ORIGIN` subdomain (+ `/hosted` session-cookie strip when same-origin) |
+| CSRF | Origin/Referer checks only — `X-Requested-With` bypass removed |
+| Path ownership | `createVersion` asserts student-owned B2 paths (covers save-draft) |
 | Passwords | Production requires dedicated `STUDENT_PASSWORD_ENCRYPTION_SECRET` (fail closed) |
 | SSRF | `/fetch-video` connects to DNS-pinned IP (Host/SNI keep original hostname) |
-| Admin XSS | Submissions UI escapes `'` / avoids unsafe single-quoted `onclick` interpolation |
+| Admin XSS | Shared `escapeHtml` (escapes `'`) + data-* actions on Users/Submissions |
 | Screenshots | Puppeteer request interception blocks private/metadata URLs; no `--disable-web-security` |
 | Ridey | Strict student auth whenever AI analysis can spend |
 | Tests | Extended `npm run test:security` |
 
+### Production note (webxride)
+
+As of the 3.8 round-2 deploy ops: `HOSTED_ORIGIN=https://hosted.webxride.com` **is set** on the webxride Render service (not merely optional/unset). Classroom installs may still omit it.
+
 ### Remaining risks (accepted / follow-up)
 
 - Guest / local-test mode remains enabled on public webxride by product choice
-- Classroom installs without `HOSTED_ORIGIN` still serve `/hosted/*` on the app origin (document residual risk)
-- CSRF guard still accepts `X-Requested-With: XMLHttpRequest` (mitigated when hosted is on a separate origin)
+- Classroom installs without `HOSTED_ORIGIN` still serve `/hosted/*` on the app origin (cookie strip middleware mitigates server-side session use; browser cookies can still be present on same-origin `/hosted`)
+- Session cookies use `Path=/` because root HTML pages need them — path scoping cannot exclude `/hosted` alone
 - Postgres TLS uses `rejectUnauthorized: false` for managed DB compatibility
-- Zip-bomb size/ratio caps, CI security workflow, and further modularization of `simple-server.js` are not in 3.8
+- Screenshot DNS pin (TOCTOU) and further modularization of `simple-server.js` remain follow-ups
 - `seedsofstory.webxride.com` is intentionally not on 3.8 yet
 
 ---

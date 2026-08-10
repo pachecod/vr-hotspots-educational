@@ -1,7 +1,20 @@
 const { query, slugify, withClient, isDbEnabled } = require('./db-service');
+const { assertStudentOwnedRemotePath } = require('../lib/security/student-remote-path');
 
 const NOTE_MAX_LEN = 2000;
 const DISPLAY_NAME_MAX_LEN = 120;
+
+async function resolveClassSlugForStudent(studentId, classSlug) {
+  if (classSlug) return String(classSlug);
+  const { rows } = await query(
+    `SELECT c.slug AS class_slug
+     FROM students s
+     JOIN classes c ON c.id = s.class_id
+     WHERE s.id = $1`,
+    [studentId]
+  );
+  return rows[0]?.class_slug || 'default';
+}
 
 function normalizeDisplayName(projectName) {
   const trimmed = String(projectName || '').trim();
@@ -148,8 +161,22 @@ async function createVersion({
   parentVersionId,
   threadId,
   versionNumber: preReservedVersionNumber,
+  classSlug,
 }) {
   if (!isDbEnabled()) return null;
+
+  // Every student-owned path must stay under that student's B2 prefix (closes save-draft bypass).
+  let safeB2Path = b2Path;
+  if (studentId && b2Path) {
+    const slug = await resolveClassSlugForStudent(studentId, classSlug);
+    try {
+      safeB2Path = assertStudentOwnedRemotePath(b2Path, { classSlug: slug, studentId });
+    } catch (err) {
+      const wrapped = new Error(err.message || 'Invalid remotePath');
+      wrapped.statusCode = err.statusCode || 400;
+      throw wrapped;
+    }
+  }
 
   return withClient(async (client) => {
     let thread;
@@ -179,7 +206,7 @@ async function createVersion({
         thread.id,
         versionNumber,
         kind,
-        b2Path,
+        safeB2Path,
         fileName,
         trimNote(studentNote),
         trimNote(adminNote),

@@ -1,3 +1,13 @@
+var escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
+  ? window.escapeHtml
+  : function (str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
 let classes = [];
 let students = [];
 let filterClassId = 'all';
@@ -42,6 +52,7 @@ async function initAdminUsers() {
 }
 
 function bindEvents() {
+  bindTableActionDelegation();
   document.getElementById('add-class-btn').addEventListener('click', addClass);
   document.getElementById('add-student-btn').addEventListener('click', addStudent);
   document.getElementById('generate-new-password-btn').addEventListener('click', async () => {
@@ -64,6 +75,44 @@ function bindEvents() {
   bindPasswordModal();
   bindRenameModal();
   bindClassPasswordModal();
+}
+
+function bindTableActionDelegation() {
+  const classesList = document.getElementById('classes-list');
+  if (classesList && classesList.dataset.actionsBound !== '1') {
+    classesList.dataset.actionsBound = '1';
+    classesList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn || !classesList.contains(btn)) return;
+      const id = btn.getAttribute('data-id');
+      if (!id) return;
+      const action = btn.getAttribute('data-action');
+      if (action === 'open-class-password') openClassPasswordModal(id);
+      else if (action === 'delete-class') deleteClass(id);
+    });
+    classesList.addEventListener('change', (e) => {
+      const input = e.target.closest('[data-action="set-class-password-required"]');
+      if (!input || !classesList.contains(input)) return;
+      const id = input.getAttribute('data-id');
+      if (id) setClassPasswordRequired(id, input.checked);
+    });
+  }
+
+  const studentsList = document.getElementById('students-list');
+  if (studentsList && studentsList.dataset.actionsBound !== '1') {
+    studentsList.dataset.actionsBound = '1';
+    studentsList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn || !studentsList.contains(btn)) return;
+      const id = btn.getAttribute('data-id');
+      if (!id) return;
+      const action = btn.getAttribute('data-action');
+      if (action === 'peek-student') window.openStudentPeek?.(id);
+      else if (action === 'rename-student') openRenameModal(id);
+      else if (action === 'set-student-password') openPasswordModal(id);
+      else if (action === 'delete-student') deleteStudent(id);
+    });
+  }
 }
 
 function bindPasswordModal() {
@@ -476,7 +525,14 @@ async function loadPasswordReport() {
       filterClassId === 'all'
         ? 'all teams or classes'
         : classes.find((c) => c.id === filterClassId)?.name || 'selected team or class';
+    const undecryptable = passwordReportRows.filter(
+      (r) => r.password_set_at && (r.password == null || r.password === '')
+    ).length;
     status.textContent = `${passwordReportRows.length} team member(s) or student(s) — ${scope}`;
+    if (undecryptable) {
+      status.textContent +=
+        ` · ⚠ ${undecryptable} stored password(s) could not be decrypted (likely encrypted under an old key). Reset those passwords in Admin.`;
+    }
     renderPasswordReport();
   } catch (err) {
     status.textContent = '';
@@ -559,16 +615,16 @@ function renderClasses() {
         <td>${c.student_count || 0}</td>
         <td>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;white-space:nowrap;">
-            <input type="checkbox" ${classPasswordRequired(c) ? 'checked' : ''} onchange="setClassPasswordRequired('${c.id}', this.checked)" />
+            <input type="checkbox" data-action="set-class-password-required" data-id="${escapeHtml(c.id)}" ${classPasswordRequired(c) ? 'checked' : ''} />
             ${classPasswordRequired(c) ? 'On' : 'Off'}
           </label>
         </td>
         <td>${escapeHtml(c.plan_tier || 'free')}</td>
         <td>
-          <button type="button" class="btn-secondary" onclick="openClassPasswordModal('${c.id}')">Edit Password</button>
+          <button type="button" class="btn-secondary" data-action="open-class-password" data-id="${escapeHtml(c.id)}">Edit Password</button>
           <a class="btn btn-secondary" href="/${encodeURIComponent(c.slug || '')}/hosted-projects.html" target="_blank" rel="noopener noreferrer">Featured hosted pages</a>
           <a class="btn btn-secondary" href="admin-billing.html?classId=${encodeURIComponent(c.id)}">Limits</a>
-          <button class="btn-danger" onclick="deleteClass('${c.id}')">Delete</button>
+          <button type="button" class="btn-danger" data-action="delete-class" data-id="${escapeHtml(c.id)}">Delete</button>
         </td>
       </tr>`).join('')}</tbody></table>`;
 }
@@ -631,10 +687,10 @@ function renderStudents() {
         <td>${s.is_active ? 'Yes' : 'No'}</td>
         <td>
           <a class="btn btn-secondary" href="admin-common-assets.html?view=content&studentId=${encodeURIComponent(s.id)}&classId=${encodeURIComponent(s.class_id || '')}">Content</a>
-          <button class="btn-peek" onclick="openStudentPeek('${s.id}')">Peek</button>
-          <button class="btn-secondary" onclick="openRenameModal('${s.id}')">Rename</button>
-          <button class="btn-secondary" onclick="openPasswordModal('${s.id}')">Set Password</button>
-          <button class="btn-danger" onclick="deleteStudent('${s.id}')">Delete</button>
+          <button type="button" class="btn-peek" data-action="peek-student" data-id="${escapeHtml(s.id)}">Peek</button>
+          <button type="button" class="btn-secondary" data-action="rename-student" data-id="${escapeHtml(s.id)}">Rename</button>
+          <button type="button" class="btn-secondary" data-action="set-student-password" data-id="${escapeHtml(s.id)}">Set Password</button>
+          <button type="button" class="btn-danger" data-action="delete-student" data-id="${escapeHtml(s.id)}">Delete</button>
         </td>
       </tr>`).join('')}</tbody></table>`;
 }
@@ -696,9 +752,6 @@ async function exportPasswords() {
   }
 }
 
-function escapeHtml(str) {
-  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 window.deleteClass = deleteClass;
 window.deleteStudent = deleteStudent;

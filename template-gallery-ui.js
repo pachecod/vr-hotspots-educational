@@ -1,3 +1,13 @@
+var escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
+  ? window.escapeHtml
+  : function (str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
 /**
  * Template Gallery for spherical (360°) Editing Tools — same data as flat editor Templates.
  * Flat mode already has its own Templates button in FlatPageEditorUI.
@@ -7,13 +17,7 @@
     return (global.EDITOR_LAYER && global.EDITOR_LAYER.dialog) || 10050;
   }
 
-  function escapeHtml(text) {
-    return String(text || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  
 
   async function fetchPublicTemplates() {
     const res = await fetch('/api/templates');
@@ -102,7 +106,7 @@
       dialog.innerHTML = `
         <div style="background:#2a2a2a;color:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:85vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,0.45);">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
-            <h3 style="margin:0;color:#4CAF50;">Template Gallery</h3>
+            <h3 style="margin:0;color:#2E7D32;">Template Gallery</h3>
             <button type="button" id="spherical-tpl-close-x" style="background:transparent;border:none;color:#aaa;font-size:24px;line-height:1;cursor:pointer;" aria-label="Close">×</button>
           </div>
           <p style="margin:0 0 16px;color:#aaa;font-size:13px;line-height:1.45;">
@@ -155,7 +159,7 @@
                 <strong>${escapeHtml(t.title || t.slug)}</strong>${badgeHtml}
                 ${desc}
               </div>
-              <button type="button" data-slug="${escapeHtml(t.slug)}" class="spherical-tpl-load" style="flex-shrink:0;padding:8px 14px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">Load</button>
+              <button type="button" data-slug="${escapeHtml(t.slug)}" class="spherical-tpl-load" style="flex-shrink:0;padding:8px 14px;background:#2E7D32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">Load</button>
             </div>`;
         })
         .join('')}</div>`;

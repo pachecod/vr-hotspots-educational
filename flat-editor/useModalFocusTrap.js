@@ -18,6 +18,7 @@ function getFocusable(container) {
 
 /**
  * Focus trap + Escape + restore focus for flat-editor modals.
+ * onClose is read from a ref so unstable inline callers do not re-run the trap.
  * @param {boolean} open
  * @param {() => void} onClose
  * @param {{ initialFocusRef?: React.RefObject }} [options]
@@ -25,6 +26,10 @@ function getFocusable(container) {
 export default function useModalFocusTrap(open, onClose, options = {}) {
   const containerRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  const initialFocusRef = options.initialFocusRef;
+
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -34,7 +39,7 @@ export default function useModalFocusTrap(open, onClose, options = {}) {
     const focusInitial = () => {
       const root = containerRef.current;
       if (!root) return;
-      const preferred = options.initialFocusRef?.current;
+      const preferred = initialFocusRef?.current;
       if (preferred && root.contains(preferred)) {
         preferred.focus();
         return;
@@ -52,7 +57,7 @@ export default function useModalFocusTrap(open, onClose, options = {}) {
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -86,7 +91,7 @@ export default function useModalFocusTrap(open, onClose, options = {}) {
         } catch (_) {}
       }
     };
-  }, [open, onClose, options.initialFocusRef]);
+  }, [open, initialFocusRef]);
 
   return containerRef;
 }

@@ -149,7 +149,7 @@ function renderAdminLoginGate(containerId, onAuthenticated) {
       <form id="admin-login-form">
         <input type="password" id="admin-login-password" placeholder="Admin password"
           style="width:100%;padding:10px;margin-bottom:12px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;" />
-        <button type="submit" style="width:100%;padding:12px;background:#007bff;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Sign In</button>
+        <button type="submit" style="width:100%;padding:12px;background:#0056B3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Sign In</button>
       </form>
       <div id="admin-login-error" style="color:#dc3545;margin-top:10px;display:none;"></div>
     </div>

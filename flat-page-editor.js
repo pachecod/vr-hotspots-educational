@@ -107,12 +107,7 @@ button:hover { background: #1d4ed8; }`;
     };
   }
 
-  function escapeHtml(str) {
-    return String(str == null ? '' : str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
+  
 
   function extractHostedTourUrl(divAttrs, inner) {
     const blob = `${divAttrs || ''} ${inner || ''}`;
@@ -472,7 +467,7 @@ button:hover { background: #1d4ed8; }`;
 
       const title = document.createElement('span');
       title.textContent = 'Flat Web Page';
-      title.style.cssText = 'font-weight:bold;color:#4caf50;';
+      title.style.cssText = 'font-weight:bold;color:#2E7D32;';
 
       const nameInput = document.createElement('input');
       nameInput.type = 'text';
@@ -496,7 +491,7 @@ button:hover { background: #1d4ed8; }`;
       publishBtn.type = 'button';
       publishBtn.textContent = '🌐 Publish';
       publishBtn.style.cssText =
-        'padding:6px 10px;border:none;border-radius:4px;background:#2196f3;color:#fff;cursor:pointer;font-size:12px;';
+        'padding:6px 10px;border:none;border-radius:4px;background:#0B5FA5;color:#fff;cursor:pointer;font-size:12px;';
       publishBtn.addEventListener('click', () => this.publish());
       const cloudStatus = document.createElement('span');
       cloudStatus.style.cssText = 'font-size:11px;color:#9ad29a;';
@@ -650,7 +645,7 @@ button:hover { background: #1d4ed8; }`;
     _tabStyle(active) {
       return [
         'padding:6px 12px',
-        'border:1px solid ' + (active ? '#4caf50' : '#555'),
+        'border:1px solid ' + (active ? '#2E7D32' : '#555'),
         'border-radius:4px',
         'background:' + (active ? 'rgba(76,175,80,0.2)' : '#333'),
         'color:#fff',

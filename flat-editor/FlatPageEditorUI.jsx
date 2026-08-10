@@ -68,6 +68,10 @@ export default function FlatPageEditorUI({ bridge }) {
   const handleConfigLiveUpdate = useCallback((path, value) => {
     previewRef.current?.postConfigLive(path, value);
   }, []);
+  const closeSnippets = useCallback(() => setShowSnippets(false), []);
+  const closeRidey = useCallback(() => setShowRidey(false), []);
+  const closeAddFile = useCallback(() => setShowAddFile(false), []);
+  const closeTemplates = useCallback(() => setShowTemplates(false), []);
 
   useEffect(
     () =>
@@ -356,13 +360,13 @@ export default function FlatPageEditorUI({ bridge }) {
 
       <SnippetsModal
         open={showSnippets}
-        onClose={() => setShowSnippets(false)}
+        onClose={closeSnippets}
         onInsert={(code) => bridge.insertSnippet(code)}
       />
 
       <AIAssistant
         open={showRidey}
-        onClose={() => setShowRidey(false)}
+        onClose={closeRidey}
         code={fileContent}
         language={fileTypeForId(activeFileId)}
         fileName={activeFileId}
@@ -400,14 +404,14 @@ export default function FlatPageEditorUI({ bridge }) {
 
       <CustomFileModal
         open={showAddFile}
-        onClose={() => setShowAddFile(false)}
+        onClose={closeAddFile}
         onConfirm={handleAddFile}
         blockedExtensions={state.blockedExtensions}
       />
 
       <TemplateGalleryModal
         open={showTemplates}
-        onClose={() => setShowTemplates(false)}
+        onClose={closeTemplates}
         mode={state.adminTemplateMode ? 'admin' : 'student'}
         onLoad={async (template) => {
           try {

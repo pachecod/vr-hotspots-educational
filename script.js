@@ -1963,7 +1963,7 @@ class HotspotEditor {
       `;
       overlay.innerHTML = `
         <div style="width: min(520px, calc(100vw - 40px)); background:#202124; border-radius:12px; padding:22px; box-shadow:0 18px 60px rgba(0,0,0,0.45);">
-          <h3 style="margin:0 0 8px; color:#4CAF50; font-size:18px;">Preparing Video</h3>
+          <h3 style="margin:0 0 8px; color:#2E7D32; font-size:18px;">Preparing Video</h3>
           <div id="editor-video-progress-file" style="font-size:12px; color:#ccc; margin-bottom:16px; word-break:break-word;"></div>
           <div style="margin-bottom:14px;">
             <div style="display:flex; justify-content:space-between; font-size:12px; color:#ddd; margin-bottom:6px;">
@@ -1971,7 +1971,7 @@ class HotspotEditor {
               <span id="editor-video-upload-pct">0%</span>
             </div>
             <div style="height:10px; background:#444; border-radius:999px; overflow:hidden;">
-              <div id="editor-video-upload-fill" style="height:100%; width:0%; background:#4CAF50; transition:width 160ms ease;"></div>
+              <div id="editor-video-upload-fill" style="height:100%; width:0%; background:#2E7D32; transition:width 160ms ease;"></div>
             </div>
           </div>
           <div id="editor-video-transcode-step" style="display:none;">
@@ -4459,11 +4459,12 @@ class HotspotEditor {
       box.style.cssText = `
         position: fixed; top: 0; left: 0; transform: translate(12px, 12px);
         display: none; pointer-events: none; z-index: 100001;
-        background: rgba(0,0,0,0.9); color: #fff; border: 1px solid #4CAF50;
+        background: rgba(0,0,0,0.9); color: #fff; border: 1px solid #2E7D32;
         border-radius: 8px; overflow: hidden; width: 220px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
         font-family: Arial, sans-serif; backdrop-filter: blur(2px);
       `;
       const img = document.createElement('img');
+      img.alt = '';
       img.style.cssText =
         'display:block; width: 100%; height: 120px; object-fit: cover; background:#111;';
       img.id = 'nav-preview-img';
@@ -4524,6 +4525,7 @@ class HotspotEditor {
       if (!img) {
         img = document.createElement('img');
         img.id = id;
+        img.alt = '';
         img.crossOrigin = 'anonymous';
         assets.appendChild(img);
       }
@@ -5264,7 +5266,7 @@ class HotspotEditor {
       copyBtn.type = 'button';
       copyBtn.textContent = 'Copy';
       copyBtn.style.padding = '10px 14px';
-      copyBtn.style.background = '#4caf50';
+      copyBtn.style.background = '#2E7D32';
       copyBtn.style.color = 'white';
       copyBtn.style.border = 'none';
       copyBtn.style.borderRadius = '6px';
@@ -5509,7 +5511,7 @@ class HotspotEditor {
       </div>
 
       <div style="display:flex; gap:10px;">
-        <button type="submit" style="flex:1; padding:12px 16px; background:#4caf50; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">Upload</button>
+        <button type="submit" style="flex:1; padding:12px 16px; background:#2E7D32; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">Upload</button>
         <button type="button" id="gh-cancel" style="flex:1; padding:12px 16px; background:#666; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">Cancel</button>
       </div>
     `;
@@ -5805,7 +5807,7 @@ class HotspotEditor {
 
       // Update visuals
       sw.setAttribute('aria-checked', String(isEdit));
-      sw.style.background = isEdit ? '#4caf50' : '#777';
+      sw.style.background = isEdit ? '#2E7D32' : '#777';
       thumb.style.left = isEdit ? '26px' : '2px';
 
       // Update text
@@ -5831,7 +5833,7 @@ class HotspotEditor {
 
       // Update visuals
       sw.setAttribute('aria-checked', String(isOn));
-      sw.style.background = isOn ? '#4caf50' : '#777';
+      sw.style.background = isOn ? '#2E7D32' : '#777';
       thumb.style.left = isOn ? '26px' : '2px';
 
       // Update texts
@@ -5856,7 +5858,7 @@ class HotspotEditor {
       const isMuted = !!chk.checked;
 
       sw.setAttribute('aria-checked', String(isMuted));
-      sw.style.background = isMuted ? '#4caf50' : '#777';
+      sw.style.background = isMuted ? '#2E7D32' : '#777';
       thumb.style.left = isMuted ? '26px' : '2px';
 
       label.textContent = isMuted ? '🔇 Video Audio: Muted' : '🔊 Video Audio: On';
@@ -5881,7 +5883,7 @@ class HotspotEditor {
 
       // Update visuals
       sw.setAttribute('aria-checked', String(isOn));
-      sw.style.background = isOn ? '#4caf50' : '#777';
+      sw.style.background = isOn ? '#2E7D32' : '#777';
       thumb.style.left = isOn ? '26px' : '2px';
 
       // Update texts
@@ -7916,7 +7918,7 @@ class HotspotEditor {
     dialog.style.cssText =
       'background:#1f1f1f; color:#fff; width:320px; max-width:calc(100vw - 40px); border-radius:12px; padding:20px; box-shadow:0 16px 48px rgba(0,0,0,0.45); display:flex; flex-direction:column; gap:14px;';
     dialog.innerHTML = `
-      <h3 style="margin:0; font-size:18px; color:#4CAF50;">3D Model Hotspot</h3>
+      <h3 style="margin:0; font-size:18px; color:#2E7D32;">3D Model Hotspot</h3>
       <p style="margin:0; font-size:13px; line-height:1.4; color:#ccc;">Choose what you would like to do with this model hotspot.</p>
       <button id="model-action-edit" style="background:#6a1b9a; color:#fff; border:none; padding:10px 12px; border-radius:8px; font-size:14px; cursor:pointer;">Edit model settings</button>
       <button id="model-action-transform" style="background:#00897b; color:#fff; border:none; padding:10px 12px; border-radius:8px; font-size:14px; cursor:pointer;">Transform with arrows</button>
@@ -8599,7 +8601,7 @@ class HotspotEditor {
       box-shadow: 0 8px 32px rgba(0,0,0,0.6); pointer-events: auto; cursor: move; position: relative;
     `;
     dialog.innerHTML = `
-      <h3 style="margin: 0 0 10px; color: #4CAF50; cursor: move;">Edit Hotspot - ${
+      <h3 style="margin: 0 0 10px; color: #2E7D32; cursor: move;">Edit Hotspot - ${
         hotspot.type.charAt(0).toUpperCase() + hotspot.type.slice(1)
       }</h3>
       <div style="display:flex; flex-direction: column; gap: 10px;">
@@ -8878,7 +8880,7 @@ class HotspotEditor {
           <button id="edit-delete" style="background:#f44336; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">Delete Hotspot</button>
           <div style="display:flex; gap:8px;">
             <button id="edit-cancel" style="background:#666; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">Cancel</button>
-            <button id="edit-save" style="background:#4CAF50; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">Save</button>
+            <button id="edit-save" style="background:#2E7D32; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">Save</button>
           </div>
         </div>
       </div>
@@ -9938,7 +9940,7 @@ class HotspotEditor {
   _getEditButtonDataURI() {
     const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <circle cx="64" cy="64" r="58" fill="#4CAF50"/>
+  <circle cx="64" cy="64" r="58" fill="#2E7D32"/>
   <g fill="none" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
     <path d="M18 110l18-4 60-60c4-4 4-10 0-14l-0.5-0.5c-4-4-10-4-14 0l-60 60-3.5 19.5z" fill="white" stroke="none"/>
     <path d="M82 22l24 24" stroke="white"/>
@@ -9950,7 +9952,7 @@ class HotspotEditor {
   _getMoveButtonDataURI() {
     const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <circle cx="64" cy="64" r="58" fill="#2196F3"/>
+  <circle cx="64" cy="64" r="58" fill="#0B5FA5"/>
   <g fill="white">
     <path d="M64 18c-20 0-36 16-36 36 0 26 36 72 36 72s36-46 36-72c0-20-16-36-36-36zm0 52a16 16 0 1 1 0-32 16 16 0 0 1 0 32z"/>
   </g>
@@ -10251,7 +10253,7 @@ class HotspotEditor {
 
       dialog.innerHTML = `
         <div style="background: #2a2a2a; padding: 28px; border-radius: 12px; color: white; max-width: 520px; width: calc(100% - 40px); box-shadow: 0 12px 40px rgba(0,0,0,0.45);">
-          <h3 style="margin: 0 0 8px 0; color: #4CAF50;">Guest Export</h3>
+          <h3 style="margin: 0 0 8px 0; color: #2E7D32;">Guest Export</h3>
           <p style="color: #ccc; margin: 0 0 14px 0; line-height: 1.5; font-size: 14px;">
             Only your <strong>360° tour</strong> will be included in the ZIP.
           </p>
@@ -10267,7 +10269,7 @@ class HotspotEditor {
               border-radius: 6px; cursor: pointer;
             ">Cancel</button>
             <button type="button" id="guest-export-continue" style="
-              background: #4CAF50; color: white; border: none; padding: 12px 18px;
+              background: #2E7D32; color: white; border: none; padding: 12px 18px;
               border-radius: 6px; cursor: pointer; font-weight: bold;
             ">Continue Export</button>
           </div>
@@ -10306,10 +10308,10 @@ class HotspotEditor {
 
       dialog.innerHTML = `
         <div style="background: #2a2a2a; padding: 28px; border-radius: 12px; color: white; max-width: 520px; width: calc(100% - 40px); box-shadow: 0 12px 40px rgba(0,0,0,0.45);">
-          <h3 style="margin: 0 0 8px 0; color: #4CAF50;">${title}</h3>
+          <h3 style="margin: 0 0 8px 0; color: #2E7D32;">${title}</h3>
           <p style="color: #ccc; margin: 0 0 20px 0; line-height: 1.5; font-size: 14px;">${description}</p>
 
-          <label style="display: block; margin-bottom: 12px; padding: 14px; border: 2px solid #4CAF50; border-radius: 8px; cursor: pointer; background: rgba(76,175,80,0.08);">
+          <label style="display: block; margin-bottom: 12px; padding: 14px; border: 2px solid #2E7D32; border-radius: 8px; cursor: pointer; background: rgba(76,175,80,0.08);">
             <input type="radio" name="export-mode" value="bundle" ${bundleChecked ? 'checked' : ''} style="margin-right: 10px;" />
             <strong>Include media in the package</strong>
             <div style="color: #aaa; font-size: 12px; margin: 6px 0 0 24px; line-height: 1.45;">
@@ -10348,7 +10350,7 @@ class HotspotEditor {
               border-radius: 6px; cursor: pointer;
             ">Cancel</button>
             <button type="button" id="export-mode-continue" style="
-              background: #4CAF50; color: white; border: none; padding: 12px 18px;
+              background: #2E7D32; color: white; border: none; padding: 12px 18px;
               border-radius: 6px; cursor: pointer; font-weight: bold;
             ">Continue</button>
           </div>
@@ -10362,7 +10364,7 @@ class HotspotEditor {
       const syncBorder = () => {
         labels.forEach((label) => {
           const input = label.querySelector('input[name="export-mode"]');
-          label.style.borderColor = input?.checked ? '#4CAF50' : '#555';
+          label.style.borderColor = input?.checked ? '#2E7D32' : '#555';
           label.style.background = input?.checked ? 'rgba(76,175,80,0.08)' : 'transparent';
         });
       };
@@ -12665,7 +12667,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
               font-weight:bold;cursor:pointer;
             ">No</button>
             <button type="button" id="flat-vr-embed-prompt-yes" style="
-              padding:10px 18px;border:none;border-radius:6px;background:#4caf50;color:#fff;
+              padding:10px 18px;border:none;border-radius:6px;background:#2E7D32;color:#fff;
               font-weight:bold;cursor:pointer;
             ">Yes</button>
           </div>
@@ -14361,14 +14363,14 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
         <!-- Floating orbs for visual interest -->
         <a-entity id="loading-orb-1" 
                  geometry="primitive: sphere; radius: 0.3" 
-                 material="color: #4CAF50; emissive: #4CAF50; emissiveIntensity: 0.5"
+                 material="color: #2E7D32; emissive: #2E7D32; emissiveIntensity: 0.5"
                  position="3 2 -5"
                  animation="property: rotation; to: 360 360 0; dur: 8000; easing: linear; loop: true">
         </a-entity>
         
         <a-entity id="loading-orb-2" 
                  geometry="primitive: sphere; radius: 0.2" 
-                 material="color: #2196F3; emissive: #2196F3; emissiveIntensity: 0.4"
+                 material="color: #0B5FA5; emissive: #0B5FA5; emissiveIntensity: 0.4"
                  position="-4 1 -3"
                  animation="property: rotation; to: -360 180 360; dur: 6000; easing: linear; loop: true">
         </a-entity>
@@ -14396,7 +14398,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
                value="●○○" 
                position="0 -0.5 -3" 
                align="center" 
-               color="#4CAF50"
+               color="#2E7D32"
                font="dejavu"
                animation__dots="property: opacity; to: 0.3; dur: 800; easing: easeInOutSine; loop: true; dir: alternate">
         </a-text>
@@ -14448,7 +14450,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
       box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     ">
       <button id="video-play-pause" style="
-        background: #007bff;
+        background: #0056B3;
         color: white;
         border: none;
         padding: 10px 20px;
@@ -14536,7 +14538,7 @@ html.vr-tour-embed-mode #global-sound-control {
 #project-info h1 {
   margin: 0 0 5px 0;
   font-size: 18px;
-  color: #4CAF50;
+  color: #2E7D32;
 }
 
 #project-info p {
@@ -14557,7 +14559,7 @@ html.vr-tour-embed-mode #global-sound-control {
 .sound-btn {
   background: rgba(0, 0, 0, 0.8);
   color: white;
-  border: 2px solid #4CAF50;
+  border: 2px solid #2E7D32;
   padding: 10px 15px;
   border-radius: 8px;
   cursor: pointer;
@@ -14589,7 +14591,7 @@ html.vr-tour-embed-mode #global-sound-control {
 /* Audio Progress Bar */
 .audio-progress-container {
   background: rgba(0, 0, 0, 0.8);
-  border: 2px solid #4CAF50;
+  border: 2px solid #2E7D32;
   border-radius: 8px;
   padding: 10px;
   min-width: 250px;
@@ -14620,7 +14622,7 @@ html.vr-tour-embed-mode #global-sound-control {
 
 .progress-fill {
   height: 100%;
-  background: #4CAF50;
+  background: #2E7D32;
   border-radius: 3px;
   width: 0%;
   transition: width 0.1s ease;
@@ -14632,7 +14634,7 @@ html.vr-tour-embed-mode #global-sound-control {
   transform: translate(-50%, -50%);
   width: 14px;
   height: 14px;
-  background: #4CAF50;
+  background: #2E7D32;
   border: 2px solid white;
   border-radius: 50%;
   cursor: pointer;
@@ -14691,7 +14693,7 @@ html.vr-tour-embed-mode #global-sound-control {
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.85);
-  border: 2px solid #4CAF50;
+  border: 2px solid #2E7D32;
   border-radius: 12px;
   padding: 15px 20px;
   color: #fff;
@@ -14705,7 +14707,7 @@ html.vr-tour-embed-mode #global-sound-control {
 
 #motion-permission-banner button {
   margin-top: 8px;
-  background: #4CAF50;
+  background: #2E7D32;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -17049,7 +17051,7 @@ class HotspotProject {
         width: 100%;
         height: 100%;
         border: 3px solid transparent;
-        border-top: 3px solid \${i === 0 ? '#4CAF50' : i === 1 ? '#2196F3' : '#FF9800'};
+        border-top: 3px solid \${i === 0 ? '#2E7D32' : i === 1 ? '#0B5FA5' : '#FF9800'};
         border-radius: 50%;
         animation: spin-\${i} \${1 + i * 0.3}s linear infinite;
         transform: rotate(\${i * 45}deg);
@@ -17086,7 +17088,7 @@ class HotspotProject {
       font-size: 18px;
       font-weight: bold;
       margin-bottom: 10px;
-      color: #4CAF50;
+      color: #2E7D32;
       animation: pulse-text 2s ease-in-out infinite;
     \`;
     
@@ -17177,6 +17179,7 @@ class HotspotProject {
       return new Promise((resolve) => {
         const img = document.createElement('img');
         img.id = assetId;
+        img.alt = '';
         img.crossOrigin = 'anonymous';
         img.addEventListener('load', () => { done++; updateSubtitle(done); resolve(); });
         img.addEventListener('error', () => { done++; updateSubtitle(done); resolve(); });
@@ -17194,9 +17197,10 @@ class HotspotProject {
     if (!this._navBox) {
       const box = document.createElement('div');
       box.id = 'nav-preview';
-      box.style.cssText = 'position:fixed;top:0;left:0;transform:translate(12px,12px);display:none;pointer-events:none;z-index:100001;background:rgba(0,0,0,0.9);color:#fff;border:1px solid #4CAF50;border-radius:8px;overflow:hidden;width:220px;box-shadow:0 8px 24px rgba(0,0,0,0.4);font-family:Arial,sans-serif;backdrop-filter:blur(2px);';
+      box.style.cssText = 'position:fixed;top:0;left:0;transform:translate(12px,12px);display:none;pointer-events:none;z-index:100001;background:rgba(0,0,0,0.9);color:#fff;border:1px solid #2E7D32;border-radius:8px;overflow:hidden;width:220px;box-shadow:0 8px 24px rgba(0,0,0,0.4);font-family:Arial,sans-serif;backdrop-filter:blur(2px);';
       const img = document.createElement('img');
       img.id = 'nav-preview-img';
+      img.alt = '';
       img.style.cssText = 'display:block;width:100%;height:120px;object-fit:cover;background:#111;';
       const cap = document.createElement('div');
       cap.id = 'nav-preview-caption';
@@ -17976,7 +17980,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.textAlign = 'center';
         ctx.fillText('✕', 32, 40);
       } else if (filename.includes('play')) {
-        ctx.fillStyle = '#2196F3'; // blue
+        ctx.fillStyle = '#0B5FA5'; // blue
         ctx.fillRect(0, 0, 64, 64);
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 20px Arial';
@@ -18136,7 +18140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         0
       )}° Z:${rotation.z.toFixed(0)}°`;
       infoDiv.style.background = '#1B5E20';
-      infoDiv.style.color = '#4CAF50';
+      infoDiv.style.color = '#2E7D32';
     } else {
       infoDiv.innerHTML = 'No starting point set';
       infoDiv.style.background = '#333';
@@ -18851,6 +18855,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const diffuseId = `ground-texture-diffuse-${sceneId}`;
     const diffuseAsset = document.createElement('img');
     diffuseAsset.id = diffuseId;
+    diffuseAsset.alt = '';
     diffuseAsset.src = groundData.diffuseMap;
     diffuseAsset.crossOrigin = 'anonymous';
     assets.appendChild(diffuseAsset);
@@ -18861,6 +18866,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const normalId = `ground-texture-normal-${sceneId}`;
     const normalAsset = document.createElement('img');
     normalAsset.id = normalId;
+    normalAsset.alt = '';
     normalAsset.src = groundData.normalMap;
     normalAsset.crossOrigin = 'anonymous';
     assets.appendChild(normalAsset);
@@ -18872,6 +18878,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const roughnessId = `ground-texture-roughness-${sceneId}`;
       const roughnessAsset = document.createElement('img');
       roughnessAsset.id = roughnessId;
+      roughnessAsset.alt = '';
       roughnessAsset.src = groundData.roughnessMap;
       roughnessAsset.crossOrigin = 'anonymous';
       assets.appendChild(roughnessAsset);
@@ -18883,6 +18890,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const aoId = `ground-texture-ao-${sceneId}`;
       const aoAsset = document.createElement('img');
       aoAsset.id = aoId;
+      aoAsset.alt = '';
       aoAsset.src = groundData.aoMap;
       aoAsset.crossOrigin = 'anonymous';
       assets.appendChild(aoAsset);
@@ -18895,6 +18903,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const dispId = `ground-texture-displacement-${sceneId}`;
       const dispAsset = document.createElement('img');
       dispAsset.id = dispId;
+      dispAsset.alt = '';
       dispAsset.src = groundData.displacementMap;
       dispAsset.crossOrigin = 'anonymous';
       assets.appendChild(dispAsset);
@@ -19192,7 +19201,7 @@ document.addEventListener('DOMContentLoaded', () => {
       editModeIndicator.style.display = 'none';
       if (instructionsContent) {
         instructionsContent.innerHTML =
-          '<strong>Navigation Mode:</strong><br>• Click navigation portals (🚪) to move between scenes<br>• Use mouse/touch to look around 360°<br>• Toggle "Edit Mode" to modify hotspots<br><br><strong style="color: #4caf50;">💡 Pro Tip:</strong><br><span style="font-size: 12px;">First scene will be the starting point when you save/export!</span>';
+          '<strong>Navigation Mode:</strong><br>• Click navigation portals (🚪) to move between scenes<br>• Use mouse/touch to look around 360°<br>• Toggle "Edit Mode" to modify hotspots<br><br><strong style="color: #2E7D32;">💡 Pro Tip:</strong><br><span style="font-size: 12px;">First scene will be the starting point when you save/export!</span>';
       }
 
       // Do NOT auto-play global sound - let editor audio button control it
@@ -19207,13 +19216,13 @@ document.addEventListener('DOMContentLoaded', () => {
         editModeIndicator.textContent = 'Click on the 360° scene to place hotspot';
         if (instructionsContent) {
           instructionsContent.innerHTML =
-            '<strong>🎯 PLACING HOTSPOT:</strong><br>• Click anywhere on the 360° scene to place<br>• Use mouse/touch to look around first if needed<br>• Press Esc or click Add Hotspot again to cancel<br><br><strong style="color: #2196F3;">ℹ️ Tip:</strong><br><span style="font-size: 12px;">Use Move (📍) later to reposition</span>';
+            '<strong>🎯 PLACING HOTSPOT:</strong><br>• Click anywhere on the 360° scene to place<br>• Use mouse/touch to look around first if needed<br>• Press Esc or click Add Hotspot again to cancel<br><br><strong style="color: #0B5FA5;">ℹ️ Tip:</strong><br><span style="font-size: 12px;">Use Move (📍) later to reposition</span>';
         }
       } else {
         editModeIndicator.style.display = 'none';
         if (instructionsContent) {
           instructionsContent.innerHTML =
-            '<strong>🛠️ Edit Mode:</strong><br>1. 📝 Select hotspot type (Text/Audio/Portal)<br>2. 🎯 Click <strong>Add Hotspot</strong><br>3. 📍 Click on the 360° scene to position<br>4. Use Edit (📝) to modify content<br>5. Use Move (📍) to reposition<br>6. 🧭 Switch to Navigation Mode to preview<br><br><strong style="color: #4caf50;">💡 Pro Tip:</strong><br><span style="font-size: 12px;">First scene will be the starting point on export!</span>';
+            '<strong>🛠️ Edit Mode:</strong><br>1. 📝 Select hotspot type (Text/Audio/Portal)<br>2. 🎯 Click <strong>Add Hotspot</strong><br>3. 📍 Click on the 360° scene to position<br>4. Use Edit (📝) to modify content<br>5. Use Move (📍) to reposition<br>6. 🧭 Switch to Navigation Mode to preview<br><br><strong style="color: #2E7D32;">💡 Pro Tip:</strong><br><span style="font-size: 12px;">First scene will be the starting point on export!</span>';
         }
       }
     }
@@ -19404,6 +19413,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const uniqueId = `panorama-${this.currentScene}-${Date.now()}`;
       const newPanorama = document.createElement('img');
       newPanorama.id = uniqueId;
+      newPanorama.alt = '';
       const isSameOriginImage =
         typeof scene.image === 'string' &&
         (scene.image.startsWith('/') ||
@@ -20120,7 +20130,7 @@ document.addEventListener('DOMContentLoaded', () => {
               🌐 360° Tour
             </button>
             <button id="welcome-choose-flat-btn" style="
-              background: #4CAF50; color: white; border: none; padding: 15px 30px;
+              background: #2E7D32; color: white; border: none; padding: 15px 30px;
               border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
               box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform 0.2s;
             " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
@@ -20325,7 +20335,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       dialog.innerHTML = `
         <div style="background: #2a2a2a; padding: 24px; border-radius: 10px; color: white; width: min(420px, 92vw); box-sizing: border-box;">
-          <h3 style="margin: 0 0 12px; color: #4CAF50;">${title}</h3>
+          <h3 style="margin: 0 0 12px; color: #2E7D32;">${title}</h3>
           <label for="scene-name-input" style="display: block; margin-bottom: 6px; font-size: 13px; color: #ccc;">
             Scene name (max ${maxLen} characters)
           </label>
@@ -20341,7 +20351,7 @@ document.addEventListener('DOMContentLoaded', () => {
               border-radius: 6px; cursor: pointer; font-weight: bold;
             ">Cancel</button>
             <button type="button" id="scene-name-save" style="
-              flex: 1; background: #4CAF50; color: white; border: none; padding: 10px 16px;
+              flex: 1; background: #2E7D32; color: white; border: none; padding: 10px 16px;
               border-radius: 6px; cursor: pointer; font-weight: bold;
             ">Save</button>
           </div>
@@ -20410,12 +20420,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     dialog.innerHTML = `
       <div style="background: #2a2a2a; padding: 30px; border-radius: 10px; color: white; max-width: 550px;">
-        <h3 style="margin-top: 0; color: #4CAF50;">Add New Scene</h3>
+        <h3 style="margin-top: 0; color: #2E7D32;">Add New Scene</h3>
         <p>Choose media type for "${name}":</p>
         
         <!-- Media Type Selection -->
         <div style="margin: 20px 0;">
-          <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #4CAF50;">
+          <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #2E7D32;">
             Media Type:
           </label>
           <select id="new-scene-media-type" style="
@@ -20431,7 +20441,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div id="new-scene-image-options" style="display: block;">
           <div style="margin: 15px 0;">
             <button id="upload-image-file-new" style="
-              background: #4CAF50; color: white; border: none; padding: 12px 20px;
+              background: #2E7D32; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
             ">📁 Upload Image File</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
@@ -20449,7 +20459,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div style="margin: 15px 0;">
             <button id="use-image-url-new" style="
-              background: #2196F3; color: white; border: none; padding: 12px 20px;
+              background: #0B5FA5; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
             ">🌐 Use Image URL</button>
             <div style="font-size: 11px; color: #999; margin-top: 5px; text-align: center;">
@@ -21260,7 +21270,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="background:#1e1e1e;padding:20px 22px;border-radius:12px;color:#fff;width:min(1100px,94vw);height:min(80vh,820px);display:flex;flex-direction:column;box-shadow:0 16px 60px rgba(0,0,0,0.55);">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
           <div>
-            <h3 style="margin:0 0 8px;color:#4CAF50;">Scene Site Map</h3>
+            <h3 style="margin:0 0 8px;color:#2E7D32;">Scene Site Map</h3>
             <div>
               ${chip('Scenes', graph.summary.sceneCount, '#455a64')}
               ${chip('Portals', graph.summary.portalCount, '#0277bd')}
@@ -21598,7 +21608,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             <button onclick="window.hotspotEditor.editSceneMedia('${sceneId}')" style="
-              background: #2196F3; color: white; border: none; padding: 6px 12px;
+              background: #0B5FA5; color: white; border: none; padding: 6px 12px;
               border-radius: 4px; cursor: pointer; font-size: 12px;" title="Change scene media">
               ${scene.type === 'video' ? '🎥' : '🖼️'} Edit Media
             </button>
@@ -21625,7 +21635,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="background: #2a2a2a; padding: 30px; border-radius: 10px; color: white; max-width: 600px; max-height: 80vh; overflow-y: auto;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
           <div>
-            <h3 style="margin-top: 0; color: #4CAF50;">🎬 Scene Manager</h3>
+            <h3 style="margin-top: 0; color: #2E7D32;">🎬 Scene Manager</h3>
             <p style="margin: 0 0 20px; color: #ccc; font-size: 14px;">Manage your 360° scenes (images and videos)</p>
           </div>
           <button type="button" id="ssm-from-manager" style="
@@ -21901,12 +21911,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     dialog.innerHTML = `
       <div style="background: #2a2a2a; padding: 30px; border-radius: 10px; color: white; max-width: 550px;">
-        <h3 style="margin-top: 0; color: #4CAF50;">🎬 Change Scene Media</h3>
+        <h3 style="margin-top: 0; color: #2E7D32;">🎬 Change Scene Media</h3>
         <p style="color: #ccc;">Update "${scene.name}" with a 360° image or 360° video:</p>
         
         <!-- Media Type Selection -->
         <div style="margin: 20px 0;">
-          <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #4CAF50;">
+          <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #2E7D32;">
             Media Type:
           </label>
           <select id="media-type-select" style="
@@ -21925,7 +21935,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div id="image-options" style="display: ${selectedMediaType === 'video' ? 'none' : 'block'};">
           <div style="margin: 15px 0;">
             <button id="upload-image-file" style="
-              background: #4CAF50; color: white; border: none; padding: 12px 20px;
+              background: #2E7D32; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
             ">📁 Upload Image File</button>
           </div>
@@ -21940,7 +21950,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div style="margin: 15px 0;">
             <button id="use-image-url" style="
-              background: #2196F3; color: white; border: none; padding: 12px 20px;
+              background: #0B5FA5; color: white; border: none; padding: 12px 20px;
               border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; font-weight: bold;
             ">🌐 Use Image URL</button>
           </div>
@@ -23234,7 +23244,7 @@ class StudentProjectsPanel {
     }
 
     const title = draftsOnly ? 'My Cloud Saves' : 'My Inbox';
-    const titleColor = draftsOnly ? '#42a5f5' : '#4CAF50';
+    const titleColor = draftsOnly ? '#42a5f5' : '#2E7D32';
     let emptyCopy = draftsOnly
       ? 'No cloud drafts yet. Use <strong>Save to Cloud</strong> in the Template panel to keep a draft online.'
       : 'No submissions yet.';
@@ -23273,7 +23283,7 @@ class StudentProjectsPanel {
         const badge = hasFeedback
           ? p.latestKind === 'admin_assigned'
             ? '<span style="background:#7b1fa2;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px;">New project</span>'
-            : '<span style="background:#2196F3;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px;">New feedback</span>'
+            : '<span style="background:#0B5FA5;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px;">New feedback</span>'
           : '';
         const note = p.studentNote
           ? `<div style="font-size:12px;color:#ccc;margin-top:4px;">Your note: ${StudentProjectsPanel.escapeHtml(p.studentNote)}</div>`
@@ -23283,8 +23293,8 @@ class StudentProjectsPanel {
             ? `<div style="font-size:12px;color:#90caf9;margin-top:4px;">Teacher: ${StudentProjectsPanel.escapeHtml(p.adminNote)}</div>`
             : '';
         const secondaryBtns = draftsOnly
-          ? `<button data-dl="${p.latestVersionId}" style="padding:6px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Download</button>`
-          : `<button data-dl="${p.latestVersionId}" style="padding:6px 12px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Download</button>
+          ? `<button data-dl="${p.latestVersionId}" style="padding:6px 12px;background:#0B5FA5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Download</button>`
+          : `<button data-dl="${p.latestVersionId}" style="padding:6px 12px;background:#0B5FA5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Download</button>
               <button data-history="${p.threadId}" style="padding:6px 12px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">History</button>`;
         return `
           <div style="border:1px solid #555;border-radius:6px;padding:12px;margin-bottom:10px;">
@@ -23292,7 +23302,7 @@ class StudentProjectsPanel {
             <span style="color:#888;font-size:12px;margin-left:6px;">${StudentProjectsPanel.kindLabel(p.latestKind)} v${p.latestVersionNumber || '—'}</span>${badge}
             ${note}${adminNote}
             <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
-              <button data-open="${p.latestVersionId}" data-thread="${p.threadId}" data-project-name="${StudentProjectsPanel.escapeHtml(p.projectName)}" style="padding:6px 12px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Open in editor</button>
+              <button data-open="${p.latestVersionId}" data-thread="${p.threadId}" data-project-name="${StudentProjectsPanel.escapeHtml(p.projectName)}" style="padding:6px 12px;background:#2E7D32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Open in editor</button>
               ${secondaryBtns}
             </div>
             <div id="thread-history-${p.threadId}" style="display:none;margin-top:8px;font-size:12px;color:#bbb;"></div>
@@ -23408,7 +23418,7 @@ class StudentProjectsPanel {
       display:flex;align-items:center;justify-content:center;font-family:Arial;padding:16px;box-sizing:border-box;
     `;
     overlay.innerHTML = `
-      <div role="dialog" aria-labelledby="admin-msg-title" style="background:#1e3a5f;color:#fff;border-radius:10px;padding:24px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.45);border-left:4px solid ${isAssigned ? '#7b1fa2' : '#2196F3'};">
+      <div role="dialog" aria-labelledby="admin-msg-title" style="background:#1e3a5f;color:#fff;border-radius:10px;padding:24px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.45);border-left:4px solid ${isAssigned ? '#7b1fa2' : '#0B5FA5'};">
         <h3 id="admin-msg-title" style="margin:0 0 8px;font-size:20px;">${title}</h3>
         <p style="margin:0 0 12px;font-size:13px;color:#90caf9;">${StudentProjectsPanel.escapeHtml(projectName)}</p>
         <p style="margin:0 0 20px;font-size:15px;line-height:1.5;">${
@@ -23417,9 +23427,9 @@ class StudentProjectsPanel {
             : `<em style="opacity:0.85;">${defaultNote}</em>`
         }</p>
         <div style="display:flex;flex-wrap:wrap;gap:10px;">
-          <button type="button" id="admin-msg-ok" style="padding:10px 18px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">OK</button>
+          <button type="button" id="admin-msg-ok" style="padding:10px 18px;background:#0B5FA5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">OK</button>
           <button type="button" id="admin-msg-cancel" style="padding:10px 18px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
-          <button type="button" id="admin-msg-open" style="padding:10px 18px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;">Open in editor</button>
+          <button type="button" id="admin-msg-open" style="padding:10px 18px;background:#2E7D32;color:#fff;border:none;border-radius:4px;cursor:pointer;">Open in editor</button>
         </div>
       </div>`;
 
@@ -23552,13 +23562,13 @@ const AdminReviewMode = {
     `;
     dialog.innerHTML = `
       <div style="background:#2a2a2a;color:#fff;border-radius:10px;padding:24px;max-width:480px;width:90%;">
-        <h3 style="margin:0 0 12px;color:#4CAF50;">Save and Send to Team Member or Student</h3>
+        <h3 style="margin:0 0 12px;color:#2E7D32;">Save and Send to Team Member or Student</h3>
         <p style="color:#ccc;font-size:14px;">Your edits will be saved as a new version. The team member's or student's original submission is never overwritten.</p>
         <label style="display:block;margin:16px 0 6px;color:#ccc;">Feedback note for team member or student:</label>
         <textarea id="admin-return-note" rows="4" style="width:100%;padding:10px;background:#333;border:1px solid #555;color:#fff;border-radius:4px;box-sizing:border-box;" placeholder="Optional feedback..."></textarea>
         <div id="admin-return-status" style="margin-top:12px;color:#ccc;font-size:13px;"></div>
         <div style="margin-top:16px;display:flex;gap:8px;">
-          <button id="admin-return-confirm" style="padding:10px 18px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Send to Team Member or Student</button>
+          <button id="admin-return-confirm" style="padding:10px 18px;background:#2E7D32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Send to Team Member or Student</button>
           <button id="admin-return-cancel" style="padding:10px 18px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
         </div>
       </div>`;
@@ -23609,7 +23619,7 @@ const AdminReviewMode = {
       const result = await res.json();
       if (!result.success) throw new Error(result.message || 'Send failed');
 
-      status.innerHTML = '<span style="color:#4CAF50;">Sent successfully!</span>';
+      status.innerHTML = '<span style="color:#2E7D32;">Sent successfully!</span>';
       setTimeout(() => {
         dialog.remove();
         window.location.href = '/admin-submissions.html';
@@ -23701,13 +23711,13 @@ const AdminAssignMode = {
     `;
     dialog.innerHTML = `
       <div style="background:#2a2a2a;color:#fff;border-radius:10px;padding:24px;max-width:480px;width:90%;">
-        <h3 style="margin:0 0 12px;color:#4CAF50;">Send Project to Student</h3>
+        <h3 style="margin:0 0 12px;color:#2E7D32;">Send Project to Student</h3>
         <p style="color:#ccc;font-size:14px;">Send <strong>${this.escapeHtml(this.projectName || 'this project')}</strong> to <strong>${this.escapeHtml(this.studentName || 'the student')}</strong>.</p>
         <label style="display:block;margin:16px 0 6px;color:#ccc;">Note for student:</label>
         <textarea id="admin-assign-note" rows="4" style="width:100%;padding:10px;background:#333;border:1px solid #555;color:#fff;border-radius:4px;box-sizing:border-box;" placeholder="Optional instructions..."></textarea>
         <div id="admin-assign-status" style="margin-top:12px;color:#ccc;font-size:13px;"></div>
         <div style="margin-top:16px;display:flex;gap:8px;">
-          <button id="admin-assign-confirm" style="padding:10px 18px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Send to Student</button>
+          <button id="admin-assign-confirm" style="padding:10px 18px;background:#2E7D32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Send to Student</button>
           <button id="admin-assign-cancel" style="padding:10px 18px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
         </div>
       </div>`;
@@ -23760,7 +23770,7 @@ const AdminAssignMode = {
       const result = await res.json();
       if (!result.success) throw new Error(result.message || 'Send failed');
 
-      status.innerHTML = '<span style="color:#4CAF50;">Sent successfully!</span>';
+      status.innerHTML = '<span style="color:#2E7D32;">Sent successfully!</span>';
       setTimeout(() => {
         dialog.remove();
         window.location.href = '/admin-assign-project.html';
@@ -23789,7 +23799,7 @@ class StudentSubmission {
 
     dialog.innerHTML = `
       <div style="background: #2a2a2a; padding: 30px; border-radius: 10px; color: white; max-width: 500px;">
-        <h3 style="margin-top: 0; color: #4CAF50;">📤 Submit Your VR Project</h3>
+        <h3 style="margin-top: 0; color: #2E7D32;">📤 Submit Your VR Project</h3>
         <p style="color: #ccc;">Submit your VR hotspot project to the admin:</p>
         
         <div style="margin: 20px 0;">
@@ -23811,7 +23821,7 @@ class StudentSubmission {
         
         <div id="submit-project-actions" style="margin: 25px 0; text-align: center;">
           <button id="submit-project-btn" style="
-            background: #4CAF50; color: white; border: none; padding: 15px 25px;
+            background: #2E7D32; color: white; border: none; padding: 15px 25px;
             border-radius: 6px; cursor: pointer; margin: 5px; font-weight: bold;
           ">📤 Submit Project</button>
           <button id="cancel-submission-btn" style="
@@ -23860,7 +23870,7 @@ class StudentSubmission {
     `;
     overlay.innerHTML = `
       <div style="background:#2a2a2a;padding:24px;border-radius:8px;color:#fff;min-width:280px;text-align:center;">
-        <p style="margin:0 0 12px;color:#4CAF50;">${title}</p>
+        <p style="margin:0 0 12px;color:#2E7D32;">${title}</p>
         <div id="submission-status"></div>
       </div>`;
     document.body.appendChild(overlay);
@@ -23976,7 +23986,7 @@ class StudentSubmission {
     const cancelBtn = document.getElementById('cancel-submission-btn');
     if (submitBtn) submitBtn.disabled = true;
     if (cancelBtn) cancelBtn.disabled = true;
-    if (statusDiv) statusDiv.innerHTML = '<p style="color: #4CAF50;">📦 Generating project...</p>';
+    if (statusDiv) statusDiv.innerHTML = '<p style="color: #2E7D32;">📦 Generating project...</p>';
 
     let submissionSucceeded = false;
     let content = null;
@@ -24045,12 +24055,12 @@ class StudentSubmission {
 
       if (statusDiv) {
         statusDiv.innerHTML = `
-        <p style="color: #4CAF50; margin-bottom: 10px;">📤 Uploading to server...</p>
+        <p style="color: #2E7D32; margin-bottom: 10px;">📤 Uploading to server...</p>
         <div style="
           width: 100%; height: 12px; background: #444; border-radius: 999px;
           overflow: hidden; border: 1px solid #555; margin: 8px 0 6px;
         ">
-          <div id="submission-upload-fill" style="height: 100%; width: 0%; background: #4CAF50;"></div>
+          <div id="submission-upload-fill" style="height: 100%; width: 0%; background: #2E7D32;"></div>
         </div>
         <div style="display:flex; justify-content: space-between; font-size: 12px; color: #ccc;">
           <span id="submission-upload-label">Uploading...</span>
@@ -24232,12 +24242,12 @@ class StudentSubmission {
         submissionSucceeded = true;
         if (statusDiv) {
         statusDiv.innerHTML = `
-          <p style="color: #4CAF50;">✅ ${options.successMessage || 'Project submitted successfully!'}</p>
+          <p style="color: #2E7D32;">✅ ${options.successMessage || 'Project submitted successfully!'}</p>
           <p style="color: #ccc; font-size: 0.9em;">File: ${result.fileName || prepareData.fileName || 'uploaded'}</p>
           ${result.versionNumber ? `<p style="color: #ccc; font-size: 0.85em;">Version #${result.versionNumber}</p>` : ''}
           ${result.dbEnabled === false ? '<p style="color:#ffb74d;font-size:0.85em;">This server has no project database, so the draft will not appear in My Cloud Saves.</p>' : ''}
           <button id="close-submission-dialog" style="
-            background: #4CAF50; color: white; border: none; padding: 10px 20px;
+            background: #2E7D32; color: white; border: none; padding: 10px 20px;
             border-radius: 4px; cursor: pointer; margin-top: 10px;
           ">Close</button>
         `;
@@ -24613,7 +24623,7 @@ const CommonAssetsPicker = {
         }
         document.querySelectorAll('.ca-source-tab').forEach((t) => {
           t.classList.toggle('active', t === tab);
-          t.style.background = t === tab ? '#4caf50' : '#444';
+          t.style.background = t === tab ? '#2E7D32' : '#444';
         });
         this.updateSourceUi();
         this.initTagFilterBar();
@@ -24725,7 +24735,7 @@ const CommonAssetsPicker = {
       document.querySelectorAll('.ca-source-tab').forEach((t) => {
         const isShared = t.dataset.source === 'shared';
         t.classList.toggle('active', isShared);
-        t.style.background = isShared ? '#4caf50' : '#444';
+        t.style.background = isShared ? '#2E7D32' : '#444';
       });
     }
     this.targetFieldId = targetFieldId;
@@ -24800,7 +24810,7 @@ const CommonAssetsPicker = {
           document.querySelectorAll('.ca-source-tab').forEach((t) => {
             const active = t.dataset.source === 'shared';
             t.classList.toggle('active', active);
-            t.style.background = active ? '#4caf50' : '#444';
+            t.style.background = active ? '#2E7D32' : '#444';
           });
           this.updateSourceUi();
           return this.load();
@@ -25022,7 +25032,7 @@ const CommonAssetsPicker = {
           ? `<button type="button" data-ca-action="copy-page-url" data-slug="${esc(page.slug)}" style="background:#6f42c1;color:#fff;">Copy URL</button>`
           : '';
         const openBtn = page.hostedUrl
-          ? `<button type="button" data-ca-action="open-page-url" data-slug="${esc(page.slug)}" style="background:#2196f3;color:#fff;">Open</button>`
+          ? `<button type="button" data-ca-action="open-page-url" data-slug="${esc(page.slug)}" style="background:#0B5FA5;color:#fff;">Open</button>`
           : '';
         return `<div class="ca-item ca-saved-page">
           <div class="ca-item-info" style="flex:1;">
@@ -25033,7 +25043,7 @@ const CommonAssetsPicker = {
           <div class="ca-item-actions" style="flex-wrap:wrap;">
             ${copyBtn}
             ${openBtn}
-            <button type="button" data-ca-action="load-page" data-slug="${esc(page.slug)}" style="background:#4caf50;color:#fff;">Load in Editor</button>
+            <button type="button" data-ca-action="load-page" data-slug="${esc(page.slug)}" style="background:#2E7D32;color:#fff;">Load in Editor</button>
             <button type="button" data-ca-action="delete-page" data-slug="${esc(page.slug)}" style="background:#f44336;color:#fff;">Delete</button>
           </div>
         </div>`;
@@ -25212,7 +25222,7 @@ const CommonAssetsPicker = {
             <button data-ca-action="preview" data-name="${asset.name}" class="btn-preview-ca">Preview</button>
             <button data-ca-action="copy" data-name="${asset.name}" style="background:#6f42c1;color:#fff;">Copy</button>
             ${insertBtn}
-            <button data-ca-action="use" data-name="${asset.name}" style="background:#4caf50;color:#fff;">Select</button>
+            <button data-ca-action="use" data-name="${asset.name}" style="background:#2E7D32;color:#fff;">Select</button>
             ${this.canEditTags() ? `<button data-ca-action="delete" data-name="${asset.name}" style="background:#f44336;color:#fff;">Delete</button>` : ''}
           </div>
         </div>`;

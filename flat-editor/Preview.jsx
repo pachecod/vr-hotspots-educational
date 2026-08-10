@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useImperativeHandle, forwardRef, useEffect } from 'react';
+import React, { useMemo, useRef, useImperativeHandle, forwardRef } from 'react';
 import { buildPreviewDocument } from './buildPreview.js';
 
 /**
@@ -32,19 +32,6 @@ const Preview = forwardRef(function Preview({ page, refreshKey }, ref) {
     () => buildPreviewDocument(page, { baseHref }),
     [page, refreshKey, baseHref]
   );
-
-  // Defense-in-depth: ignore any inbound messages not from this preview iframe.
-  useEffect(() => {
-    const onMessage = (event) => {
-      const frameWin = iframeRef.current?.contentWindow;
-      if (!frameWin || event.source !== frameWin) return;
-      // Preview currently only receives live-config patches from parent → iframe;
-      // keep this gate so future iframe→parent messages are source-validated.
-      void event.data;
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, []);
 
   useImperativeHandle(
     ref,

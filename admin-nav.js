@@ -1,10 +1,30 @@
 function ensureAdminLandmarks() {
-  const content = document.getElementById('admin-content');
-  if (content && !document.getElementById('admin-main')) {
-    const main = document.createElement('main');
-    main.id = 'admin-main';
-    content.parentNode.insertBefore(main, content);
-    main.appendChild(content);
+  if (!document.getElementById('admin-main')) {
+    const knownIds = ['admin-content', 'main-content', 'activity-app', 'usage-app'];
+    let content = null;
+    for (const id of knownIds) {
+      content = document.getElementById(id);
+      if (content) break;
+    }
+    if (!content) {
+      // Fallback: first direct body child that isn't the nav / skip link
+      content = Array.from(document.body.children).find((el) => {
+        const id = el.id || '';
+        return (
+          el.tagName !== 'SCRIPT' &&
+          el.tagName !== 'STYLE' &&
+          id !== 'admin-nav' &&
+          id !== 'admin-skip-link' &&
+          !el.classList?.contains('admin-nav')
+        );
+      });
+    }
+    if (content) {
+      const main = document.createElement('main');
+      main.id = 'admin-main';
+      content.parentNode.insertBefore(main, content);
+      main.appendChild(content);
+    }
   }
 
   if (!document.getElementById('admin-skip-link')) {

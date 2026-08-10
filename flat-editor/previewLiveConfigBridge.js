@@ -24,6 +24,10 @@ export const PREVIEW_LIVE_CONFIG_BRIDGE = `<script>
   window.addEventListener('message', function (e) {
     if (!e.data || e.data.type !== 'flat-config-live') return;
     if (e.source !== window.parent) return;
+    // Same-origin preview (srcdoc / app origin): reject unexpected foreign origins.
+    try {
+      if (e.origin && e.origin !== 'null' && e.origin !== window.location.origin) return;
+    } catch (_) {}
     var cfg = window.__FLAT_PAGE_CONFIG__;
     if (!cfg || typeof cfg !== 'object') return;
     setPath(cfg, e.data.path, e.data.value);

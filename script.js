@@ -7358,7 +7358,7 @@ class HotspotEditor {
     if (container && container.parentNode === hotspotEl) hotspotEl.appendChild(container);
   }
 
-  _getMediaTopY(hotspotEl, data) {
+  _getMediaVerticalBounds(hotspotEl, data) {
     const media =
       hotspotEl?.querySelector('.static-image-hotspot') ||
       hotspotEl?.querySelector('.static-video-hotspot');
@@ -7396,23 +7396,30 @@ class HotspotEditor {
       }
 
       if (Number.isFinite(centerY)) {
-        return centerY + (ratio * scl) / 2;
+        const halfH = (ratio * scl) / 2;
+        return { topY: centerY + halfH, bottomY: centerY - halfH };
       }
     }
 
-    // Fallback before async media mount (video billboards mount after hotspot creation).
-    return ratio * scl;
+    // Fallback before async media mount (image billboards sit with bottom at y=0).
+    const height = ratio * scl;
+    return { topY: height, bottomY: 0 };
+  }
+
+  _getMediaTopY(hotspotEl, data) {
+    return this._getMediaVerticalBounds(hotspotEl, data).topY;
   }
 
   _computeImageHotspotControlsLayout(hotspotEl, data) {
-    const topY = this._getMediaTopY(hotspotEl, data);
+    // Keep edit/move controls under the image so they don't cover faces/content.
+    // Hint sits closest (idle state); edit/move buttons share that band when revealed.
+    const { topY, bottomY } = this._getMediaVerticalBounds(hotspotEl, data);
     const gap = 0.14;
     const buttonHalf = 0.14;
     const hintHalf = 0.16;
-    const rowGap = 0.1;
-    const buttonsY = topY + gap + buttonHalf;
-    const hintY = buttonsY + buttonHalf + rowGap + hintHalf;
-    return { topY, buttonsY, hintY };
+    const hintY = bottomY - gap - hintHalf;
+    const buttonsY = bottomY - gap - buttonHalf;
+    return { topY, bottomY, buttonsY, hintY };
   }
 
   _computeImageHotspotEditButtonY(hotspotEl, data) {
@@ -7652,12 +7659,12 @@ class HotspotEditor {
       data && (data.type === 'audio' || data.type === 'text-audio');
 
     // Create container for both buttons (parent hotspot already uses face-camera)
-    // Image/video hotspots reposition the row above the media; audio hotspots sit
+    // Image/video hotspots reposition the row under the media; audio hotspots sit
     // just above the play button; all other types keep the standard below-marker row.
     const buttonContainer = document.createElement('a-entity');
     buttonContainer.setAttribute('class', 'in-scene-edit-controls');
     if (isImageHotspot) {
-      buttonContainer.setAttribute('position', '0 0.45 0.45');
+      buttonContainer.setAttribute('position', '0 -0.45 0.45');
     } else if (isAudioHotspot) {
       buttonContainer.setAttribute('position', '0 -0.12 0.45');
     } else {
@@ -7757,11 +7764,11 @@ class HotspotEditor {
 
     if (isImageHotspot) {
       // Click-to-reveal model (image/video only): a "Click to edit or move" hint shows
-      // in edit mode, and the Edit/Move buttons stay hidden until the user clicks the
-      // media or hint. This avoids the controls covering the image content.
+      // under the media in edit mode, and Edit/Move buttons stay hidden until the user
+      // clicks the media or hint — so controls never cover the image content.
       const hint = document.createElement('a-entity');
       hint.setAttribute('class', 'in-scene-edit-hint');
-      hint.setAttribute('position', '0 0.45 0.44');
+      hint.setAttribute('position', '0 -0.45 0.44');
       hint.setAttribute('visible', 'false');
       hotspotEl.appendChild(hint);
 
@@ -7839,7 +7846,7 @@ class HotspotEditor {
       syncButtonVisibility();
     }
 
-    // If this is an image or video hotspot, place hint + buttons above the media
+    // If this is an image or video hotspot, place hint + buttons under the media
     if (data.type === 'image') {
       const adjustButtons = () => {
         try {

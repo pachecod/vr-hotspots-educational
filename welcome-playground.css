@@ -32,18 +32,38 @@ body.entry-gate-active {
   overflow: hidden;
 }
 
-body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay):not(#scene-loading-overlay) {
+/*
+ * Keep #main-content (a-scene) mounted. display:none on a-scene breaks A-Frame in Safari
+ * (raycaster: this.el.sceneEl is undefined → querySelectorAll crash).
+ */
+body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay):not(#scene-loading-overlay):not(#main-content) {
   display: none !important;
 }
 
-/* Full-screen project bootstrap — hide editor until the first scene is ready. */
+body.entry-gate-active #main-content {
+  position: fixed;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Full-screen project bootstrap — cover UI until the first scene is ready. */
 body.project-loading-active {
   background: #000;
   overflow: hidden;
 }
 
-body.project-loading-active > :not(#scene-loading-overlay):not(#guest-agreement-overlay) {
+body.project-loading-active > :not(#scene-loading-overlay):not(#guest-agreement-overlay):not(#main-content) {
   display: none !important;
+}
+
+body.project-loading-active #main-content {
+  position: fixed;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
 }
 
 body.project-loading-active #scene-loading-overlay {

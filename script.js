@@ -1,3 +1,53 @@
+// Safari can run raycaster.refreshObjects while an entity is temporarily detached
+// (e.g. during overlay boot). Guard sceneEl to avoid:
+// "undefined is not an object (evaluating 'this.el.sceneEl.querySelectorAll')"
+(function patchRaycasterSceneElGuard() {
+  function apply() {
+    try {
+      if (typeof AFRAME === 'undefined') return false;
+      const def = AFRAME.components && AFRAME.components.raycaster;
+      if (!def || def.__sceneElGuarded) return !!def?.__sceneElGuarded;
+      const proto =
+        (def.Component && def.Component.prototype) || def.prototype || null;
+      if (!proto || typeof proto.refreshObjects !== 'function') return false;
+      const original = proto.refreshObjects;
+      proto.refreshObjects = function () {
+        if (!this.el || !this.el.sceneEl) {
+          this.objects = [];
+          this.dirty = false;
+          return;
+        }
+        return original.call(this);
+      };
+      def.__sceneElGuarded = true;
+      return true;
+    } catch (err) {
+      console.warn('[raycaster] sceneEl guard skipped:', err);
+      return false;
+    }
+  }
+
+  if (!apply()) {
+    const retry = () => apply();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', retry, { once: true });
+    }
+    const sceneEl = document.querySelector('a-scene');
+    if (sceneEl) sceneEl.addEventListener('loaded', retry, { once: true });
+    else {
+      document.addEventListener(
+        'DOMContentLoaded',
+        () => {
+          const scene = document.querySelector('a-scene');
+          if (scene) scene.addEventListener('loaded', retry, { once: true });
+          else retry();
+        },
+        { once: true }
+      );
+    }
+  }
+})();
+
 // A-Frame look-controls only rotates yaw on touch (not pitch). Patch so iPad editors
 // can drag up/down to look at hotspots above/below the horizon.
 (function patchLookControlsTouchPitch() {

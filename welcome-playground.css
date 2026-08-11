@@ -36,7 +36,7 @@ body.entry-gate-active {
  * Keep #main-content (a-scene) mounted. display:none on a-scene breaks A-Frame in Safari
  * (raycaster: this.el.sceneEl is undefined → querySelectorAll crash).
  */
-body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay):not(#scene-loading-overlay):not(#main-content) {
+body.entry-gate-active > :not(#student-login-gate):not(#guest-agreement-overlay):not(#flat-vr-embed-prompt-overlay):not(#scene-loading-overlay):not(#main-content) {
   display: none !important;
 }
 
@@ -54,7 +54,7 @@ body.project-loading-active {
   overflow: hidden;
 }
 
-body.project-loading-active > :not(#scene-loading-overlay):not(#guest-agreement-overlay):not(#embed-practice-closed):not(#main-content) {
+body.project-loading-active > :not(#scene-loading-overlay):not(#guest-agreement-overlay):not(#flat-vr-embed-prompt-overlay):not(#embed-practice-closed):not(#main-content) {
   display: none !important;
 }
 

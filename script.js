@@ -1692,6 +1692,8 @@ class HotspotEditor {
 
     if (window.__vrTourEmbedMode) {
       this.applyEmbedViewerMode();
+    } else if (window.__embedEditorMode) {
+      this.applyEmbedPracticeNavigationDefault();
     }
   }
 
@@ -1708,6 +1710,38 @@ class HotspotEditor {
     this.updateModeIndicator();
     if (typeof this._updateAddHotspotButtonState === 'function') {
       this._updateAddHotspotButtonState();
+    }
+    if (typeof this._syncEditModeToggleUI === 'function') {
+      this._syncEditModeToggleUI();
+    }
+  }
+
+  /**
+   * Practice editor embed (?embedEditor=1): start 360° templates in Navigation Mode
+   * so viewers can look around immediately. Edit Mode remains available on large screens.
+   */
+  applyEmbedPracticeNavigationDefault() {
+    if (!window.__embedEditorMode || window.__vrTourEmbedMode) return;
+    if (this.contentMode === 'flat') return;
+
+    this.navigationMode = true;
+    this.editMode = false;
+    const toggle = document.getElementById('edit-mode-toggle');
+    if (toggle) {
+      if (toggle.checked) {
+        toggle.checked = false;
+        toggle.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
+      }
+    }
+    const indicator = document.getElementById('edit-indicator');
+    if (indicator) indicator.style.display = 'none';
+    this.updateModeIndicator();
+    if (typeof this._updateAddHotspotButtonState === 'function') {
+      this._updateAddHotspotButtonState();
+    }
+    if (typeof this._setHotspotPropertiesVisible === 'function') {
+      this._setHotspotPropertiesVisible(false);
     }
     if (typeof this._syncEditModeToggleUI === 'function') {
       this._syncEditModeToggleUI();
@@ -4487,6 +4521,13 @@ class HotspotEditor {
   _completeProjectBootstrap() {
     if (this._projectBootstrapComplete) return;
     this._projectBootstrapComplete = true;
+    if (window.__embedEditorMode && !window.__vrTourEmbedMode) {
+      try {
+        this.applyEmbedPracticeNavigationDefault();
+      } catch (_) {
+        /* ignore */
+      }
+    }
     if (this._shouldDeferProjectReveal()) return;
     if (typeof window.hideProjectLoadingOverlay === 'function') {
       window.hideProjectLoadingOverlay();

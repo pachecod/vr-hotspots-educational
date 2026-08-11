@@ -696,6 +696,16 @@ async function runPendingPlaygroundLoad() {
       if (!isEmbedMobileViewport()) {
         installEmbedGuestAgreementGate();
       }
+      try {
+        if (
+          window.hotspotEditor &&
+          typeof window.hotspotEditor.applyEmbedPracticeNavigationDefault === 'function'
+        ) {
+          window.hotspotEditor.applyEmbedPracticeNavigationDefault();
+        }
+      } catch (_) {
+        /* ignore */
+      }
       return;
     }
 

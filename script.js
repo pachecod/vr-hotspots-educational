@@ -1603,6 +1603,8 @@ class HotspotEditor {
     const skipInitialSceneBootstrap = isPlaygroundGuestTemplateFlow();
     if (skipInitialSceneBootstrap) {
       clearPostAuthWelcomePending();
+      // Playground ZIP load owns the reveal; safety net if media decode never finishes (Safari).
+      setTimeout(() => this._completeProjectBootstrap(), 12000);
     } else {
       // Rehydrate any image/video/audio blob URLs from IndexedDB, then load the scene
       this.rehydrateImageSourcesFromIDB()
@@ -25533,33 +25535,48 @@ document.addEventListener('DOMContentLoaded', () => {
   const startEditor = () => {
     const delay =
       window.__playgroundDeepLink || window.__pendingPlaygroundSlug || isPostAuthWelcomePending()
-        ? 150
+        ? 0
         : 1000;
-    setTimeout(async () => {
-      window.hotspotEditor = new HotspotEditor();
-      showPostAuthWelcomeIfPending();
-      if (adminReview && reviewVersionId) {
-        AdminReviewMode.init(reviewVersionId);
-      } else if (adminAssign && assignStagingId && assignStudentId) {
-        AdminAssignMode.init({
-          stagingId: assignStagingId,
-          studentId: assignStudentId,
-          projectName: assignProjectName,
-          studentName: assignStudentName,
-        });
-      } else if (window.StudentProjectsPanel && window.StudentProjectsPanel.isSignedInStudent()) {
-        StudentProjectsPanel.bind();
-      }
-      if (window.__pendingPlaygroundSlug && typeof window.runPendingPlaygroundLoad === 'function') {
-        try {
-          await window.runPendingPlaygroundLoad();
-        } catch (err) {
-          if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') return;
-          console.error('Playground load failed:', err);
-          alert(err.message || 'Could not open sample project');
+    const bootEditor = async () => {
+      try {
+        if (!window.hotspotEditor) {
+          window.hotspotEditor = new HotspotEditor();
         }
+        showPostAuthWelcomeIfPending();
+        if (adminReview && reviewVersionId) {
+          AdminReviewMode.init(reviewVersionId);
+        } else if (adminAssign && assignStagingId && assignStudentId) {
+          AdminAssignMode.init({
+            stagingId: assignStagingId,
+            studentId: assignStudentId,
+            projectName: assignProjectName,
+            studentName: assignStudentName,
+          });
+        } else if (window.StudentProjectsPanel && window.StudentProjectsPanel.isSignedInStudent()) {
+          StudentProjectsPanel.bind();
+        }
+        if (window.__pendingPlaygroundSlug && typeof window.runPendingPlaygroundLoad === 'function') {
+          try {
+            await window.runPendingPlaygroundLoad();
+          } catch (err) {
+            if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') return;
+            console.error('Playground load failed:', err);
+            if (typeof hideProjectLoadingOverlay === 'function') {
+              hideProjectLoadingOverlay();
+            }
+            alert(err.message || 'Could not open sample project');
+          }
+        }
+      } catch (err) {
+        console.error('Editor boot failed:', err);
+        if (typeof hideProjectLoadingOverlay === 'function') {
+          hideProjectLoadingOverlay();
+        }
+        alert(err.message || 'Could not start the editor');
       }
-    }, delay);
+    };
+    if (delay <= 0) bootEditor();
+    else setTimeout(bootEditor, delay);
   };
 
   // Direct template link: skip welcome screen; boot guest editor then load sample.
@@ -25575,12 +25592,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const gate = document.getElementById('student-login-gate');
     if (gate) gate.innerHTML = '';
 
+    // Absolute safety: never leave Safari stuck on the full-screen loader.
+    setTimeout(() => {
+      if (
+        window.__playgroundDeepLink &&
+        document.body.classList.contains('project-loading-active') &&
+        !document.getElementById('guest-agreement-overlay')
+      ) {
+        if (typeof hideProjectLoadingOverlay === 'function') hideProjectLoadingOverlay();
+      }
+    }, 8000);
+
     window
       .openPlaygroundTemplate(playgroundSlug, {
         onAuthenticated: (student) => {
           window.currentStudent = student;
-          if (typeof window.applyEditorCapabilities === 'function') {
-            window.applyEditorCapabilities();
+          try {
+            if (typeof window.applyEditorCapabilities === 'function') {
+              window.applyEditorCapabilities();
+            }
+          } catch (err) {
+            console.warn('applyEditorCapabilities failed:', err);
           }
           startEditor();
         },

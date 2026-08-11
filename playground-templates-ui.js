@@ -340,6 +340,60 @@ async function promptGuestAgreementAfterPlaygroundLoad() {
   return true;
 }
 
+function withTimeout(promise, ms, message) {
+  let timer = null;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => {
+      if (timer) clearTimeout(timer);
+    }),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const err = new Error(message || 'Timed out');
+        err.code = 'PLAYGROUND_LOAD_TIMEOUT';
+        reject(err);
+      }, ms);
+    }),
+  ]);
+}
+
+async function loadPlaygroundTemplateBySlug(slug) {
+  const detailRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}`);
+  const detail = await detailRes.json();
+  if (!detailRes.ok || !detail.success) {
+    throw new Error(detail.message || 'Template not found');
+  }
+  const template = detail.template;
+
+  if (template.has_bundle) {
+    const bundleRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}/bundle`, {
+      credentials: 'include',
+    });
+    if (!bundleRes.ok) throw new Error('Could not download project bundle');
+    const blob = await bundleRes.blob();
+    await window.hotspotEditor.loadZIPTemplate(blob, {
+      silent: true,
+      initialContentMode: 'spherical',
+    });
+    return template;
+  }
+
+  if (template.files_manifest && template.files_manifest.length) {
+    if (window.flatPageEditor && typeof window.flatPageEditor.loadTemplate === 'function') {
+      window.flatPageEditor.loadTemplate({
+        title: template.title,
+        slug: template.slug,
+        description: template.description,
+        files_manifest: template.files_manifest,
+        config_ui_schema: template.config_ui_schema,
+      });
+    }
+    window.hotspotEditor.setContentMode('flat', { skipVrGenerate: true });
+    return template;
+  }
+
+  throw new Error('This sample is not ready yet (no bundle or flat files).');
+}
+
 async function runPendingPlaygroundLoad() {
   const slug = window.__pendingPlaygroundSlug;
   if (!slug || !window.hotspotEditor) return;
@@ -347,45 +401,48 @@ async function runPendingPlaygroundLoad() {
   window.__playgroundTemplateLoading = true;
   window.__playgroundGuestTemplate = true;
   window.__integratedWelcomePending = false;
+  const deepLink = !!window.__playgroundDeepLink;
 
   try {
-    const detailRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}`);
-    const detail = await detailRes.json();
-    if (!detailRes.ok || !detail.success) {
-      throw new Error(detail.message || 'Template not found');
-    }
-    const template = detail.template;
-
-    if (template.has_bundle) {
-      const bundleRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}/bundle`, {
-        credentials: 'include',
-      });
-      if (!bundleRes.ok) throw new Error('Could not download project bundle');
-      const blob = await bundleRes.blob();
-      await window.hotspotEditor.loadZIPTemplate(blob, {
-        silent: true,
-        initialContentMode: 'spherical',
-      });
-    } else if (template.files_manifest && template.files_manifest.length) {
-      if (window.flatPageEditor && typeof window.flatPageEditor.loadTemplate === 'function') {
-        window.flatPageEditor.loadTemplate({
-          title: template.title,
-          slug: template.slug,
-          description: template.description,
-          files_manifest: template.files_manifest,
-          config_ui_schema: template.config_ui_schema,
-        });
-      }
-      window.hotspotEditor.setContentMode('flat', { skipVrGenerate: true });
-    } else {
-      throw new Error('This sample is not ready yet (no bundle or flat files).');
-    }
-
     if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
+
+    // Deep links: show I Agree immediately. Safari can hang inside ZIP/media decode;
+    // never keep the full-screen loader in front of the terms modal.
+    if (deepLink) {
+      if (typeof window.hideProjectLoadingOverlay === 'function') {
+        window.hideProjectLoadingOverlay();
+      }
+      if (typeof window.hideSceneLoadingOverlay === 'function') {
+        window.hideSceneLoadingOverlay();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
+      if (!agreed) {
+        window.__playgroundGuestTemplate = false;
+        const err = new Error('Guest agreement cancelled');
+        err.code = 'GUEST_AGREEMENT_CANCELLED';
+        throw err;
+      }
+      try {
+        localStorage.setItem('vr-hotspot-welcome-seen', '1');
+      } catch (_) {}
+
+      if (typeof window.showProjectLoadingOverlay === 'function') {
+        window.showProjectLoadingOverlay('Loading Project.');
+      }
+      await withTimeout(
+        loadPlaygroundTemplateBySlug(slug),
+        60000,
+        'Sample project load timed out. Please reload and try again.'
+      );
+      return;
+    }
+
+    await loadPlaygroundTemplateBySlug(slug);
+
     if (typeof window.hideProjectLoadingOverlay === 'function') window.hideProjectLoadingOverlay();
     if (typeof window.hideSceneLoadingOverlay === 'function') window.hideSceneLoadingOverlay();
-
-    // Prefer a timer over rAF — Safari can delay rAF while overlays settle.
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
@@ -400,7 +457,19 @@ async function runPendingPlaygroundLoad() {
     } catch (_) {}
   } finally {
     window.__playgroundTemplateLoading = false;
+    window.__playgroundDeepLink = false;
     if (typeof window.hideProjectLoadingOverlay === 'function') window.hideProjectLoadingOverlay();
+    if (typeof window.hideSceneLoadingOverlay === 'function') window.hideSceneLoadingOverlay();
+    try {
+      if (
+        window.hotspotEditor &&
+        typeof window.hotspotEditor._completeProjectBootstrap === 'function'
+      ) {
+        window.hotspotEditor._completeProjectBootstrap();
+      }
+    } catch (_) {
+      /* ignore */
+    }
   }
 }
 

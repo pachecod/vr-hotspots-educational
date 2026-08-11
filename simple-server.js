@@ -103,6 +103,24 @@ app.use(
     crossOriginEmbedderPolicy: false,
   })
 );
+
+// Allow third-party iframes only for the practice embed editor document.
+// Other routes keep Helmet's default X-Frame-Options: SAMEORIGIN.
+function isEmbedEditorDocumentRequest(req) {
+  const path = req.path || '';
+  if (path !== '/' && path !== '/index.html') return false;
+  const q = req.query || {};
+  return q.embedEditor === '1' || q.embedEditor === 1;
+}
+
+app.use((req, res, next) => {
+  if (!isEmbedEditorDocumentRequest(req)) return next();
+  res.removeHeader('X-Frame-Options');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Content-Security-Policy', "frame-ancestors *");
+  next();
+});
+
 app.use((req, res, next) => {
   if (req.path.startsWith('/hosted/')) {
     res.setHeader(

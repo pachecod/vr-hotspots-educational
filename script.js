@@ -25561,6 +25561,7 @@ document.addEventListener('DOMContentLoaded', () => {
   CommonAssetsPicker.init();
   const urlParams = new URLSearchParams(window.location.search);
   const embedMode = urlParams.get('embed') === '1';
+  const embedEditorMode = urlParams.get('embedEditor') === '1';
   const adminReview = urlParams.get('adminReview') === '1';
   const reviewVersionId = urlParams.get('versionId');
   const adminAssign = urlParams.get('adminAssign') === '1';
@@ -25571,7 +25572,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminTemplateId = urlParams.get('adminTemplate');
   const adminStarter = urlParams.get('starter') || '';
   const playgroundSlug = urlParams.get('playground');
-  if (playgroundSlug) {
+  // Deep-link flags only for bare ?playground= (not embed practice editor).
+  if (playgroundSlug && !embedEditorMode) {
     window.__pendingPlaygroundSlug = playgroundSlug;
     window.__playgroundTemplateLoading = true;
     window.__playgroundGuestTemplate = true;
@@ -25584,7 +25586,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const startEditor = () => {
     const delay =
-      window.__playgroundDeepLink || window.__pendingPlaygroundSlug || isPostAuthWelcomePending()
+      window.__playgroundDeepLink ||
+      window.__embedEditorMode ||
+      window.__pendingPlaygroundSlug ||
+      isPostAuthWelcomePending()
         ? 0
         : 1000;
     const bootEditor = async () => {
@@ -25609,7 +25614,12 @@ document.addEventListener('DOMContentLoaded', () => {
           try {
             await window.runPendingPlaygroundLoad();
           } catch (err) {
-            if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') return;
+            if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') {
+              if (window.__embedEditorMode && typeof window.showEmbedPracticeClosed === 'function') {
+                window.showEmbedPracticeClosed();
+              }
+              return;
+            }
             console.error('Playground load failed:', err);
             if (typeof hideProjectLoadingOverlay === 'function') {
               hideProjectLoadingOverlay();
@@ -25628,6 +25638,88 @@ document.addEventListener('DOMContentLoaded', () => {
     if (delay <= 0) bootEditor();
     else setTimeout(bootEditor, delay);
   };
+
+  // Practice editor embed (third-party iframe). Separate from ?embed=1 VR viewer and bare deep links.
+  if (embedEditorMode) {
+    window.__embedEditorMode = true;
+    document.documentElement.classList.add('embed-editor-mode');
+    document.body.classList.add('embed-editor-mode');
+
+    if (typeof setEntryGateActive === 'function') {
+      setEntryGateActive(false);
+    } else {
+      document.body.classList.remove('entry-gate-active');
+    }
+    const gate = document.getElementById('student-login-gate');
+    if (gate) gate.innerHTML = '';
+
+    if (!playgroundSlug || typeof window.openPlaygroundTemplate !== 'function') {
+      if (typeof hideProjectLoadingOverlay === 'function') hideProjectLoadingOverlay();
+      if (typeof window.showEmbedPracticeClosed === 'function') {
+        window.showEmbedPracticeClosed();
+      } else {
+        alert('Missing playground template. Use ?embedEditor=1&playground=<slug>');
+      }
+      return;
+    }
+
+    window.__pendingPlaygroundSlug = playgroundSlug;
+    window.__playgroundTemplateLoading = true;
+    window.__playgroundGuestTemplate = true;
+    window.__playgroundDeepLink = true;
+    window.__integratedWelcomePending = false;
+    try {
+      localStorage.setItem('vr-hotspot-welcome-seen', '1');
+    } catch (_) {}
+
+    if (typeof showProjectLoadingOverlay === 'function') {
+      showProjectLoadingOverlay('Loading Project.');
+    }
+
+    setTimeout(() => {
+      if (
+        window.__embedEditorMode &&
+        document.body.classList.contains('project-loading-active') &&
+        !document.getElementById('guest-agreement-overlay')
+      ) {
+        if (typeof hideProjectLoadingOverlay === 'function') hideProjectLoadingOverlay();
+      }
+    }, 8000);
+
+    window
+      .openPlaygroundTemplate(playgroundSlug, {
+        onAuthenticated: (student) => {
+          window.currentStudent = student;
+          try {
+            if (typeof window.applyEditorCapabilities === 'function') {
+              window.applyEditorCapabilities();
+            }
+          } catch (err) {
+            console.warn('applyEditorCapabilities failed:', err);
+          }
+          startEditor();
+        },
+      })
+      .catch((err) => {
+        if (err && err.code === 'GUEST_AGREEMENT_CANCELLED') {
+          if (typeof window.showEmbedPracticeClosed === 'function') {
+            window.showEmbedPracticeClosed();
+          }
+          return;
+        }
+        console.error('Embed editor load failed:', err);
+        if (typeof hideProjectLoadingOverlay === 'function') {
+          hideProjectLoadingOverlay();
+        }
+        window.__pendingPlaygroundSlug = null;
+        window.__playgroundDeepLink = false;
+        alert(err.message || 'Could not open practice editor');
+        if (typeof window.showEmbedPracticeClosed === 'function') {
+          window.showEmbedPracticeClosed();
+        }
+      });
+    return;
+  }
 
   // Direct template link: skip welcome screen; boot guest editor then load sample.
   if (playgroundSlug && typeof window.openPlaygroundTemplate === 'function') {

@@ -39,12 +39,34 @@ function guestDeepLinkUrl(slug) {
   return `${origin}/?playground=${encodeURIComponent(slug)}`;
 }
 
+function guestEmbedEditorUrl(slug) {
+  if (!slug) return '';
+  const origin = (typeof window !== 'undefined' && window.location && window.location.origin) || '';
+  return `${origin}/?embedEditor=1&playground=${encodeURIComponent(slug)}`;
+}
+
+function guestEmbedIframeSnippet(slug) {
+  const src = guestEmbedEditorUrl(slug);
+  if (!src) return '';
+  return `<iframe
+  src="${src}"
+  title="WebXRIDE practice editor"
+  style="width:100%;height:720px;border:0;"
+  allow="fullscreen; xr-spatial-tracking; accelerometer; gyroscope"
+  loading="lazy"
+></iframe>`;
+}
+
 function renderGuestDeepLink(t) {
   const url = guestDeepLinkUrl(t.slug);
   if (!url) return '';
   const active = !!(t.is_playground && t.is_public);
   const hint = active
     ? 'Opens this template in guest mode.'
+    : 'Works after the template is public and marked Show on Welcome.';
+  const embedUrl = guestEmbedEditorUrl(t.slug);
+  const embedHint = active
+    ? 'Paste on any site. Guest practice only; Sign in opens a new tab.'
     : 'Works after the template is public and marked Show on Welcome.';
   return `
     <div class="template-deeplink">
@@ -54,6 +76,14 @@ function renderGuestDeepLink(t) {
         <button type="button" class="btn btn-secondary btn-copy-deeplink" data-id="${t.id}" data-url="${escapeAttr(url)}">Copy</button>
       </div>
       <p class="template-deeplink-hint">${hint}</p>
+    </div>
+    <div class="template-deeplink template-embed-snippet">
+      <div class="template-deeplink-label">Embed practice editor</div>
+      <div class="template-deeplink-row">
+        <code class="template-deeplink-url" title="${escapeAttr(embedUrl)}">${escapeHtml(embedUrl)}</code>
+        <button type="button" class="btn btn-secondary btn-copy-embed" data-id="${t.id}" data-slug="${escapeAttr(t.slug)}">Copy iframe</button>
+      </div>
+      <p class="template-deeplink-hint">${embedHint}</p>
     </div>
   `;
 }
@@ -298,6 +328,27 @@ templateListEl.addEventListener('click', async (e) => {
       showToast('Deep link copied');
     } catch (_) {
       prompt('Copy this guest deep link:', url);
+    }
+    return;
+  }
+
+  const copyEmbedBtn = e.target.closest('.btn-copy-embed');
+  if (copyEmbedBtn && copyEmbedBtn.dataset.slug) {
+    const snippet = guestEmbedIframeSnippet(copyEmbedBtn.dataset.slug);
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(snippet);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = snippet;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      showToast('Embed iframe copied');
+    } catch (_) {
+      prompt('Copy this embed iframe code:', snippet);
     }
     return;
   }

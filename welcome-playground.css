@@ -54,7 +54,7 @@ body.project-loading-active {
   overflow: hidden;
 }
 
-body.project-loading-active > :not(#scene-loading-overlay):not(#guest-agreement-overlay):not(#main-content) {
+body.project-loading-active > :not(#scene-loading-overlay):not(#guest-agreement-overlay):not(#embed-practice-closed):not(#main-content) {
   display: none !important;
 }
 
@@ -857,4 +857,95 @@ body.guest-agreement-open {
 .guest-agreement-agree:hover {
   background: rgba(255, 255, 255, 0.92);
   border-color: rgba(255, 255, 255, 0.92);
+}
+
+/* Practice editor embed (third-party iframe via ?embedEditor=1) */
+html.embed-editor-mode,
+html.embed-editor-mode body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+html.embed-editor-mode body.entry-gate-active::before {
+  display: none !important;
+}
+
+html.embed-editor-mode #student-login-gate:empty {
+  display: none !important;
+}
+
+html.embed-editor-mode #main-content,
+html.embed-editor-mode a-scene {
+  /* Keep a-scene mounted (Safari raycaster); size to iframe viewport */
+  width: 100%;
+  height: 100%;
+}
+
+html.embed-editor-mode #hotspot-editor {
+  max-height: min(100vh, 100%);
+}
+
+html.embed-editor-mode .test-user-editor-session {
+  margin: 8px 10px 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  gap: 6px;
+}
+
+html.embed-editor-mode .test-user-editor-session .student-editor-session-text span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+html.embed-editor-mode .student-editor-session-actions {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.embed-practice-closed {
+  position: fixed;
+  inset: 0;
+  z-index: 100050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: #111;
+  color: #f0f0f0;
+  font-family: Arial, sans-serif;
+}
+
+.embed-practice-closed[hidden] {
+  display: none !important;
+}
+
+.embed-practice-closed-card {
+  max-width: 360px;
+  text-align: center;
+}
+
+.embed-practice-closed-title {
+  margin: 0 0 10px;
+  font-size: 22px;
+}
+
+.embed-practice-closed-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #cfcfcf;
+}
+
+html.embed-practice-closed-active body > :not(#embed-practice-closed) {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html.embed-practice-closed-active #embed-practice-closed {
+  visibility: visible !important;
+  pointer-events: auto !important;
 }

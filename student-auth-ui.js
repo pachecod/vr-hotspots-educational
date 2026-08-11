@@ -327,11 +327,42 @@ function bindTestUserGuestSessionButtons() {
   bindTestUserSignInBtn();
 }
 
+function isEmbedEditorMode() {
+  return !!(
+    window.__embedEditorMode ||
+    document.documentElement.classList.contains('embed-editor-mode')
+  );
+}
+
+function promptEmbedOpenInNewTab() {
+  return window.confirm('In order to proceed we need to open this in a new tab.');
+}
+
+function openEmbedSignInInNewTab() {
+  const url = `${window.location.origin}/?signin=1`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 function bindTestUserSignOutBtn() {
   const btn = document.getElementById('test-user-signout-btn');
   if (!btn || btn.dataset.bound === '1') return;
   btn.dataset.bound = '1';
   btn.addEventListener('click', async () => {
+    if (isEmbedEditorMode()) {
+      if (!confirm('Sign out of guest mode?')) return;
+      try {
+        await endLocalTestUser();
+      } catch (_) {
+        /* ignore cookie/network failures in third-party iframes */
+      }
+      window.editorAccessMode = 'none';
+      window.currentStudent = null;
+      hideTestUserEditorSession();
+      if (typeof window.showEmbedPracticeClosed === 'function') {
+        window.showEmbedPracticeClosed();
+      }
+      return;
+    }
     if (!confirm('Sign out of guest mode and return to the welcome screen?')) return;
     await endLocalTestUser();
     window.editorAccessMode = 'none';
@@ -401,6 +432,12 @@ function bindTestUserSignInBtn() {
   if (!btn || btn.dataset.bound === '1') return;
   btn.dataset.bound = '1';
   btn.addEventListener('click', async () => {
+    if (isEmbedEditorMode()) {
+      if (!promptEmbedOpenInNewTab()) return;
+      openEmbedSignInInNewTab();
+      return;
+    }
+
     const proceed = await promptGuestSignInWarning();
     if (!proceed) return;
 
@@ -922,6 +959,9 @@ async function requireStudentSession(containerId, onAuthenticated) {
   window.__welcomeOnAuthenticated = onAuthenticated;
   window.__integratedWelcomeContainerId = containerId;
   const status = await checkStudentSession();
+  const forceSignIn =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('signin') === '1';
 
   if (status.authenticated && status.student) {
     showProjectLoadingOverlay('Loading Project.');
@@ -930,6 +970,17 @@ async function requireStudentSession(containerId, onAuthenticated) {
     window.currentStudent = status.student;
     showStudentEditorSession(status.student);
     onAuthenticated(status.student);
+    return;
+  }
+
+  // Breakout from embed practice editor: open sign-in / sign-up in a top-level tab.
+  if (forceSignIn) {
+    hideSceneLoadingOverlay();
+    renderStudentLoginGate(containerId, onAuthenticated, {
+      showBackToEntry: !!status.testUserModeAvailable,
+      integratedWelcome: true,
+      guestUpgrade: !!(status.localTestUser || status.mode === 'local_test'),
+    });
     return;
   }
 

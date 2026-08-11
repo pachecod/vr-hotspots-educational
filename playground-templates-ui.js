@@ -270,12 +270,49 @@ function showGuestAgreementOverlay(page) {
   });
 }
 
+function showEmbedPracticeClosed() {
+  closeGuestAgreementOverlay();
+  if (typeof window.hideProjectLoadingOverlay === 'function') {
+    window.hideProjectLoadingOverlay();
+  }
+  if (typeof window.hideSceneLoadingOverlay === 'function') {
+    window.hideSceneLoadingOverlay();
+  }
+  if (typeof window.setEntryGateActive === 'function') {
+    window.setEntryGateActive(false);
+  } else {
+    document.body.classList.remove('entry-gate-active');
+  }
+
+  let el = document.getElementById('embed-practice-closed');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'embed-practice-closed';
+    el.className = 'embed-practice-closed';
+    el.setAttribute('role', 'status');
+    el.innerHTML = `
+      <div class="embed-practice-closed-card">
+        <h2 class="embed-practice-closed-title">Practice closed</h2>
+        <p class="embed-practice-closed-text">Reload this page to try the practice editor again.</p>
+      </div>
+    `;
+    document.body.appendChild(el);
+  }
+  el.hidden = false;
+  document.documentElement.classList.add('embed-practice-closed-active');
+  document.body.classList.add('embed-practice-closed-active');
+}
+
 async function promptGuestAgreementIfNeeded(options = {}) {
   if (!shouldPromptGuestAgreement()) return true;
   const page = await fetchGuestAgreementPage();
   const agreed = await showGuestAgreementOverlay(page);
-  if (!agreed && options.onDeclineReturnToWelcome && typeof window.returnToWelcomeScreen === 'function') {
-    await window.returnToWelcomeScreen();
+  if (!agreed) {
+    if (options.onDeclineEmbedClosed) {
+      showEmbedPracticeClosed();
+    } else if (options.onDeclineReturnToWelcome && typeof window.returnToWelcomeScreen === 'function') {
+      await window.returnToWelcomeScreen();
+    }
   }
   return agreed;
 }
@@ -283,23 +320,40 @@ async function promptGuestAgreementIfNeeded(options = {}) {
 async function ensureGuestSessionForPlayground() {
   if (window.editorAccessMode === 'local_test' || window.editorAccessMode === 'student') return;
   // JSON body ensures Safari sends an Origin header (needed if CSRF is re-enabled for this path).
-  const res = await fetch('/api/local/test-user/start', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: '{}',
-  });
-  let data = null;
   try {
-    data = await res.json();
-  } catch (_) {
-    data = null;
+    const res = await fetch('/api/local/test-user/start', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: '{}',
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (_) {
+      data = null;
+    }
+    if (!res.ok || !data || !data.success) {
+      // Third-party iframes may block cookies; allow client-side practice anyway.
+      if (window.__embedEditorMode) {
+        window.editorAccessMode = 'local_test';
+        window.currentStudent = null;
+        window.__embedGuestCookieBlocked = true;
+        return;
+      }
+      throw new Error((data && data.message) || 'Could not start guest mode');
+    }
+    window.editorAccessMode = 'local_test';
+    window.currentStudent = null;
+  } catch (err) {
+    if (window.__embedEditorMode) {
+      window.editorAccessMode = 'local_test';
+      window.currentStudent = null;
+      window.__embedGuestCookieBlocked = true;
+      return;
+    }
+    throw err;
   }
-  if (!res.ok || !data || !data.success) {
-    throw new Error((data && data.message) || 'Could not start guest mode');
-  }
-  window.editorAccessMode = 'local_test';
-  window.currentStudent = null;
 }
 
 async function openPlaygroundTemplate(slug, { containerId, onAuthenticated } = {}) {
@@ -402,13 +456,14 @@ async function runPendingPlaygroundLoad() {
   window.__playgroundGuestTemplate = true;
   window.__integratedWelcomePending = false;
   const deepLink = !!window.__playgroundDeepLink;
+  const embedEditor = !!window.__embedEditorMode;
 
   try {
     if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
 
-    // Deep links: show I Agree immediately. Safari can hang inside ZIP/media decode;
+    // Deep links / embed editor: show I Agree immediately. Safari can hang inside ZIP/media decode;
     // never keep the full-screen loader in front of the terms modal.
-    if (deepLink) {
+    if (deepLink || embedEditor) {
       if (typeof window.hideProjectLoadingOverlay === 'function') {
         window.hideProjectLoadingOverlay();
       }
@@ -417,7 +472,10 @@ async function runPendingPlaygroundLoad() {
       }
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
+      const agreed = await promptGuestAgreementIfNeeded({
+        onDeclineReturnToWelcome: !embedEditor,
+        onDeclineEmbedClosed: embedEditor,
+      });
       if (!agreed) {
         window.__playgroundGuestTemplate = false;
         const err = new Error('Guest agreement cancelled');
@@ -445,7 +503,10 @@ async function runPendingPlaygroundLoad() {
     if (typeof window.hideSceneLoadingOverlay === 'function') window.hideSceneLoadingOverlay();
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
+    const agreed = await promptGuestAgreementIfNeeded({
+      onDeclineReturnToWelcome: !embedEditor,
+      onDeclineEmbedClosed: embedEditor,
+    });
     if (!agreed) {
       window.__playgroundGuestTemplate = false;
       const err = new Error('Guest agreement cancelled');
@@ -477,6 +538,7 @@ window.fetchPlaygroundTemplates = fetchPlaygroundTemplates;
 window.mountPlaygroundTemplatesSection = mountPlaygroundTemplatesSection;
 window.renderGuestTemplatePicker = renderGuestTemplatePicker;
 window.openPlaygroundTemplate = openPlaygroundTemplate;
+window.showEmbedPracticeClosed = showEmbedPracticeClosed;
 window.runPendingPlaygroundLoad = runPendingPlaygroundLoad;
 window.promptGuestAgreementIfNeeded = promptGuestAgreementIfNeeded;
 window.promptGuestAgreementAfterPlaygroundLoad = promptGuestAgreementAfterPlaygroundLoad;

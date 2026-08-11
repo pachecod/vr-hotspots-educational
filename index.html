@@ -52,8 +52,12 @@
     <script src="script.js"></script>
     <script>
       (function () {
-        if (new URLSearchParams(location.search).get('embed') === '1') {
+        var params = new URLSearchParams(location.search);
+        if (params.get('embed') === '1') {
           document.documentElement.classList.add('vr-tour-embed-mode');
+        }
+        if (params.get('embedEditor') === '1') {
+          document.documentElement.classList.add('embed-editor-mode');
         }
       })();
     </script>

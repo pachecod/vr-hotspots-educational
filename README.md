@@ -103,7 +103,23 @@ Set `PUBLIC_PLAYGROUND_ENABLED=true` (with guest mode and `DATABASE_URL`) to sho
 2. Create a **combined playground sample**, upload the ZIP, enable **Show on welcome screen**, and add a thumbnail URL
 3. Flat templates can also appear on the welcome screen when marked playground (no ZIP required)
 
-Direct link: `/?playground=your-template-slug`
+Direct link: `/?playground=your-template-slug` (full-tab guest editor; unchanged).
+
+### Embed practice editor
+
+Any site can iframe a guest practice editor for a playground template:
+
+```html
+<iframe
+  src="https://webxride.com/?embedEditor=1&playground=your-template-slug"
+  title="WebXRIDE practice editor"
+  style="width:100%;height:720px;border:0;"
+  allow="fullscreen; xr-spatial-tracking; accelerometer; gyroscope"
+  loading="lazy"
+></iframe>
+```
+
+Same guest limits as Continue as Guest (no server upload / cloud save / submit). **Sign in** asks to open the app in a new tab. Admin **Templates** cards include a **Copy iframe** control. Bare `/?playground=slug` deep links and `?embed=1` (read-only VR viewer) are separate.
 
 ### 4. Workflow
 

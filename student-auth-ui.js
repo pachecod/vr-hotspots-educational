@@ -984,17 +984,10 @@ async function requireStudentSession(containerId, onAuthenticated) {
     return;
   }
 
-  if (status.localTestUser || status.mode === 'local_test') {
-    showProjectLoadingOverlay('Loading Project.');
-    setEntryGateActive(false);
-    window.editorAccessMode = 'local_test';
-    window.currentStudent = null;
-    showTestUserEditorSession();
-    onAuthenticated(null);
-    return;
-  }
-
-  if (status.testUserModeAvailable) {
+  // Guest cookie alone must not skip the welcome screen. Deep links / embedEditor
+  // boot their own path before requireStudentSession; bare "/" should always show welcome.
+  // (Auto-resuming guest here restored the last playground project and felt like a stuck redirect.)
+  if (status.localTestUser || status.mode === 'local_test' || status.testUserModeAvailable) {
     hideSceneLoadingOverlay();
     renderEntryGate(containerId, onAuthenticated);
     return;

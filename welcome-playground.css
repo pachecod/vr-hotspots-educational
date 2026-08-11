@@ -1077,10 +1077,33 @@ html.embed-editor-mode .student-editor-session-actions {
 }
 
 .embed-practice-closed-text {
-  margin: 0;
+  margin: 0 0 16px;
   font-size: 14px;
   line-height: 1.45;
   color: #cfcfcf;
+}
+
+.embed-practice-closed-reload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #667eea;
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.embed-practice-closed-reload:hover {
+  background: #5a6fd6;
+}
+
+.embed-practice-closed-reload:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 html.embed-practice-closed-active body > :not(#embed-practice-closed) {

@@ -294,13 +294,25 @@ function showEmbedPracticeClosed() {
       <div class="embed-practice-closed-card">
         <h2 class="embed-practice-closed-title">Practice closed</h2>
         <p class="embed-practice-closed-text">Reload this page to try the practice editor again.</p>
+        <button type="button" class="embed-practice-closed-reload" id="embed-practice-closed-reload">Reload</button>
       </div>
     `;
+    el.querySelector('#embed-practice-closed-reload')?.addEventListener('click', () => {
+      window.location.reload();
+    });
     document.body.appendChild(el);
   }
   el.hidden = false;
   document.documentElement.classList.add('embed-practice-closed-active');
   document.body.classList.add('embed-practice-closed-active');
+  const reloadBtn = el.querySelector('#embed-practice-closed-reload');
+  if (reloadBtn) {
+    try {
+      reloadBtn.focus();
+    } catch (_) {
+      /* ignore */
+    }
+  }
 }
 
 const PLAYGROUND_DRAFT_KEY = 'vr-hotspot-playground-draft';

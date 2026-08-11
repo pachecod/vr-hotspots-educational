@@ -269,12 +269,12 @@ async function refreshClassHostedProjectsPromo() {
   if (!promo || !btn) return;
 
   const params = new URLSearchParams(window.location.search);
+  // adminCombined was never set as a link target anywhere; ignore if present in old URLs.
   if (
     window.editorAccessMode !== 'student' ||
     !window.currentStudent ||
     params.get('adminReview') === '1' ||
-    params.get('adminAssign') === '1' ||
-    params.get('adminCombined') === '1'
+    params.get('adminAssign') === '1'
   ) {
     hideClassHostedProjectsPromo();
     return;
@@ -334,8 +334,66 @@ function isEmbedEditorMode() {
   );
 }
 
+function closeEmbedConfirmOverlay() {
+  const overlay = document.getElementById('embed-confirm-overlay');
+  if (overlay) overlay.remove();
+  document.body.classList.remove('guest-agreement-open');
+}
+
+/** DOM confirm for cross-origin embeds (native confirm() is unreliable in third-party iframes). */
+function promptEmbedDomConfirm({ title, message, okLabel = 'OK', cancelLabel = 'Cancel' } = {}) {
+  return new Promise((resolve) => {
+    closeEmbedConfirmOverlay();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'embed-confirm-overlay';
+    overlay.className = 'guest-agreement-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'embed-confirm-title');
+
+    overlay.innerHTML = `
+      <div class="guest-agreement-backdrop" data-action="cancel"></div>
+      <div class="guest-agreement-dialog">
+        <h2 id="embed-confirm-title" class="guest-agreement-title">${escapeHtml(title || 'Confirm')}</h2>
+        <div class="guest-agreement-content"><p>${escapeHtml(message || '')}</p></div>
+        <div class="guest-agreement-actions">
+          <button type="button" class="guest-agreement-btn guest-agreement-cancel" data-action="cancel">${escapeHtml(cancelLabel)}</button>
+          <button type="button" class="guest-agreement-btn guest-agreement-agree" data-action="ok">${escapeHtml(okLabel)}</button>
+        </div>
+      </div>
+    `;
+
+    const finish = (proceed) => {
+      closeEmbedConfirmOverlay();
+      document.removeEventListener('keydown', onKeyDown);
+      resolve(proceed);
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') finish(false);
+    };
+
+    overlay.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-action]')?.dataset.action;
+      if (action === 'ok') finish(true);
+      if (action === 'cancel') finish(false);
+    });
+
+    document.addEventListener('keydown', onKeyDown);
+    document.body.appendChild(overlay);
+    document.body.classList.add('guest-agreement-open');
+    overlay.querySelector('[data-action="ok"]')?.focus();
+  });
+}
+
 function promptEmbedOpenInNewTab() {
-  return window.confirm('In order to proceed we need to open this in a new tab.');
+  return promptEmbedDomConfirm({
+    title: 'Open in a new tab?',
+    message: 'In order to proceed we need to open this in a new tab.',
+    okLabel: 'OK',
+    cancelLabel: 'Cancel',
+  });
 }
 
 function openEmbedSignInInNewTab() {
@@ -349,7 +407,13 @@ function bindTestUserSignOutBtn() {
   btn.dataset.bound = '1';
   btn.addEventListener('click', async () => {
     if (isEmbedEditorMode()) {
-      if (!confirm('Sign out of guest mode?')) return;
+      const proceed = await promptEmbedDomConfirm({
+        title: 'Sign out?',
+        message: 'Sign out of guest mode?',
+        okLabel: 'Sign out',
+        cancelLabel: 'Cancel',
+      });
+      if (!proceed) return;
       try {
         await endLocalTestUser();
       } catch (_) {
@@ -433,7 +497,8 @@ function bindTestUserSignInBtn() {
   btn.dataset.bound = '1';
   btn.addEventListener('click', async () => {
     if (isEmbedEditorMode()) {
-      if (!promptEmbedOpenInNewTab()) return;
+      const proceed = await promptEmbedOpenInNewTab();
+      if (!proceed) return;
       openEmbedSignInInNewTab();
       return;
     }

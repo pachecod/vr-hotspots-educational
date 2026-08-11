@@ -370,22 +370,64 @@ function testPreviewSandboxAdminElevatedIsolation() {
     'utf8'
   );
   const classic = fs.readFileSync(path.join(__dirname, '..', 'preview-sandbox.js'), 'utf8');
-  for (const [label, src] of [
-    ['flat-editor/previewSandbox.js', helper],
-    ['preview-sandbox.js', classic],
-  ]) {
-    assert.ok(/adminReview/.test(src), `${label} must check adminReview`);
-    assert.ok(/adminTemplate/.test(src), `${label} must check adminTemplate`);
-    assert.ok(/adminAssign/.test(src), `${label} must check adminAssign`);
-    assert.ok(
-      /allow-scripts allow-modals allow-popups allow-forms/.test(src),
-      `${label} must define restricted sandbox`
-    );
-    assert.ok(
-      /allow-scripts allow-same-origin allow-modals allow-popups allow-forms/.test(src),
-      `${label} must keep same-origin for non-admin editing`
-    );
-  }
+  const bundle = fs.readFileSync(path.join(__dirname, '..', 'flat-editor.bundle.js'), 'utf8');
+
+  // Canonical implementation lives in the ESM module and is exported on window.
+  assert.ok(/adminReview/.test(helper), 'previewSandbox.js must check adminReview');
+  assert.ok(/adminTemplate/.test(helper), 'previewSandbox.js must check adminTemplate');
+  assert.ok(/adminAssign/.test(helper), 'previewSandbox.js must check adminAssign');
+  assert.ok(
+    /window\.getPreviewSandboxAttribute\s*=/.test(helper),
+    'previewSandbox.js must assign getPreviewSandboxAttribute on window'
+  );
+  assert.ok(
+    /window\.getPreviewSandboxAttribute\s*=/.test(bundle),
+    'flat-editor.bundle.js must assign getPreviewSandboxAttribute on window'
+  );
+
+  // Classic script must be a prefer-global fallback (escapeHtml pattern), not a second source of truth.
+  assert.ok(
+    /typeof global\.getPreviewSandboxAttribute !== 'function'/.test(classic) ||
+      /typeof global\.getPreviewSandboxAttribute !== "function"/.test(classic),
+    'preview-sandbox.js must only set getPreviewSandboxAttribute when missing'
+  );
+  assert.ok(/adminReview/.test(classic), 'preview-sandbox.js fallback must still check adminReview');
+  assert.ok(/adminTemplate/.test(classic), 'preview-sandbox.js fallback must still check adminTemplate');
+  assert.ok(/adminAssign/.test(classic), 'preview-sandbox.js fallback must still check adminAssign');
+  assert.ok(
+    /allow-scripts allow-modals allow-popups allow-forms/.test(classic),
+    'preview-sandbox.js fallback must define restricted sandbox'
+  );
+  assert.ok(
+    /allow-scripts allow-same-origin allow-modals allow-popups allow-forms/.test(classic),
+    'preview-sandbox.js fallback must keep same-origin for non-admin editing'
+  );
+
+  // Fallback behavior smoke-check (only matters if the bundle failed to load).
+  const classicRunner = new Function('window', 'globalThis', `${classic}\nreturn window;`);
+  const sandboxGlobal = { location: { search: '' } };
+  const g = classicRunner(sandboxGlobal, sandboxGlobal);
+  assert.strictEqual(
+    g.getPreviewSandboxAttribute('?foo=1'),
+    'allow-scripts allow-same-origin allow-modals allow-popups allow-forms'
+  );
+  assert.strictEqual(
+    g.getPreviewSandboxAttribute('?adminReview=1'),
+    'allow-scripts allow-modals allow-popups allow-forms'
+  );
+  assert.strictEqual(
+    g.getPreviewSandboxAttribute('?adminTemplate=abc'),
+    'allow-scripts allow-modals allow-popups allow-forms'
+  );
+  assert.strictEqual(
+    g.getPreviewSandboxAttribute('?adminAssign=1'),
+    'allow-scripts allow-modals allow-popups allow-forms'
+  );
+  // Prefer an existing global rather than overwriting it.
+  const existing = () => 'FROM_BUNDLE';
+  const preferGlobal = { location: { search: '' }, getPreviewSandboxAttribute: existing };
+  const g2 = classicRunner(preferGlobal, preferGlobal);
+  assert.strictEqual(g2.getPreviewSandboxAttribute, existing);
 
   // Both editor paths must call the shared helper — not re-inline query-param logic.
   const preview = fs.readFileSync(path.join(__dirname, '..', 'flat-editor', 'Preview.jsx'), 'utf8');
@@ -418,7 +460,7 @@ function testPreviewSandboxAdminElevatedIsolation() {
     'index.html must load preview-sandbox.js for the legacy editor path'
   );
 
-  console.log('✓ preview sandbox: shared helper covers adminReview/Template/Assign in both editors');
+  console.log('✓ preview sandbox: window export + classic fallback (single source of truth)');
 }
 
 function testStudentRemotePathOwnership() {

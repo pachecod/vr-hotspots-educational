@@ -106,11 +106,17 @@ app.use(
 
 // Allow third-party iframes only for the practice embed editor document.
 // Other routes keep Helmet's default X-Frame-Options: SAMEORIGIN.
+// Never relax framing when admin-elevated or sign-in params are also present.
 function isEmbedEditorDocumentRequest(req) {
   const path = req.path || '';
   if (path !== '/' && path !== '/index.html') return false;
   const q = req.query || {};
-  return q.embedEditor === '1' || q.embedEditor === 1;
+  if (!(q.embedEditor === '1' || q.embedEditor === 1)) return false;
+  if (q.adminReview === '1' || q.adminReview === 1) return false;
+  if (q.adminAssign === '1' || q.adminAssign === 1) return false;
+  if (q.adminTemplate != null && String(q.adminTemplate).trim() !== '') return false;
+  if (q.signin === '1' || q.signin === 1) return false;
+  return true;
 }
 
 app.use((req, res, next) => {

@@ -303,6 +303,40 @@ function showEmbedPracticeClosed() {
   document.body.classList.add('embed-practice-closed-active');
 }
 
+const PLAYGROUND_DRAFT_KEY = 'vr-hotspot-playground-draft';
+
+function markPlaygroundGuestDraft(slug) {
+  try {
+    if (slug) localStorage.setItem(PLAYGROUND_DRAFT_KEY, String(slug));
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+/**
+ * Welcome / bare homepage should not reopen the last guest sample.
+ * Named "Save Locally" projects are separate and are not cleared here.
+ */
+function clearEphemeralEditorWorkspaceForWelcome() {
+  if (
+    window.__pendingPlaygroundSlug ||
+    window.__playgroundTemplateLoading ||
+    window.__embedEditorMode ||
+    window.__playgroundDeepLink
+  ) {
+    return false;
+  }
+  try {
+    localStorage.removeItem(PLAYGROUND_DRAFT_KEY);
+    localStorage.removeItem('vr-hotspot-scenes-data');
+    localStorage.removeItem('vr-hotspot-css-styles');
+    localStorage.removeItem('vr-flat-pages-data');
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 async function promptGuestAgreementIfNeeded(options = {}) {
   if (!shouldPromptGuestAgreement()) return true;
   const page = await fetchGuestAgreementPage();
@@ -494,10 +528,12 @@ async function runPendingPlaygroundLoad() {
         60000,
         'Sample project load timed out. Please reload and try again.'
       );
+      markPlaygroundGuestDraft(slug);
       return;
     }
 
     await loadPlaygroundTemplateBySlug(slug);
+    markPlaygroundGuestDraft(slug);
 
     if (typeof window.hideProjectLoadingOverlay === 'function') window.hideProjectLoadingOverlay();
     if (typeof window.hideSceneLoadingOverlay === 'function') window.hideSceneLoadingOverlay();
@@ -539,6 +575,7 @@ window.mountPlaygroundTemplatesSection = mountPlaygroundTemplatesSection;
 window.renderGuestTemplatePicker = renderGuestTemplatePicker;
 window.openPlaygroundTemplate = openPlaygroundTemplate;
 window.showEmbedPracticeClosed = showEmbedPracticeClosed;
+window.clearEphemeralEditorWorkspaceForWelcome = clearEphemeralEditorWorkspaceForWelcome;
 window.runPendingPlaygroundLoad = runPendingPlaygroundLoad;
 window.promptGuestAgreementIfNeeded = promptGuestAgreementIfNeeded;
 window.promptGuestAgreementAfterPlaygroundLoad = promptGuestAgreementAfterPlaygroundLoad;

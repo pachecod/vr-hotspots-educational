@@ -479,6 +479,10 @@ async function renderIntegratedAuthStep(containerId, onAuthenticated, options = 
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  if (typeof window.clearEphemeralEditorWorkspaceForWelcome === 'function') {
+    window.clearEphemeralEditorWorkspaceForWelcome();
+  }
+
   setEntryGateActive(true);
   hideSceneLoadingOverlay();
   hideStudentEditorSession();
@@ -601,8 +605,12 @@ async function returnToWelcomeScreen() {
   window.__pendingPlaygroundSlug = null;
   window.__playgroundGuestTemplate = false;
   window.__playgroundTemplateLoading = false;
+  window.__playgroundDeepLink = false;
   window.__integratedWelcomePending = false;
   window.__guestAgreementAccepted = false;
+  if (typeof window.clearEphemeralEditorWorkspaceForWelcome === 'function') {
+    window.clearEphemeralEditorWorkspaceForWelcome();
+  }
   hideTestUserEditorSession();
   hideStudentEditorSession();
   const containerId = window.__integratedWelcomeContainerId || 'student-login-gate';

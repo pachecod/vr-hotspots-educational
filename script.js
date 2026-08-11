@@ -25572,6 +25572,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminTemplateId = urlParams.get('adminTemplate');
   const adminStarter = urlParams.get('starter') || '';
   const playgroundSlug = urlParams.get('playground');
+  const forceSignIn = urlParams.get('signin') === '1';
+  // Bare homepage / welcome: drop the last guest sample so it cannot reopen as a stuck draft.
+  const isSpecialEditorEntry = !!(
+    playgroundSlug ||
+    embedEditorMode ||
+    embedMode ||
+    adminReview ||
+    adminAssign ||
+    adminTemplateId ||
+    forceSignIn
+  );
+  if (!isSpecialEditorEntry && typeof window.clearEphemeralEditorWorkspaceForWelcome === 'function') {
+    window.clearEphemeralEditorWorkspaceForWelcome();
+  }
   // Deep-link flags only for bare ?playground= (not embed practice editor).
   if (playgroundSlug && !embedEditorMode) {
     window.__pendingPlaygroundSlug = playgroundSlug;

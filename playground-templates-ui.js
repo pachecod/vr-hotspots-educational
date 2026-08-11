@@ -441,6 +441,86 @@ function installEmbedGuestAgreementGate() {
   window.__embedGuestAgreementGate = { onPointerDown, onKeyDown };
 }
 
+const EMBED_MOBILE_MQ = '(max-width: 768px)';
+
+function isEmbedMobileViewport() {
+  return (
+    !!window.__embedEditorMode &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia(EMBED_MOBILE_MQ).matches
+  );
+}
+
+/** Collapse Editing Tools / edit-mode chrome without rewriting the user's desktop localStorage prefs. */
+function collapseEmbedEditorChrome() {
+  const panel = document.getElementById('hotspot-editor');
+  const toggle = document.getElementById('hotspot-editor-toggle');
+  const icon = document.getElementById('hotspot-editor-toggle-icon');
+  if (panel) {
+    panel.classList.add('collapsed');
+    document.body.classList.add('hotspot-editor-collapsed');
+  }
+  if (icon) icon.textContent = '‹';
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.title = 'Show editor tools';
+  }
+
+  const bar = document.getElementById('edit-mode-bar');
+  const barToggle = document.getElementById('edit-mode-bar-toggle');
+  const barIcon = document.getElementById('edit-mode-bar-toggle-icon');
+  if (bar) bar.classList.add('collapsed');
+  if (barIcon) barIcon.textContent = '›';
+  if (barToggle) {
+    barToggle.setAttribute('aria-expanded', 'false');
+    barToggle.title = 'Show edit mode panel';
+  }
+}
+
+function applyEmbedMobileEditorLayout() {
+  if (!window.__embedEditorMode) return;
+  const mobile = isEmbedMobileViewport();
+  document.documentElement.classList.toggle('embed-mobile-compact', mobile);
+  if (mobile) collapseEmbedEditorChrome();
+}
+
+function installEmbedMobileEditorLayout() {
+  if (!window.__embedEditorMode || window.__embedMobileEditorLayoutInstalled) return;
+  window.__embedMobileEditorLayoutInstalled = true;
+
+  const mq = window.matchMedia(EMBED_MOBILE_MQ);
+  const onChange = () => {
+    if (!mq.matches) {
+      document.documentElement.classList.remove('embed-mobile-flat-expanded');
+    }
+    applyEmbedMobileEditorLayout();
+  };
+  if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onChange);
+  else if (typeof mq.addListener === 'function') mq.addListener(onChange);
+
+  // Flat editor: let mobile users reopen the code pane via Editor / 50/50 split controls.
+  document.addEventListener(
+    'click',
+    (event) => {
+      if (!document.documentElement.classList.contains('embed-mobile-compact')) return;
+      const btn = event.target && event.target.closest && event.target.closest('.flat-split-btns .flat-tool-btn');
+      if (!btn) return;
+      const label = `${btn.getAttribute('title') || ''} ${btn.textContent || ''}`.toLowerCase();
+      if (label.includes('preview') && !label.includes('editor')) {
+        document.documentElement.classList.remove('embed-mobile-flat-expanded');
+      } else {
+        document.documentElement.classList.add('embed-mobile-flat-expanded');
+      }
+    },
+    true
+  );
+
+  applyEmbedMobileEditorLayout();
+  // HotspotEditor may expand panels from localStorage after boot — re-apply shortly after.
+  setTimeout(applyEmbedMobileEditorLayout, 0);
+  setTimeout(applyEmbedMobileEditorLayout, 400);
+}
+
 async function ensureGuestSessionForPlayground() {
   if (window.editorAccessMode === 'local_test' || window.editorAccessMode === 'student') return;
   // JSON body ensures Safari sends an Origin header (needed if CSRF is re-enabled for this path).
@@ -597,6 +677,7 @@ async function runPendingPlaygroundLoad() {
       );
       markPlaygroundGuestDraft(slug);
       installEmbedGuestAgreementGate();
+      installEmbedMobileEditorLayout();
       return;
     }
 
@@ -675,6 +756,8 @@ window.renderGuestTemplatePicker = renderGuestTemplatePicker;
 window.openPlaygroundTemplate = openPlaygroundTemplate;
 window.showEmbedPracticeClosed = showEmbedPracticeClosed;
 window.installEmbedGuestAgreementGate = installEmbedGuestAgreementGate;
+window.installEmbedMobileEditorLayout = installEmbedMobileEditorLayout;
+window.isEmbedMobileViewport = isEmbedMobileViewport;
 window.clearEphemeralEditorWorkspaceForWelcome = clearEphemeralEditorWorkspaceForWelcome;
 window.runPendingPlaygroundLoad = runPendingPlaygroundLoad;
 window.promptGuestAgreementIfNeeded = promptGuestAgreementIfNeeded;

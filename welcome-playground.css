@@ -908,6 +908,27 @@ html.embed-editor-mode #hotspot-editor {
   max-height: min(100vh, 100%);
 }
 
+/* Embed + narrow viewport: prioritize preview / scene; editing chrome starts minimized.
+   Users can reopen the code pane via Editor / 50/50 (sets embed-mobile-flat-expanded). */
+html.embed-editor-mode.embed-mobile-compact:not(.embed-mobile-flat-expanded) .flat-body {
+  grid-template-columns: 0fr 1fr !important;
+}
+
+html.embed-editor-mode.embed-mobile-compact:not(.embed-mobile-flat-expanded) .flat-editor-pane {
+  display: none !important;
+}
+
+html.embed-editor-mode.embed-mobile-compact .flat-toolbar {
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+html.embed-editor-mode.embed-mobile-compact .flat-toolbar .flat-page-name {
+  min-width: 0;
+  flex: 1 1 120px;
+}
+
 html.embed-editor-mode .test-user-editor-session {
   margin: 8px 10px 0;
   padding: 8px 10px;

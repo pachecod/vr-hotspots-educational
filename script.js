@@ -4733,18 +4733,27 @@ class HotspotEditor {
 
     const storageKey = 'hotspot-editor-expanded';
     const saved = localStorage.getItem(storageKey);
-    const startExpanded = saved === null ? true : saved === 'true';
+    const embedMobile =
+      typeof window.isEmbedMobileViewport === 'function'
+        ? window.isEmbedMobileViewport()
+        : !!(
+            window.__embedEditorMode &&
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(max-width: 768px)').matches
+          );
+    const startExpanded = embedMobile ? false : saved === null ? true : saved === 'true';
 
-    const setExpanded = (expanded) => {
+    const setExpanded = (expanded, { persist = true } = {}) => {
       panel.classList.toggle('collapsed', !expanded);
       document.body.classList.toggle('hotspot-editor-collapsed', !expanded);
       icon.textContent = expanded ? '›' : '‹';
       toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
       toggle.title = expanded ? 'Hide editor tools' : 'Show editor tools';
-      localStorage.setItem(storageKey, expanded ? 'true' : 'false');
+      if (persist) localStorage.setItem(storageKey, expanded ? 'true' : 'false');
     };
 
-    setExpanded(startExpanded);
+    // Embed mobile: start collapsed without overwriting the user's desktop preference.
+    setExpanded(startExpanded, { persist: !embedMobile });
 
     toggle.addEventListener('click', () => {
       setExpanded(panel.classList.contains('collapsed'));
@@ -4759,17 +4768,25 @@ class HotspotEditor {
 
     const storageKey = 'edit-mode-bar-expanded';
     const saved = localStorage.getItem(storageKey);
-    const startExpanded = saved === null ? true : saved === 'true';
+    const embedMobile =
+      typeof window.isEmbedMobileViewport === 'function'
+        ? window.isEmbedMobileViewport()
+        : !!(
+            window.__embedEditorMode &&
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(max-width: 768px)').matches
+          );
+    const startExpanded = embedMobile ? false : saved === null ? true : saved === 'true';
 
-    const setExpanded = (expanded) => {
+    const setExpanded = (expanded, { persist = true } = {}) => {
       bar.classList.toggle('collapsed', !expanded);
       icon.textContent = expanded ? '‹' : '›';
       toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
       toggle.title = expanded ? 'Hide edit mode panel' : 'Show edit mode panel';
-      localStorage.setItem(storageKey, expanded ? 'true' : 'false');
+      if (persist) localStorage.setItem(storageKey, expanded ? 'true' : 'false');
     };
 
-    setExpanded(startExpanded);
+    setExpanded(startExpanded, { persist: !embedMobile });
 
     toggle.addEventListener('click', () => {
       setExpanded(bar.classList.contains('collapsed'));
@@ -25658,6 +25675,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.__embedEditorMode = true;
     document.documentElement.classList.add('embed-editor-mode');
     document.body.classList.add('embed-editor-mode');
+    if (typeof window.installEmbedMobileEditorLayout === 'function') {
+      window.installEmbedMobileEditorLayout();
+    }
 
     if (typeof setEntryGateActive === 'function') {
       setEntryGateActive(false);

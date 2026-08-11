@@ -908,25 +908,125 @@ html.embed-editor-mode #hotspot-editor {
   max-height: min(100vh, 100%);
 }
 
-/* Embed + narrow viewport: prioritize preview / scene; editing chrome starts minimized.
-   Users can reopen the code pane via Editor / 50/50 (sets embed-mobile-flat-expanded). */
-html.embed-editor-mode.embed-mobile-compact:not(.embed-mobile-flat-expanded) .flat-body {
-  grid-template-columns: 0fr 1fr !important;
-}
-
-html.embed-editor-mode.embed-mobile-compact:not(.embed-mobile-flat-expanded) .flat-editor-pane {
+/* Embed + narrow viewport: preview only (no editing chrome) */
+html.embed-editor-mode.embed-mobile-preview #hotspot-editor,
+html.embed-editor-mode.embed-mobile-preview #edit-mode-bar,
+html.embed-editor-mode.embed-mobile-preview #edit-indicator,
+html.embed-editor-mode.embed-mobile-preview #test-user-editor-session,
+html.embed-editor-mode.embed-mobile-preview #student-editor-session,
+html.embed-editor-mode.embed-mobile-preview #admin-combined-bar,
+html.embed-editor-mode.embed-mobile-preview #admin-review-bar,
+html.embed-editor-mode.embed-mobile-preview #admin-assign-bar {
   display: none !important;
 }
 
-html.embed-editor-mode.embed-mobile-compact .flat-toolbar {
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 6px 8px;
+html.embed-editor-mode.embed-mobile-preview .flat-page-editor-root {
+  right: 0 !important;
 }
 
-html.embed-editor-mode.embed-mobile-compact .flat-toolbar .flat-page-name {
-  min-width: 0;
-  flex: 1 1 120px;
+html.embed-editor-mode.embed-mobile-preview .flat-toolbar,
+html.embed-editor-mode.embed-mobile-preview .flat-editor-pane,
+html.embed-editor-mode.embed-mobile-preview .flat-pane-bar {
+  display: none !important;
+}
+
+html.embed-editor-mode.embed-mobile-preview .flat-body {
+  grid-template-columns: 0fr 1fr !important;
+  height: 100%;
+}
+
+html.embed-editor-mode.embed-mobile-preview .flat-preview-pane {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+html.embed-editor-mode.embed-mobile-preview .flat-preview-frame,
+html.embed-editor-mode.embed-mobile-preview .flat-preview-pane iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border: 0 !important;
+}
+
+.embed-mobile-open-editor-btn {
+  display: none;
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 100060;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #2e7d32;
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+html.embed-editor-mode.embed-mobile-preview .embed-mobile-open-editor-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.embed-mobile-open-editor-btn:hover {
+  background: #256628;
+}
+
+.embed-mobile-editor-unsupported {
+  position: fixed;
+  inset: 0;
+  z-index: 100070;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
+.embed-mobile-editor-unsupported-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.embed-mobile-editor-unsupported-card {
+  position: relative;
+  z-index: 1;
+  max-width: 340px;
+  width: 100%;
+  padding: 22px 20px 18px;
+  border-radius: 12px;
+  background: #1f1f1f;
+  color: #f2f2f2;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+
+.embed-mobile-editor-unsupported-title {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.embed-mobile-editor-unsupported-text {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #d8d8d8;
+}
+
+.embed-mobile-editor-unsupported-ok {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #667eea;
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
 }
 
 html.embed-editor-mode .test-user-editor-session {

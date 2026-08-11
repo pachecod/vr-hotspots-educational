@@ -451,37 +451,75 @@ function isEmbedMobileViewport() {
   );
 }
 
-/** Collapse Editing Tools / edit-mode chrome without rewriting the user's desktop localStorage prefs. */
-function collapseEmbedEditorChrome() {
-  const panel = document.getElementById('hotspot-editor');
-  const toggle = document.getElementById('hotspot-editor-toggle');
-  const icon = document.getElementById('hotspot-editor-toggle-icon');
-  if (panel) {
-    panel.classList.add('collapsed');
-    document.body.classList.add('hotspot-editor-collapsed');
-  }
-  if (icon) icon.textContent = '‹';
-  if (toggle) {
-    toggle.setAttribute('aria-expanded', 'false');
-    toggle.title = 'Show editor tools';
-  }
+function ensureEmbedMobileOpenEditorBtn() {
+  let btn = document.getElementById('embed-mobile-open-editor-btn');
+  if (btn) return btn;
+  btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'embed-mobile-open-editor-btn';
+  btn.className = 'embed-mobile-open-editor-btn';
+  btn.textContent = 'Open Editor';
+  btn.addEventListener('click', () => {
+    showEmbedMobileEditorUnsupported();
+  });
+  document.body.appendChild(btn);
+  return btn;
+}
 
-  const bar = document.getElementById('edit-mode-bar');
-  const barToggle = document.getElementById('edit-mode-bar-toggle');
-  const barIcon = document.getElementById('edit-mode-bar-toggle-icon');
-  if (bar) bar.classList.add('collapsed');
-  if (barIcon) barIcon.textContent = '›';
-  if (barToggle) {
-    barToggle.setAttribute('aria-expanded', 'false');
-    barToggle.title = 'Show edit mode panel';
-  }
+function closeEmbedMobileEditorUnsupported() {
+  const overlay = document.getElementById('embed-mobile-editor-unsupported');
+  if (overlay) overlay.remove();
+}
+
+function showEmbedMobileEditorUnsupported() {
+  closeEmbedMobileEditorUnsupported();
+  const overlay = document.createElement('div');
+  overlay.id = 'embed-mobile-editor-unsupported';
+  overlay.className = 'embed-mobile-editor-unsupported';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'embed-mobile-editor-unsupported-title');
+  overlay.innerHTML = `
+    <div class="embed-mobile-editor-unsupported-backdrop" data-action="close"></div>
+    <div class="embed-mobile-editor-unsupported-card">
+      <h2 id="embed-mobile-editor-unsupported-title" class="embed-mobile-editor-unsupported-title">Editing not available</h2>
+      <p class="embed-mobile-editor-unsupported-text">
+        Editing on a mobile screen is not currently supported. Please open this page on a laptop or desktop browser.
+      </p>
+      <button type="button" class="embed-mobile-editor-unsupported-ok" data-action="close">OK</button>
+    </div>
+  `;
+  overlay.addEventListener('click', (event) => {
+    if (event.target.closest('[data-action="close"]')) closeEmbedMobileEditorUnsupported();
+  });
+  document.body.appendChild(overlay);
+  overlay.querySelector('.embed-mobile-editor-unsupported-ok')?.focus();
 }
 
 function applyEmbedMobileEditorLayout() {
   if (!window.__embedEditorMode) return;
   const mobile = isEmbedMobileViewport();
-  document.documentElement.classList.toggle('embed-mobile-compact', mobile);
-  if (mobile) collapseEmbedEditorChrome();
+  document.documentElement.classList.toggle('embed-mobile-preview', mobile);
+  document.documentElement.classList.remove('embed-mobile-compact', 'embed-mobile-flat-expanded');
+  if (mobile) {
+    ensureEmbedMobileOpenEditorBtn();
+    // Preview-only: no guest agreement / edit gate on small screens.
+    if (typeof removeEmbedGuestAgreementGate === 'function') {
+      try {
+        removeEmbedGuestAgreementGate();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  } else {
+    closeEmbedMobileEditorUnsupported();
+    const btn = document.getElementById('embed-mobile-open-editor-btn');
+    if (btn) btn.remove();
+    // Desktop embed: restore deferred agreement gate if they have not agreed yet.
+    if (typeof installEmbedGuestAgreementGate === 'function') {
+      installEmbedGuestAgreementGate();
+    }
+  }
 }
 
 function installEmbedMobileEditorLayout() {
@@ -489,34 +527,11 @@ function installEmbedMobileEditorLayout() {
   window.__embedMobileEditorLayoutInstalled = true;
 
   const mq = window.matchMedia(EMBED_MOBILE_MQ);
-  const onChange = () => {
-    if (!mq.matches) {
-      document.documentElement.classList.remove('embed-mobile-flat-expanded');
-    }
-    applyEmbedMobileEditorLayout();
-  };
+  const onChange = () => applyEmbedMobileEditorLayout();
   if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onChange);
   else if (typeof mq.addListener === 'function') mq.addListener(onChange);
 
-  // Flat editor: let mobile users reopen the code pane via Editor / 50/50 split controls.
-  document.addEventListener(
-    'click',
-    (event) => {
-      if (!document.documentElement.classList.contains('embed-mobile-compact')) return;
-      const btn = event.target && event.target.closest && event.target.closest('.flat-split-btns .flat-tool-btn');
-      if (!btn) return;
-      const label = `${btn.getAttribute('title') || ''} ${btn.textContent || ''}`.toLowerCase();
-      if (label.includes('preview') && !label.includes('editor')) {
-        document.documentElement.classList.remove('embed-mobile-flat-expanded');
-      } else {
-        document.documentElement.classList.add('embed-mobile-flat-expanded');
-      }
-    },
-    true
-  );
-
   applyEmbedMobileEditorLayout();
-  // HotspotEditor may expand panels from localStorage after boot — re-apply shortly after.
   setTimeout(applyEmbedMobileEditorLayout, 0);
   setTimeout(applyEmbedMobileEditorLayout, 400);
 }
@@ -676,8 +691,11 @@ async function runPendingPlaygroundLoad() {
         'Sample project load timed out. Please reload and try again.'
       );
       markPlaygroundGuestDraft(slug);
-      installEmbedGuestAgreementGate();
       installEmbedMobileEditorLayout();
+      // Desktop embeds defer agreement until first edit; mobile is preview-only.
+      if (!isEmbedMobileViewport()) {
+        installEmbedGuestAgreementGate();
+      }
       return;
     }
 

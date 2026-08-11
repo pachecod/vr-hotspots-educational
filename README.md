@@ -122,7 +122,7 @@ Any site can iframe a guest practice editor for a playground template:
 
 The iframe stretches to the full width of its host container (`width: 100%`). Adjust only `height` if you need a taller/shorter embed.
 
-Same guest limits as Continue as Guest (no server upload / cloud save / submit). **Sign in** asks to open the app in a new tab. Admin **Templates** cards include a **Copy iframe** control. Bare `/?playground=slug` deep links and `?embed=1` (read-only VR viewer) are separate.
+Same guest limits as Continue as Guest (no server upload / cloud save / submit). The guest agreement modal appears only when someone first tries to edit (not on initial embed load). **Sign in** asks to open the app in a new tab. Admin **Templates** cards include a **Copy iframe** control. Bare `/?playground=slug` deep links and `?embed=1` (read-only VR viewer) are separate.
 
 ### 4. Workflow
 

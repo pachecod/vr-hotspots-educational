@@ -351,6 +351,96 @@ async function promptGuestAgreementIfNeeded(options = {}) {
   return agreed;
 }
 
+function isEmbedEditIntentTarget(target) {
+  if (!target || typeof target.closest !== 'function') return false;
+  if (
+    target.closest(
+      '#guest-agreement-overlay, #embed-practice-closed, #test-user-signin-btn, #test-user-signout-btn, #scene-loading-overlay'
+    )
+  ) {
+    return false;
+  }
+  // Flat live preview is view-only until they use editor chrome.
+  if (target.closest('.flat-preview-pane, .flat-preview-frame')) return false;
+  if (target.closest('#hotspot-editor, #edit-mode-bar, #edit-indicator')) return true;
+  if (target.closest('#flat-page-editor, #flat-page-editor-mount, .flat-page-editor-root, .flat-editor-pane, .flat-toolbar')) {
+    return true;
+  }
+  // Spherical scene clicks count as edit only while Edit Mode is on.
+  const editModeOn = !!(
+    window.hotspotEditor &&
+    (window.hotspotEditor.isEditMode || window.hotspotEditor.editMode)
+  );
+  if (editModeOn && target.closest('a-scene, #main-content, canvas')) return true;
+  return false;
+}
+
+function removeEmbedGuestAgreementGate() {
+  const gate = window.__embedGuestAgreementGate;
+  if (!gate) return;
+  document.removeEventListener('pointerdown', gate.onPointerDown, true);
+  document.removeEventListener('keydown', gate.onKeyDown, true);
+  window.__embedGuestAgreementGate = null;
+  window.__embedGuestAgreementPending = false;
+}
+
+function installEmbedGuestAgreementGate() {
+  if (!window.__embedEditorMode) return;
+  if (window.__guestAgreementAccepted || !shouldPromptGuestAgreement()) return;
+  if (window.__embedGuestAgreementGate) return;
+
+  window.__embedGuestAgreementPending = true;
+  let prompting = false;
+
+  const runGate = async (event) => {
+    if (!window.__embedGuestAgreementPending || window.__guestAgreementAccepted) {
+      removeEmbedGuestAgreementGate();
+      return;
+    }
+    if (prompting) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (!isEmbedEditIntentTarget(event.target)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    prompting = true;
+    try {
+      const agreed = await promptGuestAgreementIfNeeded({ onDeclineEmbedClosed: true });
+      if (agreed) {
+        try {
+          localStorage.setItem('vr-hotspot-welcome-seen', '1');
+        } catch (_) {}
+        removeEmbedGuestAgreementGate();
+      } else {
+        window.__embedGuestAgreementPending = false;
+        removeEmbedGuestAgreementGate();
+      }
+    } finally {
+      prompting = false;
+    }
+  };
+
+  const onPointerDown = (event) => {
+    runGate(event);
+  };
+  const onKeyDown = (event) => {
+    // Ignore pure navigation keys in preview; gate typing / Enter / Backspace in editor chrome.
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      runGate(event);
+      return;
+    }
+    if (event.key === 'Tab' || event.key === 'Escape' || event.key === 'Shift') return;
+    runGate(event);
+  };
+
+  document.addEventListener('pointerdown', onPointerDown, true);
+  document.addEventListener('keydown', onKeyDown, true);
+  window.__embedGuestAgreementGate = { onPointerDown, onKeyDown };
+}
+
 async function ensureGuestSessionForPlayground() {
   if (window.editorAccessMode === 'local_test' || window.editorAccessMode === 'student') return;
   // JSON body ensures Safari sends an Origin header (needed if CSRF is re-enabled for this path).
@@ -495,9 +585,24 @@ async function runPendingPlaygroundLoad() {
   try {
     if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
 
-    // Deep links / embed editor: show I Agree immediately. Safari can hang inside ZIP/media decode;
+    // Embed practice editor: load immediately and defer the guest agreement until first edit.
+    if (embedEditor) {
+      if (typeof window.showProjectLoadingOverlay === 'function') {
+        window.showProjectLoadingOverlay('Loading Project.');
+      }
+      await withTimeout(
+        loadPlaygroundTemplateBySlug(slug),
+        60000,
+        'Sample project load timed out. Please reload and try again.'
+      );
+      markPlaygroundGuestDraft(slug);
+      installEmbedGuestAgreementGate();
+      return;
+    }
+
+    // Deep links: show I Agree immediately. Safari can hang inside ZIP/media decode;
     // never keep the full-screen loader in front of the terms modal.
-    if (deepLink || embedEditor) {
+    if (deepLink) {
       if (typeof window.hideProjectLoadingOverlay === 'function') {
         window.hideProjectLoadingOverlay();
       }
@@ -506,10 +611,7 @@ async function runPendingPlaygroundLoad() {
       }
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      const agreed = await promptGuestAgreementIfNeeded({
-        onDeclineReturnToWelcome: !embedEditor,
-        onDeclineEmbedClosed: embedEditor,
-      });
+      const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
       if (!agreed) {
         window.__playgroundGuestTemplate = false;
         const err = new Error('Guest agreement cancelled');
@@ -539,10 +641,7 @@ async function runPendingPlaygroundLoad() {
     if (typeof window.hideSceneLoadingOverlay === 'function') window.hideSceneLoadingOverlay();
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    const agreed = await promptGuestAgreementIfNeeded({
-      onDeclineReturnToWelcome: !embedEditor,
-      onDeclineEmbedClosed: embedEditor,
-    });
+    const agreed = await promptGuestAgreementIfNeeded({ onDeclineReturnToWelcome: true });
     if (!agreed) {
       window.__playgroundGuestTemplate = false;
       const err = new Error('Guest agreement cancelled');
@@ -575,6 +674,7 @@ window.mountPlaygroundTemplatesSection = mountPlaygroundTemplatesSection;
 window.renderGuestTemplatePicker = renderGuestTemplatePicker;
 window.openPlaygroundTemplate = openPlaygroundTemplate;
 window.showEmbedPracticeClosed = showEmbedPracticeClosed;
+window.installEmbedGuestAgreementGate = installEmbedGuestAgreementGate;
 window.clearEphemeralEditorWorkspaceForWelcome = clearEphemeralEditorWorkspaceForWelcome;
 window.runPendingPlaygroundLoad = runPendingPlaygroundLoad;
 window.promptGuestAgreementIfNeeded = promptGuestAgreementIfNeeded;

@@ -113,11 +113,14 @@ Any site can iframe a guest practice editor for a playground template:
 <iframe
   src="https://webxride.com/?embedEditor=1&playground=your-template-slug"
   title="WebXRIDE practice editor"
-  style="width:100%;height:720px;border:0;"
+  width="100%"
+  style="display:block;width:100%;max-width:100%;height:720px;border:0;box-sizing:border-box;"
   allow="fullscreen; xr-spatial-tracking; accelerometer; gyroscope"
   loading="lazy"
 ></iframe>
 ```
+
+The iframe stretches to the full width of its host container (`width: 100%`). Adjust only `height` if you need a taller/shorter embed.
 
 Same guest limits as Continue as Guest (no server upload / cloud save / submit). **Sign in** asks to open the app in a new tab. Admin **Templates** cards include a **Copy iframe** control. Bare `/?playground=slug` deep links and `?embed=1` (read-only VR viewer) are separate.
 

@@ -860,11 +860,21 @@ body.guest-agreement-open {
 }
 
 /* Practice editor embed (third-party iframe via ?embedEditor=1) */
+html.embed-editor-mode {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+}
+
 html.embed-editor-mode,
 html.embed-editor-mode body {
+  width: 100%;
+  max-width: none;
   height: 100%;
   margin: 0;
+  padding: 0;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 html.embed-editor-mode body.entry-gate-active::before {
@@ -877,9 +887,21 @@ html.embed-editor-mode #student-login-gate:empty {
 
 html.embed-editor-mode #main-content,
 html.embed-editor-mode a-scene {
-  /* Keep a-scene mounted (Safari raycaster); size to iframe viewport */
-  width: 100%;
-  height: 100%;
+  /* Keep a-scene mounted (Safari raycaster); fill the iframe width/height */
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  box-sizing: border-box;
+}
+
+html.embed-editor-mode #flat-page-editor,
+html.embed-editor-mode #flat-page-editor-mount,
+html.embed-editor-mode .flat-page-editor-root {
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box;
 }
 
 html.embed-editor-mode #hotspot-editor {

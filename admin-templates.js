@@ -51,7 +51,8 @@ function guestEmbedIframeSnippet(slug) {
   return `<iframe
   src="${src}"
   title="WebXRIDE practice editor"
-  style="width:100%;height:720px;border:0;"
+  width="100%"
+  style="display:block;width:100%;max-width:100%;height:720px;border:0;box-sizing:border-box;"
   allow="fullscreen; xr-spatial-tracking; accelerometer; gyroscope"
   loading="lazy"
 ></iframe>`;

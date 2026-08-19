@@ -31,7 +31,7 @@ import {
   stripExistingVrTourEmbeds,
 } from './vrTourEmbed.js';
 import {
-  buildFlatPageQrCornerHtml,
+  buildFlatPageQrHtml,
   bodyCloseInsertPos,
   flatPageQrApiUrl,
   resolveFlatPageQrSrc,
@@ -1000,7 +1000,7 @@ export class FlatPageEditorBridge {
 
       await this._syncSavedPagesToAssets(data, page, data.slug, { published: true });
 
-      const snippet = buildFlatPageQrCornerHtml(hostedUrl, qrUrl);
+      const snippet = buildFlatPageQrHtml(hostedUrl, qrUrl);
       if (!snippet) {
         throw new Error('Could not build the QR code HTML.');
       }

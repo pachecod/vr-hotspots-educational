@@ -35,6 +35,10 @@ function applyEditorCapabilities() {
   const cloudBtn = document.getElementById('save-cloud-draft');
   if (cloudBtn) cloudBtn.style.display = caps.canUseCloudSave ? '' : 'none';
 
+  if (typeof window.updateFlatPageQrButtonState === 'function') {
+    window.updateFlatPageQrButtonState();
+  }
+
   document.querySelectorAll('.save-locally-trigger').forEach((btn) => {
     btn.style.display = caps.canSaveLocally ? '' : 'none';
   });

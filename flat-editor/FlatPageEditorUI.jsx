@@ -202,6 +202,30 @@ export default function FlatPageEditorUI({ bridge }) {
             >
               ☁️ Save to Cloud
             </button>
+            <button
+              type="button"
+              className={`flat-btn flat-btn-qr${state.flatPageQrEnabled ? '' : ' is-disabled'}`}
+              aria-disabled={!state.flatPageQrEnabled}
+              title={
+                state.flatPageQrEnabled
+                  ? 'Publish this page and add a QR code linking to the hosted flat page'
+                  : 'Save to Cloud first, then generate a QR code for your hosted flat page'
+              }
+              onClick={() => {
+                if (!state.flatPageQrEnabled) {
+                  const msg = 'Save this page to the cloud before generating a QR code.';
+                  if (typeof window.showFlatPageQrNeedsCloudSaveMessage === 'function') {
+                    window.showFlatPageQrNeedsCloudSaveMessage(msg);
+                  } else {
+                    alert(msg);
+                  }
+                  return;
+                }
+                void bridge.generateFlatPageQrAndInsert();
+              }}
+            >
+              📱 Add QR Code
+            </button>
             <button type="button" className="flat-btn flat-btn-publish" onClick={() => bridge.publish()}>
               🌐 Publish
             </button>

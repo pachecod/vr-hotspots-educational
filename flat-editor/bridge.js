@@ -30,6 +30,13 @@ import {
   rewriteVrTourEmbedsInHtml,
   stripExistingVrTourEmbeds,
 } from './vrTourEmbed.js';
+import {
+  buildFlatPageQrCornerHtml,
+  bodyCloseInsertPos,
+  flatPageQrApiUrl,
+  resolveFlatPageQrSrc,
+  stripExistingFlatPageQr,
+} from './flatPageQr.js';
 import { downloadStarterTemplateZip } from './downloadStarterZip.js';
 
 export class FlatPageEditorBridge {
@@ -42,6 +49,12 @@ export class FlatPageEditorBridge {
     this._listeners = new Set();
     this._cloudStatus = '';
     this._cloudStatusError = false;
+    this._flatPageHosted = {
+      hostedUrl: null,
+      qrUrl: null,
+      publishedAt: null,
+      slug: null,
+    };
     this._editorSelections = {};
     this._blockedExtensions = [];
     this._rideyStatus = { enabled: false, hasApiKey: false, version: '1.0' };
@@ -204,6 +217,7 @@ export class FlatPageEditorBridge {
     const page = this.getActivePage();
     const caps = this._capabilities();
     const canUseRidey = caps.canUseRidey || this._adminTemplateMode;
+    const hasCloudSave = Boolean(window.hotspotEditor?._localWorkspaceMeta?.threadId);
     return {
       project: this.project,
       activeFileId: this.activeFileId,
@@ -211,6 +225,8 @@ export class FlatPageEditorBridge {
       cloudStatus: this._cloudStatus,
       cloudStatusError: this._cloudStatusError,
       showCloudActions: caps.canUseCloudSave,
+      flatPageQrEnabled: caps.canUseCloudSave && hasCloudSave,
+      flatPageQrReady: Boolean(this._flatPageHosted?.hostedUrl),
       files: this._visiblePageFiles(page),
       rideyEnabled: canUseRidey && this._rideyStatus.enabled && this._rideyStatus.hasApiKey,
       rideyVersion: this._rideyStatus.version === '2.0' ? '2.0' : '1.0',
@@ -507,6 +523,9 @@ export class FlatPageEditorBridge {
     let content = this.getFileContent(htmlFileId);
     if (cat === 'project-vr') {
       content = stripExistingVrTourEmbeds(content);
+    }
+    if (cat === 'flat-page-qr') {
+      // Inline insert keeps any corner QR; do not strip unless inserting another corner block.
     }
     const sel = this._editorSelections[htmlFileId];
     const insertAt =
@@ -902,10 +921,118 @@ export class FlatPageEditorBridge {
 
     if (window.StudentSubmission && typeof window.StudentSubmission.saveCloudDraft === 'function') {
       await window.StudentSubmission.saveCloudDraft();
+      if (typeof window.updateFlatPageQrButtonState === 'function') {
+        window.updateFlatPageQrButtonState();
+      }
+      this._notify();
       return;
     }
 
     alert('Cloud save is not available yet. Please wait for the editor to finish loading.');
+  }
+
+  getFlatPageQrInfo() {
+    const state = this._flatPageHosted || {};
+    const hostedUrl = resolveAbsoluteUrl(state.hostedUrl || '');
+    const qrUrl = hostedUrl
+      ? resolveFlatPageQrSrc(hostedUrl, state.qrUrl) || flatPageQrApiUrl(hostedUrl)
+      : '';
+    const nameInput = document.getElementById('template-name');
+    const pageName =
+      (nameInput && nameInput.value && nameInput.value.trim()) ||
+      this.getActivePage()?.name ||
+      'Flat Web Page';
+    return {
+      category: 'flat-page-qr',
+      name: `${pageName} QR`,
+      embeddable: Boolean(hostedUrl && qrUrl),
+      hostedUrl,
+      qrUrl,
+      url: qrUrl,
+      publishedAt: state.publishedAt || null,
+      slug: state.slug || null,
+      description: hostedUrl
+        ? 'QR code that opens your hosted flat web page'
+        : 'Publish your flat page to create a QR code',
+    };
+  }
+
+  /**
+   * Publish (or republish) the current flat page, then inject a fixed bottom-right
+   * QR that encodes the hosted flat URL. Requires a prior cloud save (threadId).
+   */
+  async generateFlatPageQrAndInsert() {
+    const hasCloudSave = Boolean(window.hotspotEditor?._localWorkspaceMeta?.threadId);
+    if (!hasCloudSave) {
+      const msg = 'Save this page to the cloud before generating a QR code.';
+      this._setCloudStatus(msg, true);
+      if (typeof window.showFlatPageQrNeedsCloudSaveMessage === 'function') {
+        window.showFlatPageQrNeedsCloudSaveMessage(msg);
+      } else {
+        alert(msg);
+      }
+      return false;
+    }
+
+    this._setCloudStatus('Publishing page & generating QR…');
+    try {
+      const vrTourEmbed = window.hotspotEditor?.vrTourEmbed;
+      if (vrTourEmbed?.hostedUrl && typeof this.upgradeVrTourEmbeds === 'function') {
+        this.upgradeVrTourEmbeds(vrTourEmbed);
+      }
+      const page = this.getActivePage();
+      const cloudName = this._resolveCloudPageName();
+      page.name = cloudName;
+      this.save();
+      const payload = this._filesPayload();
+      const data = await publishFlatPage(null, payload);
+      const hostedUrl = resolveAbsoluteUrl(data?.url || '');
+      if (!hostedUrl) {
+        throw new Error('Publish succeeded but no hosted URL was returned.');
+      }
+      const qrUrl = resolveFlatPageQrSrc(hostedUrl, flatPageQrApiUrl(hostedUrl));
+      this._flatPageHosted = {
+        hostedUrl,
+        qrUrl,
+        publishedAt: new Date().toISOString(),
+        slug: data?.slug || null,
+      };
+
+      await this._syncSavedPagesToAssets(data, page, data.slug, { published: true });
+
+      const snippet = buildFlatPageQrCornerHtml(hostedUrl, qrUrl);
+      if (!snippet) {
+        throw new Error('Could not build the QR code HTML.');
+      }
+      let html = this.getFileContent('index.html');
+      html = stripExistingFlatPageQr(html);
+      const insertAt = bodyCloseInsertPos(html);
+      html = `${html.slice(0, insertAt)}\n${snippet}\n${html.slice(insertAt)}`;
+      this.setFileContent('index.html', html);
+      this._syncScenesData();
+
+      if (window.hotspotEditor && typeof window.hotspotEditor.setContentMode === 'function') {
+        const mode = window.hotspotEditor.contentMode;
+        if (mode !== 'flat') {
+          void window.hotspotEditor.setContentMode('flat', { skipVrGenerate: true });
+        }
+      }
+
+      this._setCloudStatus('QR code added ✓ — also available under Online Assets → Page QR Code');
+      this._notify();
+      if (typeof window.updateFlatPageQrButtonState === 'function') {
+        window.updateFlatPageQrButtonState();
+      }
+      const picker = window.CommonAssetsPicker;
+      if (picker && picker.activeCategory === 'flat-page-qr' && typeof picker.renderFlatPageQr === 'function') {
+        picker.renderFlatPageQr();
+      }
+      return true;
+    } catch (err) {
+      this._setCloudStatus(err.message || 'Could not generate QR code', true);
+      alert('Could not generate QR code: ' + (err.message || 'unknown error'));
+      return false;
+    }
   }
 
   async publish() {
@@ -921,8 +1048,19 @@ export class FlatPageEditorBridge {
       this.save();
       const payload = this._filesPayload();
       const data = await publishFlatPage(null, payload);
+      if (data?.url) {
+        const hostedUrl = resolveAbsoluteUrl(data.url);
+        this._flatPageHosted = {
+          ...(this._flatPageHosted || {}),
+          hostedUrl,
+          qrUrl: resolveFlatPageQrSrc(hostedUrl, flatPageQrApiUrl(hostedUrl)),
+          publishedAt: new Date().toISOString(),
+          slug: data.slug || this._flatPageHosted?.slug || null,
+        };
+      }
       await this._syncSavedPagesToAssets(data, page, data.slug, { published: true });
       this._setCloudStatus('Published ✓ — find it under Online Assets → My Saved Pages');
+      this._notify();
       if (data.url && confirm(`Published to:\n${data.url}\n\nCopy this URL to your clipboard?`)) {
         try {
           await navigator.clipboard.writeText(data.url);

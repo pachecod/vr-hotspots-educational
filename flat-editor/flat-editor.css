@@ -60,6 +60,17 @@
   background: #0b5fa5;
 }
 
+.flat-btn-qr {
+  background: #e65100;
+}
+
+.flat-btn-qr.is-disabled,
+.flat-btn-qr[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

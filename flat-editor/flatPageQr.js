@@ -47,6 +47,7 @@ export function stripExistingFlatPageQr(html) {
   );
   next = next.replace(/<div[^>]*data-flat-page-qr="1"[^>]*>[\s\S]*?<\/div>\s*/gi, '');
   next = next.replace(/<figure[^>]*data-flat-page-qr="1"[^>]*>[\s\S]*?<\/figure>\s*/gi, '');
+  next = next.replace(/<p\b[^>]*\bdata-flat-page-qr=["']1["'][^>]*>[\s\S]*?<\/p>\s*/gi, '');
   next = next.replace(/<img\b[^>]*\bdata-flat-page-qr=["']1["'][^>]*\/?>\s*/gi, '');
   return next;
 }
@@ -75,6 +76,7 @@ export function buildFlatPageQrHtml(hostedUrl, qrUrl) {
   const qrAttr = escapeAttr(qrSrc);
   return [
     '<!-- Flat page QR (scan to open this hosted page) -->',
+    '<p data-flat-page-qr="1">View on Your Phone</p>',
     `<img class="vr-tour-mobile-qr-img" data-flat-page-qr="1" data-flat-page-url="${pageAttr}" src="${qrAttr}" alt="Scan to open this page on your phone" width="160" height="160">`,
   ].join('\n');
 }

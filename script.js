@@ -24707,11 +24707,15 @@ function updateFlatPageQrButtonState() {
   const caps =
     typeof window.getEditorCapabilities === 'function'
       ? window.getEditorCapabilities()
-      : { canUseCloudSave: !!window.currentStudent };
+      : {
+          canUseCloudSave: !!window.currentStudent,
+          isTestUser: window.editorAccessMode === 'local_test',
+        };
   const btn = document.getElementById('add-flat-page-qr');
   const hint = document.getElementById('add-flat-page-qr-hint');
   if (!btn) return;
-  const show = !!caps.canUseCloudSave;
+  const isGuest = !!caps.isTestUser || window.editorAccessMode === 'local_test';
+  const show = !!caps.canUseCloudSave || isGuest;
   btn.style.display = show ? '' : 'none';
   if (!show) {
     if (hint) {
@@ -24720,13 +24724,16 @@ function updateFlatPageQrButtonState() {
     }
     return;
   }
-  const enabled = hasCloudDraftThread();
-  btn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
-  btn.title = enabled
-    ? 'Publish this page and add a QR code linking to the hosted flat page'
-    : 'Save to Cloud first, then generate a QR code for your hosted flat page';
-  if (enabled && hint && hint.dataset.locked !== '1') {
-    // Keep an explicit needs-save message until the next interaction if still showing.
+  if (isGuest && !caps.canUseCloudSave) {
+    btn.setAttribute('aria-disabled', 'false');
+    btn.title =
+      'Host a temporary flat page and add a QR code (expires per admin guest-preview timeout)';
+  } else {
+    const enabled = hasCloudDraftThread();
+    btn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+    btn.title = enabled
+      ? 'Publish this page and add a QR code linking to the hosted flat page'
+      : 'Save to Cloud first, then generate a QR code for your hosted flat page';
   }
   if (window.flatPageEditor && typeof window.flatPageEditor._notify === 'function') {
     window.flatPageEditor._notify();
@@ -25354,8 +25361,26 @@ const CommonAssetsPicker = {
     }
     const info = bridge.getFlatPageQrInfo();
     const hasCloud = hasCloudDraftThread();
+    const isGuest =
+      (typeof window.getEditorCapabilities === 'function' &&
+        window.getEditorCapabilities().isTestUser) ||
+      window.editorAccessMode === 'local_test';
     let statusHtml = '';
-    if (!hasCloud) {
+    if (isGuest && !hasCloud) {
+      if (!info.embeddable) {
+        statusHtml =
+          '<div class="ca-project-vr-desc">Generate a temporary hosted flat page and QR. The link expires automatically using the admin guest-preview timeout.</div>';
+      } else {
+        const expNote = info.expiresAt
+          ? ` Expires around ${new Date(info.expiresAt).toLocaleString()}.`
+          : ' Guest preview timeout is currently off.';
+        statusHtml = `<div class="ca-project-vr-desc">Temporary page: ${esc(info.hostedUrl)}</div>
+          <div class="ca-project-vr-desc">${esc(expNote)}</div>
+          <div class="ca-project-vr-qr" style="margin-top:10px;text-align:center;">
+            <img src="${esc(info.qrUrl)}" alt="QR code for this flat page" width="120" height="120" style="border-radius:4px;background:#fff;padding:4px;" />
+          </div>`;
+      }
+    } else if (!hasCloud) {
       statusHtml =
         '<div class="ca-project-vr-desc">Save your project to the cloud first, then generate a QR code for the hosted flat page.</div>';
     } else if (!info.embeddable) {
@@ -25367,7 +25392,8 @@ const CommonAssetsPicker = {
           <img src="${esc(info.qrUrl)}" alt="QR code for this flat page" width="120" height="120" style="border-radius:4px;background:#fff;padding:4px;" />
         </div>`;
     }
-    const generateBtn = hasCloud
+    const canGenerate = isGuest || hasCloud;
+    const generateBtn = canGenerate
       ? `<button type="button" data-ca-action="generate-flat-page-qr" style="background:#e65100;color:#fff;">${info.embeddable ? 'Update QR Code' : 'Generate QR Code'}</button>`
       : '';
     const insertBtn = info.embeddable

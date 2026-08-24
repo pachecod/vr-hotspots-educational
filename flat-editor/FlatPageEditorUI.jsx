@@ -236,6 +236,23 @@ export default function FlatPageEditorUI({ bridge }) {
             )}
           </div>
         )}
+        {!state.adminTemplateMode && state.showFlatPageQr && !state.showCloudActions && (
+          <div className="flat-cloud-actions">
+            <button
+              type="button"
+              className="flat-btn flat-btn-qr"
+              title="Host a temporary flat page and add a QR code (expires per guest preview settings)"
+              onClick={() => void bridge.generateFlatPageQrAndInsert()}
+            >
+              📱 Add QR Code
+            </button>
+            {state.cloudStatus && (
+              <span className={`flat-cloud-status${state.cloudStatusError ? ' error' : ''}`}>
+                {state.cloudStatus}
+              </span>
+            )}
+          </div>
+        )}
         <FileTabs
           files={state.files}
           activeFileId={activeFileId}

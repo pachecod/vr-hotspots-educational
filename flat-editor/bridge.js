@@ -9,7 +9,7 @@ import {
   createDefaultProject,
 } from './defaults.js';
 import { buildPreviewDocument } from './buildPreview.js';
-import { saveFlatPage, publishFlatPage } from './flat-page-api.js';
+import { saveFlatPage, publishFlatPage, previewPublishFlatPage } from './flat-page-api.js';
 import { buildInsertHtml, defaultHtmlInsertPos } from './insertAssetHtml.js';
 import {
   CORE_FILE_IDS,
@@ -207,9 +207,11 @@ export class FlatPageEditorBridge {
     }
     const isStudent = !!window.currentStudent;
     const isAdmin = !!window.adminAuthenticated || this._adminTemplateMode;
+    const isTestUser = window.editorAccessMode === 'local_test';
     return {
       canUseCloudSave: isStudent,
       canUseRidey: isStudent || isAdmin,
+      isTestUser,
     };
   }
 
@@ -217,7 +219,9 @@ export class FlatPageEditorBridge {
     const page = this.getActivePage();
     const caps = this._capabilities();
     const canUseRidey = caps.canUseRidey || this._adminTemplateMode;
+    const isGuest = !!caps.isTestUser || window.editorAccessMode === 'local_test';
     const hasCloudSave = Boolean(window.hotspotEditor?._localWorkspaceMeta?.threadId);
+    const showFlatPageQr = !this._adminTemplateMode && (caps.canUseCloudSave || isGuest);
     return {
       project: this.project,
       activeFileId: this.activeFileId,
@@ -225,8 +229,11 @@ export class FlatPageEditorBridge {
       cloudStatus: this._cloudStatus,
       cloudStatusError: this._cloudStatusError,
       showCloudActions: caps.canUseCloudSave,
-      flatPageQrEnabled: caps.canUseCloudSave && hasCloudSave,
+      showFlatPageQr,
+      flatPageQrEnabled: caps.canUseCloudSave ? hasCloudSave : isGuest,
+      flatPageQrIsGuest: isGuest && !caps.canUseCloudSave,
       flatPageQrReady: Boolean(this._flatPageHosted?.hostedUrl),
+      flatPageQrExpiresAt: this._flatPageHosted?.expiresAt || null,
       files: this._visiblePageFiles(page),
       rideyEnabled: canUseRidey && this._rideyStatus.enabled && this._rideyStatus.hasApiKey,
       rideyVersion: this._rideyStatus.version === '2.0' ? '2.0' : '1.0',
@@ -942,6 +949,13 @@ export class FlatPageEditorBridge {
       (nameInput && nameInput.value && nameInput.value.trim()) ||
       this.getActivePage()?.name ||
       'Flat Web Page';
+    const isGuestPreview = !!state.preview;
+    let description = 'Publish your flat page to create a QR code';
+    if (hostedUrl) {
+      description = isGuestPreview
+        ? 'Temporary QR for your guest-hosted flat page (expires automatically)'
+        : 'QR code that opens your hosted flat web page';
+    }
     return {
       category: 'flat-page-qr',
       name: `${pageName} QR`,
@@ -950,20 +964,27 @@ export class FlatPageEditorBridge {
       qrUrl,
       url: qrUrl,
       publishedAt: state.publishedAt || null,
+      expiresAt: state.expiresAt || null,
+      preview: isGuestPreview,
       slug: state.slug || null,
-      description: hostedUrl
-        ? 'QR code that opens your hosted flat web page'
-        : 'Publish your flat page to create a QR code',
+      description,
     };
   }
 
   /**
-   * Publish (or republish) the current flat page, then inject a fixed bottom-right
-   * QR that encodes the hosted flat URL. Requires a prior cloud save (threadId).
+   * Publish (or guest preview-publish) the current flat page, then inject a QR
+   * that encodes the hosted flat URL. Students need a prior cloud save; guests
+   * get an ephemeral hosted page that expires per admin guest-preview settings.
    */
   async generateFlatPageQrAndInsert() {
+    const caps =
+      typeof window.getEditorCapabilities === 'function'
+        ? window.getEditorCapabilities()
+        : { canUseCloudSave: !!window.currentStudent, isTestUser: window.editorAccessMode === 'local_test' };
+    const isGuest = !!caps.isTestUser || window.editorAccessMode === 'local_test';
     const hasCloudSave = Boolean(window.hotspotEditor?._localWorkspaceMeta?.threadId);
-    if (!hasCloudSave) {
+
+    if (caps.canUseCloudSave && !hasCloudSave) {
       const msg = 'Save this page to the cloud before generating a QR code.';
       this._setCloudStatus(msg, true);
       if (typeof window.showFlatPageQrNeedsCloudSaveMessage === 'function') {
@@ -974,7 +995,9 @@ export class FlatPageEditorBridge {
       return false;
     }
 
-    this._setCloudStatus('Publishing page & generating QR…');
+    this._setCloudStatus(
+      isGuest ? 'Hosting temporary page & generating QR…' : 'Publishing page & generating QR…'
+    );
     try {
       const vrTourEmbed = window.hotspotEditor?.vrTourEmbed;
       if (vrTourEmbed?.hostedUrl && typeof this.upgradeVrTourEmbeds === 'function') {
@@ -985,20 +1008,29 @@ export class FlatPageEditorBridge {
       page.name = cloudName;
       this.save();
       const payload = this._filesPayload();
-      const data = await publishFlatPage(null, payload);
-      const hostedUrl = resolveAbsoluteUrl(data?.url || '');
+
+      let data;
+      if (isGuest || !caps.canUseCloudSave) {
+        data = await previewPublishFlatPage(payload);
+      } else {
+        data = await publishFlatPage(null, payload);
+        await this._syncSavedPagesToAssets(data, page, data.slug, { published: true });
+      }
+
+      const hostedUrl = resolveAbsoluteUrl(data?.url || data?.hostedUrl || '');
       if (!hostedUrl) {
         throw new Error('Publish succeeded but no hosted URL was returned.');
       }
-      const qrUrl = resolveFlatPageQrSrc(hostedUrl, flatPageQrApiUrl(hostedUrl));
+      const qrUrl = resolveFlatPageQrSrc(hostedUrl, data?.qrUrl || flatPageQrApiUrl(hostedUrl));
       this._flatPageHosted = {
         hostedUrl,
         qrUrl,
         publishedAt: new Date().toISOString(),
         slug: data?.slug || null,
+        preview: !!data?.preview || isGuest,
+        expiresAt: data?.expiresAt || null,
+        timeoutSeconds: data?.timeoutSeconds || null,
       };
-
-      await this._syncSavedPagesToAssets(data, page, data.slug, { published: true });
 
       const snippet = buildFlatPageQrHtml(hostedUrl, qrUrl);
       if (!snippet) {
@@ -1018,7 +1050,19 @@ export class FlatPageEditorBridge {
         }
       }
 
-      this._setCloudStatus('QR code added ✓ — also available under Online Assets → Page QR Code');
+      let status = 'QR code added ✓';
+      if (this._flatPageHosted.preview && this._flatPageHosted.expiresAt) {
+        const mins = Math.max(
+          1,
+          Math.round((Number(this._flatPageHosted.expiresAt) - Date.now()) / 60000)
+        );
+        status = `Temporary QR added ✓ — link expires in about ${mins} min (admin guest-preview timeout)`;
+      } else if (!this._flatPageHosted.preview) {
+        status = 'QR code added ✓ — also available under Online Assets → Page QR Code';
+      } else {
+        status = 'Temporary QR added ✓ — guest preview timeout is off, so this link will not auto-delete';
+      }
+      this._setCloudStatus(status);
       this._notify();
       if (typeof window.updateFlatPageQrButtonState === 'function') {
         window.updateFlatPageQrButtonState();

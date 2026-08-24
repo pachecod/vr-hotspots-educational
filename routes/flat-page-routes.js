@@ -5,10 +5,16 @@
  */
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const b2Service = require('../services/b2-service');
 const { query, isDbEnabled, slugify } = require('../services/db-service');
 const { requireStudentStrict } = require('../student-auth');
 const { assertAllowedFlatFilename, contentTypeForFilename } = require('../lib/flat-page-files');
+const { parseCookies } = require('../lib/session');
+const { isLocalTestUser } = require('../lib/local-test-user');
+const { getGuestPreviewTimeoutMs, getGuestPreviewTimeoutSeconds } = require('../lib/app-settings');
+const { markGuestPreviewExpiry } = require('../lib/guest-preview-cleanup');
+const { tourUrlToQrUrl } = require('../services/qr-service');
 
 const {
   deleteFlatPageB2Files,
@@ -20,6 +26,21 @@ const { logAppError } = require('../lib/error-log');
 const { buildHostedUrl } = require('../lib/hosted-origin');
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const PREVIEW_COOKIE = 'vr_preview_sid';
+const PREVIEW_COOKIE_MAX_AGE_SEC = 7 * 24 * 60 * 60;
+
+function getOrSetPreviewSessionId(req, res) {
+  const cookies = parseCookies(req);
+  let sid = cookies[PREVIEW_COOKIE];
+  if (!sid || !/^[a-f0-9]{8,32}$/i.test(sid)) {
+    sid = crypto.randomBytes(8).toString('hex');
+  }
+  res.setHeader(
+    'Set-Cookie',
+    `${PREVIEW_COOKIE}=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${PREVIEW_COOKIE_MAX_AGE_SEC}`
+  );
+  return sid.toLowerCase();
+}
 
 async function getStudentContext(studentId) {
   const { rows } = await query(
@@ -207,6 +228,63 @@ async function streamToString(stream) {
 }
 
 function registerFlatPageRoutes(app) {
+  /**
+   * Ephemeral flat-page host for guests (and anyone editing without a student session).
+   * Uses the same admin guest-preview timeout as temporary 360 tours.
+   */
+  app.post('/api/flat-pages/preview-publish', async (req, res) => {
+    try {
+      const payload = await normalizePayload(req.body);
+      if (payload.error) return res.status(400).json({ success: false, message: payload.error });
+
+      const previewSid = getOrSetPreviewSessionId(req, res);
+      const hostedPath = `flat-preview-${previewSid}-${payload.slug}`;
+
+      for (const file of payload.files) {
+        await uploadHostedUtf8(hostedPath, file.name, file.content);
+      }
+
+      const url = buildHostedUrl(hostedPath, 'index.html', req);
+      const qrUrl = tourUrlToQrUrl(url);
+
+      let expiresAt = null;
+      let timeoutSeconds = null;
+      if (isLocalTestUser(req)) {
+        const ttlMs = await getGuestPreviewTimeoutMs();
+        if (ttlMs != null) {
+          expiresAt = Date.now() + ttlMs;
+          timeoutSeconds = await getGuestPreviewTimeoutSeconds();
+          await markGuestPreviewExpiry(hostedPath, { expiresAt, timeoutSeconds });
+        } else {
+          await markGuestPreviewExpiry(hostedPath, {});
+        }
+      }
+
+      res.json({
+        success: true,
+        preview: true,
+        url,
+        hostedUrl: url,
+        hostedPath,
+        qrUrl,
+        slug: payload.slug,
+        name: payload.name,
+        expiresAt,
+        timeoutSeconds,
+      });
+    } catch (err) {
+      console.error('Flat page preview publish error:', err);
+      logAppError({
+        level: 'error',
+        code: 'flat_page_preview_publish_failed',
+        message: err.message || 'Flat page preview publish failed',
+        source: 'flat-pages/preview-publish',
+        details: { stack: err.stack ? String(err.stack).slice(0, 2000) : null },
+      });
+      res.status(500).json({ success: false, message: err.message || 'Preview publish failed' });
+    }
+  });
+
   // List the signed-in student's flat pages (metadata only)
   app.get('/api/student/flat-pages', requireStudentStrict, async (req, res) => {
     try {

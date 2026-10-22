@@ -1559,7 +1559,8 @@ class HotspotEditor {
 
     this.loadVideoPipelineConfig().catch(() => {});
 
-    const skipInitialSceneBootstrap = isPlaygroundGuestTemplateFlow();
+    // Cloud project (admin review/assign/template): the ZIP load owns the reveal; never show local work.
+    const skipInitialSceneBootstrap = isPlaygroundGuestTemplateFlow() || !!window.__cloudProjectPending;
     if (skipInitialSceneBootstrap) {
       clearPostAuthWelcomePending();
     } else {
@@ -23336,6 +23337,7 @@ class StudentProjectsPanel {
   }
 
   static async openVersionInEditor(versionId, parentDialog, options = {}) {
+    if (typeof window.beginCloudProjectLoad === 'function') window.beginCloudProjectLoad();
     try {
       let projectName = options.projectName;
       let threadId = options.threadId;
@@ -23364,6 +23366,7 @@ class StudentProjectsPanel {
           source: 'inbox',
         },
       });
+      if (typeof window.endCloudProjectLoad === 'function') window.endCloudProjectLoad();
 
       try {
         await fetch(`/api/student/versions/${versionId}/seen`, {
@@ -23375,6 +23378,7 @@ class StudentProjectsPanel {
 
       if (parentDialog) parentDialog.remove();
     } catch (err) {
+      if (typeof window.endCloudProjectLoad === 'function') window.endCloudProjectLoad();
       alert('Could not open project: ' + err.message);
     }
   }
@@ -23537,6 +23541,9 @@ const AdminReviewMode = {
       await window.hotspotEditor.loadZIPTemplate(blob);
     } catch (err) {
       alert('Failed to load submission for review: ' + err.message);
+    } finally {
+      window.__cloudProjectPending = false;
+      if (typeof window.endCloudProjectLoad === 'function') window.endCloudProjectLoad();
     }
   },
 
@@ -23706,6 +23713,9 @@ const AdminAssignMode = {
       await window.hotspotEditor.loadZIPTemplate(blob);
     } catch (err) {
       alert('Failed to load project for preview: ' + err.message);
+    } finally {
+      window.__cloudProjectPending = false;
+      if (typeof window.endCloudProjectLoad === 'function') window.endCloudProjectLoad();
     }
   },
 
@@ -25399,9 +25409,18 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('vr-hotspot-welcome-seen', '1');
     } catch (_) {}
   }
+  // Opening a cloud project: show the loading screen now and skip restoring local work.
+  if (
+    (adminReview && reviewVersionId) ||
+    (adminAssign && assignStagingId && assignStudentId) ||
+    (adminTemplateId && window.AdminCombinedTemplateMode)
+  ) {
+    window.__cloudProjectPending = true;
+    if (typeof window.beginCloudProjectLoad === 'function') window.beginCloudProjectLoad();
+  }
 
   const startEditor = () => {
-    const delay = isPostAuthWelcomePending() ? 150 : 1000;
+    const delay = window.__cloudProjectPending ? 0 : isPostAuthWelcomePending() ? 150 : 1000;
     setTimeout(async () => {
       window.hotspotEditor = new HotspotEditor();
       showPostAuthWelcomeIfPending();

@@ -56,6 +56,17 @@ body.project-loading-active #scene-loading-overlay {
   background: #000 !important;
 }
 
+/* Same purple card as the welcome screen. */
+.project-loading-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  text-align: center;
+  color: #fff;
+}
+
 .welcome-github-footer {
   color: rgba(255, 255, 255, 0.75);
   margin-top: 18px;

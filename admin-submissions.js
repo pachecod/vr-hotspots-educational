@@ -293,9 +293,11 @@ async function loadInbox() {
         const historyBtn = legacy
           ? ''
           : `<button class="btn-history" type="button" data-action="toggle-history">📜 Version history</button>`;
-        const repairsBtn = legacy
-          ? ''
-          : `<button class="btn-repairs" type="button" data-action="toggle-repairs">Repaired versions</button>`;
+        // Only offer repaired copies when "Repair media" has produced at least one.
+        const repairsBtn =
+          legacy || !sub.repairCount
+            ? ''
+            : `<button class="btn-repairs" type="button" data-action="toggle-repairs">Repaired versions (${sub.repairCount})</button>`;
         const reviewLink = legacy
           ? ''
           : `<a class="btn btn-review" href="/index.html?adminReview=1&versionId=${encodeURIComponent(versionId)}">✏️ Review in Editor</a>`;
@@ -653,9 +655,8 @@ async function toggleRepairs(
         parentVersionNumber,
       });
     if (btn) {
-      btn.textContent = repairs.length
-        ? `Repaired versions (${repairs.length})`
-        : 'Repaired versions';
+      btn.textContent = `Repaired versions (${repairs.length})`;
+      if (!repairs.length) btn.remove();
     }
   } catch (err) {
     console.error(err);

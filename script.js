@@ -23822,7 +23822,7 @@ const AdminReviewMode = {
           tick();
         });
       await waitForEditor();
-      await window.hotspotEditor.loadZIPTemplate(blob);
+      await window.hotspotEditor.loadZIPTemplate(blob, { silent: true });
     } catch (err) {
       alert('Failed to load submission for review: ' + err.message);
     } finally {
@@ -23840,6 +23840,7 @@ const AdminReviewMode = {
     dialog.innerHTML = `
       <div style="background:#2a2a2a;color:#fff;border-radius:10px;padding:24px;max-width:480px;width:90%;">
         <h3 style="margin:0 0 12px;color:#2E7D32;">Save and Send to Team Member or Student</h3>
+        <div id="admin-return-form">
         <p style="color:#ccc;font-size:14px;">Your edits will be saved as a new version. The team member's or student's original submission is never overwritten.</p>
         <label style="display:block;margin:16px 0 6px;color:#ccc;">Feedback note for team member or student:</label>
         <textarea id="admin-return-note" rows="4" style="width:100%;padding:10px;background:#333;border:1px solid #555;color:#fff;border-radius:4px;box-sizing:border-box;" placeholder="Optional feedback..."></textarea>
@@ -23847,8 +23848,13 @@ const AdminReviewMode = {
           <input type="checkbox" id="admin-return-save-to-submissions" style="margin-top:3px;" checked>
           <span>Also save as the latest version in Submissions<br><span style="font-size:12px;color:#999;">If the current version is hosted, the live page is updated at the same URL (and stays featured).</span></span>
         </label>
+        </div>
+        <div id="admin-return-progress" style="display:none;text-align:center;padding:20px 0 8px;" aria-live="polite">
+          <div id="admin-return-spinner" style="width:48px;height:48px;border:4px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px;"></div>
+          <div id="admin-return-progress-text" style="font-size:16px;color:#fff;line-height:1.5;"></div>
+        </div>
         <div id="admin-return-status" style="margin-top:12px;color:#ccc;font-size:13px;"></div>
-        <div style="margin-top:16px;display:flex;gap:8px;">
+        <div id="admin-return-actions" style="margin-top:16px;display:flex;gap:8px;">
           <button id="admin-return-confirm" style="padding:10px 18px;background:#2E7D32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Send to Team Member or Student</button>
           <button id="admin-return-cancel" style="padding:10px 18px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
         </div>
@@ -23865,7 +23871,19 @@ const AdminReviewMode = {
     const note = dialog.querySelector('#admin-return-note')?.value || '';
     const confirmBtn = dialog.querySelector('#admin-return-confirm');
     if (confirmBtn) confirmBtn.disabled = true;
-    status.textContent = 'Generating ZIP...';
+    status.textContent = '';
+    const formEl = dialog.querySelector('#admin-return-form');
+    const actionsEl = dialog.querySelector('#admin-return-actions');
+    const progressEl = dialog.querySelector('#admin-return-progress');
+    const progressText = dialog.querySelector('#admin-return-progress-text');
+    const spinner = dialog.querySelector('#admin-return-spinner');
+    // While sending, show only a please-wait message (no editable fields or buttons).
+    const setBusy = (busy, message = '') => {
+      if (formEl) formEl.style.display = busy ? 'none' : '';
+      if (actionsEl) actionsEl.style.display = busy ? 'none' : 'flex';
+      if (progressEl) progressEl.style.display = busy ? 'block' : 'none';
+      if (progressText) progressText.textContent = message;
+    };
 
     try {
       if (!window.hotspotEditor) throw new Error('Editor not ready');
@@ -23878,6 +23896,7 @@ const AdminReviewMode = {
         status.textContent = '';
         return;
       }
+      setBusy(true, 'Preparing your project, please wait…');
 
       const JSZip = window.JSZip || (await window.hotspotEditor.loadJSZip());
       const zip = new JSZip();
@@ -23887,7 +23906,7 @@ const AdminReviewMode = {
       await window.hotspotEditor.addFilesToZip(zip, safeName, skyboxSrc, exportMode);
       const blob = await zip.generateAsync({ type: 'blob' });
 
-      status.textContent = 'Uploading...';
+      setBusy(true, 'Uploading, please wait…');
       const formData = new FormData();
       formData.append('project', blob, `${safeName}_return.zip`);
       formData.append('adminNote', note);
@@ -23913,7 +23932,8 @@ const AdminReviewMode = {
         doneMsg += `<br><span style="color:#4CAF50;">Live page updated at /hosted/${AdminReviewMode.escapeHtml(result.hosting.hostedPath)}/${result.hosting.featured ? ' (still featured)' : ''}.</span>`;
         redirectDelay = 2500;
       }
-      status.innerHTML = doneMsg;
+      if (spinner) spinner.style.display = 'none';
+      if (progressText) progressText.innerHTML = doneMsg;
       const updatedThread = result.threadId || this.versionMeta?.threadId;
       setTimeout(() => {
         dialog.remove();
@@ -23922,6 +23942,7 @@ const AdminReviewMode = {
           (updatedThread ? `?updated=${encodeURIComponent(updatedThread)}` : '');
       }, redirectDelay);
     } catch (err) {
+      setBusy(false);
       status.innerHTML = `<span style="color:#f44336;">${AdminReviewMode.escapeHtml(err.message)}</span>`;
       if (confirmBtn) confirmBtn.disabled = false;
     }
@@ -23994,7 +24015,7 @@ const AdminAssignMode = {
           tick();
         });
       await waitForEditor();
-      await window.hotspotEditor.loadZIPTemplate(blob);
+      await window.hotspotEditor.loadZIPTemplate(blob, { silent: true });
     } catch (err) {
       alert('Failed to load project for preview: ' + err.message);
     } finally {

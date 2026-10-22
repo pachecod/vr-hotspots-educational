@@ -1650,11 +1650,15 @@ class HotspotEditor {
 
     this.loadVideoPipelineConfig().catch(() => {});
 
-    const skipInitialSceneBootstrap = isPlaygroundGuestTemplateFlow();
+    // Cloud project (admin review/assign/template): the ZIP load owns the reveal; never show local work.
+    const cloudProjectPending = !!window.__cloudProjectPending;
+    const skipInitialSceneBootstrap = isPlaygroundGuestTemplateFlow() || cloudProjectPending;
     if (skipInitialSceneBootstrap) {
       clearPostAuthWelcomePending();
-      // Playground ZIP load owns the reveal; safety net if media decode never finishes (Safari).
-      setTimeout(() => this._completeProjectBootstrap(), 12000);
+      if (!cloudProjectPending) {
+        // Playground ZIP load owns the reveal; safety net if media decode never finishes (Safari).
+        setTimeout(() => this._completeProjectBootstrap(), 12000);
+      }
     } else {
       // Rehydrate any image/video/audio blob URLs from IndexedDB, then load the scene
       this.rehydrateImageSourcesFromIDB()
@@ -23615,6 +23619,7 @@ class StudentProjectsPanel {
   }
 
   static async openVersionInEditor(versionId, parentDialog, options = {}) {
+    if (typeof window.beginCloudProjectLoad === 'function') window.beginCloudProjectLoad();
     try {
       let projectName = options.projectName;
       let threadId = options.threadId;
@@ -23643,6 +23648,7 @@ class StudentProjectsPanel {
           source: 'inbox',
         },
       });
+      if (typeof window.endCloudProjectLoad === 'function') window.endCloudProjectLoad();
 
       try {
         await fetch(`/api/student/versions/${versionId}/seen`, {
@@ -23654,6 +23660,7 @@ class StudentProjectsPanel {
 
       if (parentDialog) parentDialog.remove();
     } catch (err) {
+      if (typeof window.endCloudProjectLoad === 'function') window.endCloudProjectLoad();
       alert('Could not open project: ' + err.message);
     }
   }
@@ -23816,6 +23823,9 @@ const AdminReviewMode = {
       await window.hotspotEditor.loadZIPTemplate(blob);
     } catch (err) {
       alert('Failed to load submission for review: ' + err.message);
+    } finally {
+      window.__cloudProjectPending = false;
+      if (typeof window.endCloudProjectLoad === 'function') window.endCloudProjectLoad();
     }
   },
 
@@ -23985,6 +23995,9 @@ const AdminAssignMode = {
       await window.hotspotEditor.loadZIPTemplate(blob);
     } catch (err) {
       alert('Failed to load project for preview: ' + err.message);
+    } finally {
+      window.__cloudProjectPending = false;
+      if (typeof window.endCloudProjectLoad === 'function') window.endCloudProjectLoad();
     }
   },
 
@@ -25863,6 +25876,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!isSpecialEditorEntry && typeof window.clearEphemeralEditorWorkspaceForWelcome === 'function') {
     window.clearEphemeralEditorWorkspaceForWelcome();
   }
+  // Opening a cloud project: show the loading screen now and skip restoring local work.
+  if (
+    (adminReview && reviewVersionId) ||
+    (adminAssign && assignStagingId && assignStudentId) ||
+    (adminTemplateId && window.AdminCombinedTemplateMode)
+  ) {
+    window.__cloudProjectPending = true;
+    if (typeof window.beginCloudProjectLoad === 'function') window.beginCloudProjectLoad();
+  }
   // Deep-link flags only for bare ?playground= (not embed practice editor).
   if (playgroundSlug && !embedEditorMode) {
     window.__pendingPlaygroundSlug = playgroundSlug;
@@ -25877,6 +25899,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const startEditor = () => {
     const delay =
+      window.__cloudProjectPending ||
       window.__playgroundDeepLink ||
       window.__embedEditorMode ||
       window.__pendingPlaygroundSlug ||

@@ -85,6 +85,8 @@ function showProjectLoadingOverlay(message = 'Loading Project.') {
 }
 
 function hideProjectLoadingOverlay() {
+  // A cloud project is still downloading: keep covering the editor so stale local work never shows.
+  if (window.__cloudProjectLoadPending) return;
   const overlay = document.getElementById('scene-loading-overlay');
   if (overlay) {
     overlay.style.pointerEvents = 'none';
@@ -94,6 +96,17 @@ function hideProjectLoadingOverlay() {
   if (document.body) {
     document.body.classList.remove('project-loading-active');
   }
+}
+
+/** Cover the editor until endCloudProjectLoad(); other hide calls are ignored meanwhile. */
+function beginCloudProjectLoad(message = 'Loading Project.') {
+  window.__cloudProjectLoadPending = true;
+  showProjectLoadingOverlay(message);
+}
+
+function endCloudProjectLoad() {
+  window.__cloudProjectLoadPending = false;
+  hideProjectLoadingOverlay();
 }
 
 function hideSceneLoadingOverlay() {
@@ -1093,3 +1106,5 @@ window.beginIntegratedWelcomeAfterAuth = beginIntegratedWelcomeAfterAuth;
 window.hideSceneLoadingOverlay = hideSceneLoadingOverlay;
 window.showProjectLoadingOverlay = showProjectLoadingOverlay;
 window.hideProjectLoadingOverlay = hideProjectLoadingOverlay;
+window.beginCloudProjectLoad = beginCloudProjectLoad;
+window.endCloudProjectLoad = endCloudProjectLoad;

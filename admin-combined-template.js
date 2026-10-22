@@ -109,6 +109,9 @@ const AdminCombinedTemplateMode = {
     } catch (err) {
       this.setStatus(err.message || 'Failed to load template', true);
       alert(err.message || 'Failed to load combined template');
+    } finally {
+      window.__cloudProjectPending = false;
+      if (typeof window.endCloudProjectLoad === 'function') window.endCloudProjectLoad();
     }
   },
 

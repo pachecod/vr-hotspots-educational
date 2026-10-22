@@ -23472,6 +23472,10 @@ const AdminReviewMode = {
   versionId: null,
   versionMeta: null,
 
+  escapeHtml(text) {
+    return StudentProjectsPanel.escapeHtml(text);
+  },
+
   async checkAdminAndStart(startEditor) {
     try {
       const res = await fetch('/admin/session', { credentials: 'include' });
@@ -23550,7 +23554,7 @@ const AdminReviewMode = {
         <textarea id="admin-return-note" rows="4" style="width:100%;padding:10px;background:#333;border:1px solid #555;color:#fff;border-radius:4px;box-sizing:border-box;" placeholder="Optional feedback..."></textarea>
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:14px;color:#ccc;font-size:14px;cursor:pointer;">
           <input type="checkbox" id="admin-return-save-to-submissions" style="margin-top:3px;">
-          <span>Also save as the latest version in Submissions</span>
+          <span>Also save as the latest version in Submissions<br><span style="font-size:12px;color:#999;">If the current version is hosted, the live page is updated at the same URL (and stays featured).</span></span>
         </label>
         <div id="admin-return-status" style="margin-top:12px;color:#ccc;font-size:13px;"></div>
         <div style="margin-top:16px;display:flex;gap:8px;">
@@ -23609,11 +23613,20 @@ const AdminReviewMode = {
       const result = await res.json();
       if (!result.success) throw new Error(result.message || 'Send failed');
 
-      status.innerHTML = '<span style="color:#4CAF50;">Sent successfully!</span>';
+      let doneMsg = '<span style="color:#4CAF50;">Sent successfully!</span>';
+      let redirectDelay = 1200;
+      if (result.hosting?.error) {
+        doneMsg += `<br><span style="color:#ff9800;">Saved, but re-hosting failed: ${AdminReviewMode.escapeHtml(result.hosting.error)}. Host it from Submissions.</span>`;
+        redirectDelay = 6000;
+      } else if (result.hosting?.hostedPath) {
+        doneMsg += `<br><span style="color:#4CAF50;">Live page updated at /hosted/${AdminReviewMode.escapeHtml(result.hosting.hostedPath)}/${result.hosting.featured ? ' (still featured)' : ''}.</span>`;
+        redirectDelay = 2500;
+      }
+      status.innerHTML = doneMsg;
       setTimeout(() => {
         dialog.remove();
         window.location.href = '/admin-submissions.html';
-      }, 1200);
+      }, redirectDelay);
     } catch (err) {
       status.innerHTML = `<span style="color:#f44336;">${AdminReviewMode.escapeHtml(err.message)}</span>`;
       if (confirmBtn) confirmBtn.disabled = false;

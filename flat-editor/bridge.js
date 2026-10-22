@@ -9,7 +9,7 @@ import {
   createDefaultProject,
 } from './defaults.js';
 import { buildPreviewDocument } from './buildPreview.js';
-import { saveFlatPage, publishFlatPage } from './flat-page-api.js';
+import { saveFlatPage, publishFlatPage, previewPublishFlatPage } from './flat-page-api.js';
 import { buildInsertHtml, defaultHtmlInsertPos } from './insertAssetHtml.js';
 import {
   CORE_FILE_IDS,
@@ -29,8 +29,23 @@ import {
   resolveAbsoluteUrl,
   rewriteVrTourEmbedsInHtml,
   stripExistingVrTourEmbeds,
+  hasEmbedAttachedQr,
+  buildVrTourQrHtml,
+  stripExistingVrTourQr,
 } from './vrTourEmbed.js';
+import {
+  buildFlatPageQrHtml,
+  bodyCloseInsertPos,
+  flatPageQrApiUrl,
+  resolveFlatPageQrSrc,
+  stripExistingFlatPageQr,
+} from './flatPageQr.js';
 import { downloadStarterTemplateZip } from './downloadStarterZip.js';
+
+// First element of an existing QR block (any markup version) — re-adding replaces it in place.
+const FLAT_PAGE_QR_START_RE = /<!--\s*Flat page QR|<(?:div|p|img|figure)\b[^>]*\bdata-flat-page-qr=/i;
+const VR_TOUR_QR_START_RE = /<!--\s*360° tour QR|<div\b[^>]*\bdata-vr-tour-qr=/i;
+
 
 export class FlatPageEditorBridge {
   constructor(options = {}) {
@@ -420,31 +435,17 @@ export class FlatPageEditorBridge {
   upgradeVrTourEmbeds(vrTourEmbed = {}) {
     const embedUrl = resolveAbsoluteUrl(vrTourEmbed.hostedUrl || '');
     if (!embedUrl) return false;
-    const qrUrl =
-      resolveAbsoluteUrl(vrTourEmbed.qrUrl || '') || deriveQrUrlFromTourUrl(embedUrl);
     let html = this.getFileContent('index.html');
     if (!hasVrTourEmbed(html)) return false;
 
-    const needsQrBlock = !/vr-tour-mobile-qr-img/i.test(html);
-    if (needsQrBlock) {
-      html = stripExistingVrTourEmbeds(html);
-      const name =
-        (window.hotspotEditor &&
-          typeof window.hotspotEditor.getProjectVrEmbedInfo === 'function' &&
-          window.hotspotEditor.getProjectVrEmbedInfo().name) ||
-        '360° VR Tour';
-      const snippet = isGuestEditor()
-        ? buildGuestProjectVrInsertHtml(name, embedUrl, qrUrl)
-        : buildProjectVrInsertHtml(name, embedUrl, qrUrl);
-      const insertAt = defaultHtmlInsertPos(html);
-      html = `${html.slice(0, insertAt)}\n${snippet}\n${html.slice(insertAt)}`;
-    } else {
-      html = rewriteVrTourEmbedsInHtml(html, {
-        hostedUrl: embedUrl,
-        useOnlineUrl: true,
-        guestMode: isGuestEditor(),
-      });
-    }
+    // Point embeds at the hosted tour. QR codes are added separately (Editing Tools → QR Code),
+    // so only keep an embed's QR if it already had one.
+    html = rewriteVrTourEmbedsInHtml(html, {
+      hostedUrl: embedUrl,
+      useOnlineUrl: true,
+      hideQr: !hasEmbedAttachedQr(html),
+      guestMode: isGuestEditor(),
+    });
 
     this.setFileContent('index.html', html);
     this._syncScenesData();
@@ -693,6 +694,7 @@ export class FlatPageEditorBridge {
           content = rewriteVrTourEmbedsInHtml(content, {
             hostedUrl: hostedUrl || '',
             useOnlineUrl,
+            hideQr: !hasEmbedAttachedQr(content),
           });
         }
         pageFolder.file(file.name, content);
@@ -906,6 +908,146 @@ export class FlatPageEditorBridge {
     }
 
     alert('Cloud save is not available yet. Please wait for the editor to finish loading.');
+  }
+
+  /**
+   * Insert a QR block at the HTML cursor (or the end of the page). If a QR of the same
+   * kind is already on the page, replace it in place instead of adding a second one.
+   */
+  _upsertQrBlock(snippet, stripFn, startRe) {
+    const fileId = 'index.html';
+    const html = this.getFileContent(fileId);
+    // Mark where an existing block starts, strip the old block(s), then put the new one at the mark.
+    const MARK = '\u0000qr-block\u0000';
+    const marked = html.replace(startRe, (m) => MARK + m);
+    let stripped = stripFn(marked);
+    let insertAt = stripped.indexOf(MARK);
+    const replacing = insertAt !== -1;
+    if (replacing) {
+      stripped = stripped.replace(MARK, '');
+    } else {
+      stripped = stripFn(html);
+      const sel = this._editorSelections[fileId];
+      insertAt =
+        sel && typeof sel.head === 'number'
+          ? Math.max(0, Math.min(sel.head, stripped.length))
+          : bodyCloseInsertPos(stripped);
+    }
+    const padded = replacing ? `${snippet}\n` : `\n${snippet}\n`;
+    this.setFileContent(fileId, stripped.slice(0, insertAt) + padded + stripped.slice(insertAt));
+    const nextPos = insertAt + padded.length;
+    this._editorSelections[fileId] = { anchor: nextPos, head: nextPos };
+    this._pendingSelection = { fileId, anchor: nextPos, head: nextPos };
+    this._syncScenesData();
+    if (this.activeFileId !== fileId) this.setActiveFile(fileId);
+    else this._notify();
+  }
+
+  _expiryNote(expiresAt) {
+    if (!expiresAt) return '';
+    const mins = Math.max(1, Math.round((Number(expiresAt) - Date.now()) / 60000));
+    return ` The link is temporary and expires in about ${mins} min.`;
+  }
+
+  /**
+   * Host the flat page (permanent for students, saving to the cloud first if needed;
+   * temporary preview for guests; preview for admins) and add a QR code that opens it.
+   * Resolves to { message }; throws on failure.
+   */
+  async generateFlatPageQrAndInsert() {
+    const caps =
+      typeof window.getEditorCapabilities === 'function'
+        ? window.getEditorCapabilities()
+        : { canUseCloudSave: !!window.currentStudent, isTestUser: window.editorAccessMode === 'local_test' };
+    const isGuest = !!caps.isTestUser || window.editorAccessMode === 'local_test';
+    const usePermanent = !!caps.canUseCloudSave && !isGuest;
+
+    try {
+      if (usePermanent && !window.hotspotEditor?._localWorkspaceMeta?.threadId) {
+        this._setCloudStatus('Saving to the cloud…');
+        await this.cloudSave();
+        if (!window.hotspotEditor?._localWorkspaceMeta?.threadId) {
+          throw new Error('Could not save this project to the cloud. Try ☁️ Save to Cloud, then add the QR code again.');
+        }
+      }
+
+      this._setCloudStatus(usePermanent ? 'Publishing page & generating QR…' : 'Hosting page & generating QR…');
+      const vrTourEmbed = window.hotspotEditor?.vrTourEmbed;
+      if (vrTourEmbed?.hostedUrl) this.upgradeVrTourEmbeds(vrTourEmbed);
+      const page = this.getActivePage();
+      page.name = this._resolveCloudPageName();
+      this.save();
+      const payload = this._filesPayload();
+
+      let data;
+      if (usePermanent) {
+        data = await publishFlatPage(null, payload);
+        await this._syncSavedPagesToAssets(data, page, data.slug, { published: true });
+      } else {
+        data = await previewPublishFlatPage(payload);
+      }
+
+      const hostedUrl = resolveAbsoluteUrl(data?.url || data?.hostedUrl || '');
+      if (!hostedUrl) throw new Error('Publish succeeded but no hosted URL was returned.');
+      const qrUrl = resolveFlatPageQrSrc(hostedUrl, data?.qrUrl || flatPageQrApiUrl(hostedUrl));
+      this._flatPageHosted = {
+        hostedUrl,
+        qrUrl,
+        publishedAt: new Date().toISOString(),
+        slug: data?.slug || null,
+        preview: !usePermanent,
+        expiresAt: data?.expiresAt || null,
+        timeoutSeconds: data?.timeoutSeconds || null,
+      };
+
+      const snippet = buildFlatPageQrHtml(hostedUrl, qrUrl);
+      if (!snippet) throw new Error('Could not build the QR code HTML.');
+      this._upsertQrBlock(snippet, stripExistingFlatPageQr, FLAT_PAGE_QR_START_RE);
+
+      const message = `QR code for this page added.${this._expiryNote(data?.expiresAt)}`;
+      this._setCloudStatus(`${message} ✓`);
+      return { message, url: hostedUrl };
+    } catch (err) {
+      this._setCloudStatus(err.message || 'Could not generate QR code', true);
+      throw err;
+    }
+  }
+
+  /**
+   * Host the project's 360° tour (permanent for signed-in students, preview otherwise) and
+   * add a QR code that opens it. Re-adding republishes to the same address, so printed codes
+   * keep working. Resolves to { message }; throws on failure.
+   */
+  async generateVrTourQrAndInsert() {
+    const editor = window.hotspotEditor;
+    if (!editor) throw new Error('The 360° editor is not available.');
+    if (typeof editor.hasSphericalContent === 'function' && !editor.hasSphericalContent()) {
+      throw new Error('Add 360° content to this project first.');
+    }
+    const caps = typeof window.getEditorCapabilities === 'function' ? window.getEditorCapabilities() : {};
+    const usePermanent = !!caps.canPublishVrTour;
+
+    try {
+      this._setCloudStatus(usePermanent ? 'Publishing your 360° tour & generating QR…' : 'Hosting your 360° tour & generating QR…');
+      const data = usePermanent
+        ? await editor.generateVrTourEmbed()
+        : await editor.generateVrTourEmbedForFlatMode();
+      const tourUrl = resolveAbsoluteUrl(editor.vrTourEmbed?.hostedUrl || data?.url || '');
+      if (!tourUrl) throw new Error('Publish succeeded but no 360° tour URL was returned.');
+      const qrSrc =
+        resolveAbsoluteUrl(editor.vrTourEmbed?.qrUrl || data?.qrUrl || '') || deriveQrUrlFromTourUrl(tourUrl);
+
+      const snippet = buildVrTourQrHtml(tourUrl, qrSrc);
+      if (!snippet) throw new Error('Could not build the QR code HTML.');
+      this._upsertQrBlock(snippet, stripExistingVrTourQr, VR_TOUR_QR_START_RE);
+
+      const message = `QR code for the 360° tour added.${this._expiryNote(data?.expiresAt)}`;
+      this._setCloudStatus(`${message} ✓`);
+      return { message, url: tourUrl };
+    } catch (err) {
+      this._setCloudStatus(err.message || 'Could not generate QR code', true);
+      throw err;
+    }
   }
 
   async publish() {

@@ -64,3 +64,18 @@ export async function publishFlatPage(slug, payload) {
   if (!resp.ok || !data.success) throw new Error(data.message || `Publish failed (${resp.status})`);
   return data;
 }
+
+/** Ephemeral guest flat-page host (auto-expires per admin guest-preview timeout). */
+export async function previewPublishFlatPage(payload) {
+  const resp = await fetch('/api/flat-pages/preview-publish', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(payload),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || !data.success) {
+    throw new Error(data.message || `Preview publish failed (${resp.status})`);
+  }
+  return data;
+}

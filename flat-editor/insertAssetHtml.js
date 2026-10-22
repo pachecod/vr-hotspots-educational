@@ -71,11 +71,7 @@ export function defaultHtmlInsertPos(html) {
 export function buildInsertHtml(category, asset) {
   if (category === 'project-vr') {
     const buildFn = isGuestEditor() ? buildGuestProjectVrInsertHtml : buildProjectVrInsertHtml;
-    return buildFn(
-      asset?.name,
-      asset?.embedUrl || asset?.url,
-      asset?.qrUrl
-    );
+    return buildFn(asset?.name, asset?.embedUrl || asset?.url, asset?.qrUrl, { includeQr: false });
   }
 
   const url = getAssetMediaUrl(asset);

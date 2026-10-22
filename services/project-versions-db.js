@@ -41,6 +41,7 @@ function formatVersionRow(row) {
     featuredOnHostedGallery: row.featured_on_hosted_gallery,
     inAdminInbox: row.in_admin_inbox,
     lastActivityAt: row.last_activity_at,
+    repairCount: row.repair_count,
     createdAt: row.created_at,
     projectName: row.project_name,
     projectSlug: row.project_slug,
@@ -296,6 +297,8 @@ async function listAdminInbox({ classId, studentId, filter, hostedFilter, featur
                pv.*, pt.project_name, pt.project_slug, pt.student_id,
                (SELECT MAX(pa.created_at) FROM project_versions pa
                  WHERE pa.thread_id = pt.id AND pa.kind IN ('submitted', 'admin_return')) AS last_activity_at,
+               (SELECT COUNT(*)::int FROM project_versions pr
+                 WHERE pr.thread_id = pt.id AND pr.kind = 'admin_repair') AS repair_count,
                s.display_name AS student_display_name, s.username AS student_username, c.name AS class_name, c.id AS class_id,
                c.slug AS class_slug
              FROM project_threads pt

@@ -102,10 +102,25 @@ function hideProjectLoadingOverlay() {
 function beginCloudProjectLoad(message = 'Loading Project.') {
   window.__cloudProjectLoadPending = true;
   showProjectLoadingOverlay(message);
+  clearTimeout(window.__cloudProjectLoadCeiling);
+  // Never trap the user behind the loading screen if something upstream hangs.
+  window.__cloudProjectLoadCeiling = setTimeout(endCloudProjectLoad, 60000);
+}
+
+/**
+ * Called once the cloud project has replaced local data in the editor. Safari can stall
+ * indefinitely on scene video load/play, so reveal the editor shortly after even if it does.
+ */
+function cloudProjectDataApplied() {
+  if (!window.__cloudProjectLoadPending) return;
+  window.__cloudProjectLoadPending = false;
+  clearTimeout(window.__cloudProjectLoadCeiling);
+  setTimeout(hideProjectLoadingOverlay, 4000);
 }
 
 function endCloudProjectLoad() {
   window.__cloudProjectLoadPending = false;
+  clearTimeout(window.__cloudProjectLoadCeiling);
   hideProjectLoadingOverlay();
 }
 
@@ -1108,3 +1123,4 @@ window.showProjectLoadingOverlay = showProjectLoadingOverlay;
 window.hideProjectLoadingOverlay = hideProjectLoadingOverlay;
 window.beginCloudProjectLoad = beginCloudProjectLoad;
 window.endCloudProjectLoad = endCloudProjectLoad;
+window.cloudProjectDataApplied = cloudProjectDataApplied;

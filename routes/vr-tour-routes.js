@@ -99,6 +99,8 @@ function registerVrTourRoutes(app, { upload, assertValidZipFile, extractZipToDir
       const { renderTourQrBuffer } = require('../services/qr-service');
       const buffer = await renderTourQrBuffer(url);
       res.setHeader('Content-Type', 'image/png');
+      // QR codes are public; let the editor (app origin), hosted pages and copies hosted elsewhere show them.
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       res.send(buffer);
     } catch (err) {

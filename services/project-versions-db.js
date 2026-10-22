@@ -52,6 +52,7 @@ function formatVersionRow(row) {
     hostedAt: row.hosted_at,
     isHosted: row.is_hosted,
     featuredOnHostedGallery: row.featured_on_hosted_gallery,
+    inAdminInbox: row.in_admin_inbox,
     createdAt: row.created_at,
     projectName: row.project_name,
     projectSlug: row.project_slug,
@@ -162,6 +163,7 @@ async function createVersion({
   threadId,
   versionNumber: preReservedVersionNumber,
   classSlug,
+  inAdminInbox = false,
 }) {
   if (!isDbEnabled()) return null;
 
@@ -199,8 +201,8 @@ async function createVersion({
     const { rows } = await client.query(
       `INSERT INTO project_versions (
         thread_id, version_number, kind, b2_path, file_name,
-        student_note, admin_note, parent_version_id, created_by, submitted_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        student_note, admin_note, parent_version_id, created_by, submitted_at, in_admin_inbox
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *`,
       [
         thread.id,
@@ -213,6 +215,7 @@ async function createVersion({
         parentVersionId || null,
         createdBy,
         submittedAt,
+        !!inAdminInbox,
       ]
     );
 
@@ -320,7 +323,8 @@ async function listAdminInbox({ classId, studentId, filter, hostedFilter, featur
                s.display_name AS student_display_name, s.username AS student_username, c.name AS class_name, c.id AS class_id,
                c.slug AS class_slug
              FROM project_threads pt
-             JOIN project_versions pv ON pv.thread_id = pt.id AND pv.kind = 'submitted'
+             JOIN project_versions pv ON pv.thread_id = pt.id
+               AND (pv.kind = 'submitted' OR (pv.kind = 'admin_return' AND pv.in_admin_inbox))
              LEFT JOIN students s ON s.id = pt.student_id
              LEFT JOIN classes c ON c.id = s.class_id
              WHERE 1=1`;

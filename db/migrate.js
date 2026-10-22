@@ -319,6 +319,13 @@ async function applyIncrementalMigrations(pool) {
           CHECK (kind IN ('draft', 'submitted', 'admin_return', 'admin_assigned', 'admin_repair'));
       `,
     },
+    {
+      name: 'project_versions_in_admin_inbox_v1',
+      sql: `
+        ALTER TABLE project_versions
+          ADD COLUMN IF NOT EXISTS in_admin_inbox BOOLEAN NOT NULL DEFAULT FALSE;
+      `,
+    },
   ];
 
   for (const migration of migrations) {

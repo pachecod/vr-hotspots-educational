@@ -23827,6 +23827,10 @@ const AdminReviewMode = {
         <p style="color:#ccc;font-size:14px;">Your edits will be saved as a new version. The team member's or student's original submission is never overwritten.</p>
         <label style="display:block;margin:16px 0 6px;color:#ccc;">Feedback note for team member or student:</label>
         <textarea id="admin-return-note" rows="4" style="width:100%;padding:10px;background:#333;border:1px solid #555;color:#fff;border-radius:4px;box-sizing:border-box;" placeholder="Optional feedback..."></textarea>
+        <label style="display:flex;gap:8px;align-items:flex-start;margin-top:14px;color:#ccc;font-size:14px;cursor:pointer;">
+          <input type="checkbox" id="admin-return-save-to-submissions" style="margin-top:3px;">
+          <span>Also save as the latest version in Submissions</span>
+        </label>
         <div id="admin-return-status" style="margin-top:12px;color:#ccc;font-size:13px;"></div>
         <div style="margin-top:16px;display:flex;gap:8px;">
           <button id="admin-return-confirm" style="padding:10px 18px;background:#2E7D32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Send to Team Member or Student</button>
@@ -23871,6 +23875,10 @@ const AdminReviewMode = {
       const formData = new FormData();
       formData.append('project', blob, `${safeName}_return.zip`);
       formData.append('adminNote', note);
+      formData.append(
+        'saveToSubmissions',
+        dialog.querySelector('#admin-return-save-to-submissions')?.checked ? 'true' : 'false'
+      );
 
       const res = await fetch(`/admin/versions/${this.versionId}/return`, {
         method: 'POST',

@@ -275,6 +275,8 @@ async function loadInbox() {
         const threadId = sub.threadId;
         const noteBlock = sub.studentNote
           ? `<div class="note-block"><strong>Team member or student note:</strong>${escapeHtml(sub.studentNote)}</div>`
+          : sub.kind === 'admin_return' && sub.adminNote
+          ? `<div class="note-block"><strong>Admin note:</strong>${escapeHtml(sub.adminNote)}</div>`
           : '';
         const hostedLink = formatHostedLinks(sub);
         const hosted = isSubmissionHosted(sub);
@@ -294,11 +296,11 @@ async function loadInbox() {
 
         return `
           <div class="submission-card" data-version-id="${escapeHtml(versionId)}" data-thread-id="${escapeHtml(threadId)}" data-project-name="${escapeHtml(sub.projectName || '')}" data-student-name="${escapeHtml(studentLabel)}" data-student-id="${escapeHtml(sub.studentId || '')}" data-class-id="${escapeHtml(sub.classId || '')}">
-            <h3>${escapeHtml(sub.projectName)} ${kindBadge('submitted')}${featured ? ' <span class="badge badge-featured">Featured</span>' : ''}${legacy ? ' <span class="badge badge-draft">B2 only</span>' : ''}</h3>
+            <h3>${escapeHtml(sub.projectName)} ${kindBadge(sub.kind === 'admin_return' ? 'admin_return' : 'submitted')}${featured ? ' <span class="badge badge-featured">Featured</span>' : ''}${legacy ? ' <span class="badge badge-draft">B2 only</span>' : ''}</h3>
             <p class="submitted-by">Submitted by: <strong>${escapeHtml(studentLabel)}</strong>${sub.className ? ` <span class="submitted-by-class">(${escapeHtml(sub.className)})</span>` : ''}</p>
             <div class="meta">
               <strong>Version:</strong> #${sub.versionNumber || 1}<br>
-              <strong>Submitted:</strong> ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '—'}<br>
+              <strong>Submitted:</strong> ${sub.submittedAt || sub.createdAt ? new Date(sub.submittedAt || sub.createdAt).toLocaleString() : '—'}<br>
               <strong>File:</strong> ${escapeHtml(sub.fileName)}${hostedLink}
               ${sub.studentId ? `<br><a href="admin-common-assets.html?view=content&studentId=${encodeURIComponent(sub.studentId)}">View in Content Hub</a>` : ''}
             </div>

@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS project_versions (
   hosted_at TIMESTAMPTZ,
   is_hosted BOOLEAN NOT NULL DEFAULT FALSE,
   featured_on_hosted_gallery BOOLEAN NOT NULL DEFAULT FALSE,
+  in_admin_inbox BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (thread_id, version_number)
 );

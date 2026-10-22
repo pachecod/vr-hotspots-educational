@@ -661,6 +661,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       }
 
       const adminNote = projectVersionsDb.trimNote(req.body?.adminNote || req.body?.admin_note);
+      const saveToSubmissions = String(req.body?.saveToSubmissions || '') === 'true';
       const classSlug = parentVersion.classSlug || 'default';
 
       const reserved = await projectVersionsDb.reserveVersionPath({
@@ -683,6 +684,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         parentVersionId: parentVersion.id,
         threadId: parentVersion.threadId,
         versionNumber: reserved.versionNumber,
+        inAdminInbox: saveToSubmissions,
       });
 
       try {

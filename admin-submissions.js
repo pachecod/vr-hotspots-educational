@@ -269,6 +269,13 @@ async function loadInbox() {
       return;
     }
 
+    // After Save and Send, the editor returns with ?updated=<threadId>: pin that project first.
+    const updatedThreadId = new URLSearchParams(window.location.search).get('updated');
+    if (updatedThreadId) {
+      const idx = submissions.findIndex((s) => s.threadId === updatedThreadId);
+      if (idx > 0) submissions.unshift(submissions.splice(idx, 1)[0]);
+    }
+
     container.innerHTML = submissions
       .map((sub) => {
         const versionId = sub.id;
@@ -335,6 +342,17 @@ async function loadInbox() {
       })
       .join('');
     bindInboxCardActions(container);
+    if (updatedThreadId) {
+      const card = container.querySelector(`.submission-card[data-thread-id="${CSS.escape(updatedThreadId)}"]`);
+      if (card) {
+        card.classList.add('recently-updated');
+        card.scrollIntoView({ block: 'nearest' });
+      }
+      // Pin only on the first load after returning from the editor.
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('updated');
+      history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+    }
     revealDangerZone();
   } catch (error) {
     if (error.code === 'AUTH_REQUIRED') {

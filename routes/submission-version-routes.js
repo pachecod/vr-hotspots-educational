@@ -762,6 +762,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         message: 'Feedback sent to student',
         versionId: result.version.id,
         versionNumber: result.versionNumber,
+        threadId: parentVersion.threadId,
         hosting,
       });
     } catch (err) {

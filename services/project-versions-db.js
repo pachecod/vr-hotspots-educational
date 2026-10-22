@@ -40,6 +40,7 @@ function formatVersionRow(row) {
     isHosted: row.is_hosted,
     featuredOnHostedGallery: row.featured_on_hosted_gallery,
     inAdminInbox: row.in_admin_inbox,
+    lastActivityAt: row.last_activity_at,
     createdAt: row.created_at,
     projectName: row.project_name,
     projectSlug: row.project_slug,
@@ -293,6 +294,8 @@ async function listThreadVersions(threadId, { studentId } = {}) {
 async function listAdminInbox({ classId, studentId, filter, hostedFilter, featuredFilter } = {}) {
   let sql = `SELECT DISTINCT ON (pt.id)
                pv.*, pt.project_name, pt.project_slug, pt.student_id,
+               (SELECT MAX(pa.created_at) FROM project_versions pa
+                 WHERE pa.thread_id = pt.id AND pa.kind IN ('submitted', 'admin_return')) AS last_activity_at,
                s.display_name AS student_display_name, s.username AS student_username, c.name AS class_name, c.id AS class_id,
                c.slug AS class_slug
              FROM project_threads pt
@@ -326,6 +329,8 @@ async function listAdminInbox({ classId, studentId, filter, hostedFilter, featur
     sql += ` AND pv.featured_on_hosted_gallery = FALSE`;
   }
   sql += ` ORDER BY pt.id, pv.version_number DESC, pv.submitted_at DESC NULLS LAST`;
+  // Most recent student submission or admin return first.
+  sql = `SELECT * FROM (${sql}) inbox ORDER BY inbox.last_activity_at DESC NULLS LAST`;
   const { rows } = await query(sql, params);
   return rows.map(formatVersionRow);
 }

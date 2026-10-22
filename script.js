@@ -23553,7 +23553,7 @@ const AdminReviewMode = {
         <label style="display:block;margin:16px 0 6px;color:#ccc;">Feedback note for team member or student:</label>
         <textarea id="admin-return-note" rows="4" style="width:100%;padding:10px;background:#333;border:1px solid #555;color:#fff;border-radius:4px;box-sizing:border-box;" placeholder="Optional feedback..."></textarea>
         <label style="display:flex;gap:8px;align-items:flex-start;margin-top:14px;color:#ccc;font-size:14px;cursor:pointer;">
-          <input type="checkbox" id="admin-return-save-to-submissions" style="margin-top:3px;">
+          <input type="checkbox" id="admin-return-save-to-submissions" style="margin-top:3px;" checked>
           <span>Also save as the latest version in Submissions<br><span style="font-size:12px;color:#999;">If the current version is hosted, the live page is updated at the same URL (and stays featured).</span></span>
         </label>
         <div id="admin-return-status" style="margin-top:12px;color:#ccc;font-size:13px;"></div>
@@ -23623,9 +23623,12 @@ const AdminReviewMode = {
         redirectDelay = 2500;
       }
       status.innerHTML = doneMsg;
+      const updatedThread = result.threadId || this.versionMeta?.threadId;
       setTimeout(() => {
         dialog.remove();
-        window.location.href = '/admin-submissions.html';
+        window.location.href =
+          '/admin-submissions.html' +
+          (updatedThread ? `?updated=${encodeURIComponent(updatedThread)}` : '');
       }, redirectDelay);
     } catch (err) {
       status.innerHTML = `<span style="color:#f44336;">${AdminReviewMode.escapeHtml(err.message)}</span>`;

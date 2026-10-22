@@ -202,30 +202,6 @@ export default function FlatPageEditorUI({ bridge }) {
             >
               ☁️ Save to Cloud
             </button>
-            <button
-              type="button"
-              className={`flat-btn flat-btn-qr${state.flatPageQrEnabled ? '' : ' is-disabled'}`}
-              aria-disabled={!state.flatPageQrEnabled}
-              title={
-                state.flatPageQrEnabled
-                  ? 'Publish this page and add a QR code linking to the hosted flat page'
-                  : 'Save to Cloud first, then generate a QR code for your hosted flat page'
-              }
-              onClick={() => {
-                if (!state.flatPageQrEnabled) {
-                  const msg = 'Save this page to the cloud before generating a QR code.';
-                  if (typeof window.showFlatPageQrNeedsCloudSaveMessage === 'function') {
-                    window.showFlatPageQrNeedsCloudSaveMessage(msg);
-                  } else {
-                    alert(msg);
-                  }
-                  return;
-                }
-                void bridge.generateFlatPageQrAndInsert();
-              }}
-            >
-              📱 Add QR Code
-            </button>
             <button type="button" className="flat-btn flat-btn-publish" onClick={() => bridge.publish()}>
               🌐 Publish
             </button>
@@ -236,16 +212,8 @@ export default function FlatPageEditorUI({ bridge }) {
             )}
           </div>
         )}
-        {!state.adminTemplateMode && state.showFlatPageQr && !state.showCloudActions && (
+        {!state.adminTemplateMode && !state.showCloudActions && state.cloudStatus && (
           <div className="flat-cloud-actions">
-            <button
-              type="button"
-              className="flat-btn flat-btn-qr"
-              title="Host a temporary flat page and add a QR code (expires per guest preview settings)"
-              onClick={() => void bridge.generateFlatPageQrAndInsert()}
-            >
-              📱 Add QR Code
-            </button>
             {state.cloudStatus && (
               <span className={`flat-cloud-status${state.cloudStatusError ? ' error' : ''}`}>
                 {state.cloudStatus}

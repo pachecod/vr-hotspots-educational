@@ -301,25 +301,33 @@ export function buildLocalBundleVrInsertHtml(name) {
   ].join('\n');
 }
 
-/** Guest flat-page embed — unchanged legacy format (QR inside embed wrapper). */
-export function buildGuestProjectVrInsertHtml(name, embedUrl, qrUrl) {
+/**
+ * Guest flat-page embed (QR inside embed wrapper). New inserts pass includeQr: false;
+ * QR codes are added separately with Editing Tools → QR Code.
+ */
+export function buildGuestProjectVrInsertHtml(name, embedUrl, qrUrl, { includeQr = true } = {}) {
   const title = escapeAttr(name || '360° VR Tour');
   const src = escapeAttr(withEmbedQuery(resolveAbsoluteUrl(embedUrl)));
   if (!src) return '';
   const qrSrc = escapeAttr(qrUrl ? resolveAbsoluteUrl(qrUrl) : deriveQrUrlFromTourUrl(embedUrl));
-  return [
+  const lines = [
     '<!-- 360° VR tour from this project (Spherical Content) -->',
     `<style>${GUEST_VR_TOUR_EMBED_STYLES}</style>`,
     `<div class="vr-tour-embed" data-vr-tour-embed="1" data-vr-tour-url="${src}">`,
     `<iframe src="${src}" title="${title}" allow="fullscreen; vr; accelerometer; gyroscope"></iframe>`,
-    '<p class="vr-tour-mobile-label">View on Your Phone</p>',
-    `<img class="vr-tour-mobile-qr-img" src="${qrSrc}" alt="Scan to open this 360° tour on your phone" width="160" height="160" />`,
-    '</div>',
-  ].join('\n');
+  ];
+  if (includeQr) {
+    lines.push(
+      '<p class="vr-tour-mobile-label">View on Your Phone</p>',
+      `<img class="vr-tour-mobile-qr-img" src="${qrSrc}" alt="Scan to open this 360° tour on your phone" width="160" height="160" />`
+    );
+  }
+  lines.push('</div>');
+  return lines.join('\n');
 }
 
-/** Signed-in student hosted embed — separate mobile QR section below iframe. */
-export function buildProjectVrInsertHtml(name, embedUrl, qrUrl) {
+/** Signed-in student hosted embed — optional mobile QR section below iframe. */
+export function buildProjectVrInsertHtml(name, embedUrl, qrUrl, { includeQr = true } = {}) {
   const src = resolveAbsoluteUrl(embedUrl);
   if (!src) return '';
   const qrSrc = qrUrl ? resolveAbsoluteUrl(qrUrl) : deriveQrUrlFromTourUrl(embedUrl);
@@ -328,10 +336,44 @@ export function buildProjectVrInsertHtml(name, embedUrl, qrUrl) {
     buildSignedInStyleBlock(),
     buildSignedInEmbedDivHtml(name, src, src),
   ];
-  if (qrSrc) {
+  if (includeQr && qrSrc) {
     lines.push('', buildMobileQrSectionHtml(qrSrc));
   }
   return lines.join('\n');
+}
+
+/** True when a 360 embed on the page already carries its own (visible) QR code. */
+export function hasEmbedAttachedQr(html) {
+  const content = String(html || '');
+  if (/<div\b[^>]*\bvr-tour-mobile-section\b/i.test(content)) return true;
+  const wrapperRe = /<div\b[^>]*\sdata-vr-tour-embed=["']1["'][^>]*>([\s\S]*?)<\/div>/gi;
+  let match;
+  while ((match = wrapperRe.exec(content))) {
+    const img = match[1].match(/<img\b[^>]*\bvr-tour-mobile-qr-img\b[^>]*>/i);
+    if (img && !/display\s*:\s*none/i.test(img[0])) return true;
+  }
+  return false;
+}
+
+/** Standalone QR code that opens the hosted 360° tour (Editing Tools → QR Code). */
+export function buildVrTourQrHtml(tourUrl, qrSrc) {
+  const url = resolveAbsoluteUrl(tourUrl || '');
+  const src = qrSrc ? resolveAbsoluteUrl(qrSrc) : deriveQrUrlFromTourUrl(url);
+  if (!url || !src) return '';
+  return [
+    '<!-- 360° tour QR (scan to open the 360° tour) -->',
+    `<div class="page-qr" data-vr-tour-qr="1" data-vr-tour-url="${escapeAttr(url)}" style="text-align:center;margin:24px auto;">`,
+    '<p style="margin:0 0 8px;">View the 360° Tour on Your Phone</p>',
+    `<img src="${escapeAttr(src)}" alt="Scan to open the 360° tour on your phone" width="160" height="160">`,
+    '</div>',
+  ].join('\n');
+}
+
+export function stripExistingVrTourQr(html) {
+  if (!html || !html.includes('data-vr-tour-qr')) return html || '';
+  return String(html)
+    .replace(/<!--\s*360° tour QR[\s\S]*?-->\s*/gi, '')
+    .replace(/<div\b[^>]*\bdata-vr-tour-qr=["']1["'][^>]*>[\s\S]*?<\/div>\s*/gi, '');
 }
 
 /**

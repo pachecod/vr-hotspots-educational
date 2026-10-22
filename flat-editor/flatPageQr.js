@@ -64,10 +64,7 @@ export function bodyCloseInsertPos(html) {
   return content.length;
 }
 
-/**
- * Flat-page QR — same simple <img> pattern as the 360 tour mobile QR
- * (160×160, centered via tour mobile-section styles when present).
- */
+/** Flat-page QR (Editing Tools → QR Code): a self-contained, centered 160×160 block. */
 export function buildFlatPageQrHtml(hostedUrl, qrUrl) {
   const pageUrl = resolveAbsoluteUrl(hostedUrl || '');
   const qrSrc = resolveFlatPageQrSrc(hostedUrl, qrUrl);
@@ -76,17 +73,9 @@ export function buildFlatPageQrHtml(hostedUrl, qrUrl) {
   const qrAttr = escapeAttr(qrSrc);
   return [
     '<!-- Flat page QR (scan to open this hosted page) -->',
-    '<p data-flat-page-qr="1">View on Your Phone</p>',
-    `<img class="vr-tour-mobile-qr-img" data-flat-page-qr="1" data-flat-page-url="${pageAttr}" src="${qrAttr}" alt="Scan to open this page on your phone" width="160" height="160">`,
+    `<div class="page-qr" data-flat-page-qr="1" data-flat-page-url="${pageAttr}" style="text-align:center;margin:24px auto;">`,
+    '<p style="margin:0 0 8px;">View on Your Phone</p>',
+    `<img src="${qrAttr}" alt="Scan to open this page on your phone" width="160" height="160">`,
+    '</div>',
   ].join('\n');
-}
-
-/** Alias used by Online Assets insert-at-cursor (same markup). */
-export function buildFlatPageQrInlineHtml(hostedUrl, qrUrl) {
-  return buildFlatPageQrHtml(hostedUrl, qrUrl);
-}
-
-/** @deprecated Use buildFlatPageQrHtml — kept for any leftover imports. */
-export function buildFlatPageQrCornerHtml(hostedUrl, qrUrl) {
-  return buildFlatPageQrHtml(hostedUrl, qrUrl);
 }

@@ -1,7 +1,6 @@
 const AFRAME_CDN = 'https://aframe.io/releases/1.7.1/aframe.min.js';
 const MODEL_VIEWER_CDN = 'https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js';
 import { buildProjectVrInsertHtml, buildGuestProjectVrInsertHtml, isGuestEditor } from './vrTourEmbed.js';
-import { buildFlatPageQrInlineHtml } from './flatPageQr.js';
 
 function escapeAttr(value) {
   return String(value || '')
@@ -72,15 +71,7 @@ export function defaultHtmlInsertPos(html) {
 export function buildInsertHtml(category, asset) {
   if (category === 'project-vr') {
     const buildFn = isGuestEditor() ? buildGuestProjectVrInsertHtml : buildProjectVrInsertHtml;
-    return buildFn(
-      asset?.name,
-      asset?.embedUrl || asset?.url,
-      asset?.qrUrl
-    );
-  }
-
-  if (category === 'flat-page-qr') {
-    return buildFlatPageQrInlineHtml(asset?.hostedUrl, asset?.qrUrl || asset?.url);
+    return buildFn(asset?.name, asset?.embedUrl || asset?.url, asset?.qrUrl, { includeQr: false });
   }
 
   const url = getAssetMediaUrl(asset);

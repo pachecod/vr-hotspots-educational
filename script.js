@@ -19566,19 +19566,9 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   }
 
-  /** True when the project has real 360° content (not just the default starter scene). */
+  /** True when the project has a 360° tour to publish — any scene, even the untouched starter scene. */
   hasSphericalContent() {
-    if (Array.isArray(this.hotspots) && this.hotspots.length > 0) return true;
-    const scenes = this.scenes || {};
-    if (Object.keys(scenes).length > 1) return true;
-    return Object.values(scenes).some(
-      (scene) =>
-        scene &&
-        typeof scene === 'object' &&
-        ((scene.type === 'video' && scene.videoSrc) ||
-          (scene.image && !HotspotEditor.DEFAULT_SCENE_IMAGES.includes(scene.image)) ||
-          (Array.isArray(scene.hotspots) && scene.hotspots.length > 0))
-    );
+    return Object.keys(this.scenes || {}).length > 0;
   }
 
   /** True when the active browser workspace should be offered as "last worked on locally". */
@@ -24368,7 +24358,7 @@ function openQrCodeChooser() {
           <span><strong>The 360° tour</strong><br><span style="font-size:12px;color:#aaa;">${
             has360
               ? 'Hosts this project’s 360° tour online so the code works.'
-              : 'Add 360° content to this project first.'
+              : 'Add a 360° scene to this project first.'
           }</span></span>
         </label>
         <p style="font-size:12px;color:#aaa;margin:4px 0 0;">${lifetime} The QR code is added where your cursor is in index.html.</p>

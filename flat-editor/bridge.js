@@ -1022,7 +1022,7 @@ export class FlatPageEditorBridge {
     const editor = window.hotspotEditor;
     if (!editor) throw new Error('The 360° editor is not available.');
     if (typeof editor.hasSphericalContent === 'function' && !editor.hasSphericalContent()) {
-      throw new Error('Add 360° content to this project first.');
+      throw new Error('Add a 360° scene to this project first.');
     }
     const caps = typeof window.getEditorCapabilities === 'function' ? window.getEditorCapabilities() : {};
     const usePermanent = !!caps.canPublishVrTour;

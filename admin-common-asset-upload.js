@@ -191,6 +191,28 @@
       }
     }
 
+    /** Pixel size of an image file, or null if the browser can't read it. */
+    function readImageSize(file) {
+      return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(null);
+        };
+        img.src = url;
+      });
+    }
+
+    // 360° photos are equirectangular: twice as wide as they are tall.
+    function isEquirectangular(size) {
+      return !!size && size.height > 0 && Math.abs(size.width / size.height - 2) <= 0.02;
+    }
+
     function describeUploadResult(fileName, asset, category) {
       if (asset?.transcoded && asset.originalSize && asset.size) {
         return `Uploaded ${fileName} — compressed ${formatBytes(asset.originalSize)} → ${formatBytes(asset.size)}`;
@@ -211,6 +233,7 @@
       const activeCategory = getActiveCategory();
       let hadFailure = false;
       let hadSuccess = false;
+      let filedAs360 = 0;
 
       resetUploadProgress();
 
@@ -240,11 +263,16 @@
           continue;
         }
 
+        let uploadCategory = activeCategory;
+        if (activeCategory === 'images' && ['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+          if (isEquirectangular(await readImageSize(file))) uploadCategory = '360-images';
+        }
+
         resetUploadProgress();
         if (status) status.textContent = `Uploading ${i + 1}/${files.length}: ${file.name}...`;
         const fd = new FormData();
         fd.append('file', file);
-        fd.append('category', activeCategory);
+        fd.append('category', uploadCategory);
         if (uploadTags) fd.append('tags', uploadTags);
         const shareCheckbox = document.getElementById('upload-share-with-students');
         if (shareCheckbox?.checked) fd.append('shareWithStudents', 'true');
@@ -273,9 +301,10 @@
 
           if (status) {
             status.textContent = asset
-              ? describeUploadResult(file.name, asset, activeCategory)
+              ? describeUploadResult(file.name, asset, uploadCategory)
               : `Uploaded ${file.name}`;
           }
+          if (uploadCategory !== activeCategory) filedAs360++;
           hadSuccess = true;
         } catch (err) {
           if (err.code === 'AUTH_REQUIRED') throw err;
@@ -294,6 +323,9 @@
           await onSuccess();
         }
         if (status && !hadFailure) status.textContent = 'Upload complete.';
+        if (status && filedAs360) {
+          status.textContent += ` ${filedAs360} 360° photo${filedAs360 === 1 ? ' was' : 's were'} detected (2:1) and filed under 360 Photos.`;
+        }
       }
 
       resetUploadProgress();

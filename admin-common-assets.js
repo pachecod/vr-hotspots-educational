@@ -79,12 +79,50 @@ function renderAssets() {
         <button class="btn-copy" data-action="copy" data-name="${asset.name}">Copy URL</button>
         <button class="btn-tags-edit" data-action="tags" data-name="${asset.name}">Edit Tags</button>
         ${visibilityButton}
+        ${activeCategory === 'images' ? `<button class="btn-move-360" data-action="move-360" data-name="${asset.name}" hidden>Move to 360 Photos</button>` : ''}
         <button class="btn-delete" data-action="delete" data-name="${asset.name}">Delete</button>
       </div>
     </div>
   `;
     })
     .join('');
+  revealMoveTo360Buttons(list);
+}
+
+// Offer "Move to 360 Photos" only on flat images whose loaded thumbnail is 2:1 (equirectangular).
+function revealMoveTo360Buttons(list) {
+  list.querySelectorAll('.btn-move-360').forEach((btn) => {
+    const img = btn.closest('.asset-card')?.querySelector('img');
+    if (!img) return;
+    const check = () => {
+      const { naturalWidth: w, naturalHeight: h } = img;
+      if (h > 0 && Math.abs(w / h - 2) <= 0.02) btn.hidden = false;
+    };
+    if (img.complete) check();
+    else img.addEventListener('load', check, { once: true });
+  });
+}
+
+async function moveAssetTo360(asset) {
+  if (
+    !confirm(
+      `Move "${asset.name}" to 360 Photos?\n\nIts link will change, so any project already using this image by its old link will need to pick it again.`
+    )
+  ) {
+    return;
+  }
+  const res = await adminFetch(
+    `/admin/common-assets/${encodeURIComponent(asset.category || activeCategory)}/${encodeURIComponent(asset.name)}/move-category`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: '360-images' }),
+    }
+  );
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Move failed');
+  showToast('Moved to 360 Photos');
+  await loadAssets();
 }
 
 function findAsset(name) {
@@ -311,6 +349,7 @@ function setupAssetList() {
       if (btn.dataset.action === 'tags') await editAssetTags(asset);
       if (btn.dataset.action === 'share') await shareAssetWithStudents(asset);
       if (btn.dataset.action === 'unshare') await makeAssetAdminOnly(asset);
+      if (btn.dataset.action === 'move-360') await moveAssetTo360(asset);
       if (btn.dataset.action === 'delete') await deleteAsset(name);
     } catch (err) {
       if (err.code === 'AUTH_REQUIRED') {

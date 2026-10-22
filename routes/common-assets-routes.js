@@ -563,6 +563,30 @@ function registerCommonAssetRoutes(app, upload) {
     }
   });
 
+  app.post('/admin/common-assets/:category/:filename/move-category', requireAdmin, async (req, res) => {
+    try {
+      const category = req.params.category;
+      const filename = sanitizeAssetFilenameParam(req.params.filename);
+      const to = req.body?.to;
+      if (!isValidCategory(category) || !isValidCategory(to) || !filename) {
+        return res.status(400).json({ success: false, message: 'Invalid category or filename' });
+      }
+
+      const resolved = await resolveStoredAssetPath(category, filename);
+      if (!resolved) {
+        return res.status(404).json({ success: false, message: 'Asset not found' });
+      }
+
+      const { moveAssetToCategory } = require('../lib/site-assets');
+      const asset = await moveAssetToCategory(category, filename, to, resolved.visibility);
+      invalidateCommonAssetsListCache();
+      res.json({ success: true, asset });
+    } catch (err) {
+      console.error('Common asset move-category error:', err);
+      res.status(400).json({ success: false, message: err.message || 'Move failed' });
+    }
+  });
+
   app.get('/admin/admin-assets/:category/:filename', requireAdmin, async (req, res) => {
     try {
       const category = req.params.category;

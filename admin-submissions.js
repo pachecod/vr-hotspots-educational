@@ -917,8 +917,64 @@ async function unhostEverything() {
   }
 }
 
-async function deleteVersion(versionId) {
-  if (!confirm('Delete this project and all its versions (including teacher feedback) from cloud storage?')) return;
+const DELETE_CONFIRM_PHRASE = 'I Agree';
+
+/** Resolves true only after the admin types DELETE_CONFIRM_PHRASE and clicks Delete. */
+function confirmProjectDelete(projectName) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText =
+      'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;font-family:Arial,sans-serif;';
+    overlay.innerHTML = `
+      <div role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title" style="background:#fff;color:#222;border-radius:10px;padding:24px;max-width:480px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+        <h2 id="delete-confirm-title" style="margin:0 0 12px;font-size:20px;color:#b00020;">Delete “${escapeHtml(projectName || 'this project')}”?</h2>
+        <p style="margin:0 0 8px;">This permanently removes, with no undo:</p>
+        <ul style="margin:0 0 16px;padding-left:20px;line-height:1.5;">
+          <li>Every version of this project (student submissions, drafts, your returned edits, repaired copies)</li>
+          <li>The project from the team member's or student's cloud saves</li>
+          <li>Any hosted page for it — public links and QR codes will stop working</li>
+        </ul>
+        <label for="delete-confirm-input" style="display:block;margin-bottom:6px;">Type <strong>${DELETE_CONFIRM_PHRASE}</strong> to confirm:</label>
+        <input id="delete-confirm-input" type="text" autocomplete="off" style="width:100%;padding:10px;border:1px solid #999;border-radius:4px;box-sizing:border-box;font-size:15px;">
+        <div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end;">
+          <button type="button" data-delete-cancel style="padding:10px 18px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
+          <button type="button" data-delete-confirm disabled style="padding:10px 18px;background:#b00020;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;opacity:0.5;">Delete</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#delete-confirm-input');
+    const confirmBtn = overlay.querySelector('[data-delete-confirm]');
+    const matches = () =>
+      input.value.trim().replace(/\s+/g, ' ').toLowerCase() === DELETE_CONFIRM_PHRASE.toLowerCase();
+    const close = (result) => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+      resolve(result);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') close(false);
+      if (e.key === 'Enter' && matches()) close(true);
+    };
+    input.addEventListener('input', () => {
+      confirmBtn.disabled = !matches();
+      confirmBtn.style.opacity = confirmBtn.disabled ? '0.5' : '1';
+    });
+    confirmBtn.addEventListener('click', () => matches() && close(true));
+    overlay.querySelector('[data-delete-cancel]').addEventListener('click', () => close(false));
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close(false);
+    });
+    document.addEventListener('keydown', onKey);
+    input.focus();
+  });
+}
+
+async function deleteVersion(versionId, projectName) {
+  if (!projectName) {
+    const card = document.querySelector(`.submission-card[data-version-id="${CSS.escape(versionId)}"]`);
+    projectName = card?.getAttribute('data-project-name') || '';
+  }
+  if (!(await confirmProjectDelete(projectName))) return;
   try {
     const deleteUrl = isLegacyVersion(versionId)
       ? `/admin/delete/${encodeURIComponent(legacyFileName(versionId))}`

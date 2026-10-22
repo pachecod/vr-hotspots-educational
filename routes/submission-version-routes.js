@@ -172,6 +172,62 @@ async function listHostedAssignableProjects() {
 }
 
 function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extractZipToDirSafe }) {
+  /** Publish a version's ZIP at /hosted/<urlPath>/ (replacing any files already there). */
+  async function hostVersionAtPath(version, urlPath) {
+    let tempPath = null;
+    let tempExtractDir = null;
+    try {
+      tempPath = path.join('temp-uploads', `host_${Date.now()}_${version.fileName}`);
+      tempExtractDir = path.join('temp-uploads', `host_extract_${Date.now()}_${urlPath}`);
+      await b2Service.downloadFile(version.b2Path, tempPath);
+      assertValidZipFile(tempPath);
+      fs.mkdirSync(tempExtractDir, { recursive: true });
+      await extractZipToDirSafe(tempPath, tempExtractDir);
+      await uploadHostedDirectory(tempExtractDir, urlPath);
+      const urls = await resolveHostedProjectUrlsAsync(urlPath);
+      await projectVersionsDb.updateVersionHosting(version.id, {
+        hostedPath: urlPath,
+        hostedUrl: urls.tourUrl,
+        isHosted: true,
+      });
+      return urls;
+    } finally {
+      if (tempPath) {
+        try {
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch (_) {}
+      }
+      if (tempExtractDir) {
+        try {
+          if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
+        } catch (_) {}
+      }
+    }
+  }
+
+  /**
+   * Move hosting (same URL) and the hosted-list feature from the thread's currently
+   * hosted version to newVersionId. Prefers parentVersion when it is the hosted one.
+   * Returns null when nothing in the thread is hosted.
+   */
+  async function carryOverHosting(parentVersion, newVersionId) {
+    let previous = parentVersion.isHosted && parentVersion.hostedPath ? parentVersion : null;
+    if (!previous) {
+      const versions = await projectVersionsDb.listThreadVersions(parentVersion.threadId);
+      previous = versions.find((v) => v.id !== newVersionId && v.isHosted && v.hostedPath) || null;
+    }
+    if (!previous) return null;
+
+    const wasFeatured = !!previous.featuredOnHostedGallery;
+    const newVersion = await projectVersionsDb.getVersionById(newVersionId);
+    const urls = await hostVersionAtPath(newVersion, previous.hostedPath);
+    // Files at that path now belong to the new version; clearing hosting also clears featured.
+    await projectVersionsDb.updateVersionHosting(previous.id, { isHosted: false });
+    if (wasFeatured) {
+      await projectVersionsDb.updateVersionGalleryFeature(newVersionId, true);
+    }
+    return { hostedPath: previous.hostedPath, tourUrl: urls.tourUrl, featured: wasFeatured };
+  }
   function zipDirectoryToFile(sourceDir, zipPath) {
     return new Promise((resolve, reject) => {
       const output = fs.createWriteStream(zipPath);
@@ -695,11 +751,22 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         if (req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
       } catch (_) {}
 
+      let hosting = null;
+      if (saveToSubmissions) {
+        try {
+          hosting = await carryOverHosting(parentVersion, result.version.id);
+        } catch (hostErr) {
+          console.error('admin return re-host error:', hostErr);
+          hosting = { error: hostErr.message };
+        }
+      }
+
       return res.json({
         success: true,
         message: 'Feedback sent to student',
         versionId: result.version.id,
         versionNumber: result.versionNumber,
+        hosting,
       });
     } catch (err) {
       console.error('admin return error:', err);
@@ -886,26 +953,12 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
     if (!urlPath || !/^[a-zA-Z0-9_-]+$/.test(urlPath)) {
       return res.status(400).json({ error: 'Invalid urlPath' });
     }
-    let tempPath = null;
-    let tempExtractDir = null;
     try {
       const version = await projectVersionsDb.getVersionById(req.params.versionId);
       if (!version) {
         return res.status(404).json({ success: false, message: 'Version not found' });
       }
-      tempPath = path.join('temp-uploads', `host_${Date.now()}_${version.fileName}`);
-      tempExtractDir = path.join('temp-uploads', `host_extract_${Date.now()}_${urlPath}`);
-      await b2Service.downloadFile(version.b2Path, tempPath);
-      assertValidZipFile(tempPath);
-      fs.mkdirSync(tempExtractDir, { recursive: true });
-      await extractZipToDirSafe(tempPath, tempExtractDir);
-      await uploadHostedDirectory(tempExtractDir, urlPath);
-      const urls = await resolveHostedProjectUrlsAsync(urlPath);
-      await projectVersionsDb.updateVersionHosting(version.id, {
-        hostedPath: urlPath,
-        hostedUrl: urls.tourUrl,
-        isHosted: true,
-      });
+      const urls = await hostVersionAtPath(version, urlPath);
       return res.json({
         success: true,
         hostedUrl: urls.tourUrl,
@@ -914,17 +967,6 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
-    } finally {
-      if (tempPath) {
-        try {
-          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-        } catch (_) {}
-      }
-      if (tempExtractDir) {
-        try {
-          if (fs.existsSync(tempExtractDir)) fs.rmSync(tempExtractDir, { recursive: true, force: true });
-        } catch (_) {}
-      }
     }
   });
 

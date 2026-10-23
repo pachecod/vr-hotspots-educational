@@ -517,6 +517,19 @@ body.project-loading-active #scene-loading-overlay {
   text-align: center;
 }
 
+/* Signed-in home: your projects on the left, sample projects on the right. */
+#integrated-welcome-inner.resume-inbox-inner.integrated-welcome-with-playground {
+  max-width: var(--welcome-shell-max-width);
+}
+
+#integrated-welcome-inner.resume-inbox-inner.integrated-welcome-with-playground .integrated-welcome-auth {
+  text-align: left;
+}
+
+.resume-inbox-footer .resume-secondary-btn + .resume-secondary-btn {
+  margin-left: 8px;
+}
+
 .integrated-welcome-layout {
   display: block;
 }

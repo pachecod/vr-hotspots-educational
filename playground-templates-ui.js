@@ -33,7 +33,7 @@ function escapeAttr(str) {
     .replace(/</g, '&lt;');
 }
 
-function bindPlaygroundGridClicks(gridWrap, templates, state, { containerId, onAuthenticated }) {
+function bindPlaygroundGridClicks(gridWrap, templates, state, { containerId, onAuthenticated, openSample }) {
   gridWrap.addEventListener('click', async (e) => {
     const btn = e.target.closest('.welcome-playground-card');
     if (!btn || state.loadingSlug) return;
@@ -42,7 +42,8 @@ function bindPlaygroundGridClicks(gridWrap, templates, state, { containerId, onA
     state.loadingSlug = slug;
     gridWrap.innerHTML = renderPlaygroundCards(templates, state.loadingSlug);
     try {
-      await openPlaygroundTemplate(slug, { containerId, onAuthenticated });
+      if (typeof openSample === 'function') await openSample(slug);
+      else await openPlaygroundTemplate(slug, { containerId, onAuthenticated });
     } catch (err) {
       if (!err || err.code !== 'GUEST_AGREEMENT_CANCELLED') {
         alert(err.message || 'Could not open sample project');
@@ -83,7 +84,14 @@ function renderPlaygroundCards(templates, loadingSlug) {
     .join('')}</div>`;
 }
 
-async function mountPlaygroundTemplatesSection(innerEl, { containerId, onAuthenticated, welcomeInner }) {
+/**
+ * Samples grid on the welcome / home screen. Signed-in homes pass openSample (load into their
+ * own editor, no guest mode) and their own subtitle.
+ */
+async function mountPlaygroundTemplatesSection(
+  innerEl,
+  { containerId, onAuthenticated, welcomeInner, openSample, subtitle }
+) {
   const shell = welcomeInner || innerEl.closest('#integrated-welcome-inner');
   let section = innerEl.querySelector('.welcome-playground-section');
   if (!section) {
@@ -108,13 +116,17 @@ async function mountPlaygroundTemplatesSection(innerEl, { containerId, onAuthent
     section.innerHTML = `
       <div class="welcome-playground-head">
         <h3 class="welcome-playground-title">Try a sample project</h3>
-        <p class="welcome-playground-subtitle">No sign-in required — open in guest mode and explore.</p>
+        <p class="welcome-playground-subtitle">${escapeHtml(subtitle || 'No sign-in required — open in guest mode and explore.')}</p>
       </div>
       <div class="welcome-playground-grid-wrap">${renderPlaygroundCards(data.templates || [], null)}</div>
     `;
 
     const gridWrap = section.querySelector('.welcome-playground-grid-wrap');
-    bindPlaygroundGridClicks(gridWrap, data.templates || [], { loadingSlug: null }, { containerId, onAuthenticated });
+    bindPlaygroundGridClicks(gridWrap, data.templates || [], { loadingSlug: null }, {
+      containerId,
+      onAuthenticated,
+      openSample,
+    });
   } catch (err) {
     section.innerHTML = `<p class="welcome-playground-error">${escapeHtml(err.message || 'Failed to load templates.')}</p>`;
   }
@@ -812,6 +824,7 @@ window.fetchPlaygroundTemplates = fetchPlaygroundTemplates;
 window.mountPlaygroundTemplatesSection = mountPlaygroundTemplatesSection;
 window.renderGuestTemplatePicker = renderGuestTemplatePicker;
 window.openPlaygroundTemplate = openPlaygroundTemplate;
+window.loadPlaygroundTemplateBySlug = loadPlaygroundTemplateBySlug;
 window.showEmbedPracticeClosed = showEmbedPracticeClosed;
 window.installEmbedGuestAgreementGate = installEmbedGuestAgreementGate;
 window.installEmbedMobileEditorLayout = installEmbedMobileEditorLayout;

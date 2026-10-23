@@ -426,8 +426,20 @@ function resumeLocalEditorWork(editor, onComplete) {
 }
 
 /** Show resume/inbox picker or first-time welcome after sign-in. */
+/** Set by Editing Tools → Home for signed-in users; read once when the home page loads. */
+function consumeStudentHomeRequest() {
+  try {
+    const requested = sessionStorage.getItem('vr-hotspot-student-home') === '1';
+    sessionStorage.removeItem('vr-hotspot-student-home');
+    return requested;
+  } catch (_) {
+    return false;
+  }
+}
+
 async function showPostAuthWelcomeIfPending() {
   if (window.__postAuthWelcomeMounted || !isPostAuthWelcomePending()) return false;
+  const homeRequested = consumeStudentHomeRequest();
   if (isPlaygroundGuestTemplateFlow()) {
     clearPostAuthWelcomePending();
     return false;
@@ -451,7 +463,10 @@ async function showPostAuthWelcomeIfPending() {
   };
 
   const context = await fetchStudentResumeContext(editor);
-  if (shouldShowResumePicker(context) && typeof editor.mountResumeOrInboxPicker === 'function') {
+  if (
+    (homeRequested || shouldShowResumePicker(context)) &&
+    typeof editor.mountResumeOrInboxPicker === 'function'
+  ) {
     editor.mountResumeOrInboxPicker(containerId, onComplete, context);
     return true;
   }
@@ -20161,6 +20176,8 @@ document.addEventListener('DOMContentLoaded', () => {
         : '';
 
     inner.innerHTML = `
+      <div class="integrated-welcome-layout">
+      <div class="integrated-welcome-auth">
       <div class="resume-inbox-panel">
         <h2 class="resume-inbox-heading">Welcome back</h2>
         <p class="resume-inbox-lead">${
@@ -20173,9 +20190,37 @@ document.addEventListener('DOMContentLoaded', () => {
         ${inboxSection}
         <div class="resume-inbox-footer">
           <button type="button" id="resume-start-new" class="resume-secondary-btn">Start something new</button>
+          <button type="button" id="resume-sign-out" class="resume-secondary-btn">Sign out</button>
         </div>
+        <p class="welcome-more-about">
+          <a href="/about-webxride.html">More about WebXRIDE</a>
+        </p>
         ${this._welcomeGithubFooterHtml()}
+      </div>
+      </div>
+      <div class="integrated-welcome-samples" id="resume-welcome-samples"></div>
       </div>`;
+
+    // Right column: sample projects, opened straight into this signed-in editor (no guest mode).
+    const samplesEl = inner.querySelector('#resume-welcome-samples');
+    if (samplesEl && typeof window.mountPlaygroundTemplatesSection === 'function') {
+      void window.mountPlaygroundTemplatesSection(samplesEl, {
+        welcomeInner: inner,
+        subtitle: 'Start from a sample. It opens in your editor as a new project.',
+        openSample: (slug) => this._openSampleFromHome(slug, onComplete),
+      });
+    }
+
+    inner.querySelector('#resume-sign-out')?.addEventListener('click', async () => {
+      if (!confirm('Sign out of your account on this computer?')) return;
+      try {
+        window.StudentProjectsPanel?.stopFeedbackPolling?.();
+        if (typeof window.studentLogout === 'function') await window.studentLogout();
+        window.location.href = '/';
+      } catch (err) {
+        alert(err.message || 'Could not sign out. Please try again.');
+      }
+    });
 
     inner.querySelector('#resume-continue-local')?.addEventListener('click', () => {
       if (this.contentMode === 'flat') {
@@ -20213,9 +20258,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     inner.querySelector('#resume-start-new')?.addEventListener('click', () => {
-      inner.classList.remove('resume-inbox-inner');
+      inner.classList.remove('resume-inbox-inner', 'integrated-welcome-with-playground');
       this._renderWelcomeModeStep(dialog, inner, { onComplete });
     });
+  }
+
+  /** Signed-in home → sample card: load the sample into this editor as a new, unlinked project. */
+  async _openSampleFromHome(slug, onComplete) {
+    this._markWelcomeSeen();
+    window.showProjectLoadingOverlay?.('Loading Project.');
+    window.clearEntryGateOverlay?.();
+    window.__integratedWelcomeContainerId = null;
+    try {
+      const template = await window.loadPlaygroundTemplateBySlug(slug);
+      const title = template?.title || 'Sample project';
+      // Not linked to any earlier cloud project, so Save to Cloud creates a new one.
+      this._localWorkspaceMeta = { projectName: title, source: 'sample', openedAt: new Date().toISOString() };
+      const nameInput = document.getElementById('template-name');
+      if (nameInput) nameInput.value = title;
+      try {
+        this.saveScenesData();
+      } catch (_) {}
+    } finally {
+      window.hideProjectLoadingOverlay?.();
+    }
+    if (typeof onComplete === 'function') onComplete();
   }
 
   _shouldShowWelcome360MediaStep() {
@@ -24756,6 +24823,9 @@ function confirmGoHomeFromEditor() {
   const params = new URLSearchParams(window.location.search);
   const caps = typeof window.getEditorCapabilities === 'function' ? window.getEditorCapabilities() : {};
   const isGuest = !!caps.isTestUser || window.editorAccessMode === 'local_test';
+  const isAdminEditor =
+    params.get('adminReview') === '1' || params.get('adminAssign') === '1' || !!params.get('adminTemplate');
+  const isSignedInStudent = !isAdminEditor && window.editorAccessMode === 'student';
   let lose;
   let comeBack;
   if (params.get('adminReview') === '1') {
@@ -24775,7 +24845,7 @@ function confirmGoHomeFromEditor() {
     comeBack = 'Choose <strong>Continue as Guest</strong>; your work reopens where you left off.';
   } else {
     lose = 'Nothing — your work stays saved in this browser. Changes you have not saved with <strong>☁️ Save to Cloud</strong> exist only on this computer.';
-    comeBack = 'Return to the editor and your project reopens where you left off. Cloud copies are under <strong>My Cloud Saves</strong> and <strong>My Inbox</strong>.';
+    comeBack = 'Your home page lists your projects. Choose <strong>Continue this project</strong>, or open one from <strong>My Cloud Saves</strong> or <strong>My Inbox</strong>.';
   }
 
   const dialog = document.createElement('div');
@@ -24807,6 +24877,13 @@ function confirmGoHomeFromEditor() {
   document.addEventListener('keydown', onKey);
   dialog.querySelector('#go-home-stay').addEventListener('click', close);
   dialog.querySelector('#go-home-leave').addEventListener('click', () => {
+    // Signed in: land on the signed-in home (your projects + samples), not straight back in the editor.
+    if (isSignedInStudent) {
+      try {
+        sessionStorage.setItem('vr-hotspot-pending-welcome', '1');
+        sessionStorage.setItem('vr-hotspot-student-home', '1');
+      } catch (_) {}
+    }
     window.location.href = '/';
   });
   dialog.querySelector('#go-home-stay').focus();

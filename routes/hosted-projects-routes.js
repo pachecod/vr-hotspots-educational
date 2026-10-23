@@ -1,5 +1,6 @@
 const { loginRateLimiter } = require('../student-auth');
 const { isDbEnabled } = require('../services/db-service');
+const { getAdminSession } = require('../admin-auth');
 const {
   verifyClassPassword,
   hasClassRosterAccess,
@@ -12,6 +13,11 @@ const {
   setHostedGalleryFeatured,
   featuredHostedPagesTitle,
 } = require('../services/hosted-projects-gallery');
+
+/** Signed-in admins can view every class gallery without its classroom password. */
+function canViewGallery(req, cls) {
+  return !!getAdminSession(req) || hasClassRosterAccess(req, cls.id);
+}
 
 function registerHostedProjectsRoutes(app) {
   app.get('/api/classes/:classSlug/hosted-projects/gate', async (req, res) => {
@@ -26,7 +32,7 @@ function registerHostedProjectsRoutes(app) {
           message: 'Class not found. Check the URL with your teacher or administrator.',
         });
       }
-      if (!cls.password_hash) {
+      if (!cls.password_hash && !getAdminSession(req)) {
         return res.status(503).json({
           success: false,
           message: `The "${cls.name}" class needs a password before this gallery can be used.`,
@@ -41,7 +47,7 @@ function registerHostedProjectsRoutes(app) {
           description: cls.description,
         },
         pageTitle: featuredHostedPagesTitle(cls.name),
-        authenticated: hasClassRosterAccess(req, cls.id),
+        authenticated: canViewGallery(req, cls),
       });
     } catch (err) {
       console.error('hosted-projects gate error:', err);
@@ -99,7 +105,7 @@ function registerHostedProjectsRoutes(app) {
       if (!cls) {
         return res.status(404).json({ success: false, message: 'Class not found' });
       }
-      if (!hasClassRosterAccess(req, cls.id)) {
+      if (!canViewGallery(req, cls)) {
         return res.status(401).json({ success: false, message: 'Password required' });
       }
       const projects = await listClassHostedGalleryProjects(cls.id);

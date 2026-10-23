@@ -29,6 +29,7 @@ const {
 const { query } = require('../services/db-service');
 const { logAppError } = require('../lib/error-log');
 const { repairMediaExtensionsInZip } = require('../lib/repair-media-extensions');
+const { localizeStudentAssetsInDir } = require('../lib/localize-student-assets');
 
 function sessDisplayName(req) {
   const sess = getStudentSession(req);
@@ -183,6 +184,8 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       assertValidZipFile(tempPath);
       fs.mkdirSync(tempExtractDir, { recursive: true });
       await extractZipToDirSafe(tempPath, tempExtractDir);
+      // Admin hosting: copy any student asset files the project links to into the hosted copy.
+      await localizeStudentAssetsInDir(tempExtractDir, { canUseStudent: () => true });
       await uploadHostedDirectory(tempExtractDir, urlPath);
       const urls = await resolveHostedProjectUrlsAsync(urlPath);
       await projectVersionsDb.updateVersionHosting(version.id, {

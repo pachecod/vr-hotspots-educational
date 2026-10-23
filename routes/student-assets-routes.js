@@ -3,6 +3,7 @@ const fs = require('fs');
 const b2Service = require('../services/b2-service');
 const { query, isDbEnabled } = require('../services/db-service');
 const { requireStudentStrict } = require('../student-auth');
+const { getAdminSession } = require('../admin-auth');
 const {
   isValidCategory,
   sanitizeFilename,
@@ -280,9 +281,19 @@ function registerStudentAssetRoutes(app, upload) {
     }
   );
 
-  app.get('/student-assets/:studentId/:category/:filename', requireStudentStrict, async (req, res) => {
+  // The owning student, or any signed-in admin (e.g. Admin Review previews), may load a student's asset.
+  const requireStudentOrAdmin = (req, res, next) => {
+    const adminSession = getAdminSession(req);
+    if (adminSession) {
+      req.adminSession = adminSession;
+      return next();
+    }
+    return requireStudentStrict(req, res, next);
+  };
+
+  app.get('/student-assets/:studentId/:category/:filename', requireStudentOrAdmin, async (req, res) => {
     try {
-      if (req.params.studentId !== req.studentSession.studentId) {
+      if (!req.adminSession && req.params.studentId !== req.studentSession.studentId) {
         return res.status(403).json({ success: false, message: 'Forbidden' });
       }
       const { studentId, category, filename } = req.params;

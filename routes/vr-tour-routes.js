@@ -19,6 +19,7 @@ const {
   hostedPathFromTourUrl,
 } = require('../lib/guest-preview-cleanup');
 const { uploadHostedDirectory } = require('../lib/hosted-b2-storage');
+const { localizeStudentAssetsInDir, studentAssetAccessFor } = require('../lib/localize-student-assets');
 const { getHostedOrigin, getAppOrigin, buildHostedUrl } = require('../lib/hosted-origin');
 
 const PREVIEW_COOKIE = 'vr_preview_sid';
@@ -51,6 +52,7 @@ async function publishZipToHostedDir({ zipPath, hostedPath, req, assertValidZipF
       throw err;
     }
 
+    await localizeStudentAssetsInDir(tempDir, { canUseStudent: studentAssetAccessFor(req) });
     await uploadHostedDirectory(tempDir, hostedPath);
 
     const url = buildHostedUrl(hostedPath, 'index.html', req);

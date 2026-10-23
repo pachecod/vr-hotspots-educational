@@ -21,7 +21,23 @@ const {
   studentHostedPrefix,
   removeHostedFlatPageDir,
 } = require('../lib/student-content/flat-page-purge');
-const { uploadHostedUtf8, getHostedDir } = require('../lib/hosted-b2-storage');
+const { uploadHostedUtf8, uploadHostedFileFromDisk, getHostedDir } = require('../lib/hosted-b2-storage');
+const { localizeStudentAssetsInFiles, studentAssetAccessFor } = require('../lib/localize-student-assets');
+
+/** Upload a flat page to its hosted path, with the student asset files it uses copied alongside. */
+async function uploadHostedFlatPage(hostedPath, files, req) {
+  const localized = await localizeStudentAssetsInFiles(files, { canUseStudent: studentAssetAccessFor(req) });
+  try {
+    for (const file of localized.files) {
+      await uploadHostedUtf8(hostedPath, file.name, file.content);
+    }
+    for (const asset of localized.assets) {
+      await uploadHostedFileFromDisk(hostedPath, asset.localPath, asset.relativePath);
+    }
+  } finally {
+    localized.cleanup();
+  }
+}
 const { logAppError } = require('../lib/error-log');
 const { buildHostedUrl } = require('../lib/hosted-origin');
 
@@ -240,9 +256,7 @@ function registerFlatPageRoutes(app) {
       const previewSid = getOrSetPreviewSessionId(req, res);
       const hostedPath = `flat-preview-${previewSid}-${payload.slug}`;
 
-      for (const file of payload.files) {
-        await uploadHostedUtf8(hostedPath, file.name, file.content);
-      }
+      await uploadHostedFlatPage(hostedPath, payload.files, req);
 
       const url = buildHostedUrl(hostedPath, 'index.html', req);
       const qrUrl = tourUrlToQrUrl(url);
@@ -438,9 +452,7 @@ function registerFlatPageRoutes(app) {
 
     const hostedPath = `${studentHostedPrefix(studentId)}${payload.slug}`;
 
-    for (const file of payload.files) {
-      await uploadHostedUtf8(hostedPath, file.name, file.content);
-    }
+    await uploadHostedFlatPage(hostedPath, payload.files, req);
 
     const prefix = buildPrefix(classSlug, studentId, payload.slug);
     await uploadFlatPageFilesToB2(prefix, payload.files);

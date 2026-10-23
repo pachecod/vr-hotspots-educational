@@ -551,6 +551,22 @@
         margin: 0;
       }
 
+      .editor-home-btn {
+        padding: 5px 10px;
+        background: transparent;
+        color: #e0e0e0;
+        border: 1px solid #666;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+
+      .editor-home-btn:hover {
+        background: #333;
+        border-color: #999;
+      }
+
       .student-editor-session {
         display: none;
         flex-direction: column;
@@ -1454,6 +1470,7 @@
       </div>
       <div class="panel-header">
         <div class="panel-header-row">
+          <button type="button" id="editor-home-btn" class="editor-home-btn" title="Go to the home page">⌂ Home</button>
           <h2>Editing Tools</h2>
           <button
             type="button"

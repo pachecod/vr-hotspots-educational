@@ -180,6 +180,7 @@ function welcomeGithubFooterHtml() {
       <span aria-hidden="true"> · </span>
       <a href="/privacy-policy.html" style="color: #fff; text-decoration: underline;">Privacy Policy</a>
     </span>
+  <a href="/admin" class="welcome-admin-link" style="display: block; margin-top: 18px; color: #fff; opacity: 0.35; font-size: 11px; text-decoration: none;">Admin</a>
   </p>`;
 }
 

@@ -4864,6 +4864,7 @@ class HotspotEditor {
     }
 
     document.getElementById('add-qr-code')?.addEventListener('click', () => openQrCodeChooser());
+    document.getElementById('editor-home-btn')?.addEventListener('click', () => confirmGoHomeFromEditor());
     if (typeof window.updateFlatPageQrButtonState === 'function') {
       window.updateFlatPageQrButtonState();
     }
@@ -19929,6 +19930,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <span aria-hidden="true"> · </span>
               <a href="/privacy-policy.html" style="color: #fff; text-decoration: underline;">Privacy Policy</a>
             </span>
+          <a href="/admin" class="welcome-admin-link" style="display: block; margin-top: 18px; color: #fff; opacity: 0.35; font-size: 11px; text-decoration: none;">Admin</a>
           </p>`;
   }
 
@@ -24733,7 +24735,70 @@ function openQrCodeChooser() {
   $('#qr-chooser-confirm').focus();
 }
 
+/**
+ * Editing Tools → Home: confirm before leaving the editor, saying what will be lost and how to
+ * get back. Note: loading the bare home page clears this browser's editor working copy
+ * (see clearEphemeralEditorWorkspaceForWelcome), so the copy below must say so.
+ */
+function confirmGoHomeFromEditor() {
+  const params = new URLSearchParams(window.location.search);
+  const caps = typeof window.getEditorCapabilities === 'function' ? window.getEditorCapabilities() : {};
+  const isGuest = !!caps.isTestUser || window.editorAccessMode === 'local_test';
+  let lose;
+  let comeBack;
+  if (params.get('adminReview') === '1') {
+    lose = 'Any edits you have not sent with <strong>Save and Send to Team Member or Student</strong> will be lost.';
+    comeBack = 'Use the faint <strong>Admin</strong> link at the bottom of the home page, then <strong>Submissions → Review in Editor</strong> on this project. It reopens the latest version.';
+  } else if (params.get('adminAssign') === '1') {
+    lose = 'This project has not been sent yet. Leaving cancels the assignment, and any edits are lost.';
+    comeBack = 'Use the faint <strong>Admin</strong> link at the bottom of the home page, then <strong>Assign Project</strong>.';
+  } else if (params.get('adminTemplate')) {
+    lose = 'Changes you have not saved with <strong>Save to Welcome Sample</strong> will be lost.';
+    comeBack = 'Use the faint <strong>Admin</strong> link at the bottom of the home page, then <strong>Templates</strong>.';
+  } else if (isGuest) {
+    lose = 'Your work in this editor will be cleared from this browser unless you saved it with <strong>💾 Save Locally</strong>. Guests cannot save to the cloud.';
+    comeBack = 'Choose <strong>Continue as Guest</strong>, then open it from <strong>My Local Projects</strong> (only if you used Save Locally).';
+  } else {
+    lose = 'The working copy in this browser will be cleared. Changes since your last <strong>☁️ Save to Cloud</strong> or <strong>💾 Save Locally</strong> will be lost.';
+    comeBack = 'Open the project again from <strong>My Cloud Saves</strong> or <strong>My Inbox</strong> (or <strong>My Local Projects</strong> if you saved it locally).';
+  }
+
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:${EDITOR_LAYER.dialog};
+    display:flex;align-items:center;justify-content:center;font-family:Arial;
+  `;
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', 'go-home-title');
+  dialog.innerHTML = `
+    <div style="background:#2a2a2a;color:#fff;border-radius:10px;padding:24px;max-width:480px;width:90%;line-height:1.5;">
+      <h3 id="go-home-title" style="margin:0 0 12px;color:#ffb74d;">Go to the home page?</h3>
+      <p style="margin:0 0 10px;color:#ddd;font-size:14px;"><strong>What you will lose:</strong> ${lose}</p>
+      <p style="margin:0 0 4px;color:#ddd;font-size:14px;"><strong>How to get back:</strong> ${comeBack}</p>
+      <div style="margin-top:18px;display:flex;gap:8px;">
+        <button type="button" id="go-home-stay" style="padding:10px 18px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Stay here</button>
+        <button type="button" id="go-home-leave" style="padding:10px 18px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;">Go Home</button>
+      </div>
+    </div>`;
+  document.body.appendChild(dialog);
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    dialog.remove();
+  };
+  const onKey = (e) => {
+    if (e.key === 'Escape') close();
+  };
+  document.addEventListener('keydown', onKey);
+  dialog.querySelector('#go-home-stay').addEventListener('click', close);
+  dialog.querySelector('#go-home-leave').addEventListener('click', () => {
+    window.location.href = '/';
+  });
+  dialog.querySelector('#go-home-stay').focus();
+}
+
 window.updateFlatPageQrButtonState = updateFlatPageQrButtonState;
+window.confirmGoHomeFromEditor = confirmGoHomeFromEditor;
 window.openQrCodeChooser = openQrCodeChooser;
 
 // Initialize the editor when the page loads

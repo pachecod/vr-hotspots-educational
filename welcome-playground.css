@@ -363,6 +363,31 @@ body.project-loading-active #scene-loading-overlay {
   color: rgba(255, 255, 255, 0.65);
 }
 
+.resume-local-cloud {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.resume-local-cloud--saved {
+  color: #c8e6ff;
+}
+
+.resume-local-cloud--local {
+  color: #ffe08a;
+}
+
+.resume-section-note {
+  margin: -6px 0 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.resume-item-badge--local {
+  background: #ffc107;
+  color: #1a1200;
+}
+
 .resume-inbox-section {
   margin-bottom: 20px;
 }

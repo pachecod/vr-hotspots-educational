@@ -19861,11 +19861,13 @@ document.addEventListener('DOMContentLoaded', () => {
   getLocalWorkspaceSummary() {
     let projectName = '';
     let sourceHint = '';
+    let threadId = null;
     try {
       const raw = localStorage.getItem('vr-hotspot-scenes-data');
       if (raw) {
         const data = JSON.parse(raw);
         projectName = data.projectDisplayName || data.localWorkspaceMeta?.projectName || '';
+        threadId = data.localWorkspaceMeta?.threadId || null;
         if (data.localWorkspaceMeta?.source === 'inbox') {
           sourceHint = 'Last opened from your inbox';
         }
@@ -19913,6 +19915,7 @@ document.addEventListener('DOMContentLoaded', () => {
       leftOffLabel: `Left off in ${modeLabel}`,
       lastEditedLabel,
       sourceHint,
+      threadId,
       isLastLocal: true,
     };
   }
@@ -20061,14 +20064,25 @@ document.addEventListener('DOMContentLoaded', () => {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 
-    const inboxCount = inboxProjects.length;
-    const inboxHeaderBadge = inboxCount
-      ? `<span class="resume-inbox-count">${inboxCount}</span>`
-      : '';
-    const unreadBadge =
-      unreadCount > 0
-        ? `<span class="resume-inbox-unread">${unreadCount} new</span>`
-        : '';
+    const kindLabelFor = (kind) =>
+      typeof StudentProjectsPanel !== 'undefined' && typeof StudentProjectsPanel.kindLabel === 'function'
+        ? StudentProjectsPanel.kindLabel(kind)
+        : kind || 'Project';
+    const localThreadId = localWorkspace?.threadId || null;
+    const linkedCloud = localThreadId ? inboxProjects.find((p) => p.threadId === localThreadId) : null;
+    // Same split as the My Cloud Saves / My Inbox buttons: drafts are cloud saves, the rest is inbox.
+    const cloudSaves = inboxProjects.filter((p) => p.latestKind === 'draft');
+    const inboxOnly = inboxProjects.filter((p) => p.latestKind !== 'draft');
+
+    const cloudLine = linkedCloud
+      ? `<span class="resume-local-cloud resume-local-cloud--saved">☁️ Also saved in the cloud as “${esc(linkedCloud.projectName)}” (${esc(
+          kindLabelFor(linkedCloud.latestKind)
+        )} · v${linkedCloud.latestVersionNumber || '—'}${
+          linkedCloud.latestCreatedAt
+            ? `, saved ${esc(formatLocalEditTime(linkedCloud.latestCreatedAt))}`
+            : ''
+        })</span>`
+      : '<span class="resume-local-cloud resume-local-cloud--local">💻 Only in this browser — not saved to the cloud</span>';
 
     const localSection = localWorkspace
       ? `
@@ -20082,58 +20096,65 @@ document.addEventListener('DOMContentLoaded', () => {
               <span class="resume-local-meta">${esc(localWorkspace.detail)}</span>
               ${
                 localWorkspace.lastEditedLabel
-                  ? `<span class="resume-local-edited">Last saved ${esc(localWorkspace.lastEditedLabel)}</span>`
-                  : `<span class="resume-local-note">${esc(localWorkspace.sourceHint || 'Saved in this browser only — not yet submitted')}</span>`
-              }
-              ${
-                localWorkspace.sourceHint && localWorkspace.lastEditedLabel
-                  ? `<span class="resume-local-note">${esc(localWorkspace.sourceHint)}</span>`
+                  ? `<span class="resume-local-edited">Last saved in this browser ${esc(localWorkspace.lastEditedLabel)}</span>`
                   : ''
               }
+              ${cloudLine}
             </div>
             <button type="button" id="resume-continue-local" class="resume-primary-btn">Continue this project</button>
           </div>
         </section>`
       : '';
 
-    const inboxItems =
-      inboxCount > 0
-        ? inboxProjects
-            .map((p) => {
-              const hasNew =
-                (p.latestKind === 'admin_return' || p.latestKind === 'admin_assigned') &&
-                !p.studentSeenAt;
-              const badge = hasNew
-                ? p.latestKind === 'admin_assigned'
-                  ? '<span class="resume-item-badge resume-item-badge--assigned">New project</span>'
-                  : '<span class="resume-item-badge resume-item-badge--feedback">New feedback</span>'
-                : '';
-              const kindLabel =
-                typeof StudentProjectsPanel !== 'undefined' &&
-                typeof StudentProjectsPanel.kindLabel === 'function'
-                  ? StudentProjectsPanel.kindLabel(p.latestKind)
-                  : p.latestKind || 'Project';
-              return `
+    const renderProjectItem = (p) => {
+      const hasNew =
+        (p.latestKind === 'admin_return' || p.latestKind === 'admin_assigned') && !p.studentSeenAt;
+      const badge = hasNew
+        ? p.latestKind === 'admin_assigned'
+          ? '<span class="resume-item-badge resume-item-badge--assigned">New project</span>'
+          : '<span class="resume-item-badge resume-item-badge--feedback">New feedback</span>'
+        : '';
+      const localBadge =
+        localThreadId && p.threadId === localThreadId
+          ? '<span class="resume-item-badge resume-item-badge--local">Your local project</span>'
+          : '';
+      return `
               <div class="resume-inbox-item">
                 <div class="resume-inbox-item-main">
                   <strong>${esc(p.projectName)}</strong>
-                  <span class="resume-inbox-item-meta">${esc(kindLabel)} · v${p.latestVersionNumber || '—'}</span>
-                  ${badge}
+                  <span class="resume-inbox-item-meta">${esc(kindLabelFor(p.latestKind))} · v${p.latestVersionNumber || '—'}</span>
+                  ${badge}${localBadge}
                 </div>
                 <button type="button" class="resume-inbox-open-btn" data-version-id="${esc(p.latestVersionId)}" data-project-name="${esc(p.projectName)}" data-thread-id="${esc(p.threadId)}">Open</button>
               </div>`;
-            })
-            .join('')
-        : '<p class="resume-inbox-empty">No inbox projects yet.</p>';
+    };
 
+    const cloudSection = cloudSaves.length
+      ? `
+        <section class="resume-inbox-section resume-cloud-section">
+          <h3 class="resume-section-title">
+            My Cloud Saves <span class="resume-inbox-count">${cloudSaves.length}</span>
+          </h3>
+          <p class="resume-section-note">Drafts you saved online. Open one to keep working on it.</p>
+          <div class="resume-inbox-list">${cloudSaves.map(renderProjectItem).join('')}</div>
+        </section>`
+      : '';
+
+    const unreadBadge =
+      unreadCount > 0 ? `<span class="resume-inbox-unread">${unreadCount} new</span>` : '';
     const inboxSection =
-      inboxCount > 0 || !localWorkspace
+      inboxOnly.length || (!localWorkspace && !cloudSaves.length)
         ? `
         <section class="resume-inbox-section">
           <h3 class="resume-section-title">
-            My Inbox ${inboxHeaderBadge} ${unreadBadge}
+            My Inbox ${inboxOnly.length ? `<span class="resume-inbox-count">${inboxOnly.length}</span>` : ''} ${unreadBadge}
           </h3>
-          <div class="resume-inbox-list">${inboxItems}</div>
+          <p class="resume-section-note">Projects you submitted, and projects or feedback from your teacher.</p>
+          <div class="resume-inbox-list">${
+            inboxOnly.length
+              ? inboxOnly.map(renderProjectItem).join('')
+              : '<p class="resume-inbox-empty">No inbox projects yet.</p>'
+          }</div>
         </section>`
         : '';
 
@@ -20142,10 +20163,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <h2 class="resume-inbox-heading">Welcome back</h2>
         <p class="resume-inbox-lead">${
           localWorkspace
-            ? 'Continue your local project or open something from your inbox.'
-            : 'Pick up your local work or open a project from your inbox.'
+            ? 'Continue your local project, or open one of your cloud saves or inbox projects.'
+            : 'Open one of your cloud saves or inbox projects.'
         }</p>
         ${localSection}
+        ${cloudSection}
         ${inboxSection}
         <div class="resume-inbox-footer">
           <button type="button" id="resume-start-new" class="resume-secondary-btn">Start something new</button>

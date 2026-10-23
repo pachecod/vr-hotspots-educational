@@ -33,12 +33,27 @@ function updateTabUi() {
   document.querySelectorAll('.tab-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.key === activeKey);
   });
+  const hint = document.getElementById('new-flat-page-hint');
+  if (hint) hint.hidden = !isPageKey(activeKey);
+}
+
+/** The new-flat-page text is a whole web page, so preview it in a sandboxed frame. */
+function isPageKey(key) {
+  return key === 'new-flat-page';
 }
 
 function renderPreview() {
   const preview = document.getElementById('system-text-preview');
-  if (!preview) return;
-  preview.innerHTML = getFormData().content_html || '';
+  const card = document.getElementById('system-text-preview-card');
+  const frame = document.getElementById('system-text-page-preview');
+  const html = getFormData().content_html || '';
+  const pageMode = isPageKey(activeKey);
+  if (card) card.hidden = pageMode;
+  if (frame) {
+    frame.hidden = !pageMode;
+    if (pageMode) frame.srcdoc = html;
+  }
+  if (preview && !pageMode) preview.innerHTML = html;
 }
 
 async function loadSystemText(key) {

@@ -24851,7 +24851,7 @@ const CommonAssetsPicker = {
         return;
       }
 
-
+      const name = btn.dataset.name;
       const asset = (this.assets[this.activeCategory] || []).find((a) => a.name === name);
       if (!asset) return;
       if (btn.dataset.caAction === 'preview') this.openPreview(asset);

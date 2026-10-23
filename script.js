@@ -1549,7 +1549,7 @@ class HotspotEditor {
         duration: 2.0, // seconds
       },
     };
-    // Brand-new project state, for Home → Start something new (see _startNewBlankFlatProject).
+    // Brand-new project state, for Home → Start something new (see _startNewProject).
     this._newProjectDefaults = JSON.stringify({ scenes: this.scenes, customStyles: this.customStyles });
 
     console.log(
@@ -20269,20 +20269,18 @@ document.addEventListener('DOMContentLoaded', () => {
       ) {
         return;
       }
-      void this._startNewBlankFlatProject(onComplete);
+      void this._startNewProject(dialog, inner, onComplete);
     });
   }
 
   /**
-   * Home → Start something new: replace this browser's workspace with a new project that has the
-   * default 360° scene and an empty flat page, then open the flat page editor.
+   * Home → Start something new: replace this browser's workspace with a new project (default 360°
+   * scene, untouched flat page), then ask 360° Tour or Flat Web Page. Choosing Flat Web Page loads
+   * the admin's New Flat Page starter (see _applyAdminNewFlatPageHtml).
    * Named "Save Locally" projects are kept.
    */
-  async _startNewBlankFlatProject(onComplete) {
-    this._markWelcomeSeen();
+  async _startNewProject(dialog, inner, onComplete) {
     window.showProjectLoadingOverlay?.('Starting a new project.');
-    window.clearEntryGateOverlay?.();
-    window.__integratedWelcomeContainerId = null;
     try {
       try {
         localStorage.removeItem('vr-hotspot-playground-draft');
@@ -20306,15 +20304,9 @@ document.addEventListener('DOMContentLoaded', () => {
       this.updateNavigationTargets();
       this.updateStartingPointInfo();
 
-      window.flatPageEditor?.loadTemplate({
-        title: 'Flat Web Page',
-        files_manifest: [
-          { name: 'index.html', content: '' },
-          { name: 'style.css', content: '' },
-          { name: 'script.js', content: '' },
-        ],
-      });
-      await this.setContentMode('flat', { skipVrGenerate: true });
+      // Back to the built-in starter files, so the flat page counts as untouched.
+      window.flatPageEditor?.loadTemplate({ title: 'Flat Web Page', files_manifest: [] });
+      await this.setContentMode('spherical');
       this.saveScenesData();
     } catch (err) {
       console.error('Start something new failed:', err);
@@ -20322,7 +20314,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } finally {
       window.hideProjectLoadingOverlay?.();
     }
-    if (typeof onComplete === 'function') onComplete();
+    inner.classList.remove('resume-inbox-inner', 'integrated-welcome-with-playground');
+    this._renderWelcomeModeStep(dialog, inner, { onComplete });
   }
 
   /** Signed-in home → sample card: load the sample into this editor as a new, unlinked project. */

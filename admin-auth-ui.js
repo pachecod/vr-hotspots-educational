@@ -137,11 +137,48 @@ function renderBackendWarning(containerId) {
   `;
 }
 
+/** Admin → Home: confirm before leaving admin, saying what is lost and how to get back. */
+function confirmAdminGoHome(signedIn) {
+  const lose = signedIn
+    ? 'Anything you have typed on this admin page but not saved will be lost. You stay signed in as admin.'
+    : 'Nothing — you are not signed in to admin yet.';
+  const overlay = document.createElement('div');
+  overlay.style.cssText =
+    'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;font-family:Arial,sans-serif;';
+  overlay.innerHTML = `
+    <div role="dialog" aria-modal="true" aria-labelledby="admin-home-title" style="background:#fff;color:#222;border-radius:10px;padding:24px;max-width:460px;width:100%;line-height:1.5;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+      <h2 id="admin-home-title" style="margin:0 0 12px;font-size:20px;">Go to the home page?</h2>
+      <p style="margin:0 0 10px;"><strong>What you will lose:</strong> ${lose}</p>
+      <p style="margin:0;"><strong>How to get back:</strong> use the small <strong>Admin</strong> link at the very bottom of the home page, or go to <code>/admin</code>.</p>
+      <div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" data-home-stay style="padding:10px 18px;background:#0056B3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Stay here</button>
+        <button type="button" data-home-leave style="padding:10px 18px;background:#6c757d;color:#fff;border:none;border-radius:4px;cursor:pointer;">Go Home</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    overlay.remove();
+  };
+  const onKey = (e) => {
+    if (e.key === 'Escape') close();
+  };
+  document.addEventListener('keydown', onKey);
+  overlay.querySelector('[data-home-stay]').addEventListener('click', close);
+  overlay.querySelector('[data-home-leave]').addEventListener('click', () => {
+    window.location.href = '/';
+  });
+  overlay.querySelector('[data-home-stay]').focus();
+}
+
+window.confirmAdminGoHome = confirmAdminGoHome;
+
 function renderAdminLoginGate(containerId, onAuthenticated) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
   container.innerHTML = `
+    <a href="/" id="admin-login-home" style="position:fixed;top:16px;left:16px;padding:8px 14px;border:1px solid #ccc;border-radius:4px;background:#fff;color:#0056B3;font-weight:bold;text-decoration:none;font-family:Arial,sans-serif;">Home</a>
     <div style="max-width:420px;margin:80px auto;padding:30px;border:1px solid #dee2e6;border-radius:8px;background:#f8f9fa;">
       <h2 style="margin-top:0;">Admin Login</h2>
       <p style="color:#666;">Enter the admin password to continue.</p>
@@ -154,6 +191,11 @@ function renderAdminLoginGate(containerId, onAuthenticated) {
       <div id="admin-login-error" style="color:#dc3545;margin-top:10px;display:none;"></div>
     </div>
   `;
+
+  document.getElementById('admin-login-home').addEventListener('click', (e) => {
+    e.preventDefault();
+    confirmAdminGoHome(false);
+  });
 
   document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
     e.preventDefault();

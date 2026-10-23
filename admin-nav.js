@@ -21,6 +21,7 @@ function renderAdminNav(activeTab) {
 
   nav.className = 'admin-nav';
   nav.innerHTML =
+    '<a href="/" id="admin-nav-home">⌂ Home</a>' +
     tabs
       .map(
         (t) =>
@@ -28,6 +29,14 @@ function renderAdminNav(activeTab) {
       )
       .join('') +
     '<button type="button" id="admin-nav-logout" class="admin-nav-logout">Logout</button>';
+
+  const homeLink = document.getElementById('admin-nav-home');
+  if (homeLink && typeof confirmAdminGoHome === 'function') {
+    homeLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      confirmAdminGoHome(true);
+    });
+  }
 
   const logoutBtn = document.getElementById('admin-nav-logout');
   if (logoutBtn && logoutBtn.dataset.bound !== '1') {

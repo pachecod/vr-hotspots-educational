@@ -1549,6 +1549,8 @@ class HotspotEditor {
         duration: 2.0, // seconds
       },
     };
+    // Brand-new project state, for Home → Start something new (see _startNewBlankFlatProject).
+    this._newProjectDefaults = JSON.stringify({ scenes: this.scenes, customStyles: this.customStyles });
 
     console.log(
       '🔄 INIT: Editor sound initialized as:',
@@ -20258,9 +20260,69 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     inner.querySelector('#resume-start-new')?.addEventListener('click', () => {
-      inner.classList.remove('resume-inbox-inner', 'integrated-welcome-with-playground');
-      this._renderWelcomeModeStep(dialog, inner, { onComplete });
+      if (
+        localWorkspace &&
+        !confirm(
+          `Start a new project?\n\n"${localWorkspace.projectName || 'Your local project'}" will be cleared from this browser. ` +
+            'Anything not saved with ☁️ Save to Cloud or 💾 Save Locally will be lost.'
+        )
+      ) {
+        return;
+      }
+      void this._startNewBlankFlatProject(onComplete);
     });
+  }
+
+  /**
+   * Home → Start something new: replace this browser's workspace with a new project that has the
+   * default 360° scene and an empty flat page, then open the flat page editor.
+   * Named "Save Locally" projects are kept.
+   */
+  async _startNewBlankFlatProject(onComplete) {
+    this._markWelcomeSeen();
+    window.showProjectLoadingOverlay?.('Starting a new project.');
+    window.clearEntryGateOverlay?.();
+    window.__integratedWelcomeContainerId = null;
+    try {
+      try {
+        localStorage.removeItem('vr-hotspot-playground-draft');
+      } catch (_) {}
+      this._hideModelTransformGizmo?.();
+      this.hotspots.forEach((h) => document.getElementById(`hotspot-${h.id}`)?.remove());
+      this.hotspots = [];
+      const defaults = JSON.parse(this._newProjectDefaults);
+      this.scenes = defaults.scenes;
+      this.customStyles = defaults.customStyles;
+      this.currentScene = 'scene1';
+      this.vrTourEmbed = { publishedAt: null, hostedUrl: null, hostedPath: null, qrUrl: null };
+      this._localWorkspaceMeta = { projectName: '', source: 'new', openedAt: new Date().toISOString() };
+      const nameInput = document.getElementById('template-name');
+      if (nameInput) nameInput.value = '';
+      this.saveCSSToLocalStorage?.();
+      this.applyStylesToExistingElements?.();
+      this.updateSceneDropdown();
+      this.loadCurrentScene();
+      this.updateHotspotList();
+      this.updateNavigationTargets();
+      this.updateStartingPointInfo();
+
+      window.flatPageEditor?.loadTemplate({
+        title: 'Flat Web Page',
+        files_manifest: [
+          { name: 'index.html', content: '' },
+          { name: 'style.css', content: '' },
+          { name: 'script.js', content: '' },
+        ],
+      });
+      await this.setContentMode('flat', { skipVrGenerate: true });
+      this.saveScenesData();
+    } catch (err) {
+      console.error('Start something new failed:', err);
+      alert(err.message || 'Could not start a new project.');
+    } finally {
+      window.hideProjectLoadingOverlay?.();
+    }
+    if (typeof onComplete === 'function') onComplete();
   }
 
   /** Signed-in home → sample card: load the sample into this editor as a new, unlinked project. */
@@ -20283,6 +20345,30 @@ document.addEventListener('DOMContentLoaded', () => {
       window.hideProjectLoadingOverlay?.();
     }
     if (typeof onComplete === 'function') onComplete();
+  }
+
+  /** Admin → System Text → New Flat Page: starter HTML for a flat page nobody has edited yet. */
+  async _applyAdminNewFlatPageHtml() {
+    const flat = window.flatPageEditor;
+    if (!flat || typeof flat.loadTemplate !== 'function') return;
+    if (typeof flat.hasContent === 'function' && flat.hasContent()) return;
+    try {
+      const res = await fetch('/api/system-text/new-flat-page', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const text = data?.text;
+      if (!text?.customized || !text.content_html) return;
+      if (flat.hasContent?.()) return;
+      flat.loadTemplate({
+        files_manifest: [
+          { name: 'index.html', content: text.content_html },
+          { name: 'style.css', content: '' },
+          { name: 'script.js', content: '' },
+        ],
+      });
+    } catch (err) {
+      console.warn('Could not load the new flat page starter:', err);
+    }
   }
 
   _shouldShowWelcome360MediaStep() {
@@ -20329,11 +20415,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('welcome-close-btn').onclick = () => finish();
 
-    document.getElementById('welcome-choose-flat-btn').onclick = () => {
+    document.getElementById('welcome-choose-flat-btn').onclick = async () => {
       finish();
       // First-time flat choice: open the editor without auto-publishing a 360° embed.
       // VR generation runs later when switching from Spherical Content → Flat Web Page.
-      void this.setContentMode('flat', { skipVrGenerate: true });
+      await this.setContentMode('flat', { skipVrGenerate: true });
+      await this._applyAdminNewFlatPageHtml();
     };
 
     document.getElementById('welcome-choose-360-btn').onclick = () => {

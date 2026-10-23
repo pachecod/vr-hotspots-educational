@@ -81,6 +81,13 @@
         text-align: center;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       }
+      #system-text-page-preview {
+        width: 100%;
+        min-height: 420px;
+        border: 0;
+        border-radius: 8px;
+        background: #fff;
+      }
       .preview-card .welcome-system-text {
         text-align: center;
       }
@@ -115,11 +122,17 @@
         <div class="tabs">
           <button type="button" class="tab-btn active" data-key="welcome-screen">Welcome Screen</button>
           <button type="button" class="tab-btn" data-key="no-teams-signin">Sign-in: No Teams</button>
+          <button type="button" class="tab-btn" data-key="new-flat-page">New Flat Page</button>
         </div>
 
         <div class="layout">
           <div class="panel">
             <h2 id="system-text-panel-title">Welcome screen</h2>
+            <p class="hint" id="new-flat-page-hint" hidden>
+              The HTML a new project starts with when someone chooses <strong>Flat Web Page</strong> on the
+              welcome screen. Write a full page; the CSS and JS tabs start empty, so put any styles in a
+              <code>&lt;style&gt;</code> tag. <strong>Start something new</strong> always opens a blank page.
+            </p>
             <div class="form-row">
               <label for="system-text-content">Content HTML</label>
               <textarea id="system-text-content" spellcheck="true"></textarea>
@@ -134,9 +147,10 @@
           <div class="panel">
             <h2>Preview</h2>
             <div class="preview-shell">
-              <div class="preview-card">
+              <div class="preview-card" id="system-text-preview-card">
                 <div id="system-text-preview" class="welcome-system-text"></div>
               </div>
+              <iframe id="system-text-page-preview" title="New flat page preview" sandbox="" hidden></iframe>
             </div>
           </div>
         </div>

@@ -23387,16 +23387,16 @@ class StudentProjectsPanel {
       alert(draftsOnly ? 'Please sign in to view your cloud saves.' : 'Please sign in to view your inbox.');
       return;
     }
-    let projects = data.projects || [];
-    if (draftsOnly) {
-      projects = projects.filter((p) => p.latestKind === 'draft');
-    }
+    // Drafts live under My Cloud Saves; everything else (submitted, teacher feedback) is the inbox.
+    const projects = (data.projects || []).filter((p) =>
+      draftsOnly ? p.latestKind === 'draft' : p.latestKind !== 'draft'
+    );
 
     const title = draftsOnly ? 'My Cloud Saves' : 'My Inbox';
     const titleColor = draftsOnly ? '#42a5f5' : '#2E7D32';
     let emptyCopy = draftsOnly
       ? 'No cloud drafts yet. Use <strong>Save to Cloud</strong> in the Template panel to keep a draft online.'
-      : 'No submissions yet.';
+      : 'Nothing in your inbox yet. Drafts you save to the cloud are under <strong>My Cloud Saves</strong>.';
     if (draftsOnly && data.dbEnabled === false) {
       emptyCopy =
         'This server is not using the project database, so cloud drafts cannot be listed here. Set <strong>DATABASE_URL</strong> on the server (hosted deployments usually have this). Your ZIP may still upload to cloud storage.';
@@ -23410,7 +23410,11 @@ class StudentProjectsPanel {
     dialog.innerHTML = `
       <div style="background:#2a2a2a;color:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:85vh;overflow:auto;">
         <h3 style="margin:0 0 16px;color:${titleColor};">${title}</h3>
-        ${draftsOnly ? '<p style="margin:0 0 14px;color:#aaa;font-size:13px;line-height:1.45;">Projects whose latest save is a cloud draft. After you submit or get teacher feedback, they appear under My Inbox instead.</p>' : ''}
+        <p style="margin:0 0 14px;color:#aaa;font-size:13px;line-height:1.45;">${
+          draftsOnly
+            ? 'Projects whose latest save is a cloud draft. After you submit or get teacher feedback, they appear under My Inbox instead.'
+            : 'Projects you submitted, and projects or feedback from your teacher. Cloud drafts are under My Cloud Saves.'
+        }</p>
         <div id="my-submissions-list"></div>
         <button id="close-my-submissions" style="margin-top:16px;padding:10px 20px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;">Close</button>
       </div>`;

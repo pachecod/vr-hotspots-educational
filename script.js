@@ -23244,6 +23244,36 @@ class StudentProjectsPanel {
     }
   }
 
+  /** Number of projects whose latest save is a cloud draft (same list My Cloud Saves shows). */
+  static setCloudSavesCount(count) {
+    const btn = document.getElementById('student-my-cloud-saves-btn');
+    if (!btn) return;
+    let badge = btn.querySelector('.count-badge');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'count-badge';
+        btn.appendChild(badge);
+      }
+      badge.textContent = String(count);
+      badge.setAttribute('aria-label', `${count} cloud save${count === 1 ? '' : 's'}`);
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+
+  static async refreshCloudSavesCount() {
+    if (!document.getElementById('student-my-cloud-saves-btn')) return;
+    try {
+      const res = await fetch('/api/student/projects', { credentials: 'include', cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      StudentProjectsPanel.setCloudSavesCount(
+        (data.projects || []).filter((p) => p.latestKind === 'draft').length
+      );
+    } catch (_) {}
+  }
+
   static async pollForFeedback() {
     if (document.hidden || StudentProjectsPanel._feedbackPollInFlight) return;
     if (!StudentProjectsPanel.isSignedInStudent()) return;
@@ -23267,6 +23297,8 @@ class StudentProjectsPanel {
   }
 
   static async refreshUnreadBadge() {
+    // Called whenever saves, submissions, or feedback may have changed — keep both counts in sync.
+    void StudentProjectsPanel.refreshCloudSavesCount();
     const btn = document.getElementById('student-my-submissions-btn');
     if (!btn) return;
     try {

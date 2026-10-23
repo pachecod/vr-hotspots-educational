@@ -30,7 +30,7 @@ function escapeAttr(str) {
     .replace(/</g, '&lt;');
 }
 
-function bindPlaygroundGridClicks(gridWrap, templates, state, { containerId, onAuthenticated }) {
+function bindPlaygroundGridClicks(gridWrap, templates, state, { containerId, onAuthenticated, openSample }) {
   gridWrap.addEventListener('click', async (e) => {
     const btn = e.target.closest('.welcome-playground-card');
     if (!btn || state.loadingSlug) return;
@@ -39,7 +39,8 @@ function bindPlaygroundGridClicks(gridWrap, templates, state, { containerId, onA
     state.loadingSlug = slug;
     gridWrap.innerHTML = renderPlaygroundCards(templates, state.loadingSlug);
     try {
-      await openPlaygroundTemplate(slug, { containerId, onAuthenticated });
+      if (typeof openSample === 'function') await openSample(slug);
+      else await openPlaygroundTemplate(slug, { containerId, onAuthenticated });
     } catch (err) {
       if (!err || err.code !== 'GUEST_AGREEMENT_CANCELLED') {
         alert(err.message || 'Could not open sample project');
@@ -80,7 +81,14 @@ function renderPlaygroundCards(templates, loadingSlug) {
     .join('')}</div>`;
 }
 
-async function mountPlaygroundTemplatesSection(innerEl, { containerId, onAuthenticated, welcomeInner }) {
+/**
+ * Samples grid on the welcome / home screen. Signed-in homes pass openSample (load into their
+ * own editor, no guest mode) and their own subtitle.
+ */
+async function mountPlaygroundTemplatesSection(
+  innerEl,
+  { containerId, onAuthenticated, welcomeInner, openSample, subtitle }
+) {
   const shell = welcomeInner || innerEl.closest('#integrated-welcome-inner');
   let section = innerEl.querySelector('.welcome-playground-section');
   if (!section) {
@@ -105,13 +113,17 @@ async function mountPlaygroundTemplatesSection(innerEl, { containerId, onAuthent
     section.innerHTML = `
       <div class="welcome-playground-head">
         <h3 class="welcome-playground-title">Try a sample project</h3>
-        <p class="welcome-playground-subtitle">No sign-in required — open in guest mode and explore.</p>
+        <p class="welcome-playground-subtitle">${escapeHtml(subtitle || 'No sign-in required — open in guest mode and explore.')}</p>
       </div>
       <div class="welcome-playground-grid-wrap">${renderPlaygroundCards(data.templates || [], null)}</div>
     `;
 
     const gridWrap = section.querySelector('.welcome-playground-grid-wrap');
-    bindPlaygroundGridClicks(gridWrap, data.templates || [], { loadingSlug: null }, { containerId, onAuthenticated });
+    bindPlaygroundGridClicks(gridWrap, data.templates || [], { loadingSlug: null }, {
+      containerId,
+      onAuthenticated,
+      openSample,
+    });
   } catch (err) {
     section.innerHTML = `<p class="welcome-playground-error">${escapeHtml(err.message || 'Failed to load templates.')}</p>`;
   }
@@ -326,6 +338,44 @@ async function promptGuestAgreementAfterPlaygroundLoad() {
   return true;
 }
 
+async function loadPlaygroundTemplateBySlug(slug) {
+  const detailRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}`);
+  const detail = await detailRes.json();
+  if (!detailRes.ok || !detail.success) {
+    throw new Error(detail.message || 'Template not found');
+  }
+  const template = detail.template;
+
+  if (template.has_bundle) {
+    const bundleRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}/bundle`, {
+      credentials: 'include',
+    });
+    if (!bundleRes.ok) throw new Error('Could not download project bundle');
+    const blob = await bundleRes.blob();
+    await window.hotspotEditor.loadZIPTemplate(blob, {
+      silent: true,
+      initialContentMode: 'spherical',
+    });
+    return template;
+  }
+
+  if (template.files_manifest && template.files_manifest.length) {
+    if (window.flatPageEditor && typeof window.flatPageEditor.loadTemplate === 'function') {
+      window.flatPageEditor.loadTemplate({
+        title: template.title,
+        slug: template.slug,
+        description: template.description,
+        files_manifest: template.files_manifest,
+        config_ui_schema: template.config_ui_schema,
+      });
+    }
+    window.hotspotEditor.setContentMode('flat', { skipVrGenerate: true });
+    return template;
+  }
+
+  throw new Error('This sample is not ready yet (no bundle or flat files).');
+}
+
 async function runPendingPlaygroundLoad() {
   const slug = window.__pendingPlaygroundSlug;
   if (!slug || !window.hotspotEditor) return;
@@ -346,37 +396,7 @@ async function runPendingPlaygroundLoad() {
       localStorage.setItem('vr-hotspot-welcome-seen', '1');
     } catch (_) {}
 
-    const detailRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}`);
-    const detail = await detailRes.json();
-    if (!detailRes.ok || !detail.success) {
-      throw new Error(detail.message || 'Template not found');
-    }
-    const template = detail.template;
-
-    if (template.has_bundle) {
-      const bundleRes = await fetch(`/api/playground/templates/${encodeURIComponent(slug)}/bundle`, {
-        credentials: 'include',
-      });
-      if (!bundleRes.ok) throw new Error('Could not download project bundle');
-      const blob = await bundleRes.blob();
-      await window.hotspotEditor.loadZIPTemplate(blob, {
-        silent: true,
-        initialContentMode: 'spherical',
-      });
-    } else if (template.files_manifest && template.files_manifest.length) {
-      if (window.flatPageEditor && typeof window.flatPageEditor.loadTemplate === 'function') {
-        window.flatPageEditor.loadTemplate({
-          title: template.title,
-          slug: template.slug,
-          description: template.description,
-          files_manifest: template.files_manifest,
-          config_ui_schema: template.config_ui_schema,
-        });
-      }
-      window.hotspotEditor.setContentMode('flat', { skipVrGenerate: true });
-    } else {
-      throw new Error('This sample is not ready yet (no bundle or flat files).');
-    }
+    await loadPlaygroundTemplateBySlug(slug);
 
     if (typeof window.clearEntryGateOverlay === 'function') window.clearEntryGateOverlay();
   } finally {
@@ -388,6 +408,7 @@ window.fetchPlaygroundTemplates = fetchPlaygroundTemplates;
 window.mountPlaygroundTemplatesSection = mountPlaygroundTemplatesSection;
 window.renderGuestTemplatePicker = renderGuestTemplatePicker;
 window.openPlaygroundTemplate = openPlaygroundTemplate;
+window.loadPlaygroundTemplateBySlug = loadPlaygroundTemplateBySlug;
 window.runPendingPlaygroundLoad = runPendingPlaygroundLoad;
 window.promptGuestAgreementIfNeeded = promptGuestAgreementIfNeeded;
 window.promptGuestAgreementAfterPlaygroundLoad = promptGuestAgreementAfterPlaygroundLoad;

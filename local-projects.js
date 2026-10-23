@@ -484,6 +484,10 @@ var escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 
         });
       }
 
+      if (typeof window.clearPlaygroundGuestDraftMarker === 'function') {
+        window.clearPlaygroundGuestDraftMarker();
+      }
+
       try {
         if (rec.scenesData) {
           localStorage.setItem(SCENES_KEY, JSON.stringify(rec.scenesData));

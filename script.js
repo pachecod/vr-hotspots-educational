@@ -23538,6 +23538,7 @@ class StudentProjectsPanel {
           source: 'inbox',
         },
       });
+      if (typeof window.clearPlaygroundGuestDraftMarker === 'function') window.clearPlaygroundGuestDraftMarker();
       if (typeof window.endCloudProjectLoad === 'function') window.endCloudProjectLoad();
 
       try {
@@ -24480,6 +24481,9 @@ class StudentSubmission {
               projectName,
               source: window.hotspotEditor._localWorkspaceMeta?.source || 'cloud',
             };
+            if (typeof window.clearPlaygroundGuestDraftMarker === 'function') {
+              window.clearPlaygroundGuestDraftMarker();
+            }
           }
           window.hotspotEditor._cloudDisplayNameSynced = projectName;
           window.hotspotEditor._updateProjectNameHint();
@@ -24737,9 +24741,17 @@ function openQrCodeChooser() {
 
 /**
  * Editing Tools → Home: confirm before leaving the editor, saying what will be lost and how to
- * get back. Note: loading the bare home page clears this browser's editor working copy
- * (see clearEphemeralEditorWorkspaceForWelcome), so the copy below must say so.
+ * get back. The home page keeps this browser's working copy, except a guest sample draft
+ * (see clearEphemeralEditorWorkspaceForWelcome).
  */
+function isGuestSampleDraft() {
+  try {
+    return !!localStorage.getItem('vr-hotspot-playground-draft');
+  } catch (_) {
+    return false;
+  }
+}
+
 function confirmGoHomeFromEditor() {
   const params = new URLSearchParams(window.location.search);
   const caps = typeof window.getEditorCapabilities === 'function' ? window.getEditorCapabilities() : {};
@@ -24755,12 +24767,15 @@ function confirmGoHomeFromEditor() {
   } else if (params.get('adminTemplate')) {
     lose = 'Changes you have not saved with <strong>Save to Welcome Sample</strong> will be lost.';
     comeBack = 'Use the faint <strong>Admin</strong> link at the bottom of the home page, then <strong>Templates</strong>.';
+  } else if (isGuestSampleDraft()) {
+    lose = 'This sample project will be cleared from this browser unless you saved it with <strong>💾 Save Locally</strong>.';
+    comeBack = 'Pick the sample again on the home page, or open your saved copy from <strong>My Local Projects</strong>.';
   } else if (isGuest) {
-    lose = 'Your work in this editor will be cleared from this browser unless you saved it with <strong>💾 Save Locally</strong>. Guests cannot save to the cloud.';
-    comeBack = 'Choose <strong>Continue as Guest</strong>, then open it from <strong>My Local Projects</strong> (only if you used Save Locally).';
+    lose = 'Nothing — your guest work stays in this browser. (Guests cannot save to the cloud, so it exists only on this computer.)';
+    comeBack = 'Choose <strong>Continue as Guest</strong>; your work reopens where you left off.';
   } else {
-    lose = 'The working copy in this browser will be cleared. Changes since your last <strong>☁️ Save to Cloud</strong> or <strong>💾 Save Locally</strong> will be lost.';
-    comeBack = 'Open the project again from <strong>My Cloud Saves</strong> or <strong>My Inbox</strong> (or <strong>My Local Projects</strong> if you saved it locally).';
+    lose = 'Nothing — your work stays saved in this browser. Changes you have not saved with <strong>☁️ Save to Cloud</strong> exist only on this computer.';
+    comeBack = 'Return to the editor and your project reopens where you left off. Cloud copies are under <strong>My Cloud Saves</strong> and <strong>My Inbox</strong>.';
   }
 
   const dialog = document.createElement('div');

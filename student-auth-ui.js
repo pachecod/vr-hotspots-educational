@@ -703,7 +703,7 @@ async function returnToWelcomeScreen() {
   window.__integratedWelcomePending = false;
   window.__guestAgreementAccepted = false;
   if (typeof window.clearEphemeralEditorWorkspaceForWelcome === 'function') {
-    window.clearEphemeralEditorWorkspaceForWelcome();
+    window.clearEphemeralEditorWorkspaceForWelcome({ force: true });
   }
   hideTestUserEditorSession();
   hideStudentEditorSession();

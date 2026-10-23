@@ -325,11 +325,22 @@ function markPlaygroundGuestDraft(slug) {
   }
 }
 
+/** The workspace now holds the user's own project (cloud or local), not a guest sample. */
+function clearPlaygroundGuestDraftMarker() {
+  try {
+    localStorage.removeItem(PLAYGROUND_DRAFT_KEY);
+  } catch (_) {
+    /* ignore */
+  }
+}
+
 /**
- * Welcome / bare homepage should not reopen the last guest sample.
- * Named "Save Locally" projects are separate and are not cleared here.
+ * Welcome / bare homepage should not reopen the last guest sample, so clear the browser
+ * workspace only when it holds a guest sample draft. Students' and guests' own work stays.
+ * { force: true } (leaving guest mode) clears it regardless.
+ * Named "Save Locally" projects are separate and are never cleared here.
  */
-function clearEphemeralEditorWorkspaceForWelcome() {
+function clearEphemeralEditorWorkspaceForWelcome({ force = false } = {}) {
   if (
     window.__pendingPlaygroundSlug ||
     window.__playgroundTemplateLoading ||
@@ -338,6 +349,13 @@ function clearEphemeralEditorWorkspaceForWelcome() {
   ) {
     return false;
   }
+  let isGuestSampleDraft = false;
+  try {
+    isGuestSampleDraft = !!localStorage.getItem(PLAYGROUND_DRAFT_KEY);
+  } catch (_) {
+    /* ignore */
+  }
+  if (!force && !isGuestSampleDraft) return false;
   try {
     localStorage.removeItem(PLAYGROUND_DRAFT_KEY);
     localStorage.removeItem('vr-hotspot-scenes-data');
@@ -799,6 +817,7 @@ window.installEmbedGuestAgreementGate = installEmbedGuestAgreementGate;
 window.installEmbedMobileEditorLayout = installEmbedMobileEditorLayout;
 window.isEmbedMobileViewport = isEmbedMobileViewport;
 window.clearEphemeralEditorWorkspaceForWelcome = clearEphemeralEditorWorkspaceForWelcome;
+window.clearPlaygroundGuestDraftMarker = clearPlaygroundGuestDraftMarker;
 window.runPendingPlaygroundLoad = runPendingPlaygroundLoad;
 window.promptGuestAgreementIfNeeded = promptGuestAgreementIfNeeded;
 window.promptGuestAgreementAfterPlaygroundLoad = promptGuestAgreementAfterPlaygroundLoad;

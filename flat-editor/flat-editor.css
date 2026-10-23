@@ -52,6 +52,17 @@
   font-size: 12px;
 }
 
+.flat-btn-home {
+  background: #444;
+  border: 1px solid #666;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.flat-btn-home:hover {
+  background: #555;
+}
+
 .flat-btn-cloud {
   background: #3d5a80;
 }

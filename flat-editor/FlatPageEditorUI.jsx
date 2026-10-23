@@ -172,6 +172,14 @@ export default function FlatPageEditorUI({ bridge }) {
   return (
     <div id="flat-page-editor" className="flat-page-editor-root">
       <div className="flat-toolbar">
+        <button
+          type="button"
+          className="flat-btn flat-btn-home"
+          title="Go to the home page"
+          onClick={() => window.confirmGoHomeFromEditor?.()}
+        >
+          ⌂ Home
+        </button>
         <span className="flat-toolbar-title">
           {state.adminTemplateMode ? 'Admin Template Editor' : 'Flat Web Page'}
         </span>

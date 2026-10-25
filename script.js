@@ -19921,21 +19921,37 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="integrated-welcome-samples" id="resume-welcome-samples"></div>
       </div>`;
 
-    // Right column: sample projects, opened straight into this signed-in editor (no guest mode).
+    // Right column: sample projects. Signed in: open straight into this editor as a new project.
+    // Guests keep the usual guest sample flow.
+    const isGuestHome = window.editorAccessMode === 'local_test';
     const samplesEl = inner.querySelector('#resume-welcome-samples');
     if (samplesEl && typeof window.mountPlaygroundTemplatesSection === 'function') {
-      void window.mountPlaygroundTemplatesSection(samplesEl, {
-        welcomeInner: inner,
-        subtitle: 'Start from a sample. It opens in your editor as a new project.',
-        openSample: (slug) => this._openSampleFromHome(slug, onComplete),
-      });
+      void window.mountPlaygroundTemplatesSection(
+        samplesEl,
+        isGuestHome
+          ? { welcomeInner: inner, containerId: dialog?.id || 'student-login-gate', onAuthenticated: onComplete }
+          : {
+              welcomeInner: inner,
+              subtitle: 'Start from a sample. It opens in your editor as a new project.',
+              openSample: (slug) => this._openSampleFromHome(slug, onComplete),
+            }
+      );
     }
 
     inner.querySelector('#resume-sign-out')?.addEventListener('click', async () => {
-      if (!confirm('Sign out of your account on this computer?')) return;
+      const question = isGuestHome
+        ? 'Sign out of guest mode and return to the welcome screen?'
+        : 'Sign out of your account on this computer?';
+      if (!confirm(question)) return;
       try {
-        window.StudentProjectsPanel?.stopFeedbackPolling?.();
-        if (typeof window.studentLogout === 'function') await window.studentLogout();
+        if (isGuestHome) {
+          if (typeof endLocalTestUser === 'function') await endLocalTestUser();
+          window.editorAccessMode = 'none';
+          window.currentStudent = null;
+        } else {
+          window.StudentProjectsPanel?.stopFeedbackPolling?.();
+          if (typeof window.studentLogout === 'function') await window.studentLogout();
+        }
         window.location.href = '/';
       } catch (err) {
         alert(err.message || 'Could not sign out. Please try again.');
@@ -24593,7 +24609,7 @@ function confirmGoHomeFromEditor() {
     comeBack = 'Use the faint <strong>Admin</strong> link at the bottom of the home page, then <strong>Templates</strong>.';
   } else if (isGuest) {
     lose = 'Nothing — your guest work stays in this browser. (Guests cannot save to the cloud, so it exists only on this computer.)';
-    comeBack = 'Choose <strong>Continue as Guest</strong>; your work reopens where you left off.';
+    comeBack = 'Your home page shows your project. Choose <strong>Continue this project</strong> to pick up where you left off.';
   } else {
     lose = 'Nothing — your work stays saved in this browser. Changes you have not saved with <strong>☁️ Save to Cloud</strong> exist only on this computer.';
     comeBack = 'Your home page lists your projects. Choose <strong>Continue this project</strong>, or open one from <strong>My Cloud Saves</strong> or <strong>My Inbox</strong>.';
@@ -24628,8 +24644,8 @@ function confirmGoHomeFromEditor() {
   document.addEventListener('keydown', onKey);
   dialog.querySelector('#go-home-stay').addEventListener('click', close);
   dialog.querySelector('#go-home-leave').addEventListener('click', () => {
-    // Signed in: land on the signed-in home (your projects + samples), not straight back in the editor.
-    if (isSignedInStudent) {
+    // Signed in or guest: land on the home page (your projects + samples), not straight back in the editor.
+    if (isSignedInStudent || (isGuest && !isAdminEditor)) {
       try {
         sessionStorage.setItem('vr-hotspot-pending-welcome', '1');
         sessionStorage.setItem('vr-hotspot-student-home', '1');

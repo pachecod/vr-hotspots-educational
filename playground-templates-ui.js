@@ -14,6 +14,17 @@ async function fetchPlaygroundConfig() {
   return res.json();
 }
 
+async function fetchNoSamplesHtml() {
+  try {
+    const res = await fetch('/api/system-text/no-samples');
+    if (!res.ok) return '';
+    const data = await res.json();
+    return data?.text?.content_html || '';
+  } catch (_) {
+    return '';
+  }
+}
+
 async function fetchPlaygroundTemplates() {
   const res = await fetch('/api/playground/templates');
   const data = await res.json();
@@ -112,6 +123,15 @@ async function mountPlaygroundTemplatesSection(
 
     if (shell) shell.classList.add('integrated-welcome-with-playground');
     const data = await fetchPlaygroundTemplates();
+
+    // No public samples: show the admin's System Text → Samples: None Available instead.
+    if (!(data.templates || []).length) {
+      const emptyHtml = await fetchNoSamplesHtml();
+      if (emptyHtml) {
+        section.innerHTML = `<div class="welcome-system-text welcome-playground-none">${emptyHtml}</div>`;
+        return;
+      }
+    }
 
     section.innerHTML = `
       <div class="welcome-playground-head">

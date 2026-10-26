@@ -35,6 +35,8 @@ function updateTabUi() {
   });
   const hint = document.getElementById('new-flat-page-hint');
   if (hint) hint.hidden = !isPageKey(activeKey);
+  const samplesHint = document.getElementById('no-samples-hint');
+  if (samplesHint) samplesHint.hidden = activeKey !== 'no-samples';
 }
 
 /** The new-flat-page text is a whole web page, so preview it in a sandboxed frame. */

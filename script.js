@@ -627,6 +627,121 @@ function clearFlatVideoHotspotOverlay(parentEl) {
   delete parentEl._flatVideoControls;
 }
 
+/**
+ * Per-hotspot style overrides (Edit Hotspot → Custom style). With a custom style on, a hotspot's
+ * styleOverrides hold every setting for its type, so project-wide style changes leave it alone.
+ */
+const HOTSPOT_STYLE_FIELDS = {
+  popup: [
+    { path: 'hotspot.infoButton.backgroundColor', label: 'Info button color', kind: 'color' },
+    { path: 'hotspot.infoButton.textColor', label: 'Info button text', kind: 'color' },
+    { path: 'hotspot.infoButton.size', label: 'Info button size', kind: 'number', min: 0.1, max: 2, step: 0.05 },
+    { path: 'hotspot.infoButton.fontSize', label: 'Info "i" size', kind: 'number', min: 4, max: 16, step: 1 },
+    { path: 'hotspot.infoButton.opacity', label: 'Info button opacity', kind: 'number', min: 0, max: 1, step: 0.05 },
+    { path: 'hotspot.popup.backgroundColor', label: 'Popup background', kind: 'color' },
+    { path: 'hotspot.popup.textColor', label: 'Popup text', kind: 'color' },
+    { path: 'hotspot.popup.opacity', label: 'Popup opacity', kind: 'number', min: 0, max: 1, step: 0.05 },
+    {
+      path: 'hotspot.closeButton.backgroundColor',
+      fallback: 'hotspot.infoButton.backgroundColor',
+      label: 'Close button color',
+      kind: 'color',
+    },
+    {
+      path: 'hotspot.closeButton.textColor',
+      fallback: 'hotspot.infoButton.textColor',
+      label: 'Close button text',
+      kind: 'color',
+    },
+    { path: 'hotspot.closeButton.size', label: 'Close button size', kind: 'number', min: 0.1, max: 2, step: 0.05 },
+    { path: 'hotspot.closeButton.opacity', label: 'Close button opacity', kind: 'number', min: 0, max: 1, step: 0.05 },
+  ],
+  audio: [
+    { path: 'buttonImages.play', label: 'Play button image URL', kind: 'url' },
+    { path: 'buttonImages.pause', label: 'Pause button image URL', kind: 'url' },
+  ],
+  navigation: [
+    { path: 'navigation.ringColor', label: 'Ring color', kind: 'color' },
+    { path: 'navigation.ringOuterRadius', label: 'Ring size', kind: 'number', min: 0.1, max: 3, step: 0.05 },
+    { path: 'navigation.ringThickness', label: 'Ring thickness', kind: 'number', min: 0.005, max: 0.5, step: 0.005 },
+    { path: 'navigation.labelColor', label: 'Label text', kind: 'color' },
+    { path: 'navigation.labelBackgroundColor', label: 'Label background', kind: 'color' },
+    { path: 'navigation.labelOpacity', label: 'Label opacity', kind: 'number', min: 0, max: 1, step: 0.05 },
+  ],
+  weblink: [
+    { path: 'navigation.weblinkRingColor', label: 'Ring color', kind: 'color' },
+    { path: 'navigation.ringOuterRadius', label: 'Ring size', kind: 'number', min: 0.1, max: 3, step: 0.05 },
+    { path: 'navigation.ringThickness', label: 'Ring thickness', kind: 'number', min: 0.005, max: 0.5, step: 0.005 },
+    { path: 'navigation.labelColor', label: 'Label text', kind: 'color' },
+    { path: 'navigation.labelBackgroundColor', label: 'Label background', kind: 'color' },
+    { path: 'navigation.labelOpacity', label: 'Label opacity', kind: 'number', min: 0, max: 1, step: 0.05 },
+  ],
+  image: [
+    { path: 'image.borderColor', label: 'Border color', kind: 'color' },
+    { path: 'image.borderWidth', label: 'Border width', kind: 'number', min: 0, max: 0.5, step: 0.01 },
+    { path: 'image.borderRadius', label: 'Corner radius', kind: 'number', min: 0, max: 0.5, step: 0.01 },
+    { path: 'image.opacity', label: 'Opacity', kind: 'number', min: 0, max: 1, step: 0.05 },
+  ],
+};
+
+function hotspotStyleFieldsForType(type) {
+  if (type === 'text') return HOTSPOT_STYLE_FIELDS.popup;
+  if (type === 'text-audio') return [...HOTSPOT_STYLE_FIELDS.popup, ...HOTSPOT_STYLE_FIELDS.audio];
+  if (type === 'audio') return HOTSPOT_STYLE_FIELDS.audio;
+  if (type === 'navigation') return HOTSPOT_STYLE_FIELDS.navigation;
+  if (type === 'weblink') return HOTSPOT_STYLE_FIELDS.weblink;
+  if (type === 'image') return HOTSPOT_STYLE_FIELDS.image;
+  return [];
+}
+
+function getStylePath(obj, path) {
+  return path.split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), obj);
+}
+
+function setStylePath(obj, path, value) {
+  const keys = path.split('.');
+  let o = obj;
+  keys.slice(0, -1).forEach((k) => {
+    if (!o[k] || typeof o[k] !== 'object') o[k] = {};
+    o = o[k];
+  });
+  o[keys[keys.length - 1]] = value;
+}
+
+/** Project styles with one hotspot's own overrides on top. */
+function mergeHotspotStyleOverrides(base, overrides) {
+  if (!overrides || typeof overrides !== 'object') return base || {};
+  const out = { ...(base || {}) };
+  Object.keys(overrides).forEach((key) => {
+    const v = overrides[key];
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      out[key] = mergeHotspotStyleOverrides(out[key] || {}, v);
+    } else if (v !== undefined && v !== null && v !== '') {
+      out[key] = v;
+    }
+  });
+  return out;
+}
+
+function _hotspotStyleRoot(el) {
+  let node = el;
+  while (node && !Object.prototype.hasOwnProperty.call(node, '_styleOverrides')) node = node.parentElement;
+  return node || null;
+}
+
+/** Styles for the hotspot an element belongs to (createHotspotElement sets _styleOverrides). */
+function hotspotStylesForElement(el) {
+  const base = window.hotspotEditor?.customStyles || {};
+  const root = _hotspotStyleRoot(el);
+  return mergeHotspotStyleOverrides(base, root ? root._styleOverrides : null);
+}
+
+/** True for parts of a hotspot with its own style, which project-wide restyling leaves alone. */
+function hasOwnHotspotStyle(el) {
+  const root = _hotspotStyleRoot(el);
+  return !!(root && root._styleOverrides);
+}
+
 function attachFlatVideoHotspotControls(parentEl, videoSrcRef, options) {
   options = options || {};
   const styles = options.styles || null;
@@ -835,8 +950,9 @@ function mountEditorFlatVideoBillboard(component, data, forceRemount) {
     });
 
     const editor = window.hotspotEditor;
-    if (editor && editor.customStyles && editor.customStyles.image) {
-      const istyle = editor.customStyles.image;
+    const elStyles = editor ? hotspotStylesForElement(el) : null;
+    if (elStyles && elStyles.image) {
+      const istyle = elStyles.image;
       const opacity = typeof istyle.opacity === 'number' ? istyle.opacity : 1.0;
       vid.setAttribute(
         'material',
@@ -887,7 +1003,7 @@ function mountEditorFlatVideoBillboard(component, data, forceRemount) {
     attachFlatVideoHotspotControls(el, _src, {
       aVideoEl: vid,
       startMuted: data.videoMuted === true,
-      styles: editor && editor.customStyles ? editor.customStyles : null,
+      styles: editor && editor.customStyles ? hotspotStylesForElement(el) : null,
     });
     component._mountedFlatVideoSrc = _src;
     if (el._repositionEditButtons) el._repositionEditButtons();
@@ -1148,7 +1264,7 @@ function getImageHotspotMaxOpacity(imgEl) {
       return Math.min(1, Math.max(0, mat.opacity));
     }
     const editor = window.hotspotEditor;
-    const istyle = editor && editor.customStyles && editor.customStyles.image;
+    const istyle = editor && editor.customStyles ? hotspotStylesForElement(imgEl).image : null;
     if (istyle && typeof istyle.opacity === 'number' && isFinite(istyle.opacity)) {
       return Math.min(1, Math.max(0, istyle.opacity));
     }
@@ -6775,7 +6891,7 @@ class HotspotEditor {
       // Transparent circle collider to capture pointer inside the circle
       const collider = document.createElement('a-entity');
       // Use customizable ring size
-      const navStyles = (this.customStyles && this.customStyles.navigation) || {};
+      const navStyles = this.getHotspotStyles(data).navigation || {};
       const ringOuter =
         typeof navStyles.ringOuterRadius === 'number' ? navStyles.ringOuterRadius : 0.6;
       const ringThickness =
@@ -6892,6 +7008,7 @@ class HotspotEditor {
       hotspotEl.setAttribute('face-camera', '');
     }
     hotspotEl.setAttribute('id', `hotspot-${data.id}`);
+    hotspotEl._styleOverrides = data.styleOverrides || null;
     hotspotEl.setAttribute('position', data.position);
     // Only navigation parent is clickable; others use child elements for clicks
     if (data.type === 'navigation' || data.type === 'weblink') {
@@ -7329,7 +7446,7 @@ class HotspotEditor {
                 }
                 // If rounded corners are enabled, re-apply mask now that real image is in place
                 try {
-                  const istyleNow = this.customStyles && this.customStyles.image;
+                  const istyleNow = this.getHotspotStyles(data).image;
                   if (istyleNow && istyleNow.borderRadius && istyleNow.borderRadius > 0) {
                     whenImageHotspotTextureReady(imgEnt, () => {
                       applyRoundedMaskToAImage(imgEnt, istyleNow, true).catch(() => {});
@@ -7354,11 +7471,7 @@ class HotspotEditor {
                       // Adjust border frame if present
                       const frame = hotspotEl.querySelector('.static-image-border');
                       if (frame) {
-                        const bw =
-                          (this.customStyles &&
-                            this.customStyles.image &&
-                            this.customStyles.image.borderWidth) ||
-                          0;
+                        const bw = (this.getHotspotStyles(data).image || {}).borderWidth || 0;
                         frame.setAttribute('width', 1 * scl + bw * 2);
                         frame.setAttribute('height', ratio * scl + bw * 2);
                         frame.setAttribute('position', `0 ${(ratio / 2) * scl} 0.0`);
@@ -8824,6 +8937,7 @@ class HotspotEditor {
     dialog.style.cssText = `
       background: #2a2a2a; color: white; width: 520px; max-width: 90vw; border-radius: 10px; padding: 20px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.6); pointer-events: auto; cursor: move; position: relative;
+      max-height: calc(100vh - 40px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box;
     `;
     dialog.innerHTML = `
       <h3 style="margin: 0 0 10px; color: #2E7D32; cursor: move;">Edit Hotspot - ${
@@ -9080,6 +9194,7 @@ class HotspotEditor {
         `
             : ''
         }
+        ${this._hotspotStyleSectionHtml(hotspot)}
         <div style="margin-top:10px; padding-top:10px; border-top: 1px solid #444;">
           <div style="font-size:12px; color:#ccc; margin-bottom:6px;">Position (X Y Z)</div>
           <div style="display:flex; gap:10px;">
@@ -9481,6 +9596,7 @@ class HotspotEditor {
       if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     };
     dialog.querySelector('#edit-cancel').onclick = close;
+    this._bindHotspotStyleSection(dialog, hotspot);
 
     dialog.querySelector('#edit-delete').onclick = () => {
       if (this.deleteHotspot(id)) close();
@@ -9867,6 +9983,8 @@ class HotspotEditor {
         hotspotEl.setAttribute('position', newPosition);
       }
 
+      const styleChanged = this._applyHotspotStyleOverridesFromDialog(dialog, hotspot, sceneHotspot);
+
       // Decide whether we need a full rebuild (only needed if image source changed or non-image types)
       let needsRebuild = true;
       if (isImageType) {
@@ -9897,6 +10015,7 @@ class HotspotEditor {
       if (isWeblink) {
         needsRebuild = true;
       }
+      if (styleChanged) needsRebuild = true;
       if (needsRebuild) {
         this._refreshHotspotEntity(hotspot);
       }
@@ -9962,6 +10081,123 @@ class HotspotEditor {
       default:
         return { valid: true };
     }
+  }
+
+  /** A style field's current value, as an input value (colors as #rrggbb). */
+  _hotspotStyleFieldValue(styles, field) {
+    let v = getStylePath(styles, field.path);
+    if ((v === undefined || v === null || v === '') && field.fallback) v = getStylePath(styles, field.fallback);
+    if (field.kind === 'number') return typeof v === 'number' && isFinite(v) ? v : '';
+    if (field.kind === 'url') return typeof v === 'string' ? v : '';
+    return this._toHexColor(v);
+  }
+
+  _toHexColor(v) {
+    const str = String(v || '').trim();
+    if (/^#[0-9a-f]{6}$/i.test(str)) return str.toLowerCase();
+    if (/^#[0-9a-f]{3}$/i.test(str)) {
+      return ('#' + str.slice(1).split('').map((c) => c + c).join('')).toLowerCase();
+    }
+    const m = str.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (m) {
+      return '#' + [m[1], m[2], m[3]].map((n) => Math.min(255, +n).toString(16).padStart(2, '0')).join('');
+    }
+    return '#000000';
+  }
+
+  /** Edit Hotspot → 🎨 Custom style for this hotspot (only types the project style editor covers). */
+  _hotspotStyleSectionHtml(hotspot) {
+    const fields = hotspotStyleFieldsForType(hotspot.type);
+    if (!fields.length) return '';
+    const on = !!hotspot.styleOverrides;
+    const effective = this.getHotspotStyles(hotspot);
+    const inputStyle =
+      'width:100%; padding:6px; border-radius:6px; border:1px solid #555; background:#1f1f1f; color:#fff; box-sizing:border-box;';
+    const rows = fields
+      .map((f) => {
+        const val = this._hotspotStyleFieldValue(effective, f);
+        const attrs = `data-style-path="${f.path}"`;
+        let input;
+        if (f.kind === 'color') {
+          input = `<input type="color" ${attrs} value="${this._escapeAttr(String(val))}" style="width:100%; height:32px; border:1px solid #555; border-radius:6px; background:#1f1f1f;">`;
+        } else if (f.kind === 'number') {
+          input = `<input type="number" ${attrs} min="${f.min}" max="${f.max}" step="${f.step}" value="${val}" style="${inputStyle}">`;
+        } else {
+          input = `<input type="url" ${attrs} value="${this._escapeAttr(String(val))}" placeholder="images/play.png or https://…" style="${inputStyle}">`;
+        }
+        const wide = f.kind === 'url' ? 'grid-column: 1 / -1;' : '';
+        return `<label style="font-size:12px; color:#ccc; ${wide}">${f.label}${input}</label>`;
+      })
+      .join('');
+    return `
+        <details id="edit-style-section" ${on ? 'open' : ''} style="margin-top:10px; padding-top:10px; border-top:1px solid #444;">
+          <summary style="cursor:pointer; font-size:13px; color:#ddd;">🎨 Custom style for this hotspot</summary>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#ddd; margin:10px 0;">
+            <input type="checkbox" id="edit-style-override" ${on ? 'checked' : ''}>
+            Use a custom style instead of the project style
+          </label>
+          <div id="edit-style-fields" style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">${rows}</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
+            <div style="font-size:11px; color:#888;">With this on, changes in 🎨 Customize Styles don't affect this hotspot.</div>
+            <button type="button" id="edit-style-reset" style="background:#555; color:#fff; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-size:12px; white-space:nowrap;">Reset to project style</button>
+          </div>
+        </details>`;
+  }
+
+  _bindHotspotStyleSection(dialog, hotspot) {
+    const toggle = dialog.querySelector('#edit-style-override');
+    const fieldsEl = dialog.querySelector('#edit-style-fields');
+    if (!toggle || !fieldsEl) return;
+    const sync = () => {
+      fieldsEl.style.opacity = toggle.checked ? '1' : '0.45';
+      fieldsEl.querySelectorAll('input').forEach((input) => {
+        input.disabled = !toggle.checked;
+      });
+    };
+    toggle.addEventListener('change', sync);
+    dialog.querySelector('#edit-style-reset')?.addEventListener('click', () => {
+      hotspotStyleFieldsForType(hotspot.type).forEach((f) => {
+        const input = fieldsEl.querySelector(`[data-style-path="${f.path}"]`);
+        if (input) input.value = this._hotspotStyleFieldValue(this.customStyles, f);
+      });
+      toggle.checked = false;
+      sync();
+    });
+    sync();
+  }
+
+  /** Save the dialog's custom style: every setting for this type, so it no longer follows the project. */
+  _applyHotspotStyleOverridesFromDialog(dialog, hotspot, sceneHotspot) {
+    const toggle = dialog.querySelector('#edit-style-override');
+    if (!toggle) return false;
+    let next = null;
+    if (toggle.checked) {
+      next = {};
+      hotspotStyleFieldsForType(hotspot.type).forEach((f) => {
+        const input = dialog.querySelector(`[data-style-path="${f.path}"]`);
+        if (!input) return;
+        let val;
+        if (f.kind === 'number') {
+          val = parseFloat(input.value);
+          if (!isFinite(val)) return;
+        } else if (f.kind === 'color') {
+          val = String(input.value || '').toLowerCase();
+          if (!val) return;
+        } else {
+          val = String(input.value || '').trim();
+          if (!val) return;
+        }
+        setStylePath(next, f.path, val);
+      });
+      if (!Object.keys(next).length) next = null;
+    }
+    const changed = JSON.stringify(hotspot.styleOverrides || null) !== JSON.stringify(next);
+    [hotspot, sceneHotspot].forEach((h) => {
+      if (!h) return;
+      if (next) h.styleOverrides = JSON.parse(JSON.stringify(next));
+      else delete h.styleOverrides;
+    });
+    return changed;
   }
 
   _refreshHotspotEntity(hotspot) {
@@ -11347,6 +11583,9 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
             audio: null,
             audioLoop: origHotspot.audioLoop !== false, // Preserve audioLoop setting, default to true
           };
+          if (origHotspot.styleOverrides && typeof origHotspot.styleOverrides === 'object') {
+            newHotspot.styleOverrides = JSON.parse(JSON.stringify(origHotspot.styleOverrides));
+          }
 
           // Handle audio properly (export blobs/IDB to files)
           if (origHotspot.commonAssetUrl && (origHotspot.type === 'audio' || origHotspot.type === 'text-audio')) {
@@ -12572,6 +12811,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
     document
       .querySelectorAll('a-entity[geometry*="primitive: plane"][material*="color"]')
       .forEach((infoButton) => {
+        if (hasOwnHotspotStyle(infoButton)) return;
         const geometry = infoButton.getAttribute('geometry');
         if (geometry && geometry.includes('width: 4') && geometry.includes('height: 0.5')) {
           // This is likely an info button
@@ -12594,6 +12834,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
 
     // Update existing popups
     document.querySelectorAll('a-plane[width][height]').forEach((popup) => {
+      if (hasOwnHotspotStyle(popup)) return;
       const width = popup.getAttribute('width');
       const height = popup.getAttribute('height');
       if (width >= 3 && height >= 2) {
@@ -12605,6 +12846,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
 
     // Update popup text
     document.querySelectorAll('a-text[wrap-count]').forEach((textEl) => {
+      if (hasOwnHotspotStyle(textEl)) return;
       if (textEl.getAttribute('wrap-count') === '35') {
         // Likely popup text
         textEl.setAttribute('color', styles.hotspot.popup.textColor);
@@ -12619,6 +12861,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
       document
         .querySelectorAll('a-image[src="#play"], a-image[src*="play.png"]')
         .forEach((playBtn) => {
+          if (hasOwnHotspotStyle(playBtn)) return;
           playBtn.setAttribute('src', styles.buttonImages.play);
         });
 
@@ -12626,12 +12869,14 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
       document
         .querySelectorAll('a-image[src="#pause"], a-image[src*="pause.png"]')
         .forEach((pauseBtn) => {
+          if (hasOwnHotspotStyle(pauseBtn)) return;
           pauseBtn.setAttribute('src', styles.buttonImages.pause);
         });
     }
 
     // Update audio and video control buttons
     document.querySelectorAll('.audio-control, .video-control').forEach((controlBtn) => {
+      if (hasOwnHotspotStyle(controlBtn)) return;
       if (controlBtn.tagName === 'A-IMAGE' || controlBtn.tagName === 'A-PLANE') {
         controlBtn.setAttribute('material', `color: ${styles.audio.buttonColor}`);
         controlBtn.setAttribute('opacity', styles.audio.buttonOpacity);
@@ -12642,6 +12887,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
     if (styles.image) {
       const istyle = styles.image;
       document.querySelectorAll('.static-image-hotspot, .static-video-hotspot').forEach((imgEl) => {
+        if (hasOwnHotspotStyle(imgEl)) return;
         try {
           const parent = imgEl.parentElement;
           const opacity = typeof istyle.opacity === 'number' ? istyle.opacity : 1.0;
@@ -12797,6 +13043,11 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
     });
   }
 
+  /** Project customStyles with this hotspot's own overrides on top. */
+  getHotspotStyles(hotspot) {
+    return mergeHotspotStyleOverrides(this.customStyles, hotspot && hotspot.styleOverrides);
+  }
+
   refreshAllHotspotStyles() {
     console.log('🎨 Refreshing all hotspot styles');
 
@@ -12816,6 +13067,7 @@ Generated by WebXRIDE Immersive Storytelling Tool on ${new Date().toLocaleDateSt
 
     this.hotspots.forEach((hotspot) => {
       if (hotspot.type !== 'navigation') return;
+      if (hotspot.styleOverrides) return; // styled from its own overrides when it was drawn
       const el = document.getElementById(`hotspot-${hotspot.id}`);
       if (!el) return;
 
@@ -14937,6 +15189,28 @@ html.vr-tour-embed-mode #global-sound-control {
 // Custom Styles Configuration
 const CUSTOM_STYLES = ${customStylesJson};
 
+// Per-hotspot style overrides: a hotspot's styleOverrides sit on top of CUSTOM_STYLES.
+function mergeHotspotStyleOverrides(base, overrides) {
+  if (!overrides || typeof overrides !== 'object') return base || {};
+  var out = Object.assign({}, base || {});
+  Object.keys(overrides).forEach(function (key) {
+    var v = overrides[key];
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      out[key] = mergeHotspotStyleOverrides(out[key] || {}, v);
+    } else if (v !== undefined && v !== null && v !== '') {
+      out[key] = v;
+    }
+  });
+  return out;
+}
+
+function hotspotStylesFor(el, hotspot) {
+  if (hotspot) return mergeHotspotStyleOverrides(CUSTOM_STYLES, hotspot.styleOverrides);
+  var node = el;
+  while (node && !Object.prototype.hasOwnProperty.call(node, '_styleOverrides')) node = node.parentElement;
+  return mergeHotspotStyleOverrides(CUSTOM_STYLES, node ? node._styleOverrides : null);
+}
+
 // Helper (export build): reuse caching via local map to prevent reprocessing
 const EXPORTED_IMAGE_MASK_CACHE = new Map();
 const EXPORTED_VIDEO_THUMB_CACHE = new Map();
@@ -15006,8 +15280,9 @@ function getImageHotspotMaxOpacity(imgEl) {
     if (mat && typeof mat === 'object' && typeof mat.opacity === 'number' && isFinite(mat.opacity)) {
       return Math.min(1, Math.max(0, mat.opacity));
     }
-    if (typeof CUSTOM_STYLES !== 'undefined' && CUSTOM_STYLES.image && typeof CUSTOM_STYLES.image.opacity === 'number') {
-      return Math.min(1, Math.max(0, CUSTOM_STYLES.image.opacity));
+    var ownImageStyle = hotspotStylesFor(imgEl).image;
+    if (ownImageStyle && typeof ownImageStyle.opacity === 'number') {
+      return Math.min(1, Math.max(0, ownImageStyle.opacity));
     }
   } catch (_) {}
   return 1;
@@ -15455,6 +15730,8 @@ AFRAME.registerComponent("hotspot", {
   init: function () {
     const data = this.data;
     const el = this.el;
+    // This hotspot's styles (project styles + its own overrides).
+    const CUSTOM_STYLES = hotspotStylesFor(el);
 
     // REMOVED: Main element hover animations to prevent conflicts with popup elements
 
@@ -15699,6 +15976,7 @@ AFRAME.registerComponent("hotspot", {
 
   createPopup: function(data) {
     const el = this.el;
+    const CUSTOM_STYLES = hotspotStylesFor(el);
 
     const infoIcon = document.createElement("a-entity");
     // Create circular info icon instead of banner
@@ -15843,6 +16121,7 @@ AFRAME.registerComponent("hotspot", {
 
   createAudio: function(data) {
     const el = this.el;
+    const CUSTOM_STYLES = hotspotStylesFor(el);
     const audioEl = document.createElement("a-sound");
     // Stabilize blob/data audio by routing through <a-assets>
     let aSrc = data.audio;
@@ -16709,7 +16988,7 @@ class HotspotProject {
 
         // Transparent circle collider for interactions
   collider = document.createElement('a-entity');
-        const navStyles = (typeof CUSTOM_STYLES !== 'undefined' && CUSTOM_STYLES.navigation) ? CUSTOM_STYLES.navigation : {};
+        const navStyles = hotspotStylesFor(null, hotspot).navigation || {};
         const ringOuter = (typeof navStyles.ringOuterRadius === 'number') ? navStyles.ringOuterRadius : 0.6;
   const ringThickness = (typeof navStyles.ringThickness === 'number') ? navStyles.ringThickness : 0.02;
         const ringInner = Math.max(0.001, ringOuter - ringThickness);
@@ -16788,6 +17067,7 @@ class HotspotProject {
         hotspotEl.setAttribute('face-camera', '');
       }
       hotspotEl.setAttribute('position', hotspot.position);
+      hotspotEl._styleOverrides = hotspot.styleOverrides || null;
       // Only navigation/weblink parents may be clickable; non-navigation hotspots rely on child elements
       // (info icon, close button, audio button) which are explicitly marked as .clickable.
       if (hotspot.type === 'navigation' || hotspot.type === 'weblink') {
@@ -22891,8 +23171,9 @@ AFRAME.registerComponent('editor-spot', {
 
       // Apply global image styles if available
       const editor = window.hotspotEditor;
-      if (editor && editor.customStyles && editor.customStyles.image) {
-        const istyle = editor.customStyles.image;
+      const elStyles = editor ? hotspotStylesForElement(el) : null;
+      if (elStyles && elStyles.image) {
+        const istyle = elStyles.image;
         const opacity = typeof istyle.opacity === 'number' ? istyle.opacity : 1.0;
         img.setAttribute(
           'material',
@@ -22956,7 +23237,7 @@ AFRAME.registerComponent('editor-spot', {
           const frame = el.querySelector('.static-image-border');
           if (frame) {
             const editor2 = window.hotspotEditor;
-            const istyle2 = editor2?.customStyles?.image;
+            const istyle2 = editor2 ? hotspotStylesForElement(el).image : null;
             const bw = istyle2?.borderWidth || 0.02;
             frame.setAttribute('width', 1 * scl + bw * 2);
             frame.setAttribute('height', ratio * scl + bw * 2);
@@ -23067,7 +23348,7 @@ AFRAME.registerComponent('editor-spot', {
     if (data.popup) {
       // Get custom styles from the editor instance
       const editor = window.hotspotEditor;
-      const styles = editor ? editor.customStyles : null;
+      const styles = editor ? hotspotStylesForElement(el) : null;
 
       /* info icon */
       const infoIcon = document.createElement('a-entity');
@@ -23286,7 +23567,7 @@ AFRAME.registerComponent('editor-spot', {
 
       // Use custom styles if available
       const editor = window.hotspotEditor;
-      const styles = editor ? editor.customStyles : null;
+      const styles = editor ? hotspotStylesForElement(el) : null;
       const playImage = styles?.buttonImages?.play || '#play';
       const pauseImage = styles?.buttonImages?.pause || '#pause';
       btn.setAttribute('src', playImage);

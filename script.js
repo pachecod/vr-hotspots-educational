@@ -10695,7 +10695,7 @@ class HotspotEditor {
     let exportMode = 'bundle';
     if (!isTestUser) {
       exportMode = await this.showExportModeDialog({
-        title: 'Save Template',
+        title: 'Export HTML & Files',
         description: 'Choose how media should be included in your exported ZIP.',
       });
       if (!exportMode) return;

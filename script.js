@@ -577,6 +577,10 @@ function clearFlatVideoHotspotOverlay(parentEl) {
   delete parentEl._flatVideoControls;
 }
 
+// Scene Site Map: height of the scene thumbnail band at the top of each card, and its inset.
+const SSM_THUMB_H = 80;
+const SSM_THUMB_PAD = 6;
+
 /**
  * Per-hotspot style overrides (Edit Hotspot → Custom style). With a custom style on, a hotspot's
  * styleOverrides hold every setting for its type, so project-wide style changes leave it alone.
@@ -21383,7 +21387,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   _layoutSceneSiteMap(graph) {
     const nodeW = 160;
-    const nodeH = 64;
+    // Scene thumbnail on top (see SSM_THUMB_H), then name / counts / badge.
+    const nodeH = 64 + SSM_THUMB_H;
     const gapX = 36;
     const gapY = 90;
     const padX = 40;
@@ -21445,13 +21450,67 @@ document.addEventListener('DOMContentLoaded', () => {
     return { positions, contentWidth, contentHeight, orphanBandY, nodeW, nodeH };
   }
 
+  /**
+   * Small 2:1 thumbnail of a scene's 360° media for the Scene Site Map. Large panoramas are
+   * downscaled once and cached; video scenes use a frame from the video.
+   */
+  async _sceneSiteMapThumb(sceneId) {
+    const sc = this.scenes?.[sceneId];
+    if (!sc) return null;
+    let src = null;
+    if (sc.type === 'video') {
+      try {
+        src = await this._ensureVideoPreview(sceneId);
+      } catch (_) {
+        src = null;
+      }
+    } else {
+      src = this._getEditorPreviewSrc(sceneId);
+      if (src && src.startsWith('#')) src = document.querySelector(src)?.getAttribute('src') || null;
+    }
+    if (!src || src === 'VIDEO_ICON') return null;
+    if (!this._sceneThumbCache) this._sceneThumbCache = new Map();
+    const key = `${sceneId}|${src.length > 300 ? src.slice(0, 120) + src.length : src}`;
+    if (this._sceneThumbCache.has(key)) return this._sceneThumbCache.get(key);
+    const thumb = await new Promise((resolve) => {
+      const img = new Image();
+      if (/^https?:/i.test(src)) img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 296;
+          canvas.height = 148;
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        } catch (_) {
+          resolve(src); // e.g. a cross-origin image we can draw but not read back
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+    if (thumb) this._sceneThumbCache.set(key, thumb);
+    return thumb;
+  }
+
   _sceneSiteMapEdgePath(fromPos, toPos, index, total) {
+    const spread = 30;
+    const offset = total <= 1 ? 0 : (index - (total - 1) / 2) * spread;
+    // Portal back up the map: leave from the card's right side and enter the target's right side,
+    // bowing outward, so it isn't hidden behind the cards or the downward arrow.
+    if (toPos.y + toPos.h <= fromPos.y) {
+      const sx = fromPos.x + fromPos.w;
+      const sy = fromPos.y + fromPos.h / 2;
+      const tx = toPos.x + toPos.w;
+      const ty = toPos.y + toPos.h / 2;
+      const bow = 60 + Math.abs(offset) + index * 18;
+      const out = Math.max(sx, tx) + bow;
+      return `M ${sx} ${sy} C ${out} ${sy}, ${out} ${ty}, ${tx} ${ty}`;
+    }
     const x1 = fromPos.x + fromPos.w / 2;
     const y1 = fromPos.y + fromPos.h;
     const x2 = toPos.x + toPos.w / 2;
     const y2 = toPos.y;
-    const spread = 30;
-    const offset = total <= 1 ? 0 : (index - (total - 1) / 2) * spread;
     const midY = (y1 + y2) / 2;
     // Fan parallel portals sideways so stacked arrows are readable.
     return `M ${x1} ${y1} C ${x1 + offset} ${midY}, ${x2 + offset} ${midY}, ${x2} ${y2}`;
@@ -21537,11 +21596,17 @@ document.addEventListener('DOMContentLoaded', () => {
           <title>${esc(rawName)} — drag to rearrange · double-click to open</title>
           <rect class="ssm-node-rect" x="${pos.x}" y="${pos.y}" width="${pos.w}" height="${pos.h}" rx="10" ry="10"
             fill="${nodeFill(node)}" stroke="${nodeStroke(node)}" stroke-width="2" />
-          <text class="ssm-node-t1" x="${pos.x + pos.w / 2}" y="${pos.y + 22}" text-anchor="middle"
+          <rect class="ssm-node-thumb-bg" x="${pos.x + SSM_THUMB_PAD}" y="${pos.y + SSM_THUMB_PAD}"
+            width="${pos.w - SSM_THUMB_PAD * 2}" height="${SSM_THUMB_H - SSM_THUMB_PAD - 2}" rx="6" ry="6"
+            fill="#000" fill-opacity="0.35" />
+          <image class="ssm-node-thumb" x="${pos.x + SSM_THUMB_PAD}" y="${pos.y + SSM_THUMB_PAD}"
+            width="${pos.w - SSM_THUMB_PAD * 2}" height="${SSM_THUMB_H - SSM_THUMB_PAD - 2}"
+            preserveAspectRatio="xMidYMid slice" pointer-events="none" />
+          <text class="ssm-node-t1" x="${pos.x + pos.w / 2}" y="${pos.y + SSM_THUMB_H + 22}" text-anchor="middle"
             fill="#fff" font-size="13" font-weight="bold">${esc(shortName)}</text>
-          <text class="ssm-node-t2" x="${pos.x + pos.w / 2}" y="${pos.y + 40}" text-anchor="middle"
+          <text class="ssm-node-t2" x="${pos.x + pos.w / 2}" y="${pos.y + SSM_THUMB_H + 40}" text-anchor="middle"
             fill="#b0bec5" font-size="11">${esc(label)}</text>
-          <text class="ssm-node-t3" x="${pos.x + pos.w / 2}" y="${pos.y + 54}" text-anchor="middle"
+          <text class="ssm-node-t3" x="${pos.x + pos.w / 2}" y="${pos.y + SSM_THUMB_H + 54}" text-anchor="middle"
             fill="${nodeStroke(node)}" font-size="10">${esc(badgeText)}</text>
         </g>`;
     });
@@ -21674,18 +21739,22 @@ document.addEventListener('DOMContentLoaded', () => {
         rect.setAttribute('x', String(pos.x));
         rect.setAttribute('y', String(pos.y));
       }
+      g.querySelectorAll('.ssm-node-thumb-bg, .ssm-node-thumb').forEach((thumbEl) => {
+        thumbEl.setAttribute('x', String(pos.x + SSM_THUMB_PAD));
+        thumbEl.setAttribute('y', String(pos.y + SSM_THUMB_PAD));
+      });
       const cx = pos.x + pos.w / 2;
       if (t1) {
         t1.setAttribute('x', String(cx));
-        t1.setAttribute('y', String(pos.y + 22));
+        t1.setAttribute('y', String(pos.y + SSM_THUMB_H + 22));
       }
       if (t2) {
         t2.setAttribute('x', String(cx));
-        t2.setAttribute('y', String(pos.y + 40));
+        t2.setAttribute('y', String(pos.y + SSM_THUMB_H + 40));
       }
       if (t3) {
         t3.setAttribute('x', String(cx));
-        t3.setAttribute('y', String(pos.y + 54));
+        t3.setAttribute('y', String(pos.y + SSM_THUMB_H + 54));
       }
     };
 
@@ -21874,6 +21943,15 @@ document.addEventListener('DOMContentLoaded', () => {
     dialog.querySelector('#ssm-start-scene')?.addEventListener('change', (evt) => {
       this.setStartScene(evt.target.value);
       this.showSceneSiteMap();
+    });
+    graph.nodes.forEach((node) => {
+      this._sceneSiteMapThumb(node.id)
+        .then((thumb) => {
+          if (!thumb || !dialog.isConnected) return;
+          const img = dialog.querySelector(`.ssm-node[data-scene-id="${CSS.escape(node.id)}"] .ssm-node-thumb`);
+          if (img) img.setAttribute('href', thumb);
+        })
+        .catch(() => {});
     });
     dialog.querySelector('#ssm-reset-layout')?.addEventListener('click', () => {
       const fresh = this._layoutSceneSiteMap(graph);

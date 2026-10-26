@@ -188,7 +188,7 @@ function registerPlaygroundRoutes(app) {
       if (!validateZipHasConfig(localPath)) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid project ZIP: config.json not found. Export from the editor using Save Template (bundle mode).',
+          message: 'Invalid project ZIP: config.json not found. Export from the editor using Export HTML & Files (bundle mode).',
         });
       }
 

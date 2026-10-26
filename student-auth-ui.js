@@ -375,7 +375,7 @@ function promptGuestSignInWarning() {
         <h2 id="guest-signin-warning-title" class="guest-agreement-title">Sign in?</h2>
         <div class="guest-agreement-content">
           <p>Signing in does not upload guest work automatically. Projects you <strong>Save Locally</strong> stay in this browser under <strong>My Local Projects</strong> so you can open them after you sign in, then use cloud save or submit.</p>
-          <p>You can also click <strong>Save Template</strong> for a ZIP backup before signing in.</p>
+          <p>You can also click <strong>Export HTML &amp; Files</strong> for a ZIP backup before signing in.</p>
         </div>
         <div class="guest-agreement-actions">
           <button type="button" class="guest-agreement-btn guest-agreement-cancel" data-action="cancel">Cancel</button>

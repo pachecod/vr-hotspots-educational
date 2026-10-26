@@ -21776,6 +21776,283 @@ document.addEventListener('DOMContentLoaded', () => {
     return thumb;
   }
 
+  /** Playable/viewable URL for a hotspot's image, video or audio, loading browser-only media if needed. */
+  async _hotspotMediaUrl(h, kind) {
+    const val = kind === 'image' ? h.image : kind === 'video' ? h.video : h.audio;
+    if (val instanceof Blob) return URL.createObjectURL(val);
+    if (typeof val === 'string' && val) return val;
+    if (kind === 'audio' && h.commonAssetUrl) return h.commonAssetUrl;
+    const key = kind === 'image' ? h.imageStorageKey : kind === 'video' ? h.videoStorageKey : h.audioStorageKey;
+    if (!key) return null;
+    if (!this._ssmMediaUrls) this._ssmMediaUrls = new Map();
+    if (this._ssmMediaUrls.has(key)) return this._ssmMediaUrls.get(key);
+    try {
+      const getter =
+        kind === 'image' ? this.getImageFromIDB : kind === 'video' ? this.getVideoFromIDB : this.getAudioFromIDB;
+      const rec = await getter.call(this, key);
+      const blob = rec instanceof Blob ? rec : rec && (rec.blob || rec.file);
+      if (!(blob instanceof Blob)) return null;
+      const url = URL.createObjectURL(blob);
+      this._ssmMediaUrls.set(key, url);
+      return url;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** Small preview image (data URL) of an image URL, or of a frame from a video URL. */
+  async _ssmPreviewThumb(src, isVideo) {
+    if (!src) return null;
+    if (!this._ssmPreviewCache) this._ssmPreviewCache = new Map();
+    const cacheKey = (isVideo ? 'v|' : 'i|') + (src.length > 300 ? src.slice(0, 120) + src.length : src);
+    if (this._ssmPreviewCache.has(cacheKey)) return this._ssmPreviewCache.get(cacheKey);
+    const draw = (media, w, h) => {
+      const scale = Math.min(1, 240 / Math.max(w, h || 1));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(w * scale));
+      canvas.height = Math.max(1, Math.round(h * scale));
+      canvas.getContext('2d').drawImage(media, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', 0.8);
+    };
+    const thumb = await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 8000);
+      const done = (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      };
+      if (isVideo) {
+        const v = document.createElement('video');
+        v.muted = true;
+        v.playsInline = true;
+        v.preload = 'auto';
+        if (/^https?:/i.test(src)) v.crossOrigin = 'anonymous';
+        v.addEventListener('loadeddata', () => {
+          try {
+            v.currentTime = Math.min(1, (v.duration || 1) * 0.1);
+          } catch (_) {
+            done(null);
+          }
+        });
+        v.addEventListener('seeked', () => {
+          try {
+            done(draw(v, v.videoWidth, v.videoHeight));
+          } catch (_) {
+            done(null);
+          }
+        });
+        v.addEventListener('error', () => done(null));
+        v.src = src;
+      } else {
+        const img = new Image();
+        if (/^https?:/i.test(src)) img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            done(draw(img, img.naturalWidth, img.naturalHeight));
+          } catch (_) {
+            done(src);
+          }
+        };
+        img.onerror = () => done(null);
+        img.src = src;
+      }
+    });
+    if (thumb) this._ssmPreviewCache.set(cacheKey, thumb);
+    return thumb;
+  }
+
+  /** Scene Site Map → card counts button: a view-only list of a scene's hotspots, with Edit. */
+  _renderSceneContentsPanel(panel, sceneId, ctx) {
+    const esc = (v) => this._escapeHTML(String(v ?? ''));
+    const scene = this.scenes[sceneId];
+    const hotspots = (sceneId === this.currentScene ? this.hotspots : scene.hotspots) || [];
+    const groups = [
+      { key: 'text', label: '📝 Text', match: (h) => h.type === 'text' },
+      { key: 'text-audio', label: '🎵 Text + Audio', match: (h) => h.type === 'text-audio' },
+      { key: 'audio', label: '🔊 Audio', match: (h) => h.type === 'audio' },
+      { key: 'image', label: '🖼️ Images', match: (h) => h.type === 'image' && h.mediaKind !== 'video' && !h.video },
+      { key: 'video', label: '🎥 Videos', match: (h) => h.type === 'image' && (h.mediaKind === 'video' || !!h.video) },
+      { key: 'weblink', label: '🔗 Weblinks', match: (h) => h.type === 'weblink' },
+      { key: 'navigation', label: '🚪 Navigation', match: (h) => h.type === 'navigation' },
+      { key: 'model', label: '🧊 3D Models', match: (h) => h.type === 'model' },
+    ];
+    const btn =
+      'background:#37474f;color:#fff;border:none;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:12px;';
+    const fileName = (v) => {
+      if (!v || typeof v !== 'string' || v.startsWith('data:') || v.startsWith('blob:')) return '';
+      try {
+        return decodeURIComponent(v.split('?')[0].split('/').pop() || '');
+      } catch (_) {
+        return v.split('/').pop() || '';
+      }
+    };
+    const itemHtml = (h, groupKey) => {
+      const own = h.styleOverrides ? ' <span title="Has a custom style">🎨</span>' : '';
+      const head = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:12px;color:#90a4ae;">#${esc(h.id)}${own}</span>
+          <button type="button" class="ssm-c-edit" data-hotspot-id="${esc(h.id)}" style="${btn}">Edit</button>
+        </div>`;
+      let body = '';
+      if (groupKey === 'text' || groupKey === 'text-audio') {
+        const text = String(h.text || '').trim();
+        const short = text.length > 140 ? text.slice(0, 140) + '…' : text;
+        body += `<div class="ssm-c-text" data-full="${esc(text)}" style="font-size:13px;color:#eceff1;white-space:pre-wrap;line-height:1.4;">${esc(
+          short || '(no text)'
+        )}</div>`;
+        if (text.length > 140) body += `<button type="button" class="ssm-c-more" style="${btn}margin-top:6px;">More</button>`;
+      }
+      if (groupKey === 'audio' || groupKey === 'text-audio') {
+        body += `<div class="ssm-c-audio" data-hotspot-id="${esc(h.id)}" style="margin-top:6px;font-size:12px;color:#90a4ae;">Loading audio…</div>`;
+      }
+      if (groupKey === 'image' || groupKey === 'video') {
+        const name = fileName(groupKey === 'video' ? h.video : h.image) || h.imageFileName || h.videoFileName || '';
+        body += `<button type="button" class="ssm-c-media" data-hotspot-id="${esc(h.id)}" data-kind="${groupKey}"
+            title="Click to view larger" style="display:block;width:100%;padding:0;border:1px solid #333;border-radius:6px;background:#000;cursor:zoom-in;min-height:60px;">
+            <img alt="" style="display:block;width:100%;max-height:150px;object-fit:contain;border-radius:6px;">
+          </button>
+          ${name ? `<div style="font-size:11px;color:#90a4ae;margin-top:4px;word-break:break-all;">${esc(name)}</div>` : ''}`;
+      }
+      if (groupKey === 'weblink') {
+        const url = String(h.weblinkUrl || '');
+        body += `<div style="font-size:13px;color:#eceff1;font-weight:bold;">${esc(h.weblinkTitle || 'Weblink')}</div>
+          ${
+            /^https?:\/\//i.test(url)
+              ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#4fc3f7;word-break:break-all;">${esc(url)}</a>`
+              : `<div style="font-size:12px;color:#ef9a9a;">No link set</div>`
+          }
+          ${
+            h.weblinkPreview
+              ? `<img src="${esc(h.weblinkPreview)}" alt="" style="display:block;width:100%;max-height:120px;object-fit:cover;border-radius:6px;margin-top:6px;">`
+              : ''
+          }`;
+      }
+      if (groupKey === 'navigation') {
+        const target = this.scenes[h.navigationTarget];
+        body += target
+          ? `<button type="button" class="ssm-c-nav" data-hotspot-id="${esc(h.id)}" data-target="${esc(
+              h.navigationTarget
+            )}" title="Show this scene's contents" style="display:flex;align-items:center;gap:8px;width:100%;padding:6px;border:1px solid #333;border-radius:6px;background:#222;color:#fff;cursor:pointer;text-align:left;">
+              <img alt="" style="width:64px;height:32px;object-fit:cover;border-radius:4px;background:#000;flex:0 0 auto;">
+              <span style="font-size:13px;">→ ${esc(target.name || h.navigationTarget)}</span>
+            </button>`
+          : `<div style="font-size:12px;color:#ef9a9a;">Broken portal: target scene is missing</div>`;
+      }
+      if (groupKey === 'model') {
+        const name = h.modelFileName || fileName(h.model) || 'GLB/GLTF model';
+        body += `<div style="font-size:13px;color:#eceff1;word-break:break-all;">${esc(name)}</div>
+          <div style="font-size:11px;color:#90a4ae;">Scale ${esc(h.modelScale || 1)}</div>`;
+      }
+      return `<div class="ssm-c-item" style="background:#212121;border:1px solid #333;border-radius:8px;padding:8px;margin-bottom:8px;">${head}${body}</div>`;
+    };
+
+    let listHtml = '';
+    groups.forEach((g) => {
+      const items = hotspots.filter((h) => h && g.match(h));
+      if (!items.length) return;
+      listHtml += `<div style="font-size:12px;font-weight:bold;color:#b0bec5;margin:10px 0 6px;">${g.label} (${items.length})</div>`;
+      listHtml += items.map((h) => itemHtml(h, g.key)).join('');
+    });
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div>
+          <div style="font-size:11px;color:#90a4ae;text-transform:uppercase;letter-spacing:0.04em;">Scene contents</div>
+          <div style="font-size:15px;font-weight:bold;color:#fff;">${esc(scene.name || sceneId)}</div>
+        </div>
+        <button type="button" class="ssm-c-close" aria-label="Close contents" style="background:none;border:none;color:#ccc;font-size:22px;line-height:1;cursor:pointer;">&times;</button>
+      </div>
+      ${listHtml || '<div style="font-size:13px;color:#90a4ae;margin-top:14px;">No hotspots in this scene yet.</div>'}`;
+
+    const byId = (id) => hotspots.find((h) => h && String(h.id) === String(id));
+    panel.querySelector('.ssm-c-close')?.addEventListener('click', () => ctx.closePanel());
+    panel.querySelectorAll('.ssm-c-edit').forEach((b) =>
+      b.addEventListener('click', () => ctx.editHotspot(b.getAttribute('data-hotspot-id')))
+    );
+    panel.querySelectorAll('.ssm-c-more').forEach((b) =>
+      b.addEventListener('click', () => {
+        const t = b.previousElementSibling;
+        if (t) t.textContent = t.getAttribute('data-full') || t.textContent;
+        b.remove();
+      })
+    );
+    panel.querySelectorAll('.ssm-c-nav').forEach((b) => {
+      const id = b.getAttribute('data-hotspot-id');
+      b.addEventListener('mouseenter', () => ctx.highlightPortal(id, true));
+      b.addEventListener('mouseleave', () => ctx.highlightPortal(id, false));
+      b.addEventListener('click', () => {
+        ctx.highlightPortal(id, false);
+        ctx.openPanel(b.getAttribute('data-target'));
+      });
+      this._sceneSiteMapThumb(b.getAttribute('data-target'))
+        .then((thumb) => {
+          if (thumb && ctx.isCurrent()) b.querySelector('img')?.setAttribute('src', thumb);
+        })
+        .catch(() => {});
+    });
+    panel.querySelectorAll('.ssm-c-audio').forEach(async (holder) => {
+      const h = byId(holder.getAttribute('data-hotspot-id'));
+      const url = h ? await this._hotspotMediaUrl(h, 'audio') : null;
+      if (!ctx.isCurrent()) return;
+      if (!url) {
+        holder.textContent = 'Audio not available in this browser.';
+        return;
+      }
+      holder.innerHTML = '';
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.preload = 'none';
+      audio.src = url;
+      audio.style.cssText = 'width:100%;height:32px;';
+      holder.appendChild(audio);
+    });
+    panel.querySelectorAll('.ssm-c-media').forEach(async (b) => {
+      const h = byId(b.getAttribute('data-hotspot-id'));
+      const isVideo = b.getAttribute('data-kind') === 'video';
+      const url = h ? await this._hotspotMediaUrl(h, isVideo ? 'video' : 'image') : null;
+      if (!ctx.isCurrent()) return;
+      if (!url) {
+        b.outerHTML = `<div style="font-size:12px;color:#90a4ae;">${isVideo ? 'Video' : 'Image'} not available in this browser.</div>`;
+        return;
+      }
+      const thumb = await this._ssmPreviewThumb(url, isVideo);
+      if (!ctx.isCurrent()) return;
+      const img = b.querySelector('img');
+      if (thumb && img) img.src = thumb;
+      else if (img) img.replaceWith(Object.assign(document.createElement('div'), {
+        textContent: isVideo ? '▶ Play video' : 'View image',
+        style: 'color:#fff;font-size:13px;padding:20px;',
+      }));
+      b.addEventListener('click', () => this._showSceneContentsLightbox(panel, url, isVideo));
+    });
+  }
+
+  _showSceneContentsLightbox(panel, url, isVideo) {
+    const host = panel.closest('#scene-site-map-dialog') || document.body;
+    host.querySelector('#ssm-lightbox')?.remove();
+    const box = document.createElement('div');
+    box.id = 'ssm-lightbox';
+    box.style.cssText =
+      'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:30px;box-sizing:border-box;';
+    const media = document.createElement(isVideo ? 'video' : 'img');
+    media.src = url;
+    media.style.cssText = 'max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.6);';
+    if (isVideo) {
+      media.controls = true;
+      media.autoplay = true;
+      media.playsInline = true;
+    }
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.style.cssText =
+      'position:absolute;top:14px;right:20px;background:none;border:none;color:#fff;font-size:34px;cursor:pointer;';
+    box.appendChild(media);
+    box.appendChild(closeBtn);
+    box.addEventListener('click', (evt) => {
+      if (evt.target === box || evt.target === closeBtn) box.remove();
+    });
+    host.appendChild(box);
+  }
+
   _sceneSiteMapEdgePath(fromPos, toPos, index, total) {
     const spread = 30;
     const offset = total <= 1 ? 0 : (index - (total - 1) / 2) * spread;
@@ -21887,8 +22164,12 @@ document.addEventListener('DOMContentLoaded', () => {
             preserveAspectRatio="xMidYMid slice" pointer-events="none" />
           <text class="ssm-node-t1" x="${pos.x + pos.w / 2}" y="${pos.y + SSM_THUMB_H + 22}" text-anchor="middle"
             fill="#fff" font-size="13" font-weight="bold">${esc(shortName)}</text>
+          <rect class="ssm-node-contents" x="${pos.x + 10}" y="${pos.y + SSM_THUMB_H + 29}" width="${pos.w - 20}" height="15"
+            rx="7" ry="7" fill="#ffffff" fill-opacity="0.08" style="cursor:pointer">
+            <title>Show what's in this scene</title>
+          </rect>
           <text class="ssm-node-t2" x="${pos.x + pos.w / 2}" y="${pos.y + SSM_THUMB_H + 40}" text-anchor="middle"
-            fill="#b0bec5" font-size="11">${esc(label)}</text>
+            fill="#b0bec5" font-size="11" pointer-events="none">${esc(label)} ▸</text>
           <text class="ssm-node-t3" x="${pos.x + pos.w / 2}" y="${pos.y + SSM_THUMB_H + 54}" text-anchor="middle"
             fill="${nodeStroke(node)}" font-size="10">${esc(badgeText)}</text>
         </g>`;
@@ -21980,7 +22261,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <span style="margin-left:10px;color:#ef5350;">— —</span> Broken portal
           <span style="margin-left:12px;color:#b0bec5;">Drag cards to untangle · double-click a scene to open · click a portal to edit it.</span>
         </div>
-        <div id="ssm-canvas-wrap" style="flex:1;min-height:0;background:#121212;border:1px solid #333;border-radius:8px;overflow:auto;">
+        <div style="flex:1;min-height:0;display:flex;gap:10px;">
+        <div id="ssm-canvas-wrap" style="flex:1;min-width:0;min-height:0;background:#121212;border:1px solid #333;border-radius:8px;overflow:auto;">
           ${
             emptyHint ||
             `<svg id="ssm-svg" xmlns="http://www.w3.org/2000/svg" width="${layout.contentWidth}" height="${
@@ -21999,6 +22281,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ${orphanBand}
           </svg>`
           }
+        </div>
+        <aside id="ssm-contents" hidden style="width:320px;flex:0 0 320px;min-height:0;overflow-y:auto;background:#181818;border:1px solid #333;border-radius:8px;padding:12px;box-sizing:border-box;"></aside>
         </div>
       </div>
     `;
@@ -22026,6 +22310,11 @@ document.addEventListener('DOMContentLoaded', () => {
         thumbEl.setAttribute('x', String(pos.x + SSM_THUMB_PAD));
         thumbEl.setAttribute('y', String(pos.y + SSM_THUMB_PAD));
       });
+      const contentsBtn = g.querySelector('.ssm-node-contents');
+      if (contentsBtn) {
+        contentsBtn.setAttribute('x', String(pos.x + 10));
+        contentsBtn.setAttribute('y', String(pos.y + SSM_THUMB_H + 29));
+      }
       const cx = pos.x + pos.w / 2;
       if (t1) {
         t1.setAttribute('x', String(cx));
@@ -22227,6 +22516,73 @@ document.addEventListener('DOMContentLoaded', () => {
       this.setStartScene(evt.target.value);
       this.showSceneSiteMap();
     });
+    // Scene contents panel (counts button on each card).
+    const panel = dialog.querySelector('#ssm-contents');
+    let panelSceneId = null;
+    const closePanel = () => {
+      panelSceneId = null;
+      if (panel) {
+        panel.hidden = true;
+        panel.innerHTML = '';
+      }
+      dialog.querySelectorAll('.ssm-node-rect').forEach((r) => r.setAttribute('stroke-width', '2'));
+    };
+    const openPanel = (sceneId) => {
+      if (!panel || !this.scenes[sceneId]) return;
+      panelSceneId = sceneId;
+      dialog.querySelectorAll('.ssm-node').forEach((g) => {
+        const r = g.querySelector('.ssm-node-rect');
+        if (r) r.setAttribute('stroke-width', g.getAttribute('data-scene-id') === sceneId ? '4' : '2');
+      });
+      panel.hidden = false;
+      this._renderSceneContentsPanel(panel, sceneId, {
+        isCurrent: () => panelSceneId === sceneId && dialog.isConnected,
+        closePanel,
+        openPanel,
+        highlightPortal: (hotspotId, on) => {
+          dialog
+            .querySelectorAll(`.ssm-edge[data-hotspot-id="${CSS.escape(String(hotspotId))}"] .ssm-edge-path`)
+            .forEach((path) => {
+              path.setAttribute('stroke', on ? '#ffeb3b' : '#81d4fa');
+              path.setAttribute('stroke-width', on ? '4' : '2.5');
+            });
+        },
+        editHotspot: (hotspotId) => {
+          close();
+          const dropdown = document.getElementById('current-scene');
+          if (dropdown) dropdown.value = sceneId;
+          this.switchToScene(sceneId);
+          setTimeout(() => {
+            const hs = (this.hotspots || []).find((h) => h && String(h.id) === String(hotspotId));
+            if (hs) this.showEditHotspotDialog(hs.id);
+          }, 120);
+        },
+      });
+    };
+    dialog.querySelectorAll('.ssm-node-contents').forEach((btn) => {
+      // Keep the card from starting a drag when the button is pressed.
+      btn.addEventListener('pointerdown', (evt) => evt.stopPropagation());
+      btn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        const sceneId = btn.closest('.ssm-node')?.getAttribute('data-scene-id');
+        if (sceneId === panelSceneId) closePanel();
+        else openPanel(sceneId);
+      });
+      btn.addEventListener('dblclick', (evt) => evt.stopPropagation());
+    });
+    const onPanelKey = (evt) => {
+      if (!dialog.isConnected) {
+        document.removeEventListener('keydown', onPanelKey, true);
+        return;
+      }
+      if (evt.key === 'Escape' && panelSceneId) {
+        evt.stopPropagation();
+        if (dialog.querySelector('#ssm-lightbox')) dialog.querySelector('#ssm-lightbox').remove();
+        else closePanel();
+      }
+    };
+    document.addEventListener('keydown', onPanelKey, true);
+
     graph.nodes.forEach((node) => {
       this._sceneSiteMapThumb(node.id)
         .then((thumb) => {

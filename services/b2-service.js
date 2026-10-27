@@ -965,10 +965,17 @@ class B2Service {
       'playground-thumbs/',
       'hosted-projects/',
     ];
+    // List each folder in both buckets once and copy only what the public bucket is missing
+    // (one listing per folder instead of a lookup per file on every startup).
     let legacyFiles = [];
+    let alreadyPublic = 0;
     try {
       for (const prefix of migrationPrefixes) {
         const privateFiles = await this._listFilesInBucket(this.bucketId, prefix);
+        const publicFiles = await this._listFilesInBucket(this.commonAssetsBucketId, prefix);
+        const publicNames = new Set(publicFiles.map((f) => f.fileName));
+        // A listing returns at most 10,000 names; past that, check files one at a time.
+        const publicListComplete = publicFiles.length < 10000;
         for (const file of privateFiles) {
           const name = file.fileName || '';
           if (!name.startsWith(prefix) || name.length <= prefix.length) continue;
@@ -976,6 +983,13 @@ class B2Service {
             const rest = name.slice(prefix.length);
             const parts = rest.split('/');
             if (parts.length !== 2 || !parts[0] || !parts[1]) continue;
+          }
+          const inPublic = publicListComplete
+            ? publicNames.has(name)
+            : publicNames.has(name) || !!(await this._getFileInfoInBucket(this.commonAssetsBucketId, name));
+          if (inPublic) {
+            alreadyPublic += 1;
+            continue;
           }
           legacyFiles.push(file);
         }
@@ -985,18 +999,18 @@ class B2Service {
       return;
     }
 
-    if (legacyFiles.length === 0) return;
+    if (legacyFiles.length === 0) {
+      if (alreadyPublic) console.log(`✅ Public bucket already has all ${alreadyPublic} legacy file(s)`);
+      return;
+    }
 
-    console.log(`ℹ️  Migrating ${legacyFiles.length} legacy file(s) to public bucket...`);
+    console.log(`ℹ️  Copying ${legacyFiles.length} legacy file(s) missing from the public bucket...`);
     const os = require('os');
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'b2-common-assets-'));
 
     try {
       for (const file of legacyFiles) {
         const remotePath = file.fileName;
-        const existing = await this._getFileInfoInBucket(this.commonAssetsBucketId, remotePath);
-        if (existing) continue;
-
         const tempPath = path.join(tempDir, path.basename(remotePath));
         await this.downloadFile(remotePath, tempPath);
         await this._uploadFileToBucket(

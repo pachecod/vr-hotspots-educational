@@ -34,7 +34,7 @@
     "@google-analytics/data": "^7.0.0",
     "@sparticuz/chromium": "^133.0.0",
     "adm-zip": "^0.5.16",
-    "aframe": "^1.7.1",
+    "aframe": "1.7.1",
     "aframe-extras": "^7.6.0",
     "archiver": "^6.0.2",
     "backblaze-b2": "^1.7.1",

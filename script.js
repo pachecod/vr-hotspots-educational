@@ -2791,11 +2791,37 @@ class HotspotEditor {
   }
 
   refreshSceneMediaRaycasters() {
+    let waitingForScene = false;
     ['mouse-cursor', 'gaze-cursor'].forEach((id) => {
       const cursor = document.getElementById(id);
       const raycaster = cursor?.components?.raycaster;
-      if (raycaster?.refreshObjects) raycaster.refreshObjects();
+      if (!raycaster?.refreshObjects) return;
+      // Before the A-Frame scene finishes starting (seen on iPads), the cursor has no sceneEl
+      // yet and refreshObjects throws; refresh once the scene has loaded instead.
+      if (!raycaster.el?.sceneEl) {
+        waitingForScene = true;
+        return;
+      }
+      try {
+        raycaster.refreshObjects();
+      } catch (err) {
+        console.warn('Cursor raycaster refresh skipped:', err.message);
+      }
     });
+    if (waitingForScene && !this._raycasterRefreshPending) {
+      const sceneEl = document.querySelector('a-scene');
+      if (sceneEl && !sceneEl.hasLoaded) {
+        this._raycasterRefreshPending = true;
+        sceneEl.addEventListener(
+          'loaded',
+          () => {
+            this._raycasterRefreshPending = false;
+            this.refreshSceneMediaRaycasters();
+          },
+          { once: true }
+        );
+      }
+    }
     this._bindSceneMediaClickHandlers();
   }
 

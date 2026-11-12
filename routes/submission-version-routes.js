@@ -8,6 +8,7 @@ const { purgeContentItem, purgeHostedSubmission } = require('../lib/student-cont
 const {
   setHostedGalleryFeatured,
   moveHostedListFeatureToVersion,
+  takeOverHostedAddress,
 } = require('../services/hosted-projects-gallery');
 const projectVersionsDb = require('../services/project-versions-db');
 const b2Service = require('../services/b2-service');
@@ -968,6 +969,7 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
       const urls = await hostVersionAtPath(version, urlPath);
       let featureMoved = false;
       try {
+        await takeOverHostedAddress(version, urlPath);
         featureMoved = await moveHostedListFeatureToVersion(version);
       } catch (err) {
         console.warn('Hosted List feature move failed:', err.message);

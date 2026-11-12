@@ -251,6 +251,26 @@ async function moveHostedListFeatureToVersion(version) {
   return true;
 }
 
+/**
+ * Hosting a version at an address replaces whatever another version had there. Clear the other
+ * versions' hosting records (their files are already overwritten) so unhosting one of them later
+ * can't delete the new page, and carry their Hosted List spot over. Returns how many were replaced.
+ */
+async function takeOverHostedAddress(version, hostedPath) {
+  if (!version || !hostedPath || !isDbEnabled()) return 0;
+  const others = (await projectVersionsDb.listHostedVersions()).filter(
+    (v) => v.id !== version.id && v.hostedPath === hostedPath
+  );
+  let wasFeatured = false;
+  for (const v of others) {
+    if (v.featuredOnHostedGallery) wasFeatured = true;
+    await projectVersionsDb.updateVersionHosting(v.id, { hostedPath: null, hostedUrl: null, isHosted: false });
+    await projectVersionsDb.updateVersionGalleryFeature(v.id, false);
+  }
+  if (wasFeatured) await projectVersionsDb.updateVersionGalleryFeature(version.id, true);
+  return others.length;
+}
+
 module.exports = {
   featuredHostedPagesTitle,
   resolveClassBySlug,
@@ -258,4 +278,5 @@ module.exports = {
   hasClassHostedGalleryProjects,
   setHostedGalleryFeatured,
   moveHostedListFeatureToVersion,
+  takeOverHostedAddress,
 };

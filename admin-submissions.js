@@ -1001,6 +1001,8 @@ async function toggleHistory(threadId, btn) {
     const res = await adminFetch(`/admin/projects/${threadId}/versions`);
     const data = await res.json();
     const versions = data.versions || [];
+    // Suggest the project's current hosted address, so hosting another version replaces the live page.
+    const currentHostedPath = (versions.find((x) => x.isHosted && x.hostedPath) || {}).hostedPath || '';
     panel.innerHTML = versions
       .map((v) => {
         const note =
@@ -1036,6 +1038,8 @@ async function toggleHistory(threadId, btn) {
                   ? `<button type="button" class="btn-unfeature" onclick="setHostedGalleryFeature(${escapeHtml(jsString(v.id))}, ${escapeHtml(jsString(v.fileName))}, false)" style="margin-left:6px;font-size:11px;">Remove from Hosted List</button>`
                   : `<button type="button" class="btn-feature" onclick="setHostedGalleryFeature(${escapeHtml(jsString(v.id))}, ${escapeHtml(jsString(v.fileName))}, true)" style="margin-left:6px;font-size:11px;">Feature on Hosted List</button>`
               }`
+            : v.kind === 'submitted' || v.kind === 'admin_return'
+            ? `<br><button type="button" class="btn-host" onclick="hostVersion(${escapeHtml(jsString(v.id))}, ${escapeHtml(jsString(projectLabel))}, { studentName: ${escapeHtml(jsString(studentLabel))}, suggestedPath: ${escapeHtml(jsString(currentHostedPath))} })" style="font-size:11px;">🌐 Host this version</button>`
             : '';
         return `<div class="version-row" data-repair-id="${v.kind === 'admin_repair' ? escapeHtml(v.id) : ''}">
           ${kindBadge(v.kind)} v${v.versionNumber} — ${v.submittedAt || v.createdAt ? new Date(v.submittedAt || v.createdAt).toLocaleString() : ''}

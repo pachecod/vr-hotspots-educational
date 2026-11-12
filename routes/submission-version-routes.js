@@ -1001,6 +1001,17 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
     }
   });
 
+  app.get('/admin/hosted-versions', async (req, res) => {
+    try {
+      if (!isDbEnabled()) return res.json({ success: true, versions: [] });
+      const versions = await projectVersionsDb.listHostedVersions();
+      return res.json({ success: true, versions });
+    } catch (err) {
+      console.error('hosted-versions error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.post('/admin/hosted-gallery-feature/:versionId', async (req, res) => {
     try {
       const featured = !!req.body?.featured;

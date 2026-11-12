@@ -101,11 +101,185 @@ async function loadHostedClasses() {
   );
 }
 
+// ---- Everything hosted: one list of hosted versions with Hosted List controls ----
+
+let hostedVersions = [];
+
+function versionDate(v) {
+  const when = v.submittedAt || v.createdAt;
+  return when ? new Date(when).toLocaleDateString() : '';
+}
+
+/** Versions where a newer version of the same project is also hosted. */
+function olderVersionIds(versions) {
+  const newestByThread = {};
+  versions.forEach((v) => {
+    const n = v.versionNumber || 0;
+    if (!(v.threadId in newestByThread) || n > newestByThread[v.threadId]) newestByThread[v.threadId] = n;
+  });
+  return new Set(versions.filter((v) => (v.versionNumber || 0) < newestByThread[v.threadId]).map((v) => v.id));
+}
+
+function renderHostedVersions() {
+  const container = document.getElementById('hosted-versions');
+  const older = olderVersionIds(hostedVersions);
+  const featuredOnly = document.getElementById('hv-featured-only')?.checked;
+  const olderOnly = document.getElementById('hv-older-only')?.checked;
+  const rows = hostedVersions.filter(
+    (v) => (!featuredOnly || v.featuredOnHostedGallery) && (!olderOnly || older.has(v.id))
+  );
+  const olderFeatured = hostedVersions.filter((v) => older.has(v.id) && v.featuredOnHostedGallery);
+  const bulkBtn = document.getElementById('hv-remove-older');
+  if (bulkBtn) {
+    bulkBtn.disabled = !olderFeatured.length;
+    bulkBtn.textContent =
+      olderFeatured.length === 1
+        ? 'Remove 1 older version from the Hosted List'
+        : olderFeatured.length
+        ? `Remove all ${olderFeatured.length} older versions from the Hosted List`
+        : 'No older versions on the Hosted List';
+  }
+  if (!hostedVersions.length) {
+    container.innerHTML = '<p class="empty">Nothing is hosted yet.</p>';
+    return;
+  }
+  if (!rows.length) {
+    container.innerHTML = '<p class="empty">No hosted versions match these filters.</p>';
+    return;
+  }
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr><th>Student</th><th>Project</th><th>Version</th><th>Hosted address</th><th>Hosted List</th><th></th></tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map((v) => {
+            const isOlder = older.has(v.id);
+            const url = v.hostedUrl || (v.hostedPath ? `/hosted/${v.hostedPath}/index.html` : '');
+            return `
+          <tr class="${isOlder ? 'hv-older' : ''}" data-version-id="${escapeHtml(v.id)}">
+            <td><span class="hv-student">${escapeHtml(v.studentUsername || v.studentDisplayName || '—')}</span>
+              <span class="hv-sub">${escapeHtml(v.className || '')}</span></td>
+            <td>${escapeHtml(v.projectName || '')}</td>
+            <td>v${escapeHtml(v.versionNumber)} · ${escapeHtml(versionDate(v))}${
+              isOlder ? '<span class="badge badge-old">Older</span>' : ''
+            }<span class="hv-sub">hosted ${escapeHtml(v.hostedAt ? new Date(v.hostedAt).toLocaleDateString() : '')}</span></td>
+            <td>${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(v.hostedPath || url)}</a>` : '—'}</td>
+            <td>${v.featuredOnHostedGallery ? '<span class="badge badge-feat">Featured</span>' : '—'}</td>
+            <td class="actions">
+              ${
+                v.featuredOnHostedGallery
+                  ? '<button type="button" class="btn btn-secondary btn-small" data-hv-action="unfeature">Remove from Hosted List</button>'
+                  : '<button type="button" class="btn btn-primary btn-small" data-hv-action="feature">Feature on Hosted List</button>'
+              }
+              <button type="button" class="btn btn-danger btn-small" data-hv-action="unhost">Unhost</button>
+            </td>
+          </tr>`;
+          })
+          .join('')}
+      </tbody>
+    </table>`;
+}
+
+async function setFeatured(version, featured) {
+  const res = await adminFetch(`/admin/hosted-gallery-feature/${encodeURIComponent(version.id)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ featured, fileName: version.fileName }),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Could not update the Hosted List');
+  version.featuredOnHostedGallery = featured;
+}
+
+async function loadHostedVersions() {
+  const container = document.getElementById('hosted-versions');
+  try {
+    const res = await adminFetch('/admin/hosted-versions');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Could not load hosted versions');
+    hostedVersions = data.versions || [];
+    renderHostedVersions();
+  } catch (err) {
+    if (err.code === 'AUTH_REQUIRED') throw err;
+    container.innerHTML = `<p class="error">Could not load hosted versions: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function bindHostedVersions() {
+  document.getElementById('hv-featured-only')?.addEventListener('change', renderHostedVersions);
+  document.getElementById('hv-older-only')?.addEventListener('change', renderHostedVersions);
+
+  document.getElementById('hosted-versions').addEventListener('click', async (evt) => {
+    const btn = evt.target.closest('[data-hv-action]');
+    if (!btn) return;
+    const id = btn.closest('tr')?.dataset.versionId;
+    const version = hostedVersions.find((v) => v.id === id);
+    if (!version) return;
+    const label = `${version.studentUsername || ''} — ${version.projectName || ''} v${version.versionNumber}`;
+    const action = btn.dataset.hvAction;
+    btn.disabled = true;
+    try {
+      if (action === 'unfeature') {
+        await setFeatured(version, false);
+      } else if (action === 'feature') {
+        await setFeatured(version, true);
+      } else if (action === 'unhost') {
+        if (!confirm(`Unhost ${label}?\n\nIts link (${version.hostedPath}) will stop working. The version stays in Submissions and can be hosted again.`)) {
+          btn.disabled = false;
+          return;
+        }
+        const res = await adminFetch(`/admin/unhost-version/${encodeURIComponent(version.id)}`, { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'Unhost failed');
+        hostedVersions = hostedVersions.filter((v) => v.id !== version.id);
+      }
+      renderHostedVersions();
+      loadHostedClasses().catch(() => {});
+    } catch (err) {
+      btn.disabled = false;
+      alert(err.message);
+    }
+  });
+
+  document.getElementById('hv-remove-older')?.addEventListener('click', async (evt) => {
+    const older = olderVersionIds(hostedVersions);
+    const targets = hostedVersions.filter((v) => older.has(v.id) && v.featuredOnHostedGallery);
+    if (!targets.length) return;
+    if (
+      !confirm(
+        `Remove ${targets.length} older version(s) from the Hosted List?\n\nThe newest hosted version of each project stays listed. Older links keep working.`
+      )
+    ) {
+      return;
+    }
+    const btn = evt.currentTarget;
+    btn.disabled = true;
+    const failed = [];
+    for (const v of targets) {
+      btn.textContent = `Removing… (${targets.indexOf(v) + 1} of ${targets.length})`;
+      try {
+        await setFeatured(v, false);
+      } catch (err) {
+        failed.push(`${v.studentUsername} v${v.versionNumber}: ${err.message}`);
+      }
+    }
+    renderHostedVersions();
+    loadHostedClasses().catch(() => {});
+    if (failed.length) alert(`Some could not be removed:\n${failed.join('\n')}`);
+  });
+}
+
 requireAdminSession('admin-gate', () => {
   document.getElementById('admin-gate').style.display = 'none';
   document.getElementById('admin-content').style.display = 'block';
   renderAdminNav('hosted');
   loadHostedClasses().catch((err) => {
+    if (err.code === 'AUTH_REQUIRED') location.reload();
+  });
+  bindHostedVersions();
+  loadHostedVersions().catch((err) => {
     if (err.code === 'AUTH_REQUIRED') location.reload();
   });
 });

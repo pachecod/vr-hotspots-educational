@@ -21,6 +21,17 @@
       .btn-primary { background: #0056b3; color: #fff; }
       .btn-secondary { background: #6c757d; color: #fff; }
       .empty, .error { color: #666; }
+      .hv-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 12px; }
+      .hv-toolbar label { font-size: 14px; color: #333; }
+      #hosted-versions td { padding: 8px 10px; font-size: 14px; }
+      #hosted-versions tr.hv-older td { background: #fffbea; }
+      .hv-student { font-weight: bold; }
+      .hv-sub { display: block; font-size: 12px; color: #6c757d; }
+      .badge-old { background: #fff4e0; color: #8a5300; margin-left: 4px; }
+      .badge-feat { background: #e8f0fe; color: #1a4fa0; }
+      .btn-small { padding: 5px 10px; font-size: 13px; margin: 2px 4px 2px 0; }
+      .btn-warn { background: #b45309; color: #fff; }
+      .btn-danger { background: #dc3545; color: #fff; }
       .error { color: #dc3545; }
       @media (max-width: 700px) {
         th:nth-child(2), td:nth-child(2) { display: none; }
@@ -43,6 +54,20 @@
           Visitors need the classroom password; as a signed-in admin you are let in automatically.
         </p>
         <div id="hosted-classes"><p class="empty">Loading…</p></div>
+      </div>
+      <div class="panel">
+        <h2>Everything hosted</h2>
+        <p class="intro">
+          Every hosted version, newest first within each project. <strong>Older</strong> marks a version
+          when a newer version of the same project is also hosted. Removing a version from the Hosted
+          List keeps its link working; <strong>Unhost</strong> takes the link offline.
+        </p>
+        <div class="hv-toolbar">
+          <label><input type="checkbox" id="hv-featured-only" /> Only versions on the Hosted List</label>
+          <label><input type="checkbox" id="hv-older-only" /> Only older versions</label>
+          <button type="button" class="btn btn-warn btn-small" id="hv-remove-older">Remove all older versions from the Hosted List</button>
+        </div>
+        <div id="hosted-versions"><p class="empty">Loading…</p></div>
       </div>
     </div>
 

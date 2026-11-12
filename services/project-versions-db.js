@@ -365,6 +365,22 @@ async function listAdminInbox({ classId, studentId, filter, hostedFilter, featur
   return rows.map(formatVersionRow);
 }
 
+/** Every hosted version, with its student, class and project (Admin → Hosted Pages). */
+async function listHostedVersions() {
+  const { rows } = await query(
+    `SELECT pv.*, pt.project_name, pt.project_slug, pt.student_id,
+            s.display_name AS student_display_name, s.username AS student_username,
+            c.name AS class_name, c.id AS class_id, c.slug AS class_slug
+       FROM project_versions pv
+       JOIN project_threads pt ON pt.id = pv.thread_id
+       LEFT JOIN students s ON s.id = pt.student_id
+       LEFT JOIN classes c ON c.id = s.class_id
+      WHERE pv.is_hosted = TRUE
+      ORDER BY c.name NULLS LAST, s.username NULLS LAST, pt.project_name, pv.version_number DESC`
+  );
+  return rows.map(formatVersionRow);
+}
+
 async function markVersionSeen(versionId, studentId) {
   await query(
     `UPDATE project_versions pv
@@ -547,6 +563,7 @@ module.exports = {
   listStudentProjects,
   listThreadVersions,
   listAdminInbox,
+  listHostedVersions,
   listAllVersionsForStudent,
   markVersionSeen,
   updateVersionHosting,

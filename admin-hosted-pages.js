@@ -147,24 +147,38 @@ function renderHostedVersions() {
     container.innerHTML = '<p class="empty">No hosted versions match these filters.</p>';
     return;
   }
-  container.innerHTML = `
-    <table>
-      <thead>
-        <tr><th>Student</th><th>Project</th><th>Version</th><th>Hosted address</th><th>Hosted List</th><th></th></tr>
-      </thead>
-      <tbody>
-        ${rows
-          .map((v) => {
-            const isOlder = older.has(v.id);
-            const url = v.hostedUrl || (v.hostedPath ? `/hosted/${v.hostedPath}/index.html` : '');
-            return `
-          <tr class="${isOlder ? 'hv-older' : ''}" data-version-id="${escapeHtml(v.id)}">
-            <td><span class="hv-student">${escapeHtml(v.studentUsername || v.studentDisplayName || '—')}</span>
-              <span class="hv-sub">${escapeHtml(v.className || '')}</span></td>
-            <td>${escapeHtml(v.projectName || '')}</td>
-            <td>v${escapeHtml(v.versionNumber)} · ${escapeHtml(versionDate(v))}${
-              isOlder ? '<span class="badge badge-old">Older</span>' : ''
-            }<span class="hv-sub">hosted ${escapeHtml(v.hostedAt ? new Date(v.hostedAt).toLocaleDateString() : '')}</span></td>
+  // Group by student; within a student, the most recently updated project first. Each project's
+  // newest hosted version sits at the normal indent, its older hosted versions indented below it.
+  const students = new Map();
+  rows.forEach((v) => {
+    const key = v.studentId || v.studentUsername || 'unknown';
+    if (!students.has(key)) {
+      students.set(key, {
+        name: v.studentUsername || v.studentDisplayName || '—',
+        className: v.className || '',
+        projects: new Map(),
+      });
+    }
+    const projects = students.get(key).projects;
+    if (!projects.has(v.threadId)) projects.set(v.threadId, []);
+    projects.get(v.threadId).push(v);
+  });
+  const newestTime = (list) =>
+    Math.max(...list.map((v) => new Date(v.submittedAt || v.createdAt || 0).getTime() || 0));
+
+  const versionRow = (v, isOlder) => {
+    const url = v.hostedUrl || (v.hostedPath ? `/hosted/${v.hostedPath}/index.html` : '');
+    return `
+          <tr class="${isOlder ? 'hv-older' : 'hv-latest'}" data-version-id="${escapeHtml(v.id)}">
+            <td class="hv-version">${
+              isOlder
+                ? `<span class="hv-indent">↳ v${escapeHtml(v.versionNumber)} · ${escapeHtml(versionDate(v))}</span>`
+                : `<span class="hv-project">${escapeHtml(v.projectName || '')}</span> v${escapeHtml(
+                    v.versionNumber
+                  )} · ${escapeHtml(versionDate(v))}`
+            }<span class="hv-sub${isOlder ? ' hv-indent' : ''}">hosted ${escapeHtml(
+      v.hostedAt ? new Date(v.hostedAt).toLocaleDateString() : ''
+    )}</span></td>
             <td>${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(v.hostedPath || url)}</a>` : '—'}</td>
             <td>${v.featuredOnHostedGallery ? '<span class="badge badge-feat">Featured</span>' : '—'}</td>
             <td class="actions">
@@ -176,9 +190,30 @@ function renderHostedVersions() {
               <button type="button" class="btn btn-danger btn-small" data-hv-action="unhost">Unhost</button>
             </td>
           </tr>`;
-          })
-          .join('')}
-      </tbody>
+  };
+
+  let body = '';
+  students.forEach((student) => {
+    body += `
+          <tr class="hv-student-row"><td colspan="4"><span class="hv-student">${escapeHtml(student.name)}</span>
+            <span class="hv-class">${escapeHtml(student.className)}</span></td></tr>`;
+    [...student.projects.values()]
+      .sort((a, b) => newestTime(b) - newestTime(a))
+      .forEach((list) => {
+        list
+          .sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0))
+          .forEach((v) => {
+            body += versionRow(v, older.has(v.id));
+          });
+      });
+  });
+
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr><th>Project · version</th><th>Hosted address</th><th>Hosted List</th><th></th></tr>
+      </thead>
+      <tbody>${body}</tbody>
     </table>`;
 }
 

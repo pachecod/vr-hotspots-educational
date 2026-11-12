@@ -24,10 +24,14 @@
       .hv-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 12px; }
       .hv-toolbar label { font-size: 14px; color: #333; }
       #hosted-versions td { padding: 8px 10px; font-size: 14px; }
-      #hosted-versions tr.hv-older td { background: #fffbea; }
-      .hv-student { font-weight: bold; }
+      #hosted-versions tr.hv-student-row td { background: #f1f3f5; padding-top: 10px; padding-bottom: 10px; border-top: 2px solid #dee2e6; }
+      .hv-student { font-weight: bold; font-size: 15px; }
+      .hv-class { margin-left: 8px; font-size: 12px; color: #6c757d; }
+      .hv-project { font-weight: bold; margin-right: 4px; }
+      #hosted-versions tr.hv-latest td.hv-version { padding-left: 16px; }
+      #hosted-versions tr.hv-older td { color: #555; }
+      #hosted-versions tr.hv-older td.hv-version { padding-left: 40px; }
       .hv-sub { display: block; font-size: 12px; color: #6c757d; }
-      .badge-old { background: #fff4e0; color: #8a5300; margin-left: 4px; }
       .badge-feat { background: #e8f0fe; color: #1a4fa0; }
       .btn-small { padding: 5px 10px; font-size: 13px; margin: 2px 4px 2px 0; }
       .btn-warn { background: #b45309; color: #fff; }
@@ -58,8 +62,8 @@
       <div class="panel">
         <h2>Everything hosted</h2>
         <p class="intro">
-          Every hosted version, newest first within each project. <strong>Older</strong> marks a version
-          when a newer version of the same project is also hosted. Removing a version from the Hosted
+          Every hosted version, grouped by student. Each project's newest hosted version is listed
+          first, with its older hosted versions indented below it. Removing a version from the Hosted
           List keeps its link working; <strong>Unhost</strong> takes the link offline.
         </p>
         <div class="hv-toolbar">

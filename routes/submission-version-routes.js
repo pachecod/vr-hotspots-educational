@@ -5,7 +5,10 @@ const crypto = require('crypto');
 const archiver = require('archiver');
 const { purgeProjectThread } = require('../lib/purge-project-thread');
 const { purgeContentItem, purgeHostedSubmission } = require('../lib/student-content/purge');
-const { setHostedGalleryFeatured } = require('../services/hosted-projects-gallery');
+const {
+  setHostedGalleryFeatured,
+  moveHostedListFeatureToVersion,
+} = require('../services/hosted-projects-gallery');
 const projectVersionsDb = require('../services/project-versions-db');
 const b2Service = require('../services/b2-service');
 const { isDbEnabled } = require('../services/db-service');
@@ -956,11 +959,18 @@ function registerSubmissionVersionRoutes(app, { upload, assertValidZipFile, extr
         return res.status(404).json({ success: false, message: 'Version not found' });
       }
       const urls = await hostVersionAtPath(version, urlPath);
+      let featureMoved = false;
+      try {
+        featureMoved = await moveHostedListFeatureToVersion(version);
+      } catch (err) {
+        console.warn('Hosted List feature move failed:', err.message);
+      }
       return res.json({
         success: true,
         hostedUrl: urls.tourUrl,
         tourUrl: urls.tourUrl,
         flatPageUrl: urls.flatPageUrl,
+        featureMoved,
       });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });

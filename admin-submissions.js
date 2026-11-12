@@ -1021,13 +1021,22 @@ async function toggleHistory(threadId, btn) {
             ? `<button type="button" class="btn-host" data-action="repair-host" data-version-id="${escapeHtml(v.id)}" data-host-hint="${escapeHtml(repairHostHint)}" data-hosted-path="${escapeHtml(resolveVersionHostedPath(v) || repairHostHint)}" style="margin-left:6px;font-size:11px;">Host</button>` +
               `<button type="button" class="btn-assign-repair" data-action="repair-assign" data-hosted-path="${escapeHtml(resolveVersionHostedPath(v))}" data-repair-id="${escapeHtml(v.id)}" style="margin-left:6px;font-size:11px;">Assign / send</button>`
             : v.kind === 'submitted' || v.kind === 'admin_return' || v.kind === 'admin_assigned'
-            ? `<button type="button" onclick="repairMediaVersion(${jsString(v.id)}, ${jsString(
-                projectLabel
-              )}, ${jsString(studentLabel)}, ${jsString(threadId)}, ${jsString(
-                studentId
-              )}, ${jsString(classId)})" style="margin-left:6px;font-size:11px;">Repair media</button>`
+            ? `<button type="button" onclick="repairMediaVersion(${escapeHtml(jsString(v.id))}, ${escapeHtml(jsString(projectLabel))}, ${escapeHtml(jsString(studentLabel))}, ${escapeHtml(jsString(threadId))}, ${escapeHtml(jsString(studentId))}, ${escapeHtml(jsString(classId))})" style="margin-left:6px;font-size:11px;">Repair media</button>`
             : '';
         const histHosted = resolveVersionHostedPath(v);
+        // Any hosted version (not just the newest) can be unhosted or taken off the Hosted List here.
+        const hostedControls =
+          v.isHosted && histHosted
+            ? `${v.kind === 'admin_repair' ? '' : formatHostedLinks(v)}
+              ${v.featuredOnHostedGallery ? ' <span class="badge badge-featured">Featured</span>' : ''}
+              <br>
+              <button type="button" class="btn-unhost" onclick="unhostVersion(${escapeHtml(jsString(v.id))}, ${escapeHtml(jsString(v.fileName))}, ${escapeHtml(jsString(projectLabel + ' v' + v.versionNumber))})" style="font-size:11px;">🚫 Unhost</button>
+              ${
+                v.featuredOnHostedGallery
+                  ? `<button type="button" class="btn-unfeature" onclick="setHostedGalleryFeature(${escapeHtml(jsString(v.id))}, ${escapeHtml(jsString(v.fileName))}, false)" style="margin-left:6px;font-size:11px;">Remove from Hosted List</button>`
+                  : `<button type="button" class="btn-feature" onclick="setHostedGalleryFeature(${escapeHtml(jsString(v.id))}, ${escapeHtml(jsString(v.fileName))}, true)" style="margin-left:6px;font-size:11px;">Feature on Hosted List</button>`
+              }`
+            : '';
         return `<div class="version-row" data-repair-id="${v.kind === 'admin_repair' ? escapeHtml(v.id) : ''}">
           ${kindBadge(v.kind)} v${v.versionNumber} — ${v.submittedAt || v.createdAt ? new Date(v.submittedAt || v.createdAt).toLocaleString() : ''}
           ${v.kind === 'admin_repair' && histHosted ? `<br><strong>Hosted as:</strong> <code>${escapeHtml(histHosted)}</code>` : ''}
@@ -1035,6 +1044,7 @@ async function toggleHistory(threadId, btn) {
           ${note}
           <button type="button" data-action="repair-download" data-version-id="${escapeHtml(v.id)}" data-file-name="${escapeHtml(v.fileName || '')}" style="margin-left:8px;font-size:11px;">Download</button>
           ${repairActions}
+          ${hostedControls}
         </div>`;
       })
       .join('');

@@ -229,10 +229,33 @@ async function setHostedGalleryFeatured({ versionId, fileName, featured }) {
   return { featuredOnHostedGallery: wantFeatured };
 }
 
+/**
+ * Hosting a newer version of a project moves the project's class Hosted List spot to it, so only
+ * the latest hosted version is listed. Older versions stay hosted (their links keep working).
+ * Projects that were never featured are left alone. Returns true when the feature moved.
+ */
+async function moveHostedListFeatureToVersion(version) {
+  if (!version || !version.threadId || !isDbEnabled()) return false;
+  const versions = await projectVersionsDb.listThreadVersions(version.threadId);
+  const olderFeatured = versions.filter(
+    (v) =>
+      v.id !== version.id &&
+      v.featuredOnHostedGallery &&
+      (v.versionNumber || 0) < (version.versionNumber || 0)
+  );
+  if (!olderFeatured.length) return false;
+  for (const v of olderFeatured) {
+    await projectVersionsDb.updateVersionGalleryFeature(v.id, false);
+  }
+  await projectVersionsDb.updateVersionGalleryFeature(version.id, true);
+  return true;
+}
+
 module.exports = {
   featuredHostedPagesTitle,
   resolveClassBySlug,
   listClassHostedGalleryProjects,
   hasClassHostedGalleryProjects,
   setHostedGalleryFeatured,
+  moveHostedListFeatureToVersion,
 };

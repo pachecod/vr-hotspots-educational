@@ -1111,6 +1111,19 @@ async function toggleHistory(threadId, btn) {
               )}" data-class-id="${escapeHtml(classId)}" style="margin-left:6px;font-size:11px;">Repair media</button>`
             : '';
         const histHosted = resolveVersionHostedPath(v);
+        // Any hosted version (not just the newest) can be unhosted or taken off the Hosted List here.
+        const hostedControls =
+          v.isHosted && histHosted
+            ? `${v.kind === 'admin_repair' ? '' : formatHostedLinks(v)}
+              ${v.featuredOnHostedGallery ? ' <span class="badge badge-featured">Featured</span>' : ''}
+              <br>
+              <button type="button" class="btn-unhost" onclick="unhostVersion(${escapeHtml(JSON.stringify(String(v.id || '')))}, ${escapeHtml(JSON.stringify(String(v.fileName || '')))}, ${escapeHtml(JSON.stringify(String(projectLabel + ' v' + v.versionNumber || '')))})" style="font-size:11px;">🚫 Unhost</button>
+              ${
+                v.featuredOnHostedGallery
+                  ? `<button type="button" class="btn-unfeature" onclick="setHostedGalleryFeature(${escapeHtml(JSON.stringify(String(v.id || '')))}, ${escapeHtml(JSON.stringify(String(v.fileName || '')))}, false)" style="margin-left:6px;font-size:11px;">Remove from Hosted List</button>`
+                  : `<button type="button" class="btn-feature" onclick="setHostedGalleryFeature(${escapeHtml(JSON.stringify(String(v.id || '')))}, ${escapeHtml(JSON.stringify(String(v.fileName || '')))}, true)" style="margin-left:6px;font-size:11px;">Feature on Hosted List</button>`
+              }`
+            : '';
         return `<div class="version-row" data-repair-id="${v.kind === 'admin_repair' ? escapeHtml(v.id) : ''}">
           ${kindBadge(v.kind)} v${v.versionNumber} — ${v.submittedAt || v.createdAt ? new Date(v.submittedAt || v.createdAt).toLocaleString() : ''}
           ${v.kind === 'admin_repair' && histHosted ? `<br><strong>Hosted as:</strong> <code>${escapeHtml(histHosted)}</code>` : ''}
@@ -1118,6 +1131,7 @@ async function toggleHistory(threadId, btn) {
           ${note}
           <button type="button" data-action="repair-download" data-version-id="${escapeHtml(v.id)}" data-file-name="${escapeHtml(v.fileName || '')}" style="margin-left:8px;font-size:11px;">Download</button>
           ${repairActions}
+          ${hostedControls}
         </div>`;
       })
       .join('');

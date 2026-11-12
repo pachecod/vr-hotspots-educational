@@ -7384,6 +7384,10 @@ class HotspotEditor {
     }
 
     hotspotEl.setAttribute('editor-spot', spotConfig);
+    if (data.type === 'text' || data.type === 'text-audio') {
+      // Set separately: the config string above is split on ';', which would cut the text short.
+      hotspotEl.setAttribute('editor-spot', 'popup', data.text || '');
+    }
 
     // In-scene edit/move buttons are attached after the entity enters the scene (see below).
 
@@ -8945,6 +8949,14 @@ class HotspotEditor {
   }
 
   showEditHotspotDialog(id) {
+    // One tap on an iPad can reach both the touch handler and the button's click listener.
+    // A second, stacked dialog would still show the old text and could save it back over the edit.
+    const openDialog = document.getElementById('edit-hotspot-overlay');
+    if (openDialog) {
+      if (String(openDialog.dataset.hotspotId) === String(id)) return;
+      if (typeof openDialog._close === 'function') openDialog._close();
+      else openDialog.remove();
+    }
     this.hideModelHotspotActionMenu();
     this._hideModelTransformGizmo();
     const hotspot = this.hotspots.find((h) => h.id === id);
@@ -8958,6 +8970,8 @@ class HotspotEditor {
     const isModelType = hotspot.type === 'model';
 
     const overlay = document.createElement('div');
+    overlay.id = 'edit-hotspot-overlay';
+    overlay.dataset.hotspotId = String(id);
     overlay.style.cssText = `
       position: fixed; inset: 0; z-index: ${EDITOR_LAYER.dialog}; pointer-events: none;
       display: flex; align-items: flex-start; justify-content: center; font-family: Arial; padding-top: 20px;
@@ -9625,6 +9639,7 @@ class HotspotEditor {
       document.removeEventListener('mouseup', stopDrag);
       if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     };
+    overlay._close = close;
     dialog.querySelector('#edit-cancel').onclick = close;
     this._bindHotspotStyleSection(dialog, hotspot);
 
@@ -17342,6 +17357,10 @@ class HotspotProject {
       }
       
       hotspotEl.setAttribute('hotspot', config);
+      if (hotspot.type === 'text' || hotspot.type === 'text-audio') {
+        // Set separately: the config string is split on ';', which would cut the text short.
+        hotspotEl.setAttribute('hotspot', 'popup', hotspot.text || '');
+      }
       container.appendChild(hotspotEl);
     });
   }
@@ -22726,8 +22745,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <button onclick="window.hotspotEditor.deleteScene('${sceneId}')" style="
               background: #f44336; color: white; border: none; padding: 6px 12px;
               border-radius: 4px; cursor: pointer; font-size: 12px;" title="${
-                sceneId === 'scene1'
-                  ? 'Cannot delete default scene - click to edit instead'
+                Object.keys(this.scenes).length <= 1
+                  ? 'A project needs at least one scene'
                   : 'Delete this scene'
               }">
               🗑️ Delete
@@ -23385,71 +23404,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   deleteScene(sceneId) {
-    if (sceneId === 'scene1') {
-      // Show a styled popup explaining they can't delete but can edit
-      const dialog = document.createElement('div');
-      dialog.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85); z-index: ${EDITOR_LAYER.dialog}; display: flex;
-        align-items: center; justify-content: center; font-family: Arial;
-        animation: fadeIn 0.3s ease-in;
-      `;
-
-      dialog.innerHTML = `
-        <div style="background: linear-gradient(135deg, #f44336 0%, #e91e63 100%); padding: 40px; border-radius: 16px; color: white; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center;">
-          <div style="font-size: 48px; margin-bottom: 20px;">🚫</div>
-          <h2 style="margin: 0 0 15px 0; font-size: 28px; font-weight: bold;">Cannot Delete Scene 1</h2>
-          <p style="color: #f0f0f0; margin-bottom: 25px; font-size: 16px; line-height: 1.6;">
-            Scene 1 is the default scene and cannot be deleted.<br>
-            However, you can <strong>edit its media</strong> to customize it!
-          </p>
-          
-          <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-            <button id="edit-scene1-image-btn" style="
-              background: white; color: #f44336; border: none; padding: 15px 30px;
-              border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
-              box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform 0.2s;
-            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-              🎬 Edit Scene 1 Media
-            </button>
-            
-            <button id="close-delete-warning-btn" style="
-              background: rgba(255,255,255,0.2); color: white; border: 2px solid white; padding: 15px 30px;
-              border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
-              backdrop-filter: blur(10px); transition: all 0.2s;
-            " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-              ✓ Got It
-            </button>
-          </div>
-        </div>
-      `;
-
-      // Add animation keyframes if not already present
-      if (!document.getElementById('prompt-animation-style')) {
-        const style = document.createElement('style');
-        style.id = 'prompt-animation-style';
-        style.textContent = `
-          @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
-        `;
-        document.head.appendChild(style);
-      }
-
-      document.body.appendChild(dialog);
-
-      // Edit Image button - close this dialog and open edit scene image
-      document.getElementById('edit-scene1-image-btn').onclick = () => {
-        document.body.removeChild(dialog);
-        this.editSceneMedia('scene1');
-      };
-
-      // Close button
-      document.getElementById('close-delete-warning-btn').onclick = () => {
-        document.body.removeChild(dialog);
-      };
-
+    if (!this.scenes[sceneId]) return;
+    if (Object.keys(this.scenes).length <= 1) {
+      alert('A project needs at least one scene. Add another scene before deleting this one, or use Edit Media to change it.');
       return;
     }
 
@@ -23461,10 +23418,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Track if we switched scenes
     let switchedScenes = false;
 
-    // If we're currently on the deleted scene, switch to scene1 first
+    // If we're currently on the deleted scene, switch to the starting scene first
     if (this.currentScene === sceneId) {
-      this.currentScene = 'scene1';
-      document.getElementById('current-scene').value = 'scene1';
+      this.currentScene = this.getStartSceneId();
+      document.getElementById('current-scene').value = this.currentScene;
       this.loadCurrentScene();
       switchedScenes = true;
     }
